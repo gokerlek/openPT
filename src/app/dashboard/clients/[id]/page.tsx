@@ -9,6 +9,7 @@ import { Card, CardAction, CardContent, CardDescription, CardFooter, CardHeader,
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from '@/components/ui/item';
 import { Table, TableBody, TableCell, TableRow } from '@/components/ui/table';
+import { attentionItems, type AttentionItem } from '@/lib/attention';
 import { loadClient, readInvite } from '@/lib/clients';
 import { healthConsentState, healthFieldState } from '@/lib/client-status';
 import { readAppConfig } from '@/lib/config';
@@ -30,13 +31,51 @@ import { requirePt } from '@/lib/guards';
 import { loadMeasurements, readHealthIfAllowed } from '@/lib/health';
 import { loadHistory } from '@/lib/history-store';
 import { readLiveResponse } from '@/lib/live-store';
+import { readClientDigest } from '@/lib/notices-store';
 import type { HistoryList } from '@/lib/session-history';
+import { AttentionRow } from '../../attention-row';
 import { LiveSession } from './live-session';
 import { MeasurementsCard } from './measurements-card';
 import { SessionRow } from './sessions/session-list';
 
 /** Genel'in Antrenmanlar kartında en çok bu kadar son antrenman; gerisi sekmesinde. */
 const RECENT_SESSIONS = 3;
+
+/** Genel'in Dikkat kartında en çok bu kadar madde; gerisi yalnız sayı olarak. */
+const ATTENTION_SHOWN = 5;
+
+/**
+ * Genel'in başındaki Dikkat kartı: Genel bakış'taki "Dikkat gerektirenler"in bu danışana düşen maddeleri, en acili
+ * üstte; her madde danışanın ilgili sekmesine götürür. Ad sayfanın başında olduğundan satırlarda yazılmaz (yalnız
+ * ekran okuyucuya). Madde yoksa kart da yok.
+ */
+function AttentionSummaryCard({ clientId, name, items }: { clientId: string; name: string; items: readonly AttentionItem[] }) {
+  if (items.length === 0) return null;
+  const more = items.length - ATTENTION_SHOWN;
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          Dikkat
+          <Badge variant="secondary" className="tabular-nums">
+            {formatNumber(items.length)}
+            <span className="sr-only"> madde</span>
+          </Badge>
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-2">
+        <ul role="list" className="flex flex-col gap-1">
+          {items.slice(0, ATTENTION_SHOWN).map((item) => (
+            <li key={item.key}>
+              <AttentionRow clientId={clientId} item={{ ...item, clientName: name }} showClient={false} />
+            </li>
+          ))}
+        </ul>
+        {more > 0 ? <p className="px-3 text-sm text-muted-foreground">+{formatNumber(more)} madde daha</p> : null}
+      </CardContent>
+    </Card>
+  );
+}
 
 /**
  * Sağlık modülü kartındaki parçanın özeti (tasarım `kisit-tarama.md` §1): "2 etkin · 1 bildirim bekliyor",
@@ -262,7 +301,7 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
   }
 
   const { client } = loaded;
-  const [invite, programFile, exercises, measurements, history, live, healthRecord] = await Promise.all([
+  const [invite, programFile, exercises, measurements, history, live, healthRecord, digest] = await Promise.all([
     readInvite(id),
     // undefined: GitHub'dan okunamadı; sayfa yine açılır.
     readProgramFile(id).catch(() => undefined),
@@ -272,8 +311,17 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
     readLiveResponse(id),
     // Kısıt ve tarama özeti yalnız o parçanın onayı sürdükçe (onay yoksa dosya okunmaz).
     readHealthIfAllowed(client, ['conditions', 'screening']).catch(() => null),
+    // Dikkat maddelerinin olguları Genel bakış'la aynı önbellekli özetten; okunamazsa kart yok.
+    readClientDigest(id).catch(() => null),
   ]);
   const exerciseById = new Map(exercises.map((exercise) => [exercise.id, exercise]));
+  const attention = digest
+    ? attentionItems(digest.attention, {
+        now: new Date(),
+        timeZone: config.timeZone,
+        titleOf: (exerciseId) => exerciseById.get(exerciseId)?.title ?? exerciseId,
+      })
+    : [];
   const repo = clientRepoName(id);
   const access = accessOf(client, invite?.invite ?? null);
   const health = healthConsentState(client);
@@ -288,6 +336,9 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
         description="Profil, giriş, sağlık modülü ve özetler. Ayrıntılar kendi sekmelerinde."
         actions={<EditButton href={`/dashboard/clients/${id}/edit`} />}
       />
+
+      {/* Danışanın dikkat maddeleri en üstte: PT sayfayı açınca önce bakılacakları görür. */}
+      <AttentionSummaryCard clientId={id} name={client.name} items={attention} />
 
       {/* Açık antrenman canlı (tasarım §4.6); kimse çalışmıyorken satır yok. */}
       <LiveSession clientId={id} initial={live} />
