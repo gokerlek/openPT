@@ -26,10 +26,10 @@ export function LiveNow({ initial }: { initial: LiveOverviewResponse | null }) {
   const now = data ? new Date(data.checkedAt) : null;
 
   return (
-    <Card>
+    <Card size="sm">
       <CardHeader>
         <CardDescription>Şu an antrenmanda</CardDescription>
-        <CardTitle className="tabular-nums text-4xl">{data ? formatNumber(items.length) : '—'}</CardTitle>
+        <CardTitle className="tabular-nums group-data-[size=sm]/card:text-2xl">{data ? formatNumber(items.length) : '—'}</CardTitle>
         {items.length > 0 ? (
           <CardAction>
             <LiveDot className="mt-1.5" />

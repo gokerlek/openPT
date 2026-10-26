@@ -78,10 +78,10 @@ async function LiveNowCard() {
 
 function LiveSkeleton() {
   return (
-    <Card aria-busy="true">
+    <Card size="sm" aria-busy="true">
       <CardHeader>
         <CardDescription>Şu an antrenmanda</CardDescription>
-        <Skeleton className="h-10 w-12" />
+        <Skeleton className="h-8 w-10" />
       </CardHeader>
       <CardContent>
         <Skeleton className="h-4 w-full" />
@@ -113,8 +113,7 @@ function CountCard({ href, label, count, hint }: { href: string; label: string; 
       <Card size="sm" className="h-full transition-colors group-hover/count:bg-muted/50">
         <CardHeader>
           <CardDescription>{label}</CardDescription>
-          {/* `!`: küçük kartın başlık boyu (`group-data-[size=sm]/card:text-sm`) daha özgül; sayı yine de büyük kalsın. */}
-          <CardTitle className="tabular-nums text-2xl!">{formatNumber(count)}</CardTitle>
+          <CardTitle className="tabular-nums group-data-[size=sm]/card:text-2xl">{formatNumber(count)}</CardTitle>
           <CardAction>
             <CaretRight
               weight="fill"

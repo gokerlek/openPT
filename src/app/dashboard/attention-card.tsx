@@ -59,7 +59,7 @@ export async function AttentionCard({ timeZone, titles }: { timeZone: string; ti
             </EmptyHeader>
           </Empty>
         ) : (
-          <ul className="flex flex-col divide-y">
+          <ul role="list" className="flex flex-col divide-y">
             {groups.map((group) => (
               <li key={group.clientId} className="flex flex-col gap-1 py-3 first:pt-0 last:pb-0">
                 <div className="flex items-center gap-1.5 px-3">
@@ -76,10 +76,10 @@ export async function AttentionCard({ timeZone, titles }: { timeZone: string; ti
                   {/* Grubun düğmeleri (Task 12: "AI'ya sor"); şimdilik boş, yer tutmaz. */}
                   <div className="ms-auto flex items-center gap-1" />
                 </div>
-                <ul className="flex flex-col gap-1">
+                <ul role="list" className="flex flex-col gap-1">
                   {group.items.map((item) => (
                     <li key={item.key}>
-                      <AttentionRow clientId={group.clientId} item={item} showClient={false} />
+                      <AttentionRow clientId={group.clientId} item={{ ...item, clientName: group.clientName }} showClient={false} />
                     </li>
                   ))}
                 </ul>
@@ -93,7 +93,11 @@ export async function AttentionCard({ timeZone, titles }: { timeZone: string; ti
             ))}
           </ul>
         )}
-        {hidden > 0 ? <p className="text-sm text-muted-foreground">+{formatNumber(hidden)} danışan daha</p> : null}
+        {hidden > 0 ? (
+          <Link href="/dashboard/clients" className={`w-fit px-3 text-sm text-muted-foreground ${TOUCH_LINK}`}>
+            +{formatNumber(hidden)} danışan daha
+          </Link>
+        ) : null}
       </CardContent>
     </Card>
   );

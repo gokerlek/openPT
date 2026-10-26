@@ -29,7 +29,8 @@ export const TARGET_PATHS: Record<AttentionTarget, string> = {
 /**
  * "Dikkat gerektirenler"in tek maddesi: türün ikonu ve rozeti, metin; satır danışanın ilgili sekmesine götürür.
  * `showClient` açıkken (ve madde `clientName` taşıyorsa) rozetin önünde danışanın adı yazılır; danışana göre
- * gruplu listede ya da danışanın kendi sayfasında ad zaten yukarıda olduğundan kapatılır.
+ * gruplu listede ya da danışanın kendi sayfasında ad zaten yukarıda olduğundan kapatılır. Kapalıyken ad verilmişse
+ * yalnız ekran okuyucuya söylenir: bağlantılar listesinde de satır kimin olduğunu taşır.
  */
 export function AttentionRow({
   clientId,
@@ -48,7 +49,7 @@ export function AttentionRow({
       </ItemMedia>
       <ItemContent className="min-w-0">
         <ItemTitle className="line-clamp-none flex-wrap gap-1.5">
-          {showClient ? item.clientName : null}
+          {showClient ? item.clientName : item.clientName ? <span className="sr-only">{item.clientName}: </span> : null}
           <Badge variant="outline">{ATTENTION_LABELS[item.kind]}</Badge>
         </ItemTitle>
         {item.tone === 'danger' ? (
