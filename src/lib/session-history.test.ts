@@ -44,7 +44,7 @@ describe('geçmiş listesi', () => {
       id: 's_bbbbbbbb',
       dayOfMonth: '28',
       weekday: 'Pzt',
-      title: 'Gün B · 52 dk',
+      title: 'Gün B · 11 dk',
       meta: '1 set · 625 kg',
       otherDay: true,
       unfinished: true,
@@ -53,7 +53,7 @@ describe('geçmiş listesi', () => {
   });
 
   test('son 30 günün özeti; eski antrenman girmez', () => {
-    assert.equal(historyList(index, new Date(at(4100)), TZ).recent, 'Son 30 gün · 2 antrenman · 1 sa 44 dk · 2 rekor');
+    assert.equal(historyList(index, new Date(at(4100)), TZ).recent, 'Son 30 gün · 2 antrenman · 1 sa 3 dk · 2 rekor');
     assert.equal(historyList(emptySessionIndex(), new Date(at(0)), TZ).recent, null);
   });
 });

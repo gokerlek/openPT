@@ -83,7 +83,8 @@ describe('index satırı', () => {
       dayName: 'Gün B',
       otherDay: true,
       unfinished: true,
-      durationMin: 52,
+      // Yarım: son set (8. dk) + 10 dk; bitiş anı (52. dk) değil.
+      durationMin: 18,
       // 62,5×10 + 62,5×9 + 50×12; ısınma ve süreli set yok.
       volumeKg: 1787.5,
       sets: 4,
@@ -111,6 +112,22 @@ describe('index satırı', () => {
     assert.equal(waterOf({ waterTaps: [{ id: 'wt_aaaaaaaa', d: -1, at: at(1) }] }), 0);
     assert.equal(durationOf({ startedAt: at(0), finishedAt: at(80), effort: { durationMin: 55, updatedAt: at(90) } }), 55);
     assert.equal(volumeOf({ entries: [sessionEntry('e_aaaaaa', { sets: [workingSet('st_aaaaaaaa', 1, { reps: 3, effort: 'fail' })] })] }), 180);
+  });
+
+  test('yarım antrenman: süre son setten en çok 10 dk sonra biter (uygulama açık kalsa da)', () => {
+    const doc = finished('s_aaaaaaaa', 0, {
+      finishedAt: at(672),
+      entries: [sessionEntry('e_aaaaaa', { sets: [workingSet('st_aaaaaaaa', 3), workingSet('st_bbbbbbbb', 5)] })],
+      notices: [{ kind: 'unfinished', at: at(672), done: 2, planned: 9 }],
+    });
+    assert.equal(durationOf(doc), 15);
+  });
+
+  test('bitmiş antrenman bitiş anına göre; yarımda hiç set yoksa da bitiş anı', () => {
+    const doc = finished('s_aaaaaaaa', 0, { entries: [sessionEntry('e_aaaaaa', { sets: [workingSet('st_aaaaaaaa', 3)] })] });
+    assert.equal(durationOf(doc), 52);
+    const empty = finished('s_bbbbbbbb', 0, { notices: [{ kind: 'unfinished', at: at(52), done: 0, planned: 9 }] });
+    assert.equal(durationOf(empty), 52);
   });
 
   test('ekleme en yeni üstte; silme satırı çıkarır, kimliği bir kez silinenlere yazar', () => {

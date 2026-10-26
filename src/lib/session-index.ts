@@ -75,11 +75,24 @@ function exerciseRow(entry: SessionEntry): SessionIndexExercise | null {
   };
 }
 
-/** Süre: danışanın onayladığı (`effort.durationMin`), yoksa başlangıçtan bitişe. */
-export function durationOf(doc: Pick<SessionDoc, 'startedAt' | 'finishedAt' | 'effort'>): number | undefined {
+/** Yarım antrenmanda son setten sonra sayılan pay (dk): kapatılmadan açık kalan antrenman saatler sürmüş görünmesin. */
+const UNFINISHED_TAIL_MIN = 10;
+
+/**
+ * Süre: danışanın onayladığı (`effort.durationMin`), yoksa başlangıçtan bitişe. Yarım bırakılan antrenmanda bitiş son
+ * setten en çok `UNFINISHED_TAIL_MIN` sonradır.
+ */
+export function durationOf(
+  doc: Pick<SessionDoc, 'startedAt' | 'finishedAt' | 'effort'> & Partial<Pick<SessionDoc, 'entries' | 'notices'>>,
+): number | undefined {
   if (doc.effort?.durationMin !== undefined) return doc.effort.durationMin;
   if (!doc.finishedAt) return undefined;
-  const minutes = Math.round((time(doc.finishedAt) - time(doc.startedAt)) / 60_000);
+  let end = time(doc.finishedAt);
+  if (doc.notices?.some((notice) => notice.kind === 'unfinished')) {
+    const lastSet = Math.max(0, ...(doc.entries ?? []).flatMap((entry) => entry.sets.map((set) => time(set.at))));
+    if (lastSet > 0) end = Math.min(end, lastSet + UNFINISHED_TAIL_MIN * 60_000);
+  }
+  const minutes = Math.round((end - time(doc.startedAt)) / 60_000);
   return Math.min(24 * 60, Math.max(0, minutes));
 }
 
