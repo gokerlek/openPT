@@ -77,6 +77,7 @@ describe('geçmiş listesi', () => {
 
   test('son antrenman: bitmişlerin en yenisi, yarım dahil; kayıt yoksa yok', () => {
     assert.equal(lastWorkout(index)?.id, 's_bbbbbbbb');
+    assert.equal(lastWorkout(index, OWN_ID), null);
     assert.equal(lastWorkout(emptySessionIndex()), null);
     assert.equal(lastWorkout(null), null);
   });

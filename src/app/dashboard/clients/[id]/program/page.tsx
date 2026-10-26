@@ -159,7 +159,7 @@ export default async function ProgramPage({ params }: { params: Promise<{ id: st
   const description = phased
     ? `${program.phases.length} evre · ${countDays(program.phases)} gün · ${created}`
     : [`${countDays(program.phases)} gün`, perWeek(current?.phase.daysPerWeek), created].filter(Boolean).join(' · ');
-  // Son antrenman: danışan ekranıyla aynı kural (yarım dahil); rotasyonun son bitişi yarımı saymaz.
+  // Son antrenman: PT programında bitmişlerin en yenisi, yarım dahil (danışan ekranıyla aynı kural).
   const last = lastWorkout(sessions?.index ?? null);
   // Bu hafta yapılan (İlerleme sekmesiyle aynı hesap), planlanan haftalığın yanında.
   const week = sessions ? thisWeekLoad({ index: sessions.index, today: todayIn(timeZone, now), exercises: byId, setWeightsOf: exerciseSetWeights }) : null;
@@ -472,7 +472,7 @@ export default async function ProgramPage({ params }: { params: Promise<{ id: st
                   {daysRow}
                   <TableRow>
                     <TableCell className="text-muted-foreground">Son antrenman</TableCell>
-                    <TableCell>{last ? `${formatDay(last.date)}${last.unfinished ? ' · yarım' : ''}` : 'Henüz yok'}</TableCell>
+                    <TableCell>{last ? `${formatDay(last.date)}${last.unfinished ? ' · yarım' : ''}` : sessions ? 'Henüz yok' : '—'}</TableCell>
                   </TableRow>
                   <TableRow>
                     <TableCell className="text-muted-foreground">Başladı</TableCell>
