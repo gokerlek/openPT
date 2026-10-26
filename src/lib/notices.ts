@@ -37,7 +37,7 @@ export const PT_NOTICE_LABELS: Record<PtNoticeKind, string> = {
   lighter: 'Hafifletildi',
   pain: 'Ağrı',
   program: 'Program',
-  proposal: 'Öneri',
+  proposal: 'Bekleyen öneri',
   own_program: 'Kendi programı',
   constraint: 'Kısıt',
 };
@@ -226,14 +226,21 @@ export type FeedItem = PtNotice & { clientId: string; clientName: string; unread
 
 /**
  * Genel bakış'ın "Bildirimler" listesi: bütün danışanların bildirimleri tek listede, en yeniden eskiye,
- * en çok `limit`. `unread`: okunmamışların toplamı (listede görünmeyenler dahil); `unreadClients`:
- * "Tümünü okundu say"ın yazacağı danışanlar.
+ * en çok `limit`. Pencere burada, sayfa açılırken uygulanır: danışan özeti önbellekte eski kalabilir
+ * (`notices-store.ts`); bekleyen öneri pencere dışında da kalır (PT'nin kararını bekliyor). `unread`:
+ * okunmamışların toplamı (listede görünmeyenler dahil); `unreadClients`: "Tümünü okundu say"ın yazacağı danışanlar.
  */
-export function noticeFeed(digests: readonly ClientDigest[], limit = NOTICE_FEED_LIMIT): { items: FeedItem[]; unread: number; unreadClients: string[] } {
+export function noticeFeed(
+  digests: readonly ClientDigest[],
+  options: { now: Date; limit?: number },
+): { items: FeedItem[]; unread: number; unreadClients: string[] } {
+  const since = options.now.getTime() - NOTICE_WINDOW_DAYS * DAY_MS;
   const all = digests.flatMap((digest) =>
-    digest.notices.map((notice) => ({ ...notice, clientId: digest.id, clientName: digest.name, unread: isUnread(notice, digest.seenAt) })),
+    digest.notices
+      .filter((notice) => notice.kind === 'proposal' || time(notice.at) >= since)
+      .map((notice) => ({ ...notice, clientId: digest.id, clientName: digest.name, unread: isUnread(notice, digest.seenAt) })),
   );
   all.sort((a, b) => time(b.at) - time(a.at) || (a.clientId < b.clientId ? -1 : a.clientId > b.clientId ? 1 : 0) || (a.key < b.key ? -1 : 1));
   const unreadClients = [...new Set(all.filter((item) => item.unread).map((item) => item.clientId))].sort();
-  return { items: all.slice(0, limit), unread: all.filter((item) => item.unread).length, unreadClients };
+  return { items: all.slice(0, options.limit ?? NOTICE_FEED_LIMIT), unread: all.filter((item) => item.unread).length, unreadClients };
 }

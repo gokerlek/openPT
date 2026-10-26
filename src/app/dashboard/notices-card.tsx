@@ -22,7 +22,7 @@ import { MarkSeenButton } from './mark-seen-button';
  */
 export async function NoticesCard({ timeZone }: { timeZone: string }) {
   const { overviews, failed } = await clientOverviews();
-  const feed = noticeFeed(overviews);
+  const feed = noticeFeed(overviews, { now: new Date() });
 
   return (
     <Card>
