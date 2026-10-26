@@ -11,7 +11,8 @@ export const CLIENT_TABS = [
   { href: '/me/programlar', label: 'Program' },
   // Geçmiş, İlerleme'nin alt sekmesi (Özet · Geçmiş · Rekorlar); adresi yerinde kalır.
   { href: '/me/ilerleme', label: 'İlerleme', also: ['/me/gecmis'] },
-  { href: '/me/saglik', label: 'Sağlık' },
+  // Kamera ölçümü Sağlık'tan açılır, geri bağlantısı Sağlık.
+  { href: '/me/saglik', label: 'Sağlık', also: ['/me/olcum'] },
 ] as const satisfies readonly { href: string; label: string; also?: readonly string[] }[];
 
 export type ClientTab = (typeof CLIENT_TABS)[number];
@@ -20,8 +21,8 @@ export type ClientTab = (typeof CLIENT_TABS)[number];
  * Adresin ait olduğu sekmenin sırası; sekme dışındaki sayfada (Ayarlar) -1. Bugün yalnız tam
  * eşleşmede etkindir (`/me` bütün danışan adreslerinin önekidir); öteki sekmeler alt sayfalarında
  * da (`/me/programlar/[pid]/duzenle`, `/me/ilerleme/rekorlar`). Bir sekme `also`'daki adreslerde de
- * etkindir: Geçmiş (`/me/gecmis`, `/me/gecmis/[id]`) İlerleme'nin içindedir. Sondaki eğik çizgi yok
- * sayılır; `/me/gecmisler` Geçmiş değildir.
+ * etkindir: Geçmiş (`/me/gecmis`, `/me/gecmis/[id]`) İlerleme'nin, kamera ölçümü (`/me/olcum`) Sağlık'ın
+ * içindedir. Sondaki eğik çizgi yok sayılır; `/me/gecmisler` Geçmiş değildir.
  */
 export function clientTabIndex(pathname: string): number {
   const path = pathname.length > 1 ? pathname.replace(/\/+$/, '') : pathname;

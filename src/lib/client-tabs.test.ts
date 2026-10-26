@@ -16,6 +16,7 @@ describe("clientTabIndex: dock'un etkin sekmesi", () => {
     assert.equal(clientTabIndex('/me/gecmis/s_k2m9x4qa'), 2);
     assert.equal(clientTabIndex('/me/ilerleme/rekorlar'), 2);
     assert.equal(clientTabIndex('/me/programlar/op_k2m9x4qa/duzenle'), 1);
+    assert.equal(clientTabIndex('/me/olcum'), 3);
     assert.equal(clientTabIndex('/me/ayarlar'), -1);
     assert.equal(clientTabIndex('/me/antrenman'), -1);
   });

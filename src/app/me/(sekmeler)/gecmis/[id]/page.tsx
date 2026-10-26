@@ -19,7 +19,7 @@ const BACK = { href: '/me/gecmis', label: 'Geçmiş' };
 /**
  * Geçmişteki bir antrenman (tasarım §2.10): hareketler yapılış sırasıyla, setler zorluklarıyla, ayar notu,
  * program değişiklikleri; "Özeti aç" karuseli açar. Düzenle kipinde set, hareket ve antrenmanın tamamı onaylı
- * silinir, su ±1 (açık soru 6: geçmişte set düzeltme yok). Dock Geçmiş'te kalır. Sayfa yetkiyi kendisi
+ * silinir, su ±1 (açık soru 6: geçmişte set düzeltme yok). Dock İlerleme'de kalır. Sayfa yetkiyi kendisi
  * denetler (SPEC §5); bitmemiş antrenman antrenman ekranına döner.
  */
 export default async function HistoryDetailPage({ params }: { params: Promise<{ id: string }> }) {
