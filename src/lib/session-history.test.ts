@@ -2,7 +2,7 @@ import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { emptySessionIndex, type SessionDoc, type SessionIndexRow } from './schemas/session.ts';
 import { indexRowOf, upsertIndexRow } from './session-index.ts';
-import { deleteCopy, deletePatch, firstHistoryRows, historyList, sessionDetail, DELETE_BODY, DELETE_DETAIL, type HistoryMonth } from './session-history.ts';
+import { deleteCopy, deletePatch, firstHistoryRows, historyList, lastWorkout, sessionDetail, DELETE_BODY, DELETE_DETAIL, type HistoryMonth } from './session-history.ts';
 import { OWN_DAY_A, OWN_DAY_B, OWN_ID } from './testing/own-fixtures.ts';
 import { at, DAY_A, DAY_B, sessionDoc, sessionEntry, workingSet } from './testing/session-fixtures.ts';
 
@@ -73,6 +73,12 @@ describe('geçmiş listesi', () => {
     assert.match(long.recent ?? '', /^Son 30 gün · 1 antrenman · 3 sa 20 dk/);
     assert.equal(listOf({ ...indexRowOf(second, '1'.repeat(40)), durationMin: 180 }).months[0]?.rows[0]?.title, 'Gün B · 3 sa');
     assert.equal(listOf({ ...indexRowOf(second, '1'.repeat(40)), durationMin: 181 }).months[0]?.rows[0]?.title, 'Gün B');
+  });
+
+  test('son antrenman: bitmişlerin en yenisi, yarım dahil; kayıt yoksa yok', () => {
+    assert.equal(lastWorkout(index)?.id, 's_bbbbbbbb');
+    assert.equal(lastWorkout(emptySessionIndex()), null);
+    assert.equal(lastWorkout(null), null);
   });
 });
 

@@ -107,6 +107,12 @@ export function historyList(index: SessionIndex, now: Date, timeZone: string): H
   return { recent: summary, months, count: rows.length };
 }
 
+/** "Son antrenman" (Program sekmesi ve danışan ekranı aynı kural): bitmişlerin en yenisi, yarım dahil. */
+export function lastWorkout(index: SessionIndex | null): SessionIndexRow | null {
+  const rows = (index?.items ?? []).filter((row) => row.finishedAt);
+  return rows.sort((a, b) => time(b.startedAt ?? b.date) - time(a.startedAt ?? a.date))[0] ?? null;
+}
+
 /**
  * "Daha fazla göster": ayların satırları ilk `count` satıra kadar (boş kalan ay düşer). Danışanın Geçmiş'i ve
  * PT'nin Antrenmanlar sekmesi ortak.
