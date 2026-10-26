@@ -88,7 +88,7 @@ function Line({ lead, name, value, muted }: { lead?: React.ReactNode; name: stri
  * Erişilebilirlik: `role="region"` + `aria-roledescription="carousel"`, kartlar "2 / 4, Rekorlar ve gelişim";
  * ←/→ tuşları; görünmeyen kartlar ekran okuyucudan gizli. Hareket azaltmada geçiş anında, sayılar son değerle.
  * Bitişte, ağrıyla yine geçilen hareket varsa ilk kartın altında "Antrenörüne kısıt olarak bildir" (`painOffers`,
- * `kisit-tarama.md` §3.7). Son kartta ikincil yuva (1–3. kartta "Bugün'e dön") AI koç açıksa "Koça sor" (`coach`:
+ * `kisit-tarama.md` §3.7). Son kartta ikincil yuva (1–3. kartta "Bugün'e dön") AI koç açıksa "AI koça sor" (`coach`:
  * panel açılır, hemen değerlendirir); değilse görünmez kalır, birincil düğme yerinden oynamaz.
  */
 export function SummaryCarousel({
@@ -212,7 +212,7 @@ export function SummaryCarousel({
           </Button>
         )}
         {last && coach ? (
-          <CoachButton variant="ghost" label="Koça sor" detail={{ autoReview: true }} className="h-11 self-center text-muted-foreground" />
+          <CoachButton variant="ghost" label="AI koça sor" detail={{ autoReview: true }} className="h-11 self-center text-muted-foreground" />
         ) : (
           <Button variant="ghost" className={cn('h-11 self-center text-muted-foreground', last && 'invisible')} nativeButton={false} render={<Link href={home.href} tabIndex={last ? -1 : undefined} />}>
             {home.label}

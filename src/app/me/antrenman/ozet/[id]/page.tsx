@@ -19,7 +19,7 @@ export const metadata: Metadata = { title: 'Özet' };
  * (SPEC §5); hesaplar `history-store.ts` → `workout-summary.ts`. Bitmemiş antrenman antrenman ekranına döner;
  * silinmiş ya da olmayan antrenmanda dönüş bağlantısı. Bitişten açıldıysa ağrıyla yine geçilen hareketin
  * "Antrenörüne kısıt olarak bildir" kısayolu (`pain-report-store.ts`; kısıtlar ve ağrı takibi onaylıyken). AI koç
- * açıksa son kartta "Koça sor" (`coach`).
+ * açıksa son kartta "AI koça sor" (`coach`).
  */
 export default async function SummaryPage({
   params,

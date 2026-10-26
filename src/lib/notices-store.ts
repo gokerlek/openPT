@@ -181,7 +181,10 @@ async function buildDigest(id: string): Promise<ClientOverview | null> {
   return { id, name: client.name, ...(client.inbox?.seenAt ? { seenAt: client.inbox.seenAt } : {}), notices, attention, coach };
 }
 
-/** Danışanın Genel bakış özeti (önbellekli): bildirimler, dikkat özeti ve AI koçun açık olup olmadığı; kaydı yoksa null. */
+/**
+ * Danışanın Genel bakış özeti (önbellekli): bildirimler, dikkat özeti ve AI koçun açık olup olmadığı; kaydı yoksa null.
+ * Anahtardaki sürüm özetin biçimi değişince eski önbelleği bırakır (`v2`: `coach` alanı).
+ */
 export function readClientDigest(id: string): Promise<ClientOverview | null> {
-  return unstable_cache(() => buildDigest(id), ['client-overview', id], { tags: [noticesTag(id)], revalidate: 300 })();
+  return unstable_cache(() => buildDigest(id), ['client-overview', 'v2', id], { tags: [noticesTag(id)], revalidate: 300 })();
 }

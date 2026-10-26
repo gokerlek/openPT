@@ -52,9 +52,10 @@ export default async function ProgramsPage() {
   const count = items.length + state.unreadable.length;
   const full = count >= OWN_PROGRAM_LIMITS.programs;
   const edited = new Map(ptEdits(state.index, new Date()).map((item) => [item.id, item.at]));
-  // "Yeni program"ın altında, yer varken: AI koç paneli "Program hazırla" sekmesiyle açılır.
+  // "Yeni program"ın altında, yer varken: AI koç paneli "Program hazırla" sekmesiyle açılır. Hayalet: asıl eylem
+  // "Yeni program" kalır.
   const coach = coachAccess(client) === 'ready';
-  const aiButton = coach ? <CoachButton label="AI ile program öner" detail={{ tab: 'program' }} className="h-11 w-full" /> : null;
+  const aiButton = coach ? <CoachButton variant="ghost" label="AI ile program öner" detail={{ tab: 'program' }} className="h-11 w-full" /> : null;
 
   const ptProgram = pt?.program ?? null;
   const ptPhase = ptProgram ? currentPhaseOf(ptProgram)?.phase : undefined;
