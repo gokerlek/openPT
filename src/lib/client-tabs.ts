@@ -15,8 +15,6 @@ export const CLIENT_TABS = [
   { href: '/me/saglik', label: 'Sağlık', also: ['/me/olcum'] },
 ] as const satisfies readonly { href: string; label: string; also?: readonly string[] }[];
 
-export type ClientTab = (typeof CLIENT_TABS)[number];
-
 /** Sondaki eğik çizgi yok sayılır (`/me/gecmis/` → `/me/gecmis`); kök `/` kalır. */
 function withoutTrailingSlash(pathname: string): string {
   return pathname.length > 1 ? pathname.replace(/\/+$/, '') : pathname;

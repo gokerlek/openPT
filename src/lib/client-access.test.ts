@@ -11,6 +11,7 @@ import {
   formatInviteCode,
   healthConsentState,
   healthFieldState,
+  hasHealthSection,
   healthScopeGrows,
   indexWithStatus,
   INVITE_MAX_ATTEMPTS,
@@ -240,6 +241,16 @@ describe('sağlık onayı', () => {
     // PT'nin kaydı kapsamı genişletince taban anı yenilenir: bütün onay yeniden sorulur.
     const tabanli = danisan({ enabled: true, fields: ['check_in', 'screening'], enabledAt: an(10) }, onay(['check_in'], { at: an(5) }));
     assert.equal(canRecordHealth(tabanli, 'check_in'), false);
+  });
+
+  test('Sağlık bölümü yalnız kısıt ya da tarama kaydı yazılabilirken var; ölçüm ya da ağrı takibi tek başına açmaz', () => {
+    assert.equal(hasHealthSection(danisan({ enabled: true, fields: ['conditions'] }, onay(['conditions']))), true);
+    assert.equal(hasHealthSection(danisan({ enabled: true, fields: ['screening'] }, onay(['screening']))), true);
+    assert.equal(hasHealthSection(danisan({ enabled: true, fields: ['measurements', 'check_in'] }, onay(['measurements', 'check_in']))), false);
+    // Modülde seçili ama onay yok, ya da onay kapsamıyor: bölüm yok.
+    assert.equal(hasHealthSection(danisan({ enabled: true, fields: ['conditions', 'screening'] })), false);
+    assert.equal(hasHealthSection(danisan({ enabled: true, fields: ['conditions', 'screening'] }, onay(['check_in']))), false);
+    assert.equal(hasHealthSection(danisan({ enabled: false, fields: [] }, onay(['conditions', 'screening']))), false);
   });
 
   test('onay metni değişince eski onay güncel değil', () => {

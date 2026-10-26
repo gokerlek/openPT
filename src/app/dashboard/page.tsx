@@ -12,6 +12,7 @@ import { listClientIds } from '@/lib/github/repos';
 import { requirePt } from '@/lib/guards';
 import { readLiveOverview } from '@/lib/live-store';
 import { AttentionCard } from './attention-card';
+import { clientOverviews } from './client-overviews';
 import { LiveNow } from './live-now';
 import { NoticesCard } from './notices-card';
 
@@ -25,6 +26,9 @@ export const metadata: Metadata = { title: 'Genel bakış' };
  */
 export default async function DashboardPage() {
   await requirePt();
+  // Dikkat ve bildirimlerin danışan özetleri hemen başlar ama beklenmez (kartlar kendi akışında; React `cache` aynı
+  // okumayı paylaştırır). Reddedilmez: okunamayan danışan sayılır (`client-overviews.ts`).
+  void clientOverviews();
   const [exercises, clientIds, config] = await Promise.all([
     listExercises(),
     listClientIds().catch(() => [] as string[]),
@@ -34,7 +38,7 @@ export default async function DashboardPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <PageHeader title="Genel bakış" description="Danışanların, şablonların ve egzersiz kütüphanen." />
+      <PageHeader title="Genel bakış" description="Önce bakılacaklar: dikkat isteyen danışanlar ve bildirimler." />
 
       {/* Danışan başına özet önbellekten (iki kart ortak); önbellek boşken sayfanın geri kalanı beklemesin. */}
       <div className="grid gap-6 lg:grid-cols-2 lg:items-start">

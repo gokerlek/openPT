@@ -2,7 +2,7 @@ import { CoachPreferenceForm } from '@/components/coach/coach-preference-form';
 import type { Metadata } from 'next';
 import { FirstAidKit, Key } from '@phosphor-icons/react/dist/ssr';
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { canRecordHealth, canSetPassword, hasPassword, healthConsentState, outdatedHealthFields } from '@/lib/client-status';
+import { canRecordHealth, canSetPassword, hasHealthSection, hasPassword, healthConsentState, outdatedHealthFields } from '@/lib/client-status';
 import { readAppConfig } from '@/lib/config';
 import { currentClient } from '@/lib/guards';
 import { activeItem } from '@/lib/own-program-index';
@@ -64,7 +64,7 @@ export default async function ClientSettingsPage() {
           fields={client.modules.health.fields}
           outdated={outdatedHealthFields(client)}
           continuing={client.modules.health.fields.filter((field) => canRecordHealth(client, field))}
-          healthPage={canRecordHealth(client, 'conditions') || canRecordHealth(client, 'screening')}
+          healthPage={hasHealthSection(client)}
         />
       )}
 

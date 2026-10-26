@@ -8,6 +8,7 @@ import { Card, CardAction, CardDescription, CardFooter, CardHeader, CardTitle } 
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { InputGroup, InputGroupAddon, InputGroupInput } from '@/components/ui/input-group';
 import { Skeleton } from '@/components/ui/skeleton';
+import type { CardExtras } from '@/lib/client-card-extras';
 import type { AccessState, passwordState } from '@/lib/client-status';
 import { formatNumber } from '@/lib/format';
 import { matchesName } from '@/lib/name-search';
@@ -36,8 +37,6 @@ export type ClientCardData = {
  * maddesi var) ve "Son antrenman 23 Eki" ya da "Son 35 günde antrenman yok". Arşivdeki ya da özeti okunamayan
  * danışanda yok.
  */
-export type CardExtras = { attention: { count: number; urgent: boolean }; lastWorkout: string | null };
-
 export type ClientSectionData = { status: ClientStatus; label: string; cards: ClientCardData[] };
 
 const HEALTH_VARIANT: Record<HealthWork['tone'], 'outline' | 'secondary'> = { waiting: 'outline', info: 'secondary' };

@@ -5,14 +5,13 @@ import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
-import { ATTENTION_TUNING, attentionItems, type AttentionFacts } from '@/lib/attention';
 import { listClients, readInvite } from '@/lib/clients';
 import { readAppConfig } from '@/lib/config';
-import { formatDayShort, formatNumber } from '@/lib/format';
+import { clientCardExtras, type CardExtras } from '@/lib/client-card-extras';
 import { CLIENT_STATUS_LABELS, CLIENT_STATUSES } from '@/lib/schemas/client';
 import { requirePt } from '@/lib/guards';
 import { clientOverviews } from '../client-overviews';
-import { ClientList, type CardExtras, type ClientCardData, type ClientSectionData } from './client-list';
+import { ClientList, type ClientCardData, type ClientSectionData } from './client-list';
 import { clientsSummary, clientWork } from './client-work';
 import { passwordOf } from './invite-state';
 
@@ -26,7 +25,7 @@ export const metadata: Metadata = { title: 'Danışanlar' };
  *
  * Dikkat ve son antrenman Genel bakış'la aynı danışan özetlerinden (`client-overviews.ts`; önbellekli,
  * arşivdekiler hariç); özeti okunamayan danışanda yok. Beklenmez: liste hemen çizilir, kartların altı özetler
- * gelince dolar (önbellek boşken danışan başına GitHub okuması sürebilir).
+ * gelince dolar (önbellek boşken danışan başına GitHub okuması sürebilir). Kartın alt satırı `client-card-extras.ts`.
  */
 export default async function ClientsPage() {
   await requirePt();
@@ -50,25 +49,10 @@ export default async function ClientsPage() {
     .then((loaded) => {
       if (!loaded) return {};
       const [{ overviews }, config] = loaded;
-      const facts = new Map(overviews.map((overview) => [overview.id, overview.attention]));
-      // Yalnız sayı gösterilir: maddelerin metnindeki hareket adı gerekmez, kütüphane okunmaz.
-      const ctx = { now, timeZone: config.timeZone, titleOf: (exerciseId: string) => exerciseId };
-      return Object.fromEntries(
-        rows.flatMap(({ entry, work }): [string, CardExtras][] => {
-          const attention = entry.ok && entry.status !== 'archived' ? facts.get(entry.id) : undefined;
-          if (!attention) return [];
-          const items = attentionItems(attention, ctx);
-          const joined = work?.access === 'joined' || work?.access === 'used';
-          return [
-            [
-              entry.id,
-              {
-                attention: { count: items.length, urgent: items.some((item) => item.tone === 'danger') },
-                lastWorkout: lastWorkoutText(attention, entry.status === 'active' && joined),
-              },
-            ],
-          ];
-        }),
+      return clientCardExtras(
+        rows.map(({ entry, work }) => ({ id: entry.id, ok: entry.ok, status: entry.status, access: work?.access ?? null })),
+        new Map(overviews.map((overview) => [overview.id, overview.attention])),
+        { now, timeZone: config.timeZone },
       );
     })
     .catch(() => ({}));
@@ -130,16 +114,4 @@ export default async function ClientsPage() {
       )}
     </div>
   );
-}
-
-/**
- * Son antrenman günü (özetteki son 35 gün): "Son antrenman 23 Eki". O günlerde antrenman yoksa yalnız
- * `expected` iken söylenir: danışan aktif ve giriş yapmış (duraklatılmışta ya da daveti bekleyende antrenman
- * beklenmez).
- */
-function lastWorkoutText(facts: AttentionFacts, expected: boolean): string | null {
-  // Özet günleri sıralı tutar; yine de en büyüğü alınır.
-  const last = facts.sessionDays.reduce<string | null>((latest, day) => (latest === null || day > latest ? day : latest), null);
-  if (last) return `Son antrenman ${formatDayShort(last)}`;
-  return expected ? `Son ${formatNumber(ATTENTION_TUNING.sessionDaysKept)} günde antrenman yok` : null;
 }

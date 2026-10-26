@@ -9,13 +9,13 @@ import { hasProgressTabs, PROGRESS_SECTIONS, progressSectionIndex } from '@/lib/
  * Danışanın İlerleme sekmesinin ikinci şeridi: Özet · Geçmiş · Rekorlar (`PROGRESS_SECTIONS`). Her bölüm
  * kendi sayfasıdır (adres değişir, geri tuşu çalışır): gezinme, `tablist` değil (`TabsNav`). Etkin bölüm
  * `progressSectionIndex`'ten (Özet yalnız tam eşleşmede, Geçmiş antrenmanın detayında da). Dock'ta üçünde de
- * İlerleme etkindir (`client-tabs.ts`). Yalnız telefon: dokunmatikte şerit 44 px.
+ * İlerleme etkindir (`client-tabs.ts`). Yalnız telefon: dokunmatikte şerit 44 px (`TabsNav`'ın varsayılanı).
  */
 export function ProgressTabs() {
   const active = progressSectionIndex(usePathname());
 
   return (
-    <TabsNav aria-label="İlerleme bölümleri" className="w-full" listClassName="h-8 touch:h-11">
+    <TabsNav aria-label="İlerleme bölümleri" className="w-full">
       {PROGRESS_SECTIONS.map((section, index) => (
         <TabsNavLink key={section.href} active={index === active} render={<Link href={section.href} />}>
           {section.label}

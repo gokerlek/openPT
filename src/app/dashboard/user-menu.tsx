@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { ChatCircleDots, GearSix, SignOut, User } from '@phosphor-icons/react';
+import { GearSix, SignOut, Sparkle, User } from '@phosphor-icons/react';
 import { discardAllDrafts } from '@/components/block-editor/editor-draft';
 import { openCoach } from '@/components/coach/coach-launcher';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -59,7 +59,7 @@ export function UserMenu({ login, appName }: { login: string; appName: string })
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
           <DropdownMenuItem className="touch:min-h-11" onClick={() => openCoach()}>
-            <ChatCircleDots />
+            <Sparkle weight="fill" />
             AI koç
           </DropdownMenuItem>
           <DropdownMenuItem className="touch:min-h-11" render={<Link href="/dashboard/settings" />}>

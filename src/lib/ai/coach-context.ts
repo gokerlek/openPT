@@ -11,7 +11,7 @@ export function coachPage(pathname: string): typeof COACH_PAGES[number] {
   return 'overview';
 }
 export function coachClientOf(pathname: string) { return /^\/dashboard\/clients\/(c_[a-z0-9]{6,24})(?:\/|$)/.exec(pathname)?.[1] ?? null; }
-export const COACH_PAGE_LABELS = { overview: 'Genel görünüm', program: 'Program', measurements: 'Ölçümler', workout: 'Antrenman', progress: 'İlerleme', settings: 'Ayarlar', library: 'Kütüphane', health: 'Sağlık' };
+export const COACH_PAGE_LABELS = { overview: 'Genel bakış', program: 'Program', measurements: 'Ölçümler', workout: 'Antrenman', progress: 'İlerleme', settings: 'Ayarlar', library: 'Kütüphane', health: 'Sağlık' };
 
 /** Paneli açarken bağlam: PT'de hangi danışan, hangi sekme, açılınca hemen değerlendirilsin mi. */
 export type CoachOpen = { clientId?: string; tab?: 'review' | 'program'; autoReview?: boolean };

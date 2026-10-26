@@ -1,5 +1,5 @@
 import { Suspense } from 'react';
-import { canRecordHealth } from '@/lib/client-status';
+import { hasHealthSection } from '@/lib/client-status';
 import { currentClient, requireClient } from '@/lib/guards';
 import { ClientDock } from '../client-dock';
 
@@ -37,5 +37,5 @@ export default async function ClientTabsLayout({ children }: { children: React.R
 /** Dock, Sağlık öğesiyle: yalnız kısıt ya da tarama onaylıyken (tasarım `kisit-tarama.md` §5.2). */
 async function HealthAwareDock() {
   const client = await currentClient();
-  return <ClientDock health={canRecordHealth(client, 'conditions') || canRecordHealth(client, 'screening')} />;
+  return <ClientDock health={hasHealthSection(client)} />;
 }

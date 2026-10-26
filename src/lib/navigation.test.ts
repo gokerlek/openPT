@@ -122,8 +122,16 @@ describe('skeletonKind: geçişte hedef sayfaya benzeyen iskelet', () => {
     assert.equal(skeletonKind('/dashboard/clients'), 'list');
   });
 
+  test('Ayarlar: üç sekmesi de sekmeli iskelet (sondaki eğik çizgi sayılmaz)', () => {
+    assert.equal(skeletonKind('/dashboard/settings'), 'settings');
+    assert.equal(skeletonKind('/dashboard/settings/'), 'settings');
+    assert.equal(skeletonKind('/dashboard/settings/ai'), 'settings');
+    assert.equal(skeletonKind('/dashboard/settings/updates'), 'settings');
+    // Bilinmeyen alt sayfa Ayarlar'ın sekmeleriyle açılmaz.
+    assert.equal(skeletonKind('/dashboard/settings/baska'), 'detail');
+  });
+
   test('formlar ve detaylar', () => {
-    assert.equal(skeletonKind('/dashboard/settings'), 'form');
     assert.equal(skeletonKind('/dashboard/templates/new'), 'form');
     assert.equal(skeletonKind('/dashboard/exercises/halter-bench-press/edit'), 'form');
     assert.equal(skeletonKind('/dashboard/clients/new'), 'form');

@@ -41,7 +41,7 @@ export const SWIPE = {
 } as const;
 
 /**
- * Danışanın sekmeleri (dock: Bugün · Geçmiş · İlerleme; `(sekmeler)/template.tsx`). Yeni sekmenin
+ * Danışanın sekmeleri (dock: Bugün · Program · İlerleme · Sağlık, `lib/client-tabs.ts`; `(sekmeler)/template.tsx`). Yeni sekmenin
  * içeriği dock'taki yönden kayarak gelir (`DURATION.base`, `EASE.enter`); sekme dışı sayfada
  * (Ayarlar) yalnız saydamlık. Hareket azaltma tercihinde kayma yok (`MotionConfig`).
  */

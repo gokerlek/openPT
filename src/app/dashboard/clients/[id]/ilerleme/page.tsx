@@ -24,8 +24,9 @@ import { HEALTH_STATE_LABELS } from '../../health-state';
 export const metadata: Metadata = { title: 'İlerleme' };
 
 /**
- * Danışanın İlerleme sekmesi (PT; SPEC §6, §7.6) — danışanın `/me/ilerleme`'siyle aynı bölümler ve aynı
- * hesap (`src/components/progress`, `viewer="pt"`): üç sayı, Gelişim (kas başına güç gelişimi: harita,
+ * Danışanın İlerleme sekmesi (PT; SPEC §6, §7.6) — danışanın İlerleme'siyle aynı kartlar ve aynı hesap
+ * (`src/components/progress`, `viewer="pt"`), ama tek sayfada: danışanda Özet'te (`/me/ilerleme`) olanlar ve
+ * Rekorlar alt sekmesindekiler (`/me/ilerleme/rekorlar`: son rekorlar, başarılar) burada birlikte. Sırayla: üç sayı, Gelişim (kas başına güç gelişimi: harita,
  * listeler, kasın hareketleri ve grafikleri, onay varsa çevre değişimi), hareket başına grafik ve rekorlar,
  * haftalık yük, antrenman düzeni (plana göre), haftalık kas yükü, antrenman zorluğu, su, son rekorlar,
  * başarılar. Hazır oluşluk, ağrı ve hareket taraması (tarama sayfasına bağlantıyla) yalnız danışanın onayı o parçayı
