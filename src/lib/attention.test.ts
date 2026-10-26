@@ -324,7 +324,7 @@ describe('dikkat: Genel bakış listesi', () => {
   test('danışana göre gruplar: en acil maddesi olan önce, sonra ad; grup ve madde sınırı', () => {
     const result = attentionGroups(
       [
-        { id: 'c_bbbbbbbb', name: 'Zeynep', facts: facts({ access: 'none' }) },
+        { id: 'c_bbbbbbbb', name: 'Ayşe', facts: facts({ access: 'none' }) },
         { id: 'c_cccccccc', name: 'Can', facts: facts({ access: 'none', proposals: { count: 1, at: '2026-09-25T10:00:00.000Z', text: 'Squat 3 → 4 set' } }) },
         { id: 'c_aaaaaaaa', name: 'Ahmet', facts: facts({ proposals: { count: 2, at: '2026-09-25T10:00:00.000Z' }, access: 'joined' }) },
         { id: 'c_dddddddd', name: 'Okunamadı', facts: null },
@@ -341,6 +341,19 @@ describe('dikkat: Genel bakış listesi', () => {
     );
     assert.equal(result.total, 3);
     assert.equal(result.hidden, 1);
+    // Sağlık güvenliği maddesi grubu kırmızı yapar.
+    const red = attentionGroups(
+      [
+        {
+          id: 'c_eeeeeeee',
+          name: 'Elif',
+          facts: facts({ constraints: { urgent: [], refer: [{ id: 'k_aaaaaaaa', title: 'Sol diz' }], waiting: [], reports: [], changes: [], conflicts: [] } }),
+        },
+      ],
+      ctx,
+    );
+    assert.equal(red.groups[0]?.items[0]?.tone, 'danger');
+    assert.equal(red.groups[0]?.urgent, true);
   });
 });
 
