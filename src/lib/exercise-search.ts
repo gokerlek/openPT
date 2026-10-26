@@ -1,5 +1,5 @@
 /**
- * Egzersiz arama — şablon düzenleyicinin kütüphane panelinde ada ya da kasa göre.
+ * Egzersiz arama — şablon/program düzenleyicinin seçicisi ve egzersiz kütüphanesi listesi; ada ya da kasa göre.
  *
  * Türkçe harfler katlanır: "gogus" ile "GÖĞÜS", "incline" ile "Incline" eşleşir (Türkçe
  * küçük harfte I → ı olur; ı da i'ye katlanır). Boşlukla ayrılan kelimelerin hepsi
