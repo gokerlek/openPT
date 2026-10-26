@@ -1,6 +1,6 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { emptySessionIndex, type SessionDoc } from './schemas/session.ts';
+import { emptySessionIndex, type SessionDoc, type SessionIndexRow } from './schemas/session.ts';
 import { indexRowOf, upsertIndexRow } from './session-index.ts';
 import { deleteCopy, deletePatch, firstHistoryRows, historyList, sessionDetail, DELETE_BODY, DELETE_DETAIL, type HistoryMonth } from './session-history.ts';
 import { OWN_DAY_A, OWN_DAY_B, OWN_ID } from './testing/own-fixtures.ts';
@@ -63,6 +63,15 @@ describe('geçmiş listesi', () => {
     const list = historyList(staleIndex, new Date(at(4100)), TZ);
     assert.equal(list.months[0]?.rows[0]?.title, 'Gün B');
     assert.match(list.recent ?? '', /^Son 30 gün · 2 antrenman · 52 dk/);
+  });
+
+  test('sınır yalnız yarım antrenmanda: bitmişin uzun süresi görünür; yarımda 180 dk görünür, 181 görünmez', () => {
+    const listOf = (row: SessionIndexRow) => historyList(upsertIndexRow(emptySessionIndex(), row), new Date(at(4100)), TZ);
+    const long = listOf({ ...indexRowOf(first, '0'.repeat(40)), durationMin: 200 });
+    assert.equal(long.months[0]?.rows[0]?.title, 'Gün A · 3 sa 20 dk');
+    assert.match(long.recent ?? '', /^Son 30 gün · 1 antrenman · 3 sa 20 dk/);
+    assert.equal(listOf({ ...indexRowOf(second, '1'.repeat(40)), durationMin: 180 }).months[0]?.rows[0]?.title, 'Gün B · 3 sa');
+    assert.equal(listOf({ ...indexRowOf(second, '1'.repeat(40)), durationMin: 181 }).months[0]?.rows[0]?.title, 'Gün B');
   });
 });
 

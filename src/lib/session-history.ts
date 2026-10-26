@@ -46,7 +46,7 @@ export type HistoryList = { recent: string | null; months: HistoryMonth[]; count
 const weekdayFormat = new Intl.DateTimeFormat('tr-TR', { weekday: 'short', timeZone: 'UTC' });
 const monthFormat = new Intl.DateTimeFormat('tr-TR', { month: 'long', year: 'numeric', timeZone: 'UTC' });
 
-/** Eski index satırlarında yarım antrenmanın süresi şişik kalmış olabilir ("11 sa 12 dk"); bundan uzunu gösterilmez. */
+/** Yarım antrenmanın süresi eski index satırlarında ya da setsizse (bitiş son sete göre kısılamaz) şişik olabilir; bundan uzunu gösterilmez. */
 const UNFINISHED_MAX_MIN = 180;
 
 function shownMinutes(row: Pick<SessionIndexRow, 'durationMin' | 'unfinished'>): number | undefined {
