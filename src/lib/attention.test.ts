@@ -5,6 +5,7 @@ import {
   ATTENTION_URGENCY,
   attentionFactsOf,
   attentionFeed,
+  attentionGroups,
   attentionItems,
   constraintFactsOf,
   exerciseStalls,
@@ -318,6 +319,28 @@ describe('dikkat: Genel bakış listesi', () => {
     );
     assert.equal(feed.total, 3);
     assert.equal(feed.clients, 3);
+  });
+
+  test('danışana göre gruplar: en acil maddesi olan önce, sonra ad; grup ve madde sınırı', () => {
+    const result = attentionGroups(
+      [
+        { id: 'c_bbbbbbbb', name: 'Zeynep', facts: facts({ access: 'none' }) },
+        { id: 'c_cccccccc', name: 'Can', facts: facts({ access: 'none', proposals: { count: 1, at: '2026-09-25T10:00:00.000Z', text: 'Squat 3 → 4 set' } }) },
+        { id: 'c_aaaaaaaa', name: 'Ahmet', facts: facts({ proposals: { count: 2, at: '2026-09-25T10:00:00.000Z' }, access: 'joined' }) },
+        { id: 'c_dddddddd', name: 'Okunamadı', facts: null },
+      ],
+      ctx,
+      { groups: 2, perGroup: 1 },
+    );
+    assert.deepEqual(
+      result.groups.map((group) => [group.clientName, group.items.map((item) => item.text), group.more]),
+      [
+        ['Ahmet', ['2 öneri onay bekliyor'], 0],
+        ['Can', ['Öneri onay bekliyor: Squat 3 → 4 set'], 1],
+      ],
+    );
+    assert.equal(result.total, 3);
+    assert.equal(result.hidden, 1);
   });
 });
 

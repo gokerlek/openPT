@@ -702,3 +702,46 @@ export function attentionFeed(
   );
   return { items: all.slice(0, limit), total: all.length, clients: new Set(all.map((item) => item.clientId)).size };
 }
+
+/** Genel bakış'ta en çok bu kadar danışan ve danışan başına bu kadar madde gösterilir. */
+export const ATTENTION_GROUP_LIMIT = { groups: 8, perGroup: 3 } as const;
+
+export type AttentionGroup = {
+  clientId: string;
+  clientName: string;
+  /** En acil maddeler, `perGroup` kadar. */
+  items: AttentionItem[];
+  /** Grupta görünmeyen madde sayısı. */
+  more: number;
+  /** Sağlık güvenliği maddesi var (kırmızı). */
+  urgent: boolean;
+};
+
+/**
+ * "Dikkat gerektirenler" danışana göre: her danışanın maddeleri aciliyet sırasıyla, gruplar en acil maddelerine,
+ * sonra ada göre. `total` maddesi olan danışan sayısı, `hidden` sınır yüzünden görünmeyen danışan sayısı.
+ */
+export function attentionGroups(
+  clients: readonly { id: string; name: string; facts: AttentionFacts | null | undefined }[],
+  ctx: { now: Date; timeZone: string; titleOf: (exerciseId: string) => string },
+  limit: { groups: number; perGroup: number } = ATTENTION_GROUP_LIMIT,
+): { groups: AttentionGroup[]; total: number; hidden: number } {
+  const all = clients.flatMap((client) => {
+    const items = client.facts ? attentionItems(client.facts, ctx) : [];
+    return items.length > 0 ? [{ clientId: client.id, clientName: client.name, items }] : [];
+  });
+  all.sort(
+    (a, b) =>
+      (b.items[0]?.urgency ?? 0) - (a.items[0]?.urgency ?? 0) ||
+      a.clientName.localeCompare(b.clientName, 'tr') ||
+      a.clientId.localeCompare(b.clientId),
+  );
+  const groups = all.slice(0, limit.groups).map((group) => ({
+    clientId: group.clientId,
+    clientName: group.clientName,
+    items: group.items.slice(0, limit.perGroup),
+    more: Math.max(0, group.items.length - limit.perGroup),
+    urgent: group.items.some((item) => item.tone === 'danger'),
+  }));
+  return { groups, total: all.length, hidden: Math.max(0, all.length - groups.length) };
+}
