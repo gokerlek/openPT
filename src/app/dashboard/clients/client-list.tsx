@@ -1,12 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { Suspense, use, useState } from 'react';
 import Link from 'next/link';
 import { CaretRight, MagnifyingGlass, UserCircle, WarningCircle } from '@phosphor-icons/react';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardAction, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { InputGroup, InputGroupAddon, InputGroupInput } from '@/components/ui/input-group';
+import { Skeleton } from '@/components/ui/skeleton';
 import type { AccessState, passwordState } from '@/lib/client-status';
 import { formatNumber } from '@/lib/format';
 import { matchesName } from '@/lib/name-search';
@@ -28,11 +29,14 @@ export type ClientCardData = {
   problem: string | null;
   /** Giriş ve sağlık onayı rozetleri (okunan kayıtta). */
   work: { access: AccessState; password: ReturnType<typeof passwordState>; health: HealthWork | null } | null;
-  /** Dikkat maddelerinin sayısı; `urgent`: sağlık güvenliği maddesi var. Arşivdeki ya da özeti okunamayan danışanda yok. */
-  attention: { count: number; urgent: boolean } | null;
-  /** "Son antrenman 23 Eki" ya da "Son 35 günde antrenman yok"; özet yoksa yok. */
-  lastWorkout: string | null;
 };
+
+/**
+ * Kartın danışan özetinden gelen kısmı (sonradan akar): dikkat maddelerinin sayısı (`urgent`: sağlık güvenliği
+ * maddesi var) ve "Son antrenman 23 Eki" ya da "Son 35 günde antrenman yok". Arşivdeki ya da özeti okunamayan
+ * danışanda yok.
+ */
+export type CardExtras = { attention: { count: number; urgent: boolean }; lastWorkout: string | null };
 
 export type ClientSectionData = { status: ClientStatus; label: string; cards: ClientCardData[] };
 
@@ -40,9 +44,10 @@ const HEALTH_VARIANT: Record<HealthWork['tone'], 'outline' | 'secondary'> = { wa
 
 /**
  * Danışanlar listesi, ada göre aramayla (`matchesName`: Türkçe harfler katlanır). Bölümler durumuna göre
- * (arşivdekiler en altta); aramadan sonra boş kalan bölüm başlığıyla gizlenir.
+ * (arşivdekiler en altta); aramadan sonra boş kalan bölüm başlığıyla gizlenir. Liste hiç beklemez: dikkat ve
+ * son antrenman (`extras`) her kartın altında kendi `Suspense`'inde gelir, arama durumu korunur.
  */
-export function ClientList({ sections }: { sections: ClientSectionData[] }) {
+export function ClientList({ sections, extras }: { sections: ClientSectionData[]; extras: Promise<Record<string, CardExtras>> }) {
   const [query, setQuery] = useState('');
   const visible = sections
     .map((section) => ({ ...section, cards: section.cards.filter((card) => matchesName(card.name, query)) }))
@@ -52,21 +57,23 @@ export function ClientList({ sections }: { sections: ClientSectionData[] }) {
 
   return (
     <>
-      <InputGroup className="sm:max-w-sm">
-        <InputGroupAddon>
-          <MagnifyingGlass />
-        </InputGroupAddon>
-        <InputGroupInput
-          type="search"
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          placeholder="Danışan ara"
-          aria-label="Danışan ara"
-        />
-      </InputGroup>
+      <div role="search" className="sm:max-w-sm">
+        <InputGroup>
+          <InputGroupAddon>
+            <MagnifyingGlass />
+          </InputGroupAddon>
+          <InputGroupInput
+            type="search"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Danışan ara"
+            aria-label="Danışan ara"
+          />
+        </InputGroup>
+      </div>
       {/* Ekran okuyucu için sonuç sayısı; görünür liste zaten değişiyor. */}
-      <p className="sr-only" aria-live="polite">
-        {searching ? `${formatNumber(matches)} danışan` : ''}
+      <p role="status" className="sr-only">
+        {searching ? (matches > 0 ? `${formatNumber(matches)} danışan` : 'Eşleşen danışan yok') : ''}
       </p>
 
       {visible.length === 0 ? (
@@ -86,7 +93,7 @@ export function ClientList({ sections }: { sections: ClientSectionData[] }) {
           <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {section.cards.map((card) => (
               <li key={card.id}>
-                <ClientCard card={card} />
+                <ClientCard card={card} extras={extras} />
               </li>
             ))}
           </ul>
@@ -96,8 +103,8 @@ export function ClientList({ sections }: { sections: ClientSectionData[] }) {
   );
 }
 
-function ClientCard({ card }: { card: ClientCardData }) {
-  const { work, attention } = card;
+function ClientCard({ card, extras }: { card: ClientCardData; extras: Promise<Record<string, CardExtras>> }) {
+  const { work } = card;
   return (
     <Link
       href={`/dashboard/clients/${card.id}`}
@@ -126,22 +133,36 @@ function ClientCard({ card }: { card: ClientCardData }) {
           <CardFooter className="flex flex-wrap items-center gap-1.5">
             <AccessBadge state={work.access} password={work.password} />
             {work.health ? <Badge variant={HEALTH_VARIANT[work.health.tone]}>{work.health.label}</Badge> : null}
-            {attention && attention.count > 0 ? (
-              <Badge variant="outline" className="tabular-nums">
-                {attention.urgent ? (
-                  // Sağlık güvenliği maddesi var: renk tek başına bilgi taşımaz, ekran okuyucu "Acil" duyar.
-                  <>
-                    <WarningCircle data-icon="inline-start" weight="fill" aria-hidden className="text-destructive" />
-                    <span className="sr-only">Acil: </span>
-                  </>
-                ) : null}
-                {formatNumber(attention.count)} dikkat
-              </Badge>
-            ) : null}
-            {card.lastWorkout ? <span className="text-xs text-muted-foreground tabular-nums">{card.lastWorkout}</span> : null}
+            <Suspense fallback={<Skeleton aria-hidden className="h-5 w-14 rounded-4xl" />}>
+              <CardExtrasView extras={extras} id={card.id} />
+            </Suspense>
           </CardFooter>
         ) : null}
       </Card>
     </Link>
+  );
+}
+
+/** Kartın altındaki dikkat rozeti ve son antrenman; özet gelene kadar yerinde iskelet. */
+function CardExtrasView({ extras, id }: { extras: Promise<Record<string, CardExtras>>; id: string }) {
+  const extra = use(extras)[id];
+  if (!extra) return null;
+  const { attention, lastWorkout } = extra;
+  return (
+    <>
+      {attention.count > 0 ? (
+        <Badge variant="outline" className="tabular-nums">
+          {attention.urgent ? (
+            // Sağlık güvenliği maddesi var: renk tek başına bilgi taşımaz, ekran okuyucu "Acil" duyar.
+            <>
+              <WarningCircle data-icon="inline-start" weight="fill" aria-hidden className="text-destructive" />
+              <span className="sr-only">Acil: </span>
+            </>
+          ) : null}
+          {formatNumber(attention.count)} dikkat
+        </Badge>
+      ) : null}
+      {lastWorkout ? <span className="text-xs text-muted-foreground tabular-nums">{lastWorkout}</span> : null}
+    </>
   );
 }

@@ -12,7 +12,7 @@ import { formatDayShort, formatNumber } from '@/lib/format';
 import { CLIENT_STATUS_LABELS, CLIENT_STATUSES } from '@/lib/schemas/client';
 import { requirePt } from '@/lib/guards';
 import { clientOverviews } from '../client-overviews';
-import { ClientList, type ClientCardData, type ClientSectionData } from './client-list';
+import { ClientList, type CardExtras, type ClientCardData, type ClientSectionData } from './client-list';
 import { clientsSummary, clientWork } from './client-work';
 import { passwordOf } from './invite-state';
 
@@ -25,20 +25,20 @@ export const metadata: Metadata = { title: 'Danışanlar' };
  * günü. Başlıkta bekleyenlerin sayısı.
  *
  * Dikkat ve son antrenman Genel bakış'la aynı danışan özetlerinden (`client-overviews.ts`; önbellekli,
- * arşivdekiler hariç); özeti okunamayan danışanda yok.
+ * arşivdekiler hariç); özeti okunamayan danışanda yok. Beklenmez: liste hemen çizilir, kartların altı özetler
+ * gelince dolar (önbellek boşken danışan başına GitHub okuması sürebilir).
  */
 export default async function ClientsPage() {
   await requirePt();
-  const [clients, { overviews }, config] = await Promise.all([listClients(), clientOverviews(), readAppConfig()]);
+  // Listeyle aynı anda başlar; reddedilmez (okunamazsa kartlarda dikkat bilgisi yok).
+  const digests = Promise.all([clientOverviews(), readAppConfig()]).catch(() => null);
+  const clients = await listClients();
   const invites = new Map(
     await Promise.all(
       clients.map(async (entry) => [entry.id, await readInvite(entry.id).catch(() => null)] as const),
     ),
   );
-  const facts = new Map(overviews.map((overview) => [overview.id, overview.attention]));
   const now = new Date();
-  // Yalnız sayı gösterilir: maddelerin metnindeki hareket adı gerekmez, kütüphane okunmaz.
-  const ctx = { now, timeZone: config.timeZone, titleOf: (exerciseId: string) => exerciseId };
 
   const rows = clients.map((entry) => ({
     entry,
@@ -46,10 +46,35 @@ export default async function ClientsPage() {
   }));
   const summary = clientsSummary(rows.map(({ entry, work }) => ({ status: entry.status, work })));
 
-  const cards = rows.map(({ entry, work }): ClientCardData => {
-    const attention = entry.ok && entry.status !== 'archived' ? (facts.get(entry.id) ?? null) : null;
-    const items = attention ? attentionItems(attention, ctx) : [];
-    return {
+  const extras: Promise<Record<string, CardExtras>> = digests
+    .then((loaded) => {
+      if (!loaded) return {};
+      const [{ overviews }, config] = loaded;
+      const facts = new Map(overviews.map((overview) => [overview.id, overview.attention]));
+      // Yalnız sayı gösterilir: maddelerin metnindeki hareket adı gerekmez, kütüphane okunmaz.
+      const ctx = { now, timeZone: config.timeZone, titleOf: (exerciseId: string) => exerciseId };
+      return Object.fromEntries(
+        rows.flatMap(({ entry, work }): [string, CardExtras][] => {
+          const attention = entry.ok && entry.status !== 'archived' ? facts.get(entry.id) : undefined;
+          if (!attention) return [];
+          const items = attentionItems(attention, ctx);
+          const joined = work?.access === 'joined' || work?.access === 'used';
+          return [
+            [
+              entry.id,
+              {
+                attention: { count: items.length, urgent: items.some((item) => item.tone === 'danger') },
+                lastWorkout: lastWorkoutText(attention, entry.status === 'active' && joined),
+              },
+            ],
+          ];
+        }),
+      );
+    })
+    .catch(() => ({}));
+
+  const cards = rows.map(
+    ({ entry, work }): ClientCardData => ({
       id: entry.id,
       name: entry.ok ? entry.client.name : entry.id,
       status: entry.status,
@@ -60,10 +85,8 @@ export default async function ClientsPage() {
         entry.ok && work
           ? { access: work.access, password: passwordOf(entry.client), health: work.healthWork }
           : null,
-      attention: attention ? { count: items.length, urgent: items.some((item) => item.tone === 'danger') } : null,
-      lastWorkout: attention ? lastWorkoutText(attention, entry.status === 'active') : null,
-    };
-  });
+    }),
+  );
   const sections = CLIENT_STATUSES.flatMap((status): ClientSectionData[] => {
     const group = cards.filter((card) => card.status === status);
     return group.length > 0 ? [{ status, label: CLIENT_STATUS_LABELS[status], cards: group }] : [];
@@ -103,19 +126,20 @@ export default async function ClientsPage() {
           </Empty>
         </Card>
       ) : (
-        <ClientList sections={sections} />
+        <ClientList sections={sections} extras={extras} />
       )}
     </div>
   );
 }
 
 /**
- * Son antrenman günü (özetteki son 35 gün): "Son antrenman 23 Eki". O günlerde antrenman yoksa yalnız aktif
- * danışanda söylenir (duraklatılmışta beklenen bir şey değil).
+ * Son antrenman günü (özetteki son 35 gün): "Son antrenman 23 Eki". O günlerde antrenman yoksa yalnız
+ * `expected` iken söylenir: danışan aktif ve giriş yapmış (duraklatılmışta ya da daveti bekleyende antrenman
+ * beklenmez).
  */
-function lastWorkoutText(facts: AttentionFacts, active: boolean): string | null {
+function lastWorkoutText(facts: AttentionFacts, expected: boolean): string | null {
   // Özet günleri sıralı tutar; yine de en büyüğü alınır.
   const last = facts.sessionDays.reduce<string | null>((latest, day) => (latest === null || day > latest ? day : latest), null);
   if (last) return `Son antrenman ${formatDayShort(last)}`;
-  return active ? `Son ${formatNumber(ATTENTION_TUNING.sessionDaysKept)} günde antrenman yok` : null;
+  return expected ? `Son ${formatNumber(ATTENTION_TUNING.sessionDaysKept)} günde antrenman yok` : null;
 }
