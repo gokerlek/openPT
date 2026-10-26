@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useEffectEvent, useState, type MouseEvent } from 'react';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { X } from '@phosphor-icons/react';
@@ -7,32 +7,32 @@ import { useQuery } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { CoachPanel } from './coach-panel';
-import { coachClientOf, coachPage, COACH_PAGE_LABELS } from '@/lib/ai/coach-context';
+import { coachClientOf, coachSelection, consumeAutoReview, COACH_PAGE_LABELS, type CoachOpen, type CoachRequest } from '@/lib/ai/coach-context';
 import { fetchJson } from '@/lib/query/errors';
 import type { CoachHighlight } from '@/lib/ai/coach-highlights';
 const OPEN_EVENT = 'pulsecoach:coach-open';
-
-/** Paneli açarken bağlam: PT'de hangi danışan, hangi sekme, açılınca hemen değerlendirilsin mi. */
-export type CoachOpen = { clientId?: string; tab?: 'review' | 'program'; autoReview?: boolean };
+export type { CoachOpen };
 
 /** AI koç panelini açar (PT avatar menüsündeki "AI koç", sayfalardaki `CoachButton`); panel `CoachLauncher`'da, sabit düğme yok. */
 export function openCoach(detail: CoachOpen = {}) {
   window.dispatchEvent(new CustomEvent<CoachOpen>(OPEN_EVENT, { detail }));
 }
 export function CoachLauncher({ role, clientId }: { role: 'pt' | 'client'; clientId?: string }) {
-  const pathname = usePathname(), page = coachPage(pathname), routeClient = role === 'pt' ? coachClientOf(pathname) : clientId ?? null;
+  const pathname = usePathname(), routeClient = role === 'pt' ? coachClientOf(pathname) : clientId ?? null;
   const [open, setOpen] = useState(false), [generalPath, setGeneralPath] = useState<string | null>(null);
   // Her açılış yeni istek: bağlamı öncekinin yerine geçer (`openCoach()` boş bağlamla), `n` paneli sıfırdan kurar.
-  const [request, setRequest] = useState<{ n: number; path: string; detail: CoachOpen }>({ n: 0, path: '', detail: {} });
+  const [request, setRequest] = useState<CoachRequest>({ n: 0, path: '', detail: {} });
+  const show = useEffectEvent((detail: CoachOpen) => { setRequest(r => ({ n: r.n + 1, path: pathname, detail })); setOpen(true); });
   useEffect(() => {
-    const show = (event: Event) => { setRequest(r => ({ n: r.n + 1, path: pathname, detail: (event as CustomEvent<CoachOpen>).detail ?? {} })); setOpen(true); };
-    window.addEventListener(OPEN_EVENT, show);
-    return () => window.removeEventListener(OPEN_EVENT, show);
-  }, [pathname]);
-  // Bağlam açıldığı sayfaya ait: panelden başka sayfaya geçilince danışan yine yoldan gelir, değerlendirme yinelenmez.
-  const detail = request.path === pathname ? request.detail : {};
-  const forced = role === 'pt' ? detail.clientId ?? null : null;
-  const selected = forced ?? (generalPath === pathname && role === 'pt' ? null : routeClient);
+    const listener = (event: Event) => show((event as CustomEvent<CoachOpen>).detail ?? {});
+    window.addEventListener(OPEN_EVENT, listener);
+    return () => window.removeEventListener(OPEN_EVENT, listener);
+  }, []);
+  // Bağlam açıldığı sayfaya ait (`coachSelection`): panel açıkken geri/ileri gidilince danışan yine yoldan gelir,
+  // dönünce bağlam yeniden uygulanır. Değerlendirme yinelenmez: panel onu gönderirken `onAutoReview` isteği tüketir.
+  const { selected, page, general, initialTab, autoReview, toggle, key } = coachSelection({ role, routeClient, generalPath, pathname, request });
+  // Paneldeki bir bağlantıyla başka sayfaya geçilince modal açık kalıp yeni sayfayı örtmesin (yeni sekme açan tıklamalar hariç).
+  const closeOnNavigate = (event: MouseEvent) => { if (followsLink(event)) setOpen(false); };
   return <>
     {role === 'client' && clientId ? <CoachNudge key={`${clientId}:${pathname}`} clientId={clientId} onOpen={() => openCoach()} /> : null}
     <Sheet open={open} onOpenChange={setOpen}>
@@ -41,14 +41,20 @@ export function CoachLauncher({ role, clientId }: { role: 'pt' | 'client'; clien
           <SheetTitle className="text-xl">AI koç</SheetTitle>
           <SheetDescription>{role === 'client' ? 'Yalnız kendi kayıtların · ' : selected ? 'Bu danışanın kayıtları · ' : 'Tüm danışanlar · '}{COACH_PAGE_LABELS[page]}</SheetDescription>
         </SheetHeader>
-        <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-6">
-          {role === 'pt' && routeClient ? <Button className="mb-4 h-11 w-full" variant="outline" onClick={() => { setGeneralPath(selected ? pathname : null); setRequest(r => ({ ...r, detail: {} })); }}>{selected ? 'Tüm danışanları değerlendir' : 'Bu danışanın önerilerine dön'}</Button> : null}
-          <CoachPanel key={`${role}:${selected ?? 'general'}:${page}:${request.n}`} clientId={selected ?? 'c_ptgeneral'} role={role} page={page} general={role === 'pt' && !selected} initialTab={detail.tab} autoReview={detail.autoReview} />
-          {role === 'client' ? <Link href="/me/ayarlar" onClick={() => setOpen(false)} className="mt-6 inline-block underline">Kutlama ve öneri tercihleri</Link> : null}
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-6" onClickCapture={closeOnNavigate}>
+          {toggle ? <Button className="mb-4 h-11 w-full" variant="outline" onClick={() => { setGeneralPath(selected ? pathname : null); setRequest(r => ({ ...r, detail: {} })); }}>{selected ? 'Tüm danışanları değerlendir' : 'Bu danışanın önerilerine dön'}</Button> : null}
+          <CoachPanel key={key} clientId={selected ?? 'c_ptgeneral'} role={role} page={page} general={general} initialTab={initialTab} autoReview={autoReview} onAutoReview={() => setRequest(consumeAutoReview)} />
+          {role === 'client' ? <Link href="/me/ayarlar" className="mt-6 inline-block underline">Kutlama ve öneri tercihleri</Link> : null}
         </div>
       </SheetContent>
     </Sheet>
   </>;
+}
+/** Aynı sekmede, bu sitede bir sayfaya götüren düz tıklama (klavyeyle Enter da `click` doğurur). */
+function followsLink(event: MouseEvent) {
+  const link = event.target instanceof Element ? event.target.closest('a[href]') : null;
+  if (!(link instanceof HTMLAnchorElement) || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return false;
+  return (!link.target || link.target === '_self') && !link.hasAttribute('download') && link.origin === window.location.origin;
 }
 function CoachNudge({ clientId, onOpen }: { clientId: string; onOpen: () => void }) {
   const query = useQuery({ queryKey: ['coach', clientId, 'highlights'], queryFn: () => fetchJson<CoachHighlight[]>('/api/me/coach/highlights'), staleTime: 60000 });

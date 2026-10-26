@@ -81,9 +81,11 @@ export async function AttentionCard({ timeZone, titles }: { timeZone: string; ti
                     {coach.has(group.clientId) ? (
                       <CoachButton
                         variant="ghost"
+                        size="sm"
                         label="AI'ya sor"
+                        srLabel={`: ${group.clientName}`}
                         detail={{ clientId: group.clientId, autoReview: true }}
-                        className="h-7 px-2 text-[0.8rem] touch:h-11"
+                        className="touch:h-11"
                       />
                     ) : null}
                   </div>

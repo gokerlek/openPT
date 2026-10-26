@@ -27,7 +27,7 @@ import { answerCoach } from '@/lib/ai/coach-engine';
 import { BODY_MUSCLES, isBodyMuscle } from '@/lib/muscles';
 import { EMPTY_CARE } from '@/lib/constraint-filter';
 
-export function CoachPanel({ clientId, role, page: _page = 'overview', general = false, initialTab, autoReview = false, transport = fetchJson }: { clientId: string; role: 'pt' | 'client'; page?: typeof COACH_PAGES[number]; general?: boolean; initialTab?: 'review' | 'program'; autoReview?: boolean; transport?: typeof fetchJson }) {
+export function CoachPanel({ clientId, role, page: _page = 'overview', general = false, initialTab, autoReview = false, onAutoReview, transport = fetchJson }: { clientId: string; role: 'pt' | 'client'; page?: typeof COACH_PAGES[number]; general?: boolean; initialTab?: 'review' | 'program'; autoReview?: boolean; onAutoReview?: () => void; transport?: typeof fetchJson }) {
   const endpoint = general ? '/api/coach' : role === 'pt' ? `/api/clients/${clientId}/coach` : '/api/me/coach';
   const cache = useQueryClient(), instance = useId();
   const queryKey = ['coach', clientId, role, 'assistant'];
@@ -66,14 +66,18 @@ export function CoachPanel({ clientId, role, page: _page = 'overview', general =
     });
   }
   const data = query.data;
-  // Bağlamlı açılış (`autoReview`): kayıtlar gelince bir kez değerlendirilir; AI kapalıysa istek gitmez.
-  const reviewed = useRef(false), reviewOnOpen = useEffectEvent(() => void request({ action: 'review' }));
+  // Bağlamlı açılış (`autoReview`): kayıtlar gelince bir kez değerlendirilir; AI kapalıysa istek gitmez. Karar anında
+  // `onAutoReview` açılış isteğini tüketir: panel yeniden kurulsa da (sayfa değişip dönünce) ikinci ücretli istek gitmez.
+  // `reviewed` bu örnekte etkinin ikinci çalışmasına (Strict Mode, tüketim henüz çizilmeden) karşı.
+  const reviewed = useRef(false), reviewOnOpen = useEffectEvent((ready: boolean) => {
+    onAutoReview?.();
+    if (ready) void request({ action: 'review' });
+  });
   useEffect(() => {
     if (!autoReview || reviewed.current || !data) return;
     reviewed.current = true;
     // İstek sunucuya gider; `busy` onun süresini gösterir (Değerlendir düğmesiyle aynı yol).
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (data.access === 'ready') reviewOnOpen();
+    reviewOnOpen(data.access === 'ready');
   }, [autoReview, data]);
   if (query.isPending) return <div role="status" aria-label="AI önerileri açılıyor" className="flex flex-col gap-4"><Skeleton className="h-12 w-full" /><Skeleton className="h-48 w-full" /></div>;
   if (query.error || !data) return <Alert variant="destructive"><AlertTitle>Öneriler açılamadı</AlertTitle><AlertDescription><Button variant="outline" onClick={() => void query.refetch()}>Yeniden dene</Button></AlertDescription></Alert>;
