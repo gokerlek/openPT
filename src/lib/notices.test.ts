@@ -196,6 +196,7 @@ describe('PT bildirimleri: okundu ve Genel bakış listesi', () => {
           { key: 'oneri', kind: 'proposal', at: ago(30), text: 'Öneri: Leg Press 3 → 4 set', target: 'program' },
         ],
       },
+      { id: 'c_bbbbbbbb', name: 'Mehmet', notices: [{ key: 'bayat', kind: 'unfinished', at: ago(20), text: 'bayat', target: 'client' }] },
     ];
     const feed = noticeFeed(digests, { now: NOW });
     assert.deepEqual(
@@ -203,6 +204,7 @@ describe('PT bildirimleri: okundu ve Genel bakış listesi', () => {
       ['yeni', 'oneri'],
     );
     assert.equal(feed.unread, 2, 'pencere dışındaki eski bildirim okunmamış sayılmaz');
+    assert.deepEqual(feed.unreadClients, ['c_aaaaaaaa'], 'yalnız eski bildirimi olan danışan "Tümünü okundu say"a girmez');
   });
 });
 

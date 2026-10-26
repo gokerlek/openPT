@@ -37,7 +37,7 @@ import { readIndex, type OwnReader, type RepoHead } from './session-files-core';
  * değişiklikler için 5 dk üst sınır. Önbellek boşken danışan başına `client.json`, onarılmış index (dalın ucu,
  * `sessions/` ağacı, index'le uyuşmayan dosyalar: bitirilmemiş antrenman da gün sayılsın; set yazımları index'i
  * yazmaz), `program.json`, `proposals.json`, (onay varsa) `health.json` ve (henüz girmemişse) `invite.json` okunur.
- * Zamana bağlı kararlar (kaçan gün, evrenin bitişi) önbellekte değil, sayfa açılınca verilir.
+ * Zamana bağlı kararlar (kaçan gün, evrenin bitişi, bildirim penceresi: `noticeFeed`) önbellekte değil, sayfa açılınca verilir.
  */
 
 export const noticesTag = (id: string) => `notices-${id}`;
