@@ -37,7 +37,7 @@ export default async function OwnProgramPage({ params }: { params: Promise<{ pid
   const [client, config, { pid }] = await Promise.all([currentClient(), readAppConfig(), params]);
   if (!isOwnProgramId(pid)) notFound();
   const [read, overview, exercises] = await Promise.all([readOwnProgramOf(client.id, pid), readOwnOverview(client.id).catch(() => null), listExercises()]);
-  const back = { href: '/me/programlar', label: 'Programlar' };
+  const back = { href: '/me/programlar', label: 'Program' };
   if (read.status === 'missing') notFound();
 
   const active = activeProgramId(overview?.state.index) === pid;

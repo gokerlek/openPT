@@ -67,7 +67,7 @@ export type OwnOverview = {
   sessions: SessionIndex;
 };
 
-/** Programlar sekmesi, Bugün ve PT'nin Program sekmesi: index (onarılmış), PT'nin programı, seans index'i. */
+/** Danışanın Program sekmesi, Bugün ve PT'nin Program sekmesi: index (onarılmış), PT'nin programı, seans index'i. */
 export async function readOwnOverview(clientId: string): Promise<OwnOverview> {
   const repo = sessionRepo(clientId);
   const head = await repo.head();

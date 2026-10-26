@@ -266,7 +266,7 @@ export function OwnProgramForm(props: OwnProgramFormProps) {
                   toast.success(`Bugün ${name} ile açılır`);
                   router.refresh();
                 },
-                () => toast.error("Seçilemedi; Programlar'dan yeniden dene."),
+                () => toast.error("Seçilemedi; Program'dan yeniden dene."),
               );
             },
           },

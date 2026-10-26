@@ -24,7 +24,7 @@ import { ownProgramDraftKey } from '@/lib/unsaved-changes';
 import { clearLocalWorkout, clearWorkoutCache } from '../../workout-storage';
 
 /**
- * Programlar sekmesinin eylemleri (`docs/design/kendi-program.md` §2.3, §2.7, §2.8) — istemcide: Bugün'ün programı
+ * Program sekmesinin eylemleri (`docs/design/kendi-program.md` §2.3, §2.7, §2.8) — istemcide: Bugün'ün programı
  * yap (kalıcı seçim), antrenörle paylaş (sheet'le onay; kapatma yerelde, "Geri al" süresi bitince gider), onaylı
  * silme (yarım antrenman bu programdansa satır içi [Yarım antrenmanı sil]) ve "Antrenörün düzenledi" rozetinin
  * görüldü bilgisi (telefonda).
@@ -207,7 +207,7 @@ type DeleteState = { kind: 'confirm' } | { kind: 'session'; sessionId: string } 
 /**
  * "Programı sil" (§2.8): onaylı; "uygulamadan kalkar, deponun geçmişinde kalır", "Ayrıntı" neyin silinmediğini
  * söyler. Bugün'ün programıysa ve paylaşılmışsa ek satırlar. Yarım antrenman bu programdansa sunucu 409 döner:
- * diyalog [Yarım antrenmanı sil]'i sunar (onaylı), sonra silme yeniden denenir. Başarıda Programlar'a dönülür.
+ * diyalog [Yarım antrenmanı sil]'i sunar (onaylı), sonra silme yeniden denenir. Başarıda Program'a dönülür.
  */
 export function DeleteOwnProgram({
   clientId,
@@ -396,7 +396,7 @@ export function MarkPtEditSeen({ clientId, programId, editedAt }: { clientId: st
   return null;
 }
 
-/** Programlar'daki "Antrenörün düzenledi" rozeti: görülmediyse. */
+/** Program'daki "Antrenörün düzenledi" rozeti: görülmediyse. */
 export function PtEditBadge({ clientId, programId, editedAt }: { clientId: string; programId: string; editedAt: string | undefined }) {
   const unseen = useUnseenPtEdit(clientId, programId, editedAt);
   return unseen ? <Badge>Antrenörün düzenledi</Badge> : null;

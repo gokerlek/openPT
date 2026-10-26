@@ -24,7 +24,7 @@ export const metadata: Metadata = { title: PT_PROGRAM_NAME };
 export default async function PtProgramPage() {
   const [client, config, exercises] = await Promise.all([currentClient(), readAppConfig(), listExercises()]);
   const overview = await readOwnOverview(client.id).catch(() => null);
-  const back = { href: '/me/programlar', label: 'Programlar' };
+  const back = { href: '/me/programlar', label: 'Program' };
   const program = overview?.pt?.program ?? null;
   const phase = program ? currentPhaseOf(program)?.phase : undefined;
 

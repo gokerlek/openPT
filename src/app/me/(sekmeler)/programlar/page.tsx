@@ -20,10 +20,10 @@ import { effectiveSchedule } from '@/lib/training-days';
 import { ClientHeader } from '../../client-header';
 import { DeleteOwnProgram, PtEditBadge } from './program-actions';
 
-export const metadata: Metadata = { title: 'Programlar' };
+export const metadata: Metadata = { title: 'Program' };
 
 /**
- * Programlar sekmesi (`docs/design/kendi-program.md` §2.1): antrenörünün programı ve danışanın kendi programları
+ * Program sekmesi (`docs/design/kendi-program.md` §2.1): antrenörünün programı ve danışanın kendi programları
  * (en çok 5, oluşturulma sırasıyla; seçim değişince liste zıplamaz). Kartların bütün satırları index'ten (program
  * başına okuma yok); "son: 22 Eyl" seans index'inden. "Bugün'ün programı" rozeti tek kartta. Okunamayan dosya
  * adıyla (ya da kimliğiyle) listelenir ve silinebilir. Antrenör AI desteğini açtıysa "Yeni program"ın altında "AI ile
@@ -36,7 +36,7 @@ export default async function ProgramsPage() {
   if (!overview) {
     return (
       <main className="flex flex-col gap-6">
-        <ClientHeader client={client} appName={config.appName} title="Programlar" />
+        <ClientHeader client={client} appName={config.appName} title="Program" />
         <Alert>
           <AlertTitle>Programların şu an açılamıyor</AlertTitle>
           <AlertDescription>Biraz sonra yeniden dene.</AlertDescription>
@@ -63,7 +63,7 @@ export default async function ProgramsPage() {
 
   return (
     <main className="flex flex-col gap-6">
-      <ClientHeader client={client} appName={config.appName} title="Programlar" />
+      <ClientHeader client={client} appName={config.appName} title="Program" />
 
       <section className="flex flex-col gap-2" aria-labelledby="pt-program">
         <h2 id="pt-program" className="text-sm font-medium text-muted-foreground">

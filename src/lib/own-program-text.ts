@@ -65,7 +65,7 @@ export function lastDateByDay(index: Pick<SessionIndex, 'items'>): Map<string, s
 
 /**
  * PT'nin programı kalıcı seçimden sonra oluşturuldu ya da kaydedildi mi (Bugün'deki "Antrenörün yeni bir program
- * hazırladı" satırı, Programlar'daki "Güncellendi" rozeti, §2.6): yalnız kalıcı seçim kendi programken.
+ * hazırladı" satırı, Program'daki "Güncellendi" rozeti, §2.6): yalnız kalıcı seçim kendi programken.
  */
 export function ptUpdatedSince(program: { createdAt: string; updatedAt: string } | null | undefined, active: { programId: string | null; at: string } | null | undefined): boolean {
   if (!program || !active?.programId) return false;
