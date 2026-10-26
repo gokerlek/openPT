@@ -44,6 +44,8 @@ import {
   type FilterGroup,
   type FilterView,
 } from '@/lib/exercise-filter';
+import { searchExercises } from '@/lib/exercise-search';
+import { muscleSearchNames } from '@/lib/muscle-names';
 import { countByMuscle, isBodyMuscle, parseMuscles, summarizeMuscles, works } from '@/lib/muscles';
 import { fetchJson } from '@/lib/query/errors';
 import { useServiceQuery } from '@/lib/query/use-service';
@@ -125,11 +127,9 @@ export function ExerciseList({
   }
 
   const visible = useMemo(() => {
-    const query = search.trim().toLocaleLowerCase('tr');
-    const matched = exercises.filter(
-      (item) =>
-        (!query || item.title.toLocaleLowerCase('tr').includes(query)) &&
-        (selected.length === 0 || selected.some((muscle) => works(item, muscle))),
+    // Ada ve kas adına göre, Türkçe harfler katlanarak (düzenleyicinin seçicisiyle aynı arama).
+    const matched = searchExercises(exercises, search, muscleSearchNames).filter(
+      (item) => selected.length === 0 || selected.some((muscle) => works(item, muscle)),
     );
     if (selected.length === 0) return matched;
     // Seçili kası hedef alanlar önce, yalnız yardımcı olarak çalıştıranlar sonra.

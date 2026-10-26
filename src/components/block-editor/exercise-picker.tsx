@@ -26,23 +26,14 @@ import { InputGroup, InputGroupAddon, InputGroupInput } from '@/components/ui/in
 import { Item, ItemActions, ItemContent, ItemDescription, ItemGroup, ItemTitle } from '@/components/ui/item';
 import { Toggle } from '@/components/ui/toggle';
 import { searchExercises } from '@/lib/exercise-search';
-import { exerciseAlternatives, familyOf, summarizeMuscles, works } from '@/lib/muscles';
-import { EQUIPMENT_LABELS, MUSCLE_GROUPS, MUSCLE_LABELS, type Muscle } from '@/lib/schemas/exercise';
+import { muscleSearchNames } from '@/lib/muscle-names';
+import { exerciseAlternatives, summarizeMuscles, works } from '@/lib/muscles';
+import { EQUIPMENT_LABELS, MUSCLE_GROUPS } from '@/lib/schemas/exercise';
 import type { EditorDevice, PickerExercise } from '@/lib/template-edit';
 import { cn } from '@/lib/utils';
 
 /** Ekranda en çok bu kadar sonuç; gerisi için arama daraltılır. */
 const RESULT_LIMIT = 50;
-
-const GROUP_OF = new Map<string, string>(MUSCLE_GROUPS.flatMap((group) => group.muscles.map((muscle) => [muscle, group.label] as const)));
-
-/** Aramada bir kasın adları: kendi adı, ailesi ("Kanat"), bölgesi ("Sırt"). */
-function muscleNames(muscle: string): string[] {
-  // Ailesi olmayan kasta `familyOf` kimliğin kendisini verir; o aranmaz.
-  const family = familyOf(muscle);
-  const names = [MUSCLE_LABELS[muscle as Muscle] ?? muscle, family === muscle ? '' : family, GROUP_OF.get(muscle) ?? ''];
-  return [...new Set(names.filter(Boolean))];
-}
 
 export type ReplaceTarget = { rowId: string; label: string; title: string; exerciseId: string };
 
@@ -95,7 +86,7 @@ export function ExercisePicker({
   const results = useMemo(() => {
     const muscles = MUSCLE_GROUPS.find((item) => item.id === group)?.muscles ?? null;
     const pool = muscles ? available.filter((exercise) => muscles.some((muscle) => works(exercise, muscle))) : available;
-    return searchExercises(pool, deferredQuery, muscleNames);
+    return searchExercises(pool, deferredQuery, muscleSearchNames);
   }, [available, deferredQuery, group]);
 
   const suggestions = useMemo(() => {
