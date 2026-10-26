@@ -17,6 +17,16 @@ export const CLIENT_TABS = [
 
 export type ClientTab = (typeof CLIENT_TABS)[number];
 
+/** Sondaki eğik çizgi yok sayılır (`/me/gecmis/` → `/me/gecmis`); kök `/` kalır. */
+function withoutTrailingSlash(pathname: string): string {
+  return pathname.length > 1 ? pathname.replace(/\/+$/, '') : pathname;
+}
+
+/** `href`'in kendisi ya da alt sayfası; `/me/gecmisler` `/me/gecmis`'in altı değildir. */
+function isUnder(path: string, href: string): boolean {
+  return path === href || path.startsWith(`${href}/`);
+}
+
 /**
  * Adresin ait olduğu sekmenin sırası; sekme dışındaki sayfada (Ayarlar) -1. Bugün yalnız tam
  * eşleşmede etkindir (`/me` bütün danışan adreslerinin önekidir); öteki sekmeler alt sayfalarında
@@ -25,12 +35,42 @@ export type ClientTab = (typeof CLIENT_TABS)[number];
  * içindedir. Sondaki eğik çizgi yok sayılır; `/me/gecmisler` Geçmiş değildir.
  */
 export function clientTabIndex(pathname: string): number {
-  const path = pathname.length > 1 ? pathname.replace(/\/+$/, '') : pathname;
+  const path = withoutTrailingSlash(pathname);
   return CLIENT_TABS.findIndex((tab) => {
     if (tab.href === '/me') return path === tab.href;
     const prefixes: readonly string[] = 'also' in tab ? [tab.href, ...tab.also] : [tab.href];
-    return prefixes.some((href) => path === href || path.startsWith(`${href}/`));
+    return prefixes.some((href) => isUnder(path, href));
   });
+}
+
+/**
+ * İlerleme sekmesinin bölümleri, şeritteki sırayla (`src/app/me/progress-tabs.tsx`). Her biri ayrı
+ * sayfadır; Geçmiş'in adresi (`/me/gecmis`) yerinde kalır.
+ */
+export const PROGRESS_SECTIONS = [
+  { href: '/me/ilerleme', label: 'Özet' },
+  { href: '/me/gecmis', label: 'Geçmiş' },
+  { href: '/me/ilerleme/rekorlar', label: 'Rekorlar' },
+] as const satisfies readonly { href: string; label: string }[];
+
+/**
+ * Adresin İlerleme şeridindeki etkin bölümü; bölüm dışında -1. Özet bölümün köküdür
+ * (`/me/ilerleme/rekorlar` onun altında): yalnız tam eşleşmede etkin. Geçmiş ve Rekorlar alt
+ * sayfalarında da (`/me/gecmis/[id]`). Sondaki eğik çizgi yok sayılır; `/me/gecmisler` Geçmiş değildir.
+ */
+export function progressSectionIndex(pathname: string): number {
+  const path = withoutTrailingSlash(pathname);
+  return PROGRESS_SECTIONS.findIndex((section, index) => (index === 0 ? path === section.href : isUnder(path, section.href)));
+}
+
+/**
+ * Sayfanın başında İlerleme şeridi var mı: yalnız üç bölümün kendi sayfası. Geçmiş'teki antrenmanın
+ * detayında (`/me/gecmis/[id]`) yok: başında geri bağlantısı var, şerit yok. Yükleniyor iskeleti şeridi
+ * buna göre çizer (`src/app/me/tab-skeleton.tsx`).
+ */
+export function hasProgressTabs(pathname: string): boolean {
+  const path = withoutTrailingSlash(pathname);
+  return PROGRESS_SECTIONS.some((section) => section.href === path);
 }
 
 /**

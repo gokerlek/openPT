@@ -10,10 +10,12 @@ import { exerciseSetWeights } from './muscles';
 import { currentPhaseOf } from './program-plan';
 import { readProgramFile } from './programs';
 import { DIGEST_VERSION } from './progress';
-import { loadProgressWith, type ProgressLoad } from './progress-load';
+import { loadProgressWith, type ProgressLoad, type ProgressOptions, type RecordsLoad } from './progress-load';
 import type { Client } from './schemas/client';
 import { sessionRepo } from './session-files';
 import { effectiveSchedule, weekTarget } from './training-days';
+
+type ProgressClientRecord = Pick<Client, 'id' | 'training' | 'modules' | 'consents'>;
 
 /**
  * İlerleme sekmesinin verisi — GitHub'a ve Next önbelleğine bağlama; akış `progress-load.ts`'te (orada
@@ -25,13 +27,19 @@ import { effectiveSchedule, weekTarget } from './training-days';
  * `revalidateTag` ile düşürür). Her antrenman dosyası bir kez okunur; sonraki açılışlarda yalnız yeniler.
  * `water.json` ve program birer okuma; `health.json` yalnız hazır oluşluk, ağrı, ölçüm ya da tarama parçası
  * onaylıysa (onay yoksa hiç okunmaz, SPEC §9.4).
+ *
+ * `{ scope: 'records' }` (danışanın Rekorlar'ı): yalnız rekorlar, başarılar ve seri için gerekenler; `health.json`,
+ * `water.json` ve planlanan gün okunmaz, grafik bölümü kurulmaz (`RecordsLoad`, `insights` yok).
  */
+export function loadProgress(client: ProgressClientRecord, now: Date, today: string, timeZone: string, options?: { scope?: 'full' }): Promise<ProgressLoad>;
+export function loadProgress(client: ProgressClientRecord, now: Date, today: string, timeZone: string, options: { scope: 'records' }): Promise<RecordsLoad>;
 export function loadProgress(
-  client: Pick<Client, 'id' | 'training' | 'modules' | 'consents'>,
+  client: ProgressClientRecord,
   now: Date,
   today: string,
   timeZone: string,
-): Promise<ProgressLoad> {
+  options: ProgressOptions = {},
+): Promise<ProgressLoad | RecordsLoad> {
   const repoName = clientRepoName(client.id);
   // Program iki şey için bir kez okunur: seri hedefi (haftalık sıklık) ve planlanan gün; okunamazsa ikisi de yok sayılır.
   let program: ReturnType<typeof readProgramFile> | null = null;
@@ -72,5 +80,6 @@ export function loadProgress(
     now,
     today,
     timeZone,
+    options,
   );
 }

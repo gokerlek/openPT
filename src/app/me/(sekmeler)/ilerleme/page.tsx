@@ -15,15 +15,14 @@ import { currentClient } from '@/lib/guards';
 import { defaultStrengthWindow, STRENGTH_WINDOWS, type StrengthWindow } from '@/lib/muscle-progress';
 import { loadProgress } from '@/lib/progress-data';
 import { LOW_READINESS } from '@/lib/session-check';
-import { ClientHeader } from '../../client-header';
-import { ProgressTabs } from '../../progress-tabs';
+import { ProgressHeader } from '../../progress-header';
 
 export const metadata: Metadata = { title: 'İlerleme' };
 
 /**
  * Danışanın İlerleme sekmesinin Özet'i (tasarım §0, §8 satır 10; SPEC §6, §7.6). Başlığın altında İlerleme'nin
- * şeridi (Özet · Geçmiş · Rekorlar, `ProgressTabs`); en üstte üç sayı (antrenman, seri, rekor), sonra Gelişim
- * (hangi kasında güç kazandın: kas haritası, listeler, kasın hareketleri), hareket başına grafik (en ağır set,
+ * şeridi (Özet · Geçmiş · Rekorlar; ortak baş `ProgressHeader`); en üstte üç sayı (antrenman, seri, rekor),
+ * sonra Gelişim (hangi kasında güç kazandın: kas haritası, listeler, kasın hareketleri), hareket başına grafik (en ağır set,
  * tahmini maksimum, toplam; seçici aranabilir), grafikler (haftalık yük, antrenman düzeni, haftalık kas yükü,
  * onay varsa hazır oluşluk, ağrı ve hareket taraması, zorluk, su). Antrenörün AI desteğini açtıysa sayıların altında
  * "AI değerlendirmesi" (AI koç paneli, hemen değerlendirir). Son rekorlar ve başarılar Rekorlar
@@ -41,12 +40,7 @@ export default async function ProgressPage({
   const now = new Date();
   const today = todayIn(config.timeZone, now);
   const load = await loadProgress(client, now, today, config.timeZone);
-  const header = (
-    <div className="flex flex-col gap-4">
-      <ClientHeader client={client} appName={config.appName} title="İlerleme" />
-      <ProgressTabs />
-    </div>
-  );
+  const header = <ProgressHeader client={client} appName={config.appName} />;
 
   if (load.status === 'error') {
     return (
