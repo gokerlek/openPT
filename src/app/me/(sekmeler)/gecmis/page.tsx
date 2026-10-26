@@ -8,13 +8,16 @@ import { readAppConfig } from '@/lib/config';
 import { currentClient } from '@/lib/guards';
 import { loadHistory } from '@/lib/history-store';
 import { ClientHeader } from '../../client-header';
+import { ProgressTabs } from '../../progress-tabs';
 import { HistoryList } from './history-list';
 
 export const metadata: Metadata = { title: 'Geçmiş' };
 
 /**
- * Danışanın Geçmiş sekmesi (tasarım §2.10): bitmiş antrenmanlar en yeniden eskiye, aylara bölünmüş; satırda
- * gün, süre, set, toplam ağırlık ve rekor, "başka gün" ve "yarım" rozetleri; üstte son 30 günün özeti. Liste
+ * Danışanın İlerleme sekmesinin Geçmiş'i (tasarım §2.10; adres `/me/gecmis` yerinde kalır): başlık "İlerleme",
+ * altında İlerleme'nin şeridi (Özet · Geçmiş · Rekorlar, `ProgressTabs`), şeridin altında son 30 günün özeti.
+ * Bitmiş antrenmanlar en yeniden eskiye, aylara bölünmüş; satırda gün, süre, set, toplam ağırlık ve rekor,
+ * "başka gün" ve "yarım" rozetleri. Liste
  * `sessions-index.json`'dan tek okumayla gelir (her okumada `sessions/` ağacıyla onarılır). Satır detayı açar
  * (`/me/gecmis/[id]`: setler, silme). Sayfa yetkiyi kendisi denetler (SPEC §5).
  */
@@ -24,8 +27,9 @@ export default async function HistoryPage() {
 
   return (
     <main className="flex flex-col gap-6">
-      <div className="flex flex-col gap-1">
-        <ClientHeader client={client} appName={config.appName} title="Geçmiş" />
+      <div className="flex flex-col gap-4">
+        <ClientHeader client={client} appName={config.appName} title="İlerleme" />
+        <ProgressTabs />
         {list?.recent ? <p className="text-sm text-muted-foreground tabular-nums">{list.recent}</p> : null}
       </div>
       {list?<WorkoutCalendar months={list.months} today={todayIn(config.timeZone)}/>:null}

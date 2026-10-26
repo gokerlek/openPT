@@ -1,10 +1,8 @@
 import type { Metadata } from 'next';
 import { WarningCircle } from '@phosphor-icons/react/dist/ssr';
-import { AchievementsCard } from '@/components/progress/achievements-card';
 import { ExerciseProgress } from '@/components/progress/exercise-progress';
 import { AdherenceCard, EffortCard, PainCard, ReadinessCard, WaterCard, WeeklyLoadCard } from '@/components/progress/insight-charts';
 import { ProgressEmpty, ProgressNotice, ProgressStats } from '@/components/progress/progress-summary';
-import { RecordsCard } from '@/components/progress/records-card';
 import { ScreeningCard } from '@/components/progress/screening-card';
 import { StrengthProgress } from '@/components/progress/strength-progress';
 import { WeeklyProgress } from '@/components/progress/weekly-progress';
@@ -16,17 +14,19 @@ import { defaultStrengthWindow, STRENGTH_WINDOWS, type StrengthWindow } from '@/
 import { loadProgress } from '@/lib/progress-data';
 import { LOW_READINESS } from '@/lib/session-check';
 import { ClientHeader } from '../../client-header';
+import { ProgressTabs } from '../../progress-tabs';
 
 export const metadata: Metadata = { title: 'İlerleme' };
 
 /**
- * Danışanın İlerleme sekmesi (tasarım §0, §8 satır 10; SPEC §6, §7.6): en üstte Gelişim (hangi kasında
- * güç kazandın: kas haritası, listeler, kasın hareketleri), üç sayı (antrenman, seri, rekor), hareket
- * başına grafik (en ağır set, tahmini maksimum, toplam; seçici aranabilir), grafikler (haftalık yük,
- * antrenman düzeni, haftalık kas yükü, onay varsa hazır oluşluk, ağrı ve hareket taraması, zorluk, su), son rekorlar,
- * başarılar. Veri `sessions-index.json`, özetleri önbellekli antrenman dosyaları, `water.json` ve onay
- * varsa `health.json`'dan (`progress-data.ts`). Danışanın dilinde: "e1RM", "tonaj" yok. Yalnız telefon,
- * 375 px. Bölümler PT'nin danışan sayfasındaki İlerleme sekmesiyle ortak (`src/components/progress`,
+ * Danışanın İlerleme sekmesinin Özet'i (tasarım §0, §8 satır 10; SPEC §6, §7.6). Başlığın altında İlerleme'nin
+ * şeridi (Özet · Geçmiş · Rekorlar, `ProgressTabs`); en üstte üç sayı (antrenman, seri, rekor), sonra Gelişim
+ * (hangi kasında güç kazandın: kas haritası, listeler, kasın hareketleri), hareket başına grafik (en ağır set,
+ * tahmini maksimum, toplam; seçici aranabilir), grafikler (haftalık yük, antrenman düzeni, haftalık kas yükü,
+ * onay varsa hazır oluşluk, ağrı ve hareket taraması, zorluk, su). Son rekorlar ve başarılar Rekorlar
+ * bölümünde (`/me/ilerleme/rekorlar`). Veri `sessions-index.json`, özetleri önbellekli antrenman dosyaları,
+ * `water.json` ve onay varsa `health.json`'dan (`progress-data.ts`). Danışanın dilinde: "e1RM", "tonaj" yok.
+ * Yalnız telefon, 375 px. Bölümler PT'nin danışan sayfasındaki İlerleme sekmesiyle ortak (`src/components/progress`,
  * `viewer="client"`). Sayfa yetkiyi kendisi denetler (SPEC §5).
  */
 export default async function ProgressPage({
@@ -38,7 +38,12 @@ export default async function ProgressPage({
   const now = new Date();
   const today = todayIn(config.timeZone, now);
   const load = await loadProgress(client, now, today, config.timeZone);
-  const header = <ClientHeader client={client} appName={config.appName} title="İlerleme" />;
+  const header = (
+    <div className="flex flex-col gap-4">
+      <ClientHeader client={client} appName={config.appName} title="İlerleme" />
+      <ProgressTabs />
+    </div>
+  );
 
   if (load.status === 'error') {
     return (
@@ -74,8 +79,8 @@ export default async function ProgressPage({
     <main className="flex flex-col gap-6">
       {header}
       <ProgressNotice view={view} />
-      <StrengthProgress viewer="client" exercises={view.exercises} today={today} initialWindow={period} circumference={insights.circumference} />
       <ProgressStats viewer="client" view={view} />
+      <StrengthProgress viewer="client" exercises={view.exercises} today={today} initialWindow={period} circumference={insights.circumference} />
       {view.exercises.length > 0 ? <ExerciseProgress viewer="client" exercises={view.exercises} initialKey={requested} today={today} /> : null}
       <WeeklyLoadCard viewer="client" weeks={view.weeks} today={today} />
       <AdherenceCard viewer="client" adherence={insights.adherence} />
@@ -85,8 +90,6 @@ export default async function ProgressPage({
       <ScreeningCard viewer="client" screening={insights.screening} />
       <EffortCard viewer="client" rpe={insights.rpe} today={today} />
       <WaterCard viewer="client" water={insights.water} today={today} />
-      <RecordsCard viewer="client" items={view.recentRecords} total={view.records} today={today} />
-      <AchievementsCard viewer="client" achievements={view.achievements} streak={view.streak} />
     </main>
   );
 }
