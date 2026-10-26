@@ -32,7 +32,7 @@ export async function NoticesCard({ timeZone }: { timeZone: string }) {
           {feed.unread > 0 ? <Badge className="tabular-nums">{formatNumber(feed.unread)} yeni</Badge> : null}
         </CardTitle>
         <CardDescription>
-          Son {NOTICE_WINDOW_DAYS} gün: danışanların antrenmanlarından ve program değişikliklerinden.
+          Son {NOTICE_WINDOW_DAYS} gün ve bekleyen öneriler: danışanların antrenmanlarından ve program değişikliklerinden.
           {failed > 0 ? ` ${formatNumber(failed)} danışanın kaydı okunamadı.` : ''}
         </CardDescription>
         {feed.unreadClients.length > 0 ? (
