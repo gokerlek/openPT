@@ -676,33 +676,6 @@ export function screeningItems(facts: ScreeningFacts, today: string): AttentionI
   return items;
 }
 
-/** Genel bakış listesinin uzunluğu. */
-export const ATTENTION_FEED_LIMIT = 15;
-
-export type AttentionFeedItem = AttentionItem & { clientId: string; clientName: string };
-
-/**
- * Bütün danışanların maddeleri tek listede: aciliyet, sonra danışanın adı. `total` listede görünmeyenler dahil,
- * `clients` maddesi olan danışan sayısı.
- */
-export function attentionFeed(
-  clients: readonly { id: string; name: string; facts: AttentionFacts | null | undefined }[],
-  ctx: { now: Date; timeZone: string; titleOf: (exerciseId: string) => string },
-  limit = ATTENTION_FEED_LIMIT,
-): { items: AttentionFeedItem[]; total: number; clients: number } {
-  const all = clients.flatMap((client) =>
-    client.facts ? attentionItems(client.facts, ctx).map((item) => ({ ...item, clientId: client.id, clientName: client.name })) : [],
-  );
-  all.sort(
-    (a, b) =>
-      b.urgency - a.urgency ||
-      a.clientName.localeCompare(b.clientName, 'tr') ||
-      a.clientId.localeCompare(b.clientId) ||
-      ATTENTION_KINDS.indexOf(a.kind) - ATTENTION_KINDS.indexOf(b.kind),
-  );
-  return { items: all.slice(0, limit), total: all.length, clients: new Set(all.map((item) => item.clientId)).size };
-}
-
 /** Genel bakış'ta en çok bu kadar danışan ve danışan başına bu kadar madde gösterilir. */
 export const ATTENTION_GROUP_LIMIT = { groups: 8, perGroup: 3 } as const;
 

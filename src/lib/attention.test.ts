@@ -4,7 +4,6 @@ import * as v from 'valibot';
 import {
   ATTENTION_URGENCY,
   attentionFactsOf,
-  attentionFeed,
   attentionGroups,
   attentionItems,
   constraintFactsOf,
@@ -299,28 +298,6 @@ describe('dikkat: özet', () => {
 });
 
 describe('dikkat: Genel bakış listesi', () => {
-  test('aciliyet, sonra ad; toplam ve danışan sayısı', () => {
-    const feed = attentionFeed(
-      [
-        { id: 'c_bbbbbbbb', name: 'Zeynep', facts: facts({ proposals: { count: 1, at: '2026-09-25T10:00:00.000Z', text: 'Squat 3 → 4 set' } }) },
-        { id: 'c_aaaaaaaa', name: 'Ahmet', facts: facts({ proposals: { count: 2, at: '2026-09-25T10:00:00.000Z' }, access: 'joined' }) },
-        { id: 'c_cccccccc', name: 'Can', facts: facts({ access: 'none' }) },
-        { id: 'c_dddddddd', name: 'Okunamadı', facts: null },
-      ],
-      ctx,
-      2,
-    );
-    assert.deepEqual(
-      feed.items.map((item) => [item.clientName, item.text]),
-      [
-        ['Ahmet', '2 öneri onay bekliyor'],
-        ['Zeynep', 'Öneri onay bekliyor: Squat 3 → 4 set'],
-      ],
-    );
-    assert.equal(feed.total, 3);
-    assert.equal(feed.clients, 3);
-  });
-
   test('danışana göre gruplar: en acil maddesi olan önce, sonra ad; grup ve madde sınırı', () => {
     const result = attentionGroups(
       [
