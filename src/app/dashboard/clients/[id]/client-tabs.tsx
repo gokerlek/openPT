@@ -7,17 +7,18 @@ import { TabsNav, TabsNavLink } from '@/components/ui/tabs';
 type Tab = { key: string; label: string; href: string; active: (pathname: string) => boolean; ready: boolean };
 
 /**
- * Danışanın sekmeleri: Genel · Program · Sağlık · İlerleme · Antrenmanlar · Davet. Her sekme kendi
- * sayfasıdır (adres değişir, geri tuşu çalışır): gezinme, `tablist` değil (`TabsNav`). Alt sayfalar
- * (programı düzenle, ölçüm gir, antrenmanın detayı) kendi sekmesinde açık görünür. Henüz hazır olmayan
- * bir sekme (`ready: false`) pasif ve "yakında" yazar.
+ * Danışanın sekmeleri: Genel · Program · Antrenmanlar · İlerleme · Sağlık. Her sekme kendi sayfasıdır
+ * (adres değişir, geri tuşu çalışır): gezinme, `tablist` değil (`TabsNav`). Alt sayfalar (programı
+ * düzenle, ölçüm gir, antrenmanın detayı, AI taslağını düzenle) kendi sekmesinde açık görünür; giriş
+ * daveti (`/invite`, Genel'in Giriş kartından açılır) Genel'de sayılır. AI koç sekme değil, paneldir
+ * (`CoachLauncher`). Henüz hazır olmayan bir sekme (`ready: false`) pasif ve "yakında" yazar.
  *
  * "Sağlık" (tasarım `kisit-tarama.md` §1) Kısıtlar, Ölçümler ve Tarama'nın çatısıdır: üç adresin birindeyken
  * etkin; bağlantısı modülde seçili ilk parça (layout hesaplar, `healthHref`). İçindeki ikinci şerit
  * `HealthTabs`.
  *
- * Telefonda (375 px) altı sekme sığmaz: şerit yatay kayar, taşan kenar solar. Pasif sekme telefonda
- * görsel olarak sona alınır ki "Davet" ekran dışında kalmasın; okuma sırası (DOM) SPEC'teki gibi.
+ * Telefonda (375 px) beş sekme de tek satıra sığmaz: şerit yatay kayar, taşan kenar solar. Pasif bir sekme
+ * telefonda görsel olarak sona alınır ki hazır sekmeler ekran dışında kalmasın; okuma sırası (DOM) aynı.
  */
 export function ClientTabs({ clientId, healthHref }: { clientId: string; healthHref: string }) {
   const pathname = usePathname();
@@ -25,13 +26,24 @@ export function ClientTabs({ clientId, healthHref }: { clientId: string; healthH
   const under = (path: string) => (pathname: string) => pathname === path || pathname.startsWith(`${path}/`);
   const health = ['measurements', 'constraints', 'screening'].map((part) => under(`${base}/${part}`));
   const tabs: Tab[] = [
-    { key: 'genel', label: 'Genel', href: base, active: (p) => p === base || p === `${base}/edit`, ready: true },
-    { key: 'program', label: 'Program', href: `${base}/program`, active: under(`${base}/program`), ready: true },
-    { key: 'saglik', label: 'Sağlık', href: healthHref, active: (p) => health.some((match) => match(p)), ready: true },
-    { key: 'ilerleme', label: 'İlerleme', href: `${base}/ilerleme`, active: under(`${base}/ilerleme`), ready: true },
+    {
+      key: 'genel',
+      label: 'Genel',
+      href: base,
+      active: (p) => p === base || p === `${base}/edit` || under(`${base}/invite`)(p),
+      ready: true,
+    },
+    {
+      key: 'program',
+      label: 'Program',
+      href: `${base}/program`,
+      // AI taslağının düzenleyicisi (`/coach/drafts/…`) bir program düzenleyicisi; dönüşü de Program'a.
+      active: (p) => under(`${base}/program`)(p) || under(`${base}/coach/drafts`)(p),
+      ready: true,
+    },
     { key: 'antrenmanlar', label: 'Antrenmanlar', href: `${base}/sessions`, active: under(`${base}/sessions`), ready: true },
-    { key: 'koc', label: 'AI koç', href: `${base}/coach`, active: under(`${base}/coach`), ready: true },
-    { key: 'davet', label: 'Davet', href: `${base}/invite`, active: under(`${base}/invite`), ready: true },
+    { key: 'ilerleme', label: 'İlerleme', href: `${base}/ilerleme`, active: under(`${base}/ilerleme`), ready: true },
+    { key: 'saglik', label: 'Sağlık', href: healthHref, active: (p) => health.some((match) => match(p)), ready: true },
   ];
   const current = tabs.find((tab) => tab.active(pathname))?.key ?? 'genel';
 
