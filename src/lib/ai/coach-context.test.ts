@@ -12,6 +12,9 @@ test('PT context follows the actual client route; general pages never infer a cl
   assert.equal(coachPage('/dashboard/clients/c_zmrbywaz/measurements/camera'), 'measurements');
   assert.equal(coachPage('/me/antrenman'), 'workout');
   assert.equal(coachPage('/me/ayarlar'), 'settings');
+  assert.equal(coachPage('/dashboard/clients/c_zmrbywaz/coach/drafts/d_abc'), 'program');
+  assert.equal(coachPage('/me/programlar/ai/x'), 'program');
+  assert.equal(coachPage('/me/ilerleme/rekorlar'), 'progress');
 });
 test('each proactive preference controls its own recorded-event message', () => {
   const event = { id: 'test-session', date: '2026-10-05', dayName: 'Gün A', sets: 4 };

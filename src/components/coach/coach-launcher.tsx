@@ -12,21 +12,29 @@ import { fetchJson } from '@/lib/query/errors';
 import type { CoachHighlight } from '@/lib/ai/coach-highlights';
 const OPEN_EVENT = 'pulsecoach:coach-open';
 
-/** AI koç panelini açar (PT avatar menüsündeki "AI koç"); panel `CoachLauncher`'da, sabit düğme yok. */
-export function openCoach() {
-  window.dispatchEvent(new Event(OPEN_EVENT));
+/** Paneli açarken bağlam: PT'de hangi danışan, hangi sekme, açılınca hemen değerlendirilsin mi. */
+export type CoachOpen = { clientId?: string; tab?: 'review' | 'program'; autoReview?: boolean };
+
+/** AI koç panelini açar (PT avatar menüsündeki "AI koç", sayfalardaki `CoachButton`); panel `CoachLauncher`'da, sabit düğme yok. */
+export function openCoach(detail: CoachOpen = {}) {
+  window.dispatchEvent(new CustomEvent<CoachOpen>(OPEN_EVENT, { detail }));
 }
 export function CoachLauncher({ role, clientId }: { role: 'pt' | 'client'; clientId?: string }) {
   const pathname = usePathname(), page = coachPage(pathname), routeClient = role === 'pt' ? coachClientOf(pathname) : clientId ?? null;
   const [open, setOpen] = useState(false), [generalPath, setGeneralPath] = useState<string | null>(null);
+  // Her açılış yeni istek: bağlamı öncekinin yerine geçer (`openCoach()` boş bağlamla), `n` paneli sıfırdan kurar.
+  const [request, setRequest] = useState<{ n: number; path: string; detail: CoachOpen }>({ n: 0, path: '', detail: {} });
   useEffect(() => {
-    const show = () => setOpen(true);
+    const show = (event: Event) => { setRequest(r => ({ n: r.n + 1, path: pathname, detail: (event as CustomEvent<CoachOpen>).detail ?? {} })); setOpen(true); };
     window.addEventListener(OPEN_EVENT, show);
     return () => window.removeEventListener(OPEN_EVENT, show);
-  }, []);
-  const selected = generalPath === pathname && role === 'pt' ? null : routeClient;
+  }, [pathname]);
+  // Bağlam açıldığı sayfaya ait: panelden başka sayfaya geçilince danışan yine yoldan gelir, değerlendirme yinelenmez.
+  const detail = request.path === pathname ? request.detail : {};
+  const forced = role === 'pt' ? detail.clientId ?? null : null;
+  const selected = forced ?? (generalPath === pathname && role === 'pt' ? null : routeClient);
   return <>
-    {role === 'client' && clientId ? <CoachNudge key={`${clientId}:${pathname}`} clientId={clientId} onOpen={() => setOpen(true)} /> : null}
+    {role === 'client' && clientId ? <CoachNudge key={`${clientId}:${pathname}`} clientId={clientId} onOpen={() => openCoach()} /> : null}
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetContent className="w-full! sm:max-w-xl! h-dvh gap-0 pb-[env(safe-area-inset-bottom)] [&>[data-slot=sheet-close]]:size-11">
         <SheetHeader className="shrink-0 pr-14 pt-[max(1rem,env(safe-area-inset-top))]">
@@ -34,8 +42,8 @@ export function CoachLauncher({ role, clientId }: { role: 'pt' | 'client'; clien
           <SheetDescription>{role === 'client' ? 'Yalnız kendi kayıtların · ' : selected ? 'Bu danışanın kayıtları · ' : 'Tüm danışanlar · '}{COACH_PAGE_LABELS[page]}</SheetDescription>
         </SheetHeader>
         <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-6">
-          {role === 'pt' && routeClient ? <Button className="mb-4 h-11 w-full" variant="outline" onClick={() => setGeneralPath(selected ? pathname : null)}>{selected ? 'Tüm danışanları değerlendir' : 'Bu danışanın önerilerine dön'}</Button> : null}
-          <CoachPanel key={`${role}:${selected ?? 'general'}:${page}`} clientId={selected ?? 'c_ptgeneral'} role={role} page={page} general={role === 'pt' && !selected} />
+          {role === 'pt' && routeClient ? <Button className="mb-4 h-11 w-full" variant="outline" onClick={() => { setGeneralPath(selected ? pathname : null); setRequest(r => ({ ...r, detail: {} })); }}>{selected ? 'Tüm danışanları değerlendir' : 'Bu danışanın önerilerine dön'}</Button> : null}
+          <CoachPanel key={`${role}:${selected ?? 'general'}:${page}:${request.n}`} clientId={selected ?? 'c_ptgeneral'} role={role} page={page} general={role === 'pt' && !selected} initialTab={detail.tab} autoReview={detail.autoReview} />
           {role === 'client' ? <Link href="/me/ayarlar" onClick={() => setOpen(false)} className="mt-6 inline-block underline">Kutlama ve öneri tercihleri</Link> : null}
         </div>
       </SheetContent>

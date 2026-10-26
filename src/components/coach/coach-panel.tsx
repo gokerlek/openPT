@@ -1,5 +1,5 @@
 'use client';
-import { useId, useState } from 'react';
+import { useEffect, useEffectEvent, useId, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
@@ -27,12 +27,12 @@ import { answerCoach } from '@/lib/ai/coach-engine';
 import { BODY_MUSCLES, isBodyMuscle } from '@/lib/muscles';
 import { EMPTY_CARE } from '@/lib/constraint-filter';
 
-export function CoachPanel({ clientId, role, page: _page = 'overview', general = false, transport = fetchJson }: { clientId: string; role: 'pt' | 'client'; page?: typeof COACH_PAGES[number]; general?: boolean; transport?: typeof fetchJson }) {
+export function CoachPanel({ clientId, role, page: _page = 'overview', general = false, initialTab, autoReview = false, transport = fetchJson }: { clientId: string; role: 'pt' | 'client'; page?: typeof COACH_PAGES[number]; general?: boolean; initialTab?: 'review' | 'program'; autoReview?: boolean; transport?: typeof fetchJson }) {
   const endpoint = general ? '/api/coach' : role === 'pt' ? `/api/clients/${clientId}/coach` : '/api/me/coach';
   const cache = useQueryClient(), instance = useId();
   const queryKey = ['coach', clientId, role, 'assistant'];
   const query = useQuery({ queryKey, queryFn: () => transport<AssistantView>(endpoint) });
-  const [tab, setTab] = useState('review');
+  const [tab, setTab] = useState(initialTab === 'program' && !general ? 'program' : 'review');
   const [text, setText] = useState(''), [notice, setNotice] = useState(''), [error, setError] = useState(''), [busy, setBusy] = useState(false), [formOpen, setFormOpen] = useState(false);
   const [goal, setGoal] = useState<AssistantSelection['goal'] | ''>(''), [fullBody, setFullBody] = useState(true), [muscles, setMuscles] = useState<AssistantSelection['muscles']>([]);
   const [weekdays, setWeekdays] = useState<number[]>([]), [equipment, setEquipment] = useState<AssistantSelection['conditions']['equipment']>([]), [minutes, setMinutes] = useState(45);
@@ -66,6 +66,15 @@ export function CoachPanel({ clientId, role, page: _page = 'overview', general =
     });
   }
   const data = query.data;
+  // Bağlamlı açılış (`autoReview`): kayıtlar gelince bir kez değerlendirilir; AI kapalıysa istek gitmez.
+  const reviewed = useRef(false), reviewOnOpen = useEffectEvent(() => void request({ action: 'review' }));
+  useEffect(() => {
+    if (!autoReview || reviewed.current || !data) return;
+    reviewed.current = true;
+    // İstek sunucuya gider; `busy` onun süresini gösterir (Değerlendir düğmesiyle aynı yol).
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (data.access === 'ready') reviewOnOpen();
+  }, [autoReview, data]);
   if (query.isPending) return <div role="status" aria-label="AI önerileri açılıyor" className="flex flex-col gap-4"><Skeleton className="h-12 w-full" /><Skeleton className="h-48 w-full" /></div>;
   if (query.error || !data) return <Alert variant="destructive"><AlertTitle>Öneriler açılamadı</AlertTitle><AlertDescription><Button variant="outline" onClick={() => void query.refetch()}>Yeniden dene</Button></AlertDescription></Alert>;
   const review = data.reviews.at(-1);

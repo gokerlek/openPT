@@ -3,7 +3,8 @@ export function coachPage(pathname: string): typeof COACH_PAGES[number] {
   if (/measurements|olcum|screening/.test(pathname)) return 'measurements';
   if (/antrenman|sessions|gecmis/.test(pathname)) return 'workout';
   if (/ilerleme/.test(pathname)) return 'progress';
-  if (/program/.test(pathname)) return 'program';
+  // AI taslakları (`/coach/drafts/…`) Program sekmesinin altında.
+  if (/program|\/coach\/drafts/.test(pathname)) return 'program';
   if (/settings|ayarlar/.test(pathname)) return 'settings';
   if (/templates|exercises|devices/.test(pathname)) return 'library';
   if (/constraints|saglik/.test(pathname)) return 'health';
