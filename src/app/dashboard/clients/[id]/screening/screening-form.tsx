@@ -304,7 +304,7 @@ export function ScreeningForm({
   return (
     <div className="flex flex-col gap-6">
       <SectionHeader
-        back={{ href: base, label: 'PT değerlendirmesi' }}
+        back={{ href: base, label: 'Hareket' }}
         title={title}
         description={description}
         actions={

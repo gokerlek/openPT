@@ -64,10 +64,8 @@ export function MeasurementOverview({
           <EmptyMedia variant="icon">
             <Ruler weight="fill" />
           </EmptyMedia>
-          <EmptyTitle>Henüz manuel ölçüm yok</EmptyTitle>
-          <EmptyDescription>
-            Bu bölüm, elle girilen hareketlilik, performans ve vücut ölçümlerini gösterir. Kamera ölçümleri yukarıdaki Kamera ölçüm geçmişi bölümündedir.
-          </EmptyDescription>
+          <EmptyTitle>Henüz ölçüm yok</EmptyTitle>
+          <EmptyDescription>Elle girilen vücut ölçüleri, testler ve anket skorları burada görünür; ilk ölçüm başlangıç değerleri olur.</EmptyDescription>
         </EmptyHeader>
       </Empty>
     );
@@ -81,7 +79,7 @@ export function MeasurementOverview({
           <EmptyMedia variant="icon">
             <Ruler weight="fill" />
           </EmptyMedia>
-          <EmptyTitle>Bu aralıkta manuel ölçüm yok</EmptyTitle>
+          <EmptyTitle>Bu aralıkta ölçüm yok</EmptyTitle>
           <EmptyDescription>Tarih aralığını genişlet ya da “Tümü”nü seç.</EmptyDescription>
         </EmptyHeader>
       </Empty>

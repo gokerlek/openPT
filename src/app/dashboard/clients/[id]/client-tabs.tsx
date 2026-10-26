@@ -13,9 +13,9 @@ type Tab = { key: string; label: string; href: string; active: (pathname: string
  * daveti (`/invite`, Genel'in Giriş kartından açılır) Genel'de sayılır. AI koç sekme değil, paneldir
  * (`CoachLauncher`).
  *
- * "Sağlık" (tasarım `kisit-tarama.md` §1) Kısıtlar, Ölçümler ve Tarama'nın çatısıdır: üç adresin birindeyken
- * etkin; bağlantısı modülde seçili ilk parça (layout hesaplar, `healthHref`). İçindeki ikinci şerit
- * `HealthTabs`.
+ * "Sağlık" (tasarım `kisit-tarama.md` §1) Kısıtlar, Ölçümler ve Hareket'in çatısıdır: üç adresin birindeyken
+ * etkin (kamera ölçümü `measurements/camera` da); bağlantısı modülde seçili ilk parça (layout hesaplar,
+ * `healthHref`). İçindeki ikinci şerit `HealthTabs`.
  *
  * Telefonda (375 px) beş sekme de tek satıra sığmaz: şerit yatay kayar, taşan kenar solar.
  */

@@ -39,7 +39,7 @@ export default async function ClientLayout({ children, params }: { children: Rea
   if (!loaded) notFound();
 
   const name = loaded.ok ? loaded.client.name : id;
-  // "Sağlık" sekmesinin bağlantısı: modülde seçili ilk parça (Kısıtlar → Ölçümler → Tarama); yoksa Kısıtlar.
+  // "Sağlık" sekmesinin bağlantısı: modülde seçili ilk parça (Kısıtlar → Ölçümler → Hareket); yoksa Kısıtlar.
   const fields = loaded.ok && loaded.client.modules.health.enabled ? loaded.client.modules.health.fields : [];
   const healthPart = HEALTH_PARTS.find((part) => fields.includes(part.field)) ?? HEALTH_PARTS[0]!;
   const healthHref = `/dashboard/clients/${id}/${healthPart.path}`;

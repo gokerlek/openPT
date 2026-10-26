@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { CaretRight, PersonSimpleTaiChi, Plus, WarningCircle } from '@phosphor-icons/react/dist/ssr';
+import { Camera, CaretRight, PersonSimpleTaiChi, WarningCircle } from '@phosphor-icons/react/dist/ssr';
+import { CameraHistory } from '@/components/measurements/camera-history';
 import { SectionHeader } from '@/components/section-header';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -47,7 +48,7 @@ import { MeasurementProblemAlert, measurementClient } from '../measurements/meas
 import { CompareSelect } from './compare-select';
 import { PainActions } from './screening-actions';
 
-export const metadata: Metadata = { title: 'PT değerlendirmesi' };
+export const metadata: Metadata = { title: 'Hareket' };
 
 const CHANGE_TEXT: Record<Change, string> = { up: '↑', down: '↓', same: '=', new: 'yeni', pain_new: 'yeni ağrı', pain_gone: 'ağrı geçti' };
 
@@ -133,7 +134,7 @@ async function Overview({ client, record, today, query }: { client: Client; reco
             <EmptyMedia variant="icon">
               <PersonSimpleTaiChi weight="fill" />
             </EmptyMedia>
-            <EmptyTitle>Henüz tarama yok</EmptyTitle>
+            <EmptyTitle>Henüz hareket testi yok</EmptyTitle>
             <EmptyDescription>Başlangıçta ve 6–8 haftada bir önerilir. Sekiz test yaklaşık 15 dakika; yalnız doldurduğun testler kaydedilir.</EmptyDescription>
           </EmptyHeader>
         </Empty>
@@ -168,7 +169,7 @@ async function Overview({ client, record, today, query }: { client: Client; reco
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-2">
         <p className="text-sm text-muted-foreground">
-          Son tarama {formatDay(list[0]!.date)}
+          Son hareket testi {formatDay(list[0]!.date)}
           {weeksAgo(list[0]!.date, today) >= 1 ? ` · ${formatNumber(weeksAgo(list[0]!.date, today))} hafta önce` : ''}. Başlangıçta ve 6–8 haftada bir önerilir.
         </p>
         <CompareSelect dates={list.map((item) => item.date)} current={current.date} previous={previous?.date ?? null} />
@@ -318,9 +319,9 @@ async function Overview({ client, record, today, query }: { client: Client; reco
       ) : null}
 
       <section aria-labelledby="days-heading" className="flex flex-col gap-3">
-        <h3 id="days-heading" className="font-heading text-base font-medium">
-          Tarama günleri
-        </h3>
+        <h4 id="days-heading" className="font-heading text-base font-medium">
+          Test günleri
+        </h4>
         <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
           {list.map((item) => {
             const summary = screeningSummary(item);
@@ -344,9 +345,11 @@ async function Overview({ client, record, today, query }: { client: Client; reco
 }
 
 /**
- * Hareket taraması (tasarım `kisit-tarama.md` §4.5): son tarama ve karşılaştırma, uyarılar (ağrı; tek büyük
- * asimetri), test başına sözcükle sonuç, PT'ye ipuçları, tarama günleri. Toplam ve puan yok. Onay yoksa dosya
- * okunmaz.
+ * Sağlık'ın Hareket parçası (`screening` onayı): kamera ölçümü ve PT'nin hareket testi bir arada. Üstte iki eylem
+ * kartı (kamerayla ölçüm: `measurements/camera` sihirbazı; hareket testi: `screening/new`), sonra kamera ölçüm
+ * geçmişi ve hareket testi sonuçları (tasarım `kisit-tarama.md` §4.5): son test ve karşılaştırma, uyarılar (ağrı;
+ * tek büyük asimetri), test başına sözcükle sonuç, PT'ye ipuçları, test günleri. Toplam ve puan yok. Onay yoksa
+ * dosya okunmaz ve eylem yok.
  */
 export default async function ScreeningPage({
   params,
@@ -361,7 +364,7 @@ export default async function ScreeningPage({
   if (!loaded.ok) {
     return (
       <div className="flex flex-col gap-6">
-        <SectionHeader title="PT değerlendirmesi" />
+        <SectionHeader title="Hareket" />
         <MeasurementProblemAlert title="Danışan kaydı okunamadı" problem={loaded.problem} />
       </div>
     );
@@ -373,16 +376,8 @@ export default async function ScreeningPage({
     <div className="flex flex-col gap-6">
       <HealthStrip client={client} record={view.state === 'ok' ? view.record : null} />
       <SectionHeader
-        title="PT değerlendirmesi"
-        description="PT, sekiz temel hareketi gözlemleyip ağrı, hareket kontrolü ve uygulama koşullarını kaydeder. Kamera açı ölçümleri Kamera ölçümü sekmesindedir."
-        actions={
-          view.state === 'ok' ? (
-            <Button nativeButton={false} render={<Link href={`/dashboard/clients/${id}/screening/new`} />}>
-              <Plus data-icon="inline-start" weight="fill" />
-              Hareket testi yap
-            </Button>
-          ) : null
-        }
+        title="Hareket"
+        description="Danışanın duruş ve hareket açıları kamerayla, temel hareketlerdeki ağrı ve kontrol hareket testiyle kaydedilir."
       />
       {view.state === 'locked' ? <HealthLockAlert field="screening" lock={view.lock} clientId={id} /> : null}
       {view.state === 'broken' ? (
@@ -392,7 +387,43 @@ export default async function ScreeningPage({
           <AlertDescription>{view.problem} Kayıt uygulama dışında değiştirilmiş olabilir; düzeltilene kadar tarama yazılmaz.</AlertDescription>
         </Alert>
       ) : null}
-      {view.state === 'ok' ? <Overview client={client} record={view.record} today={todayIn(config.timeZone)} query={await searchParams} /> : null}
+      {view.state === 'ok' ? (
+        <>
+          <div className="grid gap-3 sm:grid-cols-2" role="group" aria-label="Yeni kayıt">
+            <Button
+              nativeButton={false}
+              render={<Link href={`/dashboard/clients/${id}/measurements/camera`} />}
+              className="h-auto min-h-24 w-full justify-start gap-4 rounded-xl px-5 py-4 text-left whitespace-normal">
+              <Camera aria-hidden className="size-8" />
+              <span className="flex min-w-0 flex-col gap-1">
+                <span className="text-lg font-semibold">Kamerayla ölçüm al</span>
+                <span className="text-sm font-normal">Duruş ve hareket açılarını adım adım ölç.</span>
+              </span>
+            </Button>
+            <Button
+              variant="secondary"
+              nativeButton={false}
+              render={<Link href={`/dashboard/clients/${id}/screening/new`} />}
+              className="h-auto min-h-24 w-full justify-start gap-4 rounded-xl border-border px-5 py-4 text-left whitespace-normal">
+              <PersonSimpleTaiChi aria-hidden weight="fill" className="size-8" />
+              <span className="flex min-w-0 flex-col gap-1">
+                <span className="text-lg font-semibold">Hareket testi yap</span>
+                <span className="text-sm font-normal">Sekiz temel hareketi gözle; ağrı ve kontrolü kaydet.</span>
+              </span>
+            </Button>
+          </div>
+          <CameraHistory clientId={id} timeZone={config.timeZone} records={view.record.cameraMeasurements ?? []} />
+          <section aria-labelledby="screening-results-heading" className="flex flex-col gap-4">
+            <div>
+              <h3 id="screening-results-heading" className="font-heading text-lg font-semibold">
+                Hareket testi sonuçları
+              </h3>
+              <p className="mt-1 text-sm text-muted-foreground">Sonuç gözlenen noktalardan sözcükle yazılır; toplam ve puan yok.</p>
+            </div>
+            <Overview client={client} record={view.record} today={todayIn(config.timeZone)} query={await searchParams} />
+          </section>
+        </>
+      ) : null}
     </div>
   );
 }

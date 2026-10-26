@@ -7,7 +7,7 @@
 
 ## Özet kararlar
 
-1. Danışan sayfasında **"Ölçümler" sekmesi "Sağlık" olur**; içinde alt şerit: **Kısıtlar · Ölçümler · Tarama**. Ölçüm adresleri aynen kalır, yönlendirme gerekmez (§1).
+1. Danışan sayfasında **"Ölçümler" sekmesi "Sağlık" olur**; içinde alt şerit: **Kısıtlar · Ölçümler · Hareket** (Hareket: kamera ölçümü ve PT'nin hareket testi). Ölçüm adresleri aynen kalır, yönlendirme gerekmez (§1).
 2. **Kısıt** bir kayıttır: bölge, taraf, tür, şiddet, başlangıç, durum (etkin/kapandı), kaçınılacak hareketler (kütüphanenin medikal etiketlerine eşlenir), isteğe bağlı **sağlık profesyonelinin koyduğu tanı** (kaynağıyla: hekim ya da fizyoterapist / danışanın beyanı), isteğe bağlı ve yalnız PT'nin gördüğü **gözlem** (bulgu), notlar. `health.json`'da, değişiklik kaydıyla (§2).
 3. Danışan kendisi **bildirebilir**; bildirim PT'ye gider ve PT karar verene kadar "danışan bildirdi" rozetini taşır. **Güvenli yön hemen:** bildirilen "zorlayanlar" o andan itibaren **yalnız dikkat** olarak işler (asla yasak değil; bölgeden tahmin yok); kötüleşme hemen yazılır; gevşeten değişiklik PT onayıyla **[sentez]** (§2.4).
 4. Süzgeç kısıtlardan beslenir: düzenleyicinin kütüphane sheet'i uygun olmayanı **gerekçesiyle işaretler, yasakları katlanmış grupta saklar**, PT **"Yine de ekle"** ile bu danışana özel izin verir (§3.2). **Etiketi eksik hareket hiçbir kaçınmada "uygun" sayılmaz:** kaçınmanın kalıp ailesindeyse "Etiket eksik" dikkatini alır (§2.2). Kütüphanenin squat, tek bacak, menteşe, dikey ve yatay itiş/çekiş hareketlerinin etiketlenmesi faz 3'ün ön koşuludur.
@@ -23,7 +23,7 @@
 
 ## 1. Yer: danışan sayfasında "Sağlık" sekmesi
 
-**Karar:** sekme şeridi **Genel · Program · Sağlık · İlerleme · Antrenmanlar · Davet** olur. "Sağlık"ın içinde küçük ikinci şerit (`TabsNav`, gezinme): **Kısıtlar · Ölçümler · Tarama**.
+**Karar:** sekme şeridi **Genel · Program · Sağlık · İlerleme · Antrenmanlar · Davet** olur. "Sağlık"ın içinde küçük ikinci şerit (`TabsNav`, gezinme): **Kısıtlar · Ölçümler · Hareket**, onay parçası başına bir sekme. Ölçümler yalnız elle girilen ölçümlerdir; Hareket kamera ölçümünü ve PT'nin hareket testini birlikte taşır (ikisi de `screening` onayı).
 
 | Seçenek | Neden değil / neden |
 |---|---|
@@ -31,7 +31,7 @@
 | Ölçümler sayfasına bölüm eklemek | Kısıt ölçüm değildir: programı süzer, danışan bildirir, onay akışı vardır. Üç ayrı giriş akışı ve üç ayrı kilit tek sayfada karışır; ad yanıltır. |
 | **Sağlık + alt şerit** (seçilen) | Sekme sayısı aynı kalır. Onay ve kilit tek çatıda, parça başına. Ölçüm ve tarama çoğu zaman aynı değerlendirme gününde yapılır: yan yana durmaları doğal. |
 
-**Adresler (kararlı):** `…/measurements/**` hiç değişmez (Genel'deki ölçüm kartı ve "Ölçümde gerileme" maddesinin bağlantıları çalışmaya devam eder). Yeni kardeşler: `…/constraints`, `…/constraints/new`, `…/constraints/[kid]/edit`, `…/screening`, `…/screening/new`, `…/screening/[tarih]/edit` (danışan sayfalarının İngilizce adlarıyla aynı). "Sağlık" sekmesi üç önekten birindeyken etkindir. Sekmenin bağlantısı layout'ta (danışan kaydı zaten okunuyor) hesaplanır: modülde seçili ilk parça, sıra **Kısıtlar → Ölçümler → Tarama**; modül kapalıysa Kısıtlar (kilit uyarısı neden ve ne yapılacağını söyler). Yönlendirme sayfası yok, ek istek yok.
+**Adresler (kararlı):** `…/measurements/**` hiç değişmez (Genel'deki ölçüm kartı ve "Ölçümde gerileme" maddesinin bağlantıları çalışmaya devam eder). Yeni kardeşler: `…/constraints`, `…/constraints/new`, `…/constraints/[kid]/edit`, `…/screening`, `…/screening/new`, `…/screening/[tarih]/edit` (danışan sayfalarının İngilizce adlarıyla aynı). "Sağlık" sekmesi üç önekten birindeyken etkindir; kamera sihirbazı (`…/measurements/camera`) sekme değil, Hareket'in eylemidir ve şeritte Hareket'i yakar (en uzun önek kazanır). Sekmenin bağlantısı layout'ta (danışan kaydı zaten okunuyor) hesaplanır: modülde seçili ilk parça, sıra **Kısıtlar → Ölçümler → Hareket**; modül kapalıysa Kısıtlar (kilit uyarısı neden ve ne yapılacağını söyler). Yönlendirme sayfası yok, ek istek yok.
 
 **Alt şerit:** yalnız modülde seçili parçalar etkin; seçili olmayan parça pasif ve "seçili değil" notlu (`TabsNavLink disabled note`). Bekleyen danışan bildirimi ya da gözden geçirilmemiş tarama ağrısı varsa parçanın adının yanında nokta (ekran okuyucuya "bekleyen var").
 
