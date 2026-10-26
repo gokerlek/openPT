@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Suspense } from 'react';
 import { ArrowSquareOut, Barbell, CaretRight, ListChecks, Plus, QrCode, WarningCircle } from '@phosphor-icons/react/dist/ssr';
+import { CoachButton } from '@/components/coach/coach-button';
 import { EditButton } from '@/components/edit-button';
 import { SectionHeader } from '@/components/section-header';
 import { Badge } from '@/components/ui/badge';
@@ -10,6 +11,7 @@ import { Card, CardAction, CardContent, CardDescription, CardFooter, CardHeader,
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from '@/components/ui/item';
 import { Table, TableBody, TableCell, TableRow } from '@/components/ui/table';
+import { coachAccess } from '@/lib/ai/coach-contract';
 import { attentionItems, type AttentionItem } from '@/lib/attention';
 import { loadClient, readInvite } from '@/lib/clients';
 import { healthConsentState, healthFieldState } from '@/lib/client-status';
@@ -354,13 +356,19 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
   const consent = client.consents.health;
   // Onay danışanın kendi ekranında verilir; hiç girmemiş danışanda onay kaydı tutarsızdır (elle eklenmiş).
   const consentWithoutJoin = Boolean(consent) && !client.access.joinedAt && !client.access.lastJoinAt;
+  const coach = coachAccess(client) === 'ready';
 
   return (
     <div className="flex flex-col gap-6">
       <SectionHeader
         title="Genel"
         description="Profil, giriş, sağlık modülü ve özetler. Ayrıntılar kendi sekmelerinde."
-        actions={<EditButton href={`/dashboard/clients/${id}/edit`} />}
+        actions={
+          <>
+            {coach ? <CoachButton label="AI'ya sor" detail={{ clientId: id, autoReview: true }} /> : null}
+            <EditButton href={`/dashboard/clients/${id}/edit`} />
+          </>
+        }
       />
 
       {/* Danışanın dikkat maddeleri en üstte: PT sayfayı açınca önce bakılacakları görür. Madde yoksa kart da

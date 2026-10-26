@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { WarningCircle } from '@phosphor-icons/react/dist/ssr';
+import { CoachButton } from '@/components/coach/coach-button';
 import { ExerciseProgress } from '@/components/progress/exercise-progress';
 import { AdherenceCard, EffortCard, PainCard, ReadinessCard, WaterCard, WeeklyLoadCard } from '@/components/progress/insight-charts';
 import { ProgressEmpty, ProgressNotice, ProgressStats } from '@/components/progress/progress-summary';
@@ -7,6 +8,7 @@ import { ScreeningCard } from '@/components/progress/screening-card';
 import { StrengthProgress } from '@/components/progress/strength-progress';
 import { WeeklyProgress } from '@/components/progress/weekly-progress';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { coachAccess } from '@/lib/ai/coach-contract';
 import { readAppConfig } from '@/lib/config';
 import { todayIn } from '@/lib/format';
 import { currentClient } from '@/lib/guards';
@@ -23,7 +25,8 @@ export const metadata: Metadata = { title: 'İlerleme' };
  * şeridi (Özet · Geçmiş · Rekorlar, `ProgressTabs`); en üstte üç sayı (antrenman, seri, rekor), sonra Gelişim
  * (hangi kasında güç kazandın: kas haritası, listeler, kasın hareketleri), hareket başına grafik (en ağır set,
  * tahmini maksimum, toplam; seçici aranabilir), grafikler (haftalık yük, antrenman düzeni, haftalık kas yükü,
- * onay varsa hazır oluşluk, ağrı ve hareket taraması, zorluk, su). Son rekorlar ve başarılar Rekorlar
+ * onay varsa hazır oluşluk, ağrı ve hareket taraması, zorluk, su). Antrenörün AI desteğini açtıysa sayıların altında
+ * "AI değerlendirmesi" (AI koç paneli, hemen değerlendirir). Son rekorlar ve başarılar Rekorlar
  * bölümünde (`/me/ilerleme/rekorlar`). Veri `sessions-index.json`, özetleri önbellekli antrenman dosyaları,
  * `water.json` ve onay varsa `health.json`'dan (`progress-data.ts`). Danışanın dilinde: "e1RM", "tonaj" yok.
  * Yalnız telefon, 375 px. Bölümler PT'nin danışan sayfasındaki İlerleme sekmesiyle ortak (`src/components/progress`,
@@ -80,6 +83,7 @@ export default async function ProgressPage({
       {header}
       <ProgressNotice view={view} />
       <ProgressStats viewer="client" view={view} />
+      {coachAccess(client) === 'ready' ? <CoachButton label="AI değerlendirmesi" detail={{ autoReview: true }} className="h-11 w-full" /> : null}
       <StrengthProgress viewer="client" exercises={view.exercises} today={today} initialWindow={period} circumference={insights.circumference} />
       {view.exercises.length > 0 ? <ExerciseProgress viewer="client" exercises={view.exercises} initialKey={requested} today={today} /> : null}
       <WeeklyLoadCard viewer="client" weeks={view.weeks} today={today} />

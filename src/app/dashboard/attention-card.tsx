@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { CheckCircle, WarningCircle } from '@phosphor-icons/react/dist/ssr';
+import { CoachButton } from '@/components/coach/coach-button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
@@ -23,6 +24,8 @@ const TOUCH_LINK = 'underline-offset-4 hover:underline touch:inline-flex touch:m
  */
 export async function AttentionCard({ timeZone, titles }: { timeZone: string; titles: ReadonlyMap<string, string> }) {
   const { overviews, failed } = await clientOverviews();
+  // AI koç açık danışanlar (özetten): grubun başlığında "AI'ya sor". `attentionGroups` saf kalsın diye ayrı.
+  const coach = new Set(overviews.filter((overview) => overview.coach).map((overview) => overview.id));
   const { groups, total, hidden } = attentionGroups(
     overviews.map((overview) => ({ id: overview.id, name: overview.name, facts: overview.attention })),
     { now: new Date(), timeZone, titleOf: (exerciseId) => titles.get(exerciseId) ?? exerciseId },
@@ -73,8 +76,17 @@ export async function AttentionCard({ timeZone, titles }: { timeZone: string; ti
                       <span className="sr-only">Acil</span>
                     </>
                   ) : null}
-                  {/* Grubun düğmeleri (Task 12: "AI'ya sor"); şimdilik boş, yer tutmaz. */}
-                  <div className="ms-auto flex items-center gap-1" />
+                  {/* Grubun düğmeleri: AI koç açıksa "AI'ya sor" (paneli bu danışanla açar, hemen değerlendirir). */}
+                  <div className="ms-auto flex items-center gap-1">
+                    {coach.has(group.clientId) ? (
+                      <CoachButton
+                        variant="ghost"
+                        label="AI'ya sor"
+                        detail={{ clientId: group.clientId, autoReview: true }}
+                        className="h-7 px-2 text-[0.8rem] touch:h-11"
+                      />
+                    ) : null}
+                  </div>
                 </div>
                 <ul role="list" className="flex flex-col gap-1">
                   {group.items.map((item) => (

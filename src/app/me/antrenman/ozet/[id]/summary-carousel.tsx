@@ -4,6 +4,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { animate, motion, useMotionValue, useReducedMotion, useTransform } from 'motion/react';
 import { ArrowDown, ArrowUp, CaretLeft, CaretRight, Equals, Sparkle, Trophy } from '@phosphor-icons/react';
+import { CoachButton } from '@/components/coach/coach-button';
 import { TemplateMuscleMap } from '@/components/muscle-map/template-muscle-map';
 import { Button } from '@/components/ui/button';
 import { Carousel, CarouselContent, CarouselItem, type CarouselApi } from '@/components/ui/carousel';
@@ -87,18 +88,21 @@ function Line({ lead, name, value, muted }: { lead?: React.ReactNode; name: stri
  * Erişilebilirlik: `role="region"` + `aria-roledescription="carousel"`, kartlar "2 / 4, Rekorlar ve gelişim";
  * ←/→ tuşları; görünmeyen kartlar ekran okuyucudan gizli. Hareket azaltmada geçiş anında, sayılar son değerle.
  * Bitişte, ağrıyla yine geçilen hareket varsa ilk kartın altında "Antrenörüne kısıt olarak bildir" (`painOffers`,
- * `kisit-tarama.md` §3.7).
+ * `kisit-tarama.md` §3.7). Son kartta ikincil yuva (1–3. kartta "Bugün'e dön") AI koç açıksa "Koça sor" (`coach`:
+ * panel açılır, hemen değerlendirir); değilse görünmez kalır, birincil düğme yerinden oynamaz.
  */
 export function SummaryCarousel({
   summary,
   firstName,
   from,
   painOffers = [],
+  coach = false,
 }: {
   summary: SessionSummary;
   firstName: string;
   from: 'finish' | 'history';
   painOffers?: readonly PainReportOffer[];
+  coach?: boolean;
 }) {
   const reduced = useReducedMotion() ?? false;
   const [api, setApi] = useState<CarouselApi>();
@@ -207,9 +211,13 @@ export function SummaryCarousel({
             <CaretRight data-icon="inline-end" weight="bold" />
           </Button>
         )}
-        <Button variant="ghost" className={cn('h-11 self-center text-muted-foreground', last && 'invisible')} nativeButton={false} render={<Link href={home.href} tabIndex={last ? -1 : undefined} />}>
-          {home.label}
-        </Button>
+        {last && coach ? (
+          <CoachButton variant="ghost" label="Koça sor" detail={{ autoReview: true }} className="h-11 self-center text-muted-foreground" />
+        ) : (
+          <Button variant="ghost" className={cn('h-11 self-center text-muted-foreground', last && 'invisible')} nativeButton={false} render={<Link href={home.href} tabIndex={last ? -1 : undefined} />}>
+            {home.label}
+          </Button>
+        )}
       </div>
     </div>
   );

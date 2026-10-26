@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { Bandaids, Lightning, ListChecks, Plus, WarningCircle } from '@phosphor-icons/react/dist/ssr';
+import { CoachButton } from '@/components/coach/coach-button';
 import { EditButton } from '@/components/edit-button';
 import { SectionHeader } from '@/components/section-header';
 import { ChangeLog } from '@/components/program/change-log';
@@ -15,6 +16,7 @@ import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTi
 import { Progress, ProgressLabel } from '@/components/ui/progress';
 import { Table, TableBody, TableCell, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { coachAccess } from '@/lib/ai/coach-contract';
 import { loadCareInput } from '@/lib/client-care';
 import { clientTargetNotes } from '@/lib/client-targets';
 import { loadClient } from '@/lib/clients';
@@ -80,6 +82,9 @@ export default async function ProgramPage({ params }: { params: Promise<{ id: st
   // Kaydı okunamayan danışan: sorunu detay sayfası anlatır.
   if (!loaded.ok) redirect(`/dashboard/clients/${id}`);
   const { client } = loaded;
+  // AI koç açıksa "AI ile taslak öner": panel bu danışanın "Program hazırla" sekmesiyle açılır.
+  const draftButton =
+    coachAccess(client) === 'ready' ? <CoachButton label="AI ile taslak öner" detail={{ clientId: id, tab: 'program' }} /> : null;
 
   const [file, exercises, config, templates, proposals, sessions, own] = await Promise.all([
     readProgramFile(id),
@@ -113,11 +118,12 @@ export default async function ProgramPage({ params }: { params: Promise<{ id: st
                 Bir şablondan başlayıp bu danışana göre düzenleyebilir ya da boş başlayabilirsin.
               </EmptyDescription>
             </EmptyHeader>
-            <EmptyContent>
+            <EmptyContent className="flex-row flex-wrap justify-center">
               <Button nativeButton={false} render={<Link href={`${detailHref}/program/new`} />}>
                 <Plus data-icon="inline-start" weight="fill" />
                 Program oluştur
               </Button>
+              {draftButton}
             </EmptyContent>
           </Empty>
         </Card>
@@ -282,7 +288,16 @@ export default async function ProgramPage({ params }: { params: Promise<{ id: st
 
   return (
     <div className="flex flex-col gap-6">
-      <SectionHeader title="Program" description={description} actions={<EditButton href={editHref} />} />
+      <SectionHeader
+        title="Program"
+        description={description}
+        actions={
+          <>
+            {draftButton}
+            <EditButton href={editHref} />
+          </>
+        }
+      />
       <OwnActiveAlert clientId={id} index={ownIndex} timeZone={timeZone} />
 
       {conflicts.length > 0 ? (

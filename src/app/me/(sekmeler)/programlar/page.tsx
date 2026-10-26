@@ -1,12 +1,14 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { CaretRight, Notebook, Plus } from '@phosphor-icons/react/dist/ssr';
+import { CoachButton } from '@/components/coach/coach-button';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from '@/components/ui/item';
+import { coachAccess } from '@/lib/ai/coach-contract';
 import { readAppConfig } from '@/lib/config';
 import { currentClient } from '@/lib/guards';
 import { activeProgramId, ptEdits } from '@/lib/own-program-index';
@@ -24,7 +26,8 @@ export const metadata: Metadata = { title: 'Programlar' };
  * Programlar sekmesi (`docs/design/kendi-program.md` §2.1): antrenörünün programı ve danışanın kendi programları
  * (en çok 5, oluşturulma sırasıyla; seçim değişince liste zıplamaz). Kartların bütün satırları index'ten (program
  * başına okuma yok); "son: 22 Eyl" seans index'inden. "Bugün'ün programı" rozeti tek kartta. Okunamayan dosya
- * adıyla (ya da kimliğiyle) listelenir ve silinebilir. Sayfa yetkiyi kendisi denetler (`currentClient`).
+ * adıyla (ya da kimliğiyle) listelenir ve silinebilir. Antrenör AI desteğini açtıysa "Yeni program"ın altında "AI ile
+ * program öner" (yer kalmadıysa yok: kaydedilemezdi). Sayfa yetkiyi kendisi denetler (`currentClient`).
  */
 export default async function ProgramsPage() {
   const [client, config] = await Promise.all([currentClient(), readAppConfig()]);
@@ -49,6 +52,9 @@ export default async function ProgramsPage() {
   const count = items.length + state.unreadable.length;
   const full = count >= OWN_PROGRAM_LIMITS.programs;
   const edited = new Map(ptEdits(state.index, new Date()).map((item) => [item.id, item.at]));
+  // "Yeni program"ın altında, yer varken: AI koç paneli "Program hazırla" sekmesiyle açılır.
+  const coach = coachAccess(client) === 'ready';
+  const aiButton = coach ? <CoachButton label="AI ile program öner" detail={{ tab: 'program' }} className="h-11 w-full" /> : null;
 
   const ptProgram = pt?.program ?? null;
   const ptPhase = ptProgram ? currentPhaseOf(ptProgram)?.phase : undefined;
@@ -116,10 +122,11 @@ export default async function ProgramsPage() {
               <EmptyDescription>Evde ya da tatilde çalışmak için kendi programını kur; antrenörünün programından gün kopyalayabilirsin.</EmptyDescription>
             </EmptyHeader>
             <EmptyContent>
-              <Button className="h-11" nativeButton={false} render={<Link href="/me/programlar/yeni" />}>
+              <Button className={coach ? 'h-11 w-full' : 'h-11'} nativeButton={false} render={<Link href="/me/programlar/yeni" />}>
                 <Plus data-icon="inline-start" />
                 Yeni program
               </Button>
+              {aiButton}
             </EmptyContent>
           </Empty>
         ) : (
@@ -168,10 +175,13 @@ export default async function ProgramsPage() {
                 <p className="text-sm text-muted-foreground">En fazla {OWN_PROGRAM_LIMITS.programs} program; yenisi için birini sil.</p>
               </div>
             ) : (
-              <Button variant="outline" className="h-11 w-full border-dashed" nativeButton={false} render={<Link href="/me/programlar/yeni" />}>
-                <Plus data-icon="inline-start" />
-                Yeni program
-              </Button>
+              <>
+                <Button variant="outline" className="h-11 w-full border-dashed" nativeButton={false} render={<Link href="/me/programlar/yeni" />}>
+                  <Plus data-icon="inline-start" />
+                  Yeni program
+                </Button>
+                {aiButton}
+              </>
             )}
           </>
         )}

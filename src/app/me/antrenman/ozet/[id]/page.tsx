@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation';
 import { ClockCounterClockwise } from '@phosphor-icons/react/dist/ssr';
 import { Button } from '@/components/ui/button';
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
+import { coachAccess } from '@/lib/ai/coach-contract';
 import { readAppConfig } from '@/lib/config';
 import { currentClient } from '@/lib/guards';
 import { loadSummary } from '@/lib/history-store';
@@ -17,7 +18,8 @@ export const metadata: Metadata = { title: 'Özet' };
  * Tam ekran, dock yok (`/me/antrenman` gibi sekmeler grubunun dışında). Sayfa yetkiyi kendisi denetler
  * (SPEC §5); hesaplar `history-store.ts` → `workout-summary.ts`. Bitmemiş antrenman antrenman ekranına döner;
  * silinmiş ya da olmayan antrenmanda dönüş bağlantısı. Bitişten açıldıysa ağrıyla yine geçilen hareketin
- * "Antrenörüne kısıt olarak bildir" kısayolu (`pain-report-store.ts`; kısıtlar ve ağrı takibi onaylıyken).
+ * "Antrenörüne kısıt olarak bildir" kısayolu (`pain-report-store.ts`; kısıtlar ve ağrı takibi onaylıyken). AI koç
+ * açıksa son kartta "Koça sor" (`coach`).
  */
 export default async function SummaryPage({
   params,
@@ -56,5 +58,7 @@ export default async function SummaryPage({
     );
   }
   const firstName = client.name.split(/\s+/)[0] ?? client.name;
-  return <SummaryCarousel summary={loaded.value} firstName={firstName} from={from} painOffers={painOffers} />;
+  return (
+    <SummaryCarousel summary={loaded.value} firstName={firstName} from={from} painOffers={painOffers} coach={coachAccess(client) === 'ready'} />
+  );
 }

@@ -105,7 +105,8 @@ function joined(client: Pick<Client, 'access'>): boolean {
   return Boolean(lastJoinAt && !(revokedAt && revokedAt > lastJoinAt));
 }
 
-export type ClientOverview = ClientDigest & { attention: AttentionFacts };
+/** `coach`: AI koç bu danışan için açık (`coachAccess`); Genel bakış'ın "AI'ya sor" düğmesi buna bakar. */
+export type ClientOverview = ClientDigest & { attention: AttentionFacts; coach: boolean };
 
 async function buildDigest(id: string): Promise<ClientOverview | null> {
   const stored = await readClient(id);
@@ -121,6 +122,7 @@ async function buildDigest(id: string): Promise<ClientOverview | null> {
     screening: canRecordHealth(client, 'screening'),
   };
   const anyHealth = Object.values(consent).some(Boolean);
+  const coach = coachAccess(client) === 'ready';
   const reader = sessionReader(repo);
   const head = await reader.head();
   const now = new Date();
@@ -131,7 +133,7 @@ async function buildDigest(id: string): Promise<ClientOverview | null> {
     readTolerant(repo, 'proposals.json'),
     anyHealth ? readTolerant(repo, 'health.json') : Promise.resolve(null),
     joined(client) ? Promise.resolve(null) : readTolerant(repo, 'invite.json'),
-    coachAccess(client) === 'ready' ? readTolerant(repo, ASSISTANT_PATH) : Promise.resolve(null),
+    coach ? readTolerant(repo, ASSISTANT_PATH) : Promise.resolve(null),
   ]);
   const program = programRaw === null ? null : v.safeParse(programSchema, programRaw);
   const index = repaired.index;
@@ -176,10 +178,10 @@ async function buildDigest(id: string): Promise<ClientOverview | null> {
     // Kalıcı seçim kendi programsa günler ve pencere ondan (kendi-program.md §4).
     own: own.index,
   });
-  return { id, name: client.name, ...(client.inbox?.seenAt ? { seenAt: client.inbox.seenAt } : {}), notices, attention };
+  return { id, name: client.name, ...(client.inbox?.seenAt ? { seenAt: client.inbox.seenAt } : {}), notices, attention, coach };
 }
 
-/** Danışanın Genel bakış özeti (önbellekli): bildirimler ve dikkat özeti; kaydı yoksa null. */
+/** Danışanın Genel bakış özeti (önbellekli): bildirimler, dikkat özeti ve AI koçun açık olup olmadığı; kaydı yoksa null. */
 export function readClientDigest(id: string): Promise<ClientOverview | null> {
   return unstable_cache(() => buildDigest(id), ['client-overview', id], { tags: [noticesTag(id)], revalidate: 300 })();
 }
