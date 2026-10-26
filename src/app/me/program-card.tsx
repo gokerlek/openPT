@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { Barbell, Play, Plus } from '@phosphor-icons/react/dist/ssr';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
-import { Card, CardAction, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { Item, ItemContent, ItemDescription, ItemTitle } from '@/components/ui/item';
 import { withClientTargets } from '@/lib/client-targets';
@@ -43,7 +43,8 @@ function Unavailable({ children, top }: { children?: React.ReactNode; top?: Reac
  * "Bugün antrenman günün · Gün B" ya da "Dinlenme günü · sıradaki antrenman Çarşamba (Gün B)", 7 günlük
  * şerit ve "Günlerini değiştir"; dinlenme gününde de başlatılabilir. "Antrenmana başla" tek dokunuştur:
  * antrenman ekranını açar (plan Bugün açılınca telefona alınmıştır, ağ beklenmez); telefondaki plan
- * programın bu sürümüne ait değilse atılır (`WorkoutFreshness`). "Başka gün seç" (§2.3) altında.
+ * programın bu sürümüne ait değilse atılır (`WorkoutFreshness`). "Başka gün seç" (§2.3) altında; ikisi kartın
+ * başında, şeridin ve planın üstünde (kaydırmadan görünür).
  * `children` ana kartın hemen altına (Bugün'ün su kartı). `clientId` oturumdan doğrulanmış kayıttan
  * gelir (`currentClient`).
  *
@@ -204,6 +205,15 @@ export async function ProgramCard({
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
+          {summary.rows > 0 ? (
+            <div className="flex flex-col gap-2">
+              <Button size="lg" className="h-12 w-full" nativeButton={false} render={<Link href={`/me/antrenman${programQuery}`} />}>
+                <Play data-icon="inline-start" weight="fill" />
+                Antrenmana başla
+              </Button>
+              <OtherDayButton clientId={clientId} />
+            </div>
+          ) : null}
           <WeekStrip clientId={clientId} />
           {summary.rows > 0 ? (
             <ClientDayPlan blocks={blocks} exercises={byId} />
@@ -211,15 +221,6 @@ export async function ProgramCard({
             <p className="text-sm text-muted-foreground">Bu günün hareketleri şu an açılamıyor. Antrenörüne haber ver.</p>
           )}
         </CardContent>
-        {summary.rows > 0 ? (
-          <CardFooter className="flex flex-col items-stretch gap-2">
-            <Button size="lg" className="h-12 w-full" nativeButton={false} render={<Link href={`/me/antrenman${programQuery}`} />}>
-              <Play data-icon="inline-start" weight="fill" />
-              Antrenmana başla
-            </Button>
-            <OtherDayButton clientId={clientId} />
-          </CardFooter>
-        ) : null}
       </Card>
       {children}
 
