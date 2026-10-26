@@ -1,41 +1,73 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { CaretRight, Plus, UserCircle, UsersThree, WarningCircle } from '@phosphor-icons/react/dist/ssr';
+import { Plus, UsersThree } from '@phosphor-icons/react/dist/ssr';
 import { PageHeader } from '@/components/page-header';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardAction, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card } from '@/components/ui/card';
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
+import { ATTENTION_TUNING, attentionItems, type AttentionFacts } from '@/lib/attention';
 import { listClients, readInvite } from '@/lib/clients';
+import { readAppConfig } from '@/lib/config';
+import { formatDayShort, formatNumber } from '@/lib/format';
 import { CLIENT_STATUS_LABELS, CLIENT_STATUSES } from '@/lib/schemas/client';
 import { requirePt } from '@/lib/guards';
-import { clientsSummary, clientWork, type HealthWork } from './client-work';
-import { AccessBadge, passwordOf } from './invite-state';
-import { StatusDot } from './status-dot';
+import { clientOverviews } from '../client-overviews';
+import { ClientList, type ClientCardData, type ClientSectionData } from './client-list';
+import { clientsSummary, clientWork } from './client-work';
+import { passwordOf } from './invite-state';
 
 export const metadata: Metadata = { title: 'Danışanlar' };
 
-const HEALTH_VARIANT: Record<HealthWork['tone'], 'outline' | 'secondary'> = { waiting: 'outline', info: 'secondary' };
-
 /**
- * Danışanlar: durumuna göre gruplu (arşivdekiler en altta). Her satır detaya tek dokunuşla açılır ve
- * PT'nin işini gösterir: giriş durumu (davet yok / bekliyor / süresi doldu; katıldıysa şifre
- * belirledi mi) ve sağlık onayı bekliyorsa o (`clientWork`). Başlıkta bekleyenlerin sayısı.
+ * Danışanlar: durumuna göre gruplu (arşivdekiler en altta), ada göre aranır (`ClientList`). Her satır detaya
+ * tek dokunuşla açılır ve PT'nin işini gösterir: giriş durumu (davet yok / bekliyor / süresi doldu; katıldıysa
+ * şifre belirledi mi), sağlık onayı bekliyorsa o (`clientWork`), dikkat maddelerinin sayısı ve son antrenman
+ * günü. Başlıkta bekleyenlerin sayısı.
+ *
+ * Dikkat ve son antrenman Genel bakış'la aynı danışan özetlerinden (`client-overviews.ts`; önbellekli,
+ * arşivdekiler hariç); özeti okunamayan danışanda yok.
  */
 export default async function ClientsPage() {
   await requirePt();
-  const clients = await listClients();
+  const [clients, { overviews }, config] = await Promise.all([listClients(), clientOverviews(), readAppConfig()]);
   const invites = new Map(
     await Promise.all(
       clients.map(async (entry) => [entry.id, await readInvite(entry.id).catch(() => null)] as const),
     ),
   );
+  const facts = new Map(overviews.map((overview) => [overview.id, overview.attention]));
   const now = new Date();
+  // Yalnız sayı gösterilir: maddelerin metnindeki hareket adı gerekmez, kütüphane okunmaz.
+  const ctx = { now, timeZone: config.timeZone, titleOf: (exerciseId: string) => exerciseId };
+
   const rows = clients.map((entry) => ({
     entry,
     work: entry.ok ? clientWork(entry.client, invites.get(entry.id)?.invite ?? null, now) : null,
   }));
   const summary = clientsSummary(rows.map(({ entry, work }) => ({ status: entry.status, work })));
+
+  const cards = rows.map(({ entry, work }): ClientCardData => {
+    const attention = entry.ok && entry.status !== 'archived' ? (facts.get(entry.id) ?? null) : null;
+    const items = attention ? attentionItems(attention, ctx) : [];
+    return {
+      id: entry.id,
+      name: entry.ok ? entry.client.name : entry.id,
+      status: entry.status,
+      ok: entry.ok,
+      note: entry.ok ? (entry.client.note ?? null) : null,
+      problem: entry.ok ? null : entry.problem,
+      work:
+        entry.ok && work
+          ? { access: work.access, password: passwordOf(entry.client), health: work.healthWork }
+          : null,
+      attention: attention ? { count: items.length, urgent: items.some((item) => item.tone === 'danger') } : null,
+      lastWorkout: attention ? lastWorkoutText(attention, entry.status === 'active') : null,
+    };
+  });
+  const sections = CLIENT_STATUSES.flatMap((status): ClientSectionData[] => {
+    const group = cards.filter((card) => card.status === status);
+    return group.length > 0 ? [{ status, label: CLIENT_STATUS_LABELS[status], cards: group }] : [];
+  });
 
   return (
     <div className="flex flex-col gap-6">
@@ -70,56 +102,20 @@ export default async function ClientsPage() {
             </EmptyContent>
           </Empty>
         </Card>
-      ) : null}
-
-      {CLIENT_STATUSES.map((status) => {
-        const group = rows.filter(({ entry }) => entry.status === status);
-        if (group.length === 0) return null;
-        return (
-          <section key={status} className="flex flex-col gap-3" aria-label={CLIENT_STATUS_LABELS[status]}>
-            <h2 className="text-sm font-medium text-muted-foreground">{CLIENT_STATUS_LABELS[status]}</h2>
-            <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {group.map(({ entry, work }) => (
-                <li key={entry.id}>
-                  <Link
-                    href={`/dashboard/clients/${entry.id}`}
-                    className="block h-full rounded-xl outline-none focus-visible:ring-3 focus-visible:ring-ring/50">
-                    <Card size="sm" className="h-full min-h-11 transition-colors hover:bg-muted/40">
-                      <CardHeader>
-                        <CardTitle className="flex items-center gap-2">
-                          {entry.ok ? (
-                            <UserCircle className="size-5 shrink-0 text-muted-foreground" weight="fill" />
-                          ) : (
-                            <WarningCircle className="size-5 shrink-0 text-destructive" weight="fill" />
-                          )}
-                          <span className="truncate">{entry.ok ? entry.client.name : entry.id}</span>
-                          <StatusDot status={entry.status} />
-                        </CardTitle>
-                        {!entry.ok ? (
-                          <CardDescription>{entry.problem}</CardDescription>
-                        ) : entry.client.note ? (
-                          <CardDescription className="line-clamp-2">{entry.client.note}</CardDescription>
-                        ) : null}
-                        <CardAction>
-                          <CaretRight aria-hidden className="size-4 text-muted-foreground" />
-                        </CardAction>
-                      </CardHeader>
-                      {entry.ok && work ? (
-                        <CardFooter className="flex flex-wrap gap-1.5">
-                          <AccessBadge state={work.access} password={passwordOf(entry.client)} />
-                          {work.healthWork ? (
-                            <Badge variant={HEALTH_VARIANT[work.healthWork.tone]}>{work.healthWork.label}</Badge>
-                          ) : null}
-                        </CardFooter>
-                      ) : null}
-                    </Card>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </section>
-        );
-      })}
+      ) : (
+        <ClientList sections={sections} />
+      )}
     </div>
   );
+}
+
+/**
+ * Son antrenman günü (özetteki son 35 gün): "Son antrenman 23 Eki". O günlerde antrenman yoksa yalnız aktif
+ * danışanda söylenir (duraklatılmışta beklenen bir şey değil).
+ */
+function lastWorkoutText(facts: AttentionFacts, active: boolean): string | null {
+  // Özet günleri sıralı tutar; yine de en büyüğü alınır.
+  const last = facts.sessionDays.reduce<string | null>((latest, day) => (latest === null || day > latest ? day : latest), null);
+  if (last) return `Son antrenman ${formatDayShort(last)}`;
+  return active ? `Son ${formatNumber(ATTENTION_TUNING.sessionDaysKept)} günde antrenman yok` : null;
 }
