@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { CaretLeft } from '@phosphor-icons/react/dist/ssr';
-import { canRecordHealth, hasPassword } from '@/lib/client-status';
+import { hasPassword } from '@/lib/client-status';
 import type { Client } from '@/lib/schemas/client';
 import { ClientMenu } from './client-menu';
 
@@ -39,7 +39,6 @@ export function ClientHeader({
         name={client.name}
         appName={appName}
         hasPassword={hasPassword(client.access)}
-        health={canRecordHealth(client, 'conditions') || canRecordHealth(client, 'screening')}
       />
     </header>
   );

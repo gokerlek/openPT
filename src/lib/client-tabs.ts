@@ -1,28 +1,35 @@
 /**
  * Danışan uygulamasının sekmeleri (docs/design/antrenman-ekrani.md §0, docs/design/kendi-program.md §2.1),
  * tarayıcıdan ve Next'ten bağımsız saf mantık: dock'un etkin öğesi ve sekme değişiminde içeriğin geldiği yön.
- * İkonlar ve dock `src/app/me/client-dock.tsx`'te; hesapla ilgili her şey (Ayarlar, Çıkış) avatar menüsünde
- * kalır ve dock'ta tekrarlanmaz.
+ * İkonlar ve dock `src/app/me/client-dock.tsx`'te; Sağlık öğesi yalnız kısıt ya da tarama onaylıyken görünür
+ * (dock gizler, sıra burada sabit kalır). Hesapla ilgili her şey (Ayarlar, Çıkış) avatar menüsünde kalır ve
+ * dock'ta tekrarlanmaz.
  */
 
 export const CLIENT_TABS = [
   { href: '/me', label: 'Bugün' },
-  { href: '/me/gecmis', label: 'Geçmiş' },
-  { href: '/me/ilerleme', label: 'İlerleme' },
-  { href: '/me/programlar', label: 'Programlar' },
-] as const;
+  { href: '/me/programlar', label: 'Program' },
+  // Geçmiş, İlerleme'nin alt sekmesi (Özet · Geçmiş · Rekorlar); adresi yerinde kalır.
+  { href: '/me/ilerleme', label: 'İlerleme', also: ['/me/gecmis'] },
+  { href: '/me/saglik', label: 'Sağlık' },
+] as const satisfies readonly { href: string; label: string; also?: readonly string[] }[];
 
 export type ClientTab = (typeof CLIENT_TABS)[number];
 
 /**
  * Adresin ait olduğu sekmenin sırası; sekme dışındaki sayfada (Ayarlar) -1. Bugün yalnız tam
  * eşleşmede etkindir (`/me` bütün danışan adreslerinin önekidir); öteki sekmeler alt sayfalarında
- * da (`/me/gecmis/[id]`, `/me/programlar/[pid]/duzenle`). Sondaki eğik çizgi yok sayılır; `/me/gecmisler`
- * Geçmiş değildir.
+ * da (`/me/programlar/[pid]/duzenle`, `/me/ilerleme/rekorlar`). Bir sekme `also`'daki adreslerde de
+ * etkindir: Geçmiş (`/me/gecmis`, `/me/gecmis/[id]`) İlerleme'nin içindedir. Sondaki eğik çizgi yok
+ * sayılır; `/me/gecmisler` Geçmiş değildir.
  */
 export function clientTabIndex(pathname: string): number {
   const path = pathname.length > 1 ? pathname.replace(/\/+$/, '') : pathname;
-  return CLIENT_TABS.findIndex(({ href }) => (href === '/me' ? path === href : path === href || path.startsWith(`${href}/`)));
+  return CLIENT_TABS.findIndex((tab) => {
+    if (tab.href === '/me') return path === tab.href;
+    const prefixes: readonly string[] = 'also' in tab ? [tab.href, ...tab.also] : [tab.href];
+    return prefixes.some((href) => path === href || path.startsWith(`${href}/`));
+  });
 }
 
 /**

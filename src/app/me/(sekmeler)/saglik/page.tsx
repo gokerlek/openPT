@@ -17,10 +17,10 @@ import { HealthConstraints } from './health-constraints';
 export const metadata: Metadata = { title: 'Sağlık' };
 
 /**
- * Danışanın Sağlık sayfası (tasarım `kisit-tarama.md` §5.2; avatar menüsünden, dock'ta etkin sekme yok). Yalnız
- * telefon, 375 px. Kısıtlar (onaylıysa): bildir, düzelt, geri çek, kötüleşti, düzeldi. Hareket taraması (onaylıysa):
- * sözcük, taraf, önceki taramaya göre ok ve odak; sayı ve toplam yok. Onay yoksa ilgili bölüm hiç yok, dosya
- * okunmaz.
+ * Danışanın Sağlık sekmesi (tasarım `kisit-tarama.md` §5.2; dock'un 4. sekmesi, yalnız kısıt ya da tarama
+ * onaylıyken görünür; geri bağlantısı yok). Yalnız telefon, 375 px. Kısıtlar (onaylıysa): bildir, düzelt, geri
+ * çek, kötüleşti, düzeldi. Hareket taraması (onaylıysa): sözcük, taraf, önceki taramaya göre ok ve odak; sayı ve
+ * toplam yok. Onay yoksa ilgili bölüm hiç yok, dosya okunmaz.
  */
 export default async function ClientHealthPage() {
   const [client, config] = await Promise.all([currentClient(), readAppConfig()]);
@@ -40,7 +40,7 @@ export default async function ClientHealthPage() {
 
   return (
     <main className="flex flex-col gap-6">
-      <ClientHeader client={client} appName={config.appName} title="Sağlık" back={{ href: '/me', label: 'Bugün' }} />
+      <ClientHeader client={client} appName={config.appName} title="Sağlık" />
 
       {!conditions && !screening ? (
         <Card size="sm">
