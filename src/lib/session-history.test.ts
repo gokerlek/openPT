@@ -56,6 +56,14 @@ describe('geçmiş listesi', () => {
     assert.equal(historyList(index, new Date(at(4100)), TZ).recent, 'Son 30 gün · 2 antrenman · 1 sa 3 dk · 2 rekor');
     assert.equal(historyList(emptySessionIndex(), new Date(at(0)), TZ).recent, null);
   });
+
+  test('eski kayıtta şişmiş yarım süre gösterilmez ve özete girmez', () => {
+    const stale = { ...indexRowOf(second, '1'.repeat(40)), durationMin: 672 };
+    const staleIndex = upsertIndexRow(upsertIndexRow(emptySessionIndex(), indexRowOf(first, '0'.repeat(40))), stale);
+    const list = historyList(staleIndex, new Date(at(4100)), TZ);
+    assert.equal(list.months[0]?.rows[0]?.title, 'Gün B');
+    assert.match(list.recent ?? '', /^Son 30 gün · 2 antrenman · 52 dk/);
+  });
 });
 
 describe('"Daha fazla göster"', () => {

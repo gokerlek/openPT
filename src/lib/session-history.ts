@@ -46,6 +46,14 @@ export type HistoryList = { recent: string | null; months: HistoryMonth[]; count
 const weekdayFormat = new Intl.DateTimeFormat('tr-TR', { weekday: 'short', timeZone: 'UTC' });
 const monthFormat = new Intl.DateTimeFormat('tr-TR', { month: 'long', year: 'numeric', timeZone: 'UTC' });
 
+/** Eski index satırlarında yarım antrenmanın süresi şişik kalmış olabilir ("11 sa 12 dk"); bundan uzunu gösterilmez. */
+const UNFINISHED_MAX_MIN = 180;
+
+function shownMinutes(row: Pick<SessionIndexRow, 'durationMin' | 'unfinished'>): number | undefined {
+  if (row.durationMin === undefined) return undefined;
+  return row.unfinished && row.durationMin > UNFINISHED_MAX_MIN ? undefined : row.durationMin;
+}
+
 function time(iso: string | undefined): number {
   const at = iso ? Date.parse(iso) : Number.NaN;
   return Number.isNaN(at) ? 0 : at;
@@ -56,7 +64,8 @@ function rowOf(row: SessionIndexRow): HistoryRow {
   const prs = row.prs ?? 0;
   // Kendi programdan antrenman programın adıyla ("Evde · Gün A"): program silinse de anlık görüntü kalır.
   const day = sessionDayText(row);
-  const title = [day, ...(row.durationMin !== undefined ? [minutesText(row.durationMin)] : [])].join(' · ');
+  const minutes = shownMinutes(row);
+  const title = [day, ...(minutes !== undefined ? [minutesText(minutes)] : [])].join(' · ');
   const meta = `${formatNumber(row.sets)} set · ${formatKg(row.volumeKg)}`;
   return {
     id: row.id,
@@ -86,7 +95,7 @@ export function historyList(index: SessionIndex, now: Date, timeZone: string): H
   }
   const since = addDays(todayIn(timeZone, now), -(HISTORY_RECENT_DAYS - 1));
   const recent = rows.filter((row) => row.date >= since);
-  const minutes = recent.reduce((sum, row) => sum + (row.durationMin ?? 0), 0);
+  const minutes = recent.reduce((sum, row) => sum + (shownMinutes(row) ?? 0), 0);
   const prs = recent.reduce((sum, row) => sum + (row.prs ?? 0), 0);
   const summary =
     recent.length > 0
