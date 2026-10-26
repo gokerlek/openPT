@@ -192,7 +192,7 @@ const PART_WORDS: Record<HealthField, { accusative: string; record: string; entr
   readiness: { accusative: '“Hazır oluşluk”u', record: 'hazır oluşluk', entry: 'hazır oluşluk sorulur' },
   check_in: { accusative: '“Ağrı takibi”ni', record: 'ağrı kaydı', entry: 'ağrı soruları sorulur' },
   measurements: { accusative: '“Ölçümler”i', record: 'ölçüm', entry: 'ölçüm girebilirsin' },
-  screening: { accusative: '“Hareket taraması”nı', record: 'hareket testi', entry: 'hareket testi girebilirsin' },
+  screening: { accusative: '“Hareket taraması”nı', record: 'kamera ölçümü ve hareket testi', entry: 'kamera ölçümü alıp hareket testi girebilirsin' },
 };
 
 /** Kilidin başlığı ve ne yapılacağı, parçanın adıyla. */

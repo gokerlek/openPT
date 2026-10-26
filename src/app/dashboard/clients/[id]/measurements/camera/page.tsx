@@ -3,6 +3,7 @@ import type { Metadata } from 'next';
 import { CameraWizard } from '@/components/measurements/camera-wizard';
 import { SectionHeader } from '@/components/section-header';
 import { readAppConfig } from '@/lib/config';
+import { canRecordHealth } from '@/lib/client-status';
 import { requirePt } from '@/lib/guards';
 import { loadHealthPart } from '@/lib/health';
 import { HealthLockAlert, HealthStrip } from '../../health-page';
@@ -30,7 +31,8 @@ export default async function CameraMeasurementPage({ params,searchParams }: { p
       {!loaded.ok ? <MeasurementProblemAlert title="Danışan kaydı okunamadı" problem={loaded.problem} /> : null}
       {view?.state === 'locked' ? <HealthLockAlert field="screening" lock={view.lock} clientId={id} /> : null}
       {view?.state === 'broken' ? <MeasurementProblemAlert title="Sağlık kaydı okunamadı" problem={view.problem} /> : null}
-      {view?.state === 'ok' ? <CameraWizard initialTask={initialTask} clientName={loaded.ok?loaded.client.name:undefined} clientId={id} backHref={movement} backLabel="Hareket sayfasına dön" manualHref={`${base}/new`} timeZone={config.timeZone} records={view.record.cameraMeasurements ?? []} /> : null}
+      {/* Elle ölçüm "Ölçümler" onayına bağlı: yalnız o parça yazılabiliyorsa bağlantısı görünür. */}
+      {view?.state === 'ok' ? <CameraWizard initialTask={initialTask} clientName={loaded.ok?loaded.client.name:undefined} clientId={id} backHref={movement} backLabel="Hareket sayfasına dön" manualHref={loaded.ok && canRecordHealth(loaded.client, 'measurements') ? `${base}/new` : undefined} timeZone={config.timeZone} records={view.record.cameraMeasurements ?? []} /> : null}
     </div>
   );
 }

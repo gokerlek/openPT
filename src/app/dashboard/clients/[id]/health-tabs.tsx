@@ -17,7 +17,7 @@ export function HealthTabs({ clientId, selected, pending = [] }: { clientId: str
   const base = `/dashboard/clients/${clientId}`;
   const current = activeHealthPart(pathname, base);
   return (
-    <TabsNav aria-label="Sağlık bölümleri" className="w-full sm:w-fit" listClassName="h-8 touch:h-11">
+    <TabsNav aria-label="Sağlık bölümleri" className="w-full sm:w-fit">
       {HEALTH_PARTS.map((part) => {
         const href = `${base}/${part.path}`;
         const active = current === part;

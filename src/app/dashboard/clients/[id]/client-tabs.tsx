@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { TabsNav, TabsNavLink } from '@/components/ui/tabs';
+import { activeHealthPart } from './health-parts';
 
 type Tab = { key: string; label: string; href: string; active: (pathname: string) => boolean };
 
@@ -13,9 +14,9 @@ type Tab = { key: string; label: string; href: string; active: (pathname: string
  * daveti (`/invite`, Genel'in Giriş kartından açılır) Genel'de sayılır. AI koç sekme değil, paneldir
  * (`CoachLauncher`).
  *
- * "Sağlık" (tasarım `kisit-tarama.md` §1) Kısıtlar, Ölçümler ve Hareket'in çatısıdır: üç adresin birindeyken
- * etkin (kamera ölçümü `measurements/camera` da); bağlantısı modülde seçili ilk parça (layout hesaplar,
- * `healthHref`). İçindeki ikinci şerit `HealthTabs`.
+ * "Sağlık" (tasarım `kisit-tarama.md` §1) Kısıtlar, Ölçümler ve Hareket'in çatısıdır: şeritteki bir parçanın
+ * adresindeyken etkin (`activeHealthPart`, kamera ölçümü `measurements/camera` da); bağlantısı modülde seçili ilk
+ * parça (layout hesaplar, `healthHref`). İçindeki ikinci şerit `HealthTabs`.
  *
  * Telefonda (375 px) beş sekme de tek satıra sığmaz: şerit yatay kayar, taşan kenar solar.
  */
@@ -23,7 +24,6 @@ export function ClientTabs({ clientId, healthHref }: { clientId: string; healthH
   const pathname = usePathname();
   const base = `/dashboard/clients/${clientId}`;
   const under = (path: string) => (pathname: string) => pathname === path || pathname.startsWith(`${path}/`);
-  const health = ['measurements', 'constraints', 'screening'].map((part) => under(`${base}/${part}`));
   const tabs: Tab[] = [
     {
       key: 'genel',
@@ -40,7 +40,7 @@ export function ClientTabs({ clientId, healthHref }: { clientId: string; healthH
     },
     { key: 'antrenmanlar', label: 'Antrenmanlar', href: `${base}/sessions`, active: under(`${base}/sessions`) },
     { key: 'ilerleme', label: 'İlerleme', href: `${base}/ilerleme`, active: under(`${base}/ilerleme`) },
-    { key: 'saglik', label: 'Sağlık', href: healthHref, active: (p) => health.some((match) => match(p)) },
+    { key: 'saglik', label: 'Sağlık', href: healthHref, active: (p) => activeHealthPart(p, base) !== null },
   ];
   const current = tabs.find((tab) => tab.active(pathname))?.key ?? 'genel';
 

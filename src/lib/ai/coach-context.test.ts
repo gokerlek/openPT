@@ -9,7 +9,15 @@ test('PT context follows the actual client route; general pages never infer a cl
   assert.equal(coachClientOf('/dashboard/clients/c_zmrbywaz/measurements'), 'c_zmrbywaz');
   assert.equal(coachClientOf('/dashboard/clients'), null);
   assert.equal(coachClientOf('/dashboard/clients/new'), null);
-  assert.equal(coachPage('/dashboard/clients/c_zmrbywaz/measurements/camera'), 'measurements');
+  assert.equal(coachPage('/dashboard/clients/c_zmrbywaz/measurements'), 'measurements');
+  assert.equal(coachPage('/dashboard/clients/c_zmrbywaz/measurements/new'), 'measurements');
+  // Hareket ve kamera ölçümü Sağlık'ın parçası: panel başlığı "Sağlık" der, "Ölçümler" değil.
+  assert.equal(coachPage('/dashboard/clients/c_zmrbywaz/measurements/camera'), 'health');
+  assert.equal(coachPage('/dashboard/clients/c_zmrbywaz/screening'), 'health');
+  assert.equal(coachPage('/dashboard/clients/c_zmrbywaz/screening/new'), 'health');
+  assert.equal(coachPage('/dashboard/clients/c_zmrbywaz/constraints'), 'health');
+  assert.equal(coachPage('/me/olcum'), 'health');
+  assert.equal(coachPage('/me/saglik'), 'health');
   assert.equal(coachPage('/me/antrenman'), 'workout');
   assert.equal(coachPage('/me/ayarlar'), 'settings');
   assert.equal(coachPage('/dashboard/clients/c_zmrbywaz/coach/drafts/d_abc'), 'program');

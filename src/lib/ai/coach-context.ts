@@ -1,6 +1,9 @@
 import type { COACH_PAGES } from './coach-contract.ts';
 export function coachPage(pathname: string): typeof COACH_PAGES[number] {
-  if (/measurements|olcum|screening/.test(pathname)) return 'measurements';
+  // Hareket (`screening`) ve kamera ölçümü (PT `measurements/camera`, danışan `/me/olcum`) Sağlık'ın parçası;
+  // önce bunlar, yoksa `measurements` eşleşmesi kamerayı Ölçümler'e alırdı. Elle girilen ölçümler Ölçümler'de.
+  if (/screening|measurements\/camera|olcum/.test(pathname)) return 'health';
+  if (/measurements/.test(pathname)) return 'measurements';
   if (/antrenman|sessions|gecmis/.test(pathname)) return 'workout';
   if (/ilerleme/.test(pathname)) return 'progress';
   // AI taslakları (`/coach/drafts/…`) Program sekmesinin altında.

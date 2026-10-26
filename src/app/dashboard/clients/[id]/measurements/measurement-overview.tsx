@@ -65,7 +65,7 @@ export function MeasurementOverview({
             <Ruler weight="fill" />
           </EmptyMedia>
           <EmptyTitle>Henüz ölçüm yok</EmptyTitle>
-          <EmptyDescription>Elle girilen vücut ölçüleri, testler ve anket skorları burada görünür; ilk ölçüm başlangıç değerleri olur.</EmptyDescription>
+          <EmptyDescription>Elle girilen vücut ölçüleri, performans ve hareketlilik testleri, anket skorları burada görünür; ilk ölçüm başlangıç değeri olur.</EmptyDescription>
         </EmptyHeader>
       </Empty>
     );

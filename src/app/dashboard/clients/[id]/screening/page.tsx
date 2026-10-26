@@ -220,7 +220,7 @@ async function Overview({ client, record, today, query }: { client: Client; reco
             })}
             {gone.map((cell) => (
               <p key={`gone:${cell.date}:${cell.key}`}>
-                <span className="font-medium">✓ Ağrı geçti · {cellTitle(cell.testId, cell.side)}</span>: {formatDay(cell.date)} hareket testinde ağrılıydı, bu testte
+                <span className="font-medium">✓ Ağrı geçti · {cellTitle(cell.testId, cell.side)}</span>: {formatDay(cell.date)} hareket testinde ağrılıydı, bu kez
                 ağrısız.
               </p>
             ))}
@@ -384,7 +384,7 @@ export default async function ScreeningPage({
         <Alert variant="destructive">
           <WarningCircle weight="fill" />
           <AlertTitle>Sağlık kaydı okunamadı</AlertTitle>
-          <AlertDescription>{view.problem} Kayıt uygulama dışında değiştirilmiş olabilir; düzeltilene kadar hareket testi yazılmaz.</AlertDescription>
+          <AlertDescription>{view.problem} Kayıt uygulama dışında değiştirilmiş olabilir; düzeltilene kadar kamera ölçümü ve hareket testi yazılmaz.</AlertDescription>
         </Alert>
       ) : null}
       {view.state === 'ok' ? (

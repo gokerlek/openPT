@@ -24,7 +24,11 @@ const SETTINGS_EVENT='axon-camera-settings';
 function subscribe(listener:()=>void){window.addEventListener('storage',listener);window.addEventListener(SETTINGS_EVENT,listener);return()=>{window.removeEventListener('storage',listener);window.removeEventListener(SETTINGS_EVENT,listener);};}
 function readSetting(key:string){try{return localStorage.getItem(key)??'';}catch{return '';}}
 function writeSetting(key:string,value:string){try{localStorage.setItem(key,value);}catch{}window.dispatchEvent(new Event(SETTINGS_EVENT));}
-export function CameraWizard({manualHref,backHref,manualLabel='Manuel ölçüm gir',clientId,clientName,records=[],timeZone='Europe/Istanbul',initialTask='front',backLabel='Ölçüm merkezine dön'}:{manualHref:string;backHref:string;manualLabel?:string;clientId:string;clientName?:string;records?:CameraMeasurement[];timeZone?:string;initialTask?:PoseTask;backLabel?:string}){
+/**
+ * Kamera ölçümü sihirbazı (PT ve danışan). Altta dönüş bağlantısı (`backHref`/`backLabel`, ikisi de çağıranın) ve
+ * isteğe bağlı ikinci bağlantı: `manualHref` verilmezse görünmez (PT'de yalnız "Ölçümler" onayı varken elle ölçüm).
+ */
+export function CameraWizard({manualHref,backHref,manualLabel='Ölçüm gir',clientId,clientName,records=[],timeZone='Europe/Istanbul',initialTask='front',backLabel}:{manualHref?:string;backHref:string;manualLabel?:string;clientId:string;clientName?:string;records?:CameraMeasurement[];timeZone?:string;initialTask?:PoseTask;backLabel:string}){
  const [flow,dispatch]=useReducer(sessionReducer,initialSession);
  const [selected,setSelected]=useState<PoseTask[]>([initialTask]);
  const [drafts,setDrafts]=useState<Record<string,CameraMeasurement>>({});
@@ -80,7 +84,7 @@ export function CameraWizard({manualHref,backHref,manualLabel='Manuel ölçüm g
  },[status]);
  async function openCamera(chosen=deviceId){
   if(!consent || openRef.current)return;
-  if(!window.isSecureContext || !navigator.mediaDevices?.getUserMedia){setError('Kamera için HTTPS veya localhost gerekir. Manuel ölçümle devam edebilirsin.');return;}
+  if(!window.isSecureContext || !navigator.mediaDevices?.getUserMedia){setError('Kamera için HTTPS veya localhost gerekir.');return;}
   release();openRef.current=true;setStatus('requesting');setError(null);setChecks([false,false,false]);
   const stored=chosen || readSetting('axon-camera-device-v1');
   const present=stored && devices.some(d=>d.deviceId===stored);
@@ -180,7 +184,7 @@ export function CameraWizard({manualHref,backHref,manualLabel='Manuel ölçüm g
    {error?<p role="alert" className="text-sm text-destructive">{error}</p>:null}
    {pending.length?<section className="flex flex-col gap-3 rounded-xl border p-4"><h3 className="font-medium">Kaydedilmemiş sonuçlar · {pending.length}</h3>{pending.map(record=><div key={record.id} className="flex flex-wrap items-center justify-between gap-2 text-sm"><span>{PROTOCOLS[record.task].title} · {new Date(record.capturedAt).toLocaleTimeString('tr-TR',{timeZone})}</span><Button variant="outline" disabled={Boolean(saving)} onClick={()=>void save(record)}>{saving===record.id?'Kaydediliyor…':'Ölçümü kaydet'}</Button></div>)}</section>:null}
    <CameraHistory clientId={clientId} timeZone={timeZone} records={records} onRepeat={repeat} onTrashChange={(id,removed)=>setTrashChanges(old=>({...old,[id]:removed}))}/>
-   <div className="flex flex-wrap gap-3 border-t pt-4"><Button nativeButton={false} variant="ghost" render={<Link href={backHref}/>}>{backLabel}</Button><Button nativeButton={false} variant="outline" render={<Link href={manualHref}/>}>{manualLabel}</Button></div>
+   <div className="flex flex-wrap gap-3 border-t pt-4"><Button nativeButton={false} variant="ghost" render={<Link href={backHref}/>}>{backLabel}</Button>{manualHref?<Button nativeButton={false} variant="outline" render={<Link href={manualHref}/>}>{manualLabel}</Button>:null}</div>
    <p className="text-xs text-muted-foreground">Görüntü yalnız cihazında işlenir, saklanmaz. Açılar 2D tahmindir; sonuçlar hareket testini destekler. Program otomatik değişmez.</p>
   </div>
   {overlay?createPortal(overlay,document.body):null}
