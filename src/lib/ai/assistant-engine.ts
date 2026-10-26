@@ -8,9 +8,10 @@ import { programFormSchema } from '../schemas/program.ts';
 
 /**
  * The provider interprets intent; the application owns catalog selection and numerical targets. `audience`: who asked
- * (errors tell the PT to extend the library, the client to ask the PT).
+ * (errors tell the PT to extend the library, the client to ask the PT). Required: a new caller must not silently get
+ * the client's copy.
  */
-export function assistantProgram(context: CoachContext, selection: AssistantSelection, kind: 'workout' | 'program', id: (prefix: string) => string, audience: 'pt' | 'client' = 'client') {
+export function assistantProgram(context: CoachContext, selection: AssistantSelection, kind: 'workout' | 'program', id: (prefix: string) => string, audience: 'pt' | 'client') {
   if (context.global) return { error: 'Program için bir danışanın sayfasını aç.' };
   if (context.healthUnavailable) return { error: 'İzinli kısıt kayıtları okunamadı. Kayıtlar okunmadan program hazırlanmıyor.' };
   const eligible = eligibleExercises(context, selection.conditions);

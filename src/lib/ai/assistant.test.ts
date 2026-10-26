@@ -111,17 +111,28 @@ test('punishment/body distress and medical wording cannot create a draft through
 });
 test('catalog muscle/equipment filters and unavailable health are respected; one workout has one day', () => {
   const f = setup();
-  const chest = assistantProgram(f.context, { ...selection, fullBody: false, muscles: ['chest_lower'] }, 'workout', f.deps.id);
+  const chest = assistantProgram(f.context, { ...selection, fullBody: false, muscles: ['chest_lower'] }, 'workout', f.deps.id, 'client');
   assert.ok('body' in chest); assert.equal(chest.body!.phases[0]?.days.length, 1);
   const ids = chest.body!.phases.flatMap(p => p.days.flatMap(d => d.blocks.flatMap(b => b.rows.map(r => r.exerciseId))));
   assert.ok(ids.every(id => EXERCISES.get(id)!.primaryMuscles.includes('chest_lower')));
-  assert.ok('error' in assistantProgram({ ...f.context, healthUnavailable: true }, selection, 'program', f.deps.id));
-  assert.ok('error' in assistantProgram(f.context, { ...selection, conditions: { ...selection.conditions, equipment: ['cardio_machine'] } }, 'program', f.deps.id));
+  assert.ok('error' in assistantProgram({ ...f.context, healthUnavailable: true }, selection, 'program', f.deps.id, 'client'));
+  assert.ok('error' in assistantProgram(f.context, { ...selection, conditions: { ...selection.conditions, equipment: ['cardio_machine'] } }, 'program', f.deps.id, 'client'));
   // Uygun hareket yoksa danışana PT'den alternatif istemesi, PT'ye kütüphaneyi genişletmesi söylenir.
   const none = { ...selection, conditions: { ...selection.conditions, equipment: ['cardio_machine' as const] } };
   const forClient = assistantProgram(f.context, none, 'program', f.deps.id, 'client'), forPt = assistantProgram(f.context, none, 'program', f.deps.id, 'pt');
   assert.match('error' in forClient ? forClient.error! : '', /PT’den alternatif iste/);
   assert.ok('error' in forPt && !forPt.error!.includes('PT’den') && forPt.error!.includes('kütüphaneye'));
+});
+test('mobility without warm-up/cool-down moves: the PT extends the library, the client hears the PT will', () => {
+  const f = setup();
+  // Fikstür kataloğunda ısınma/soğuma hareketi yok: hareketlilik hedefinin havuzu boş kalır.
+  const mobility: AssistantSelection = { ...selection, goal: 'mobility' };
+  const forPt = assistantProgram(f.context, mobility, 'program', f.deps.id, 'pt'), forClient = assistantProgram(f.context, mobility, 'program', f.deps.id, 'client');
+  assert.ok('error' in forPt && 'error' in forClient);
+  assert.match(forPt.error!, /kütüphaneye uygun ısınma\/soğuma hareketleri ekle/);
+  // PT'ye danışana yazılmış metin gösterilmez: "PT … eklemeli" PT'nin kendisinden üçüncü kişi olarak söz ederdi.
+  assert.ok(!/\bPT\b|antrenörün/.test(forPt.error!), forPt.error!);
+  assert.match(forClient.error!, /PT uygun hareketleri kütüphaneye eklemeli/);
 });
 test('Gemini gets only current goal/labels, not records or history; fabricated values are rejected', async () => {
   const expected = { intent: 'fitness', goal: 'general_fitness', fullBody: true, muscles: [], weekdays: null, minutes: null, equipment: null };

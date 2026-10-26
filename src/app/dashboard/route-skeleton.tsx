@@ -12,8 +12,13 @@ import { TrainingTabs } from './training-tabs';
  * Sayfa geçişinde yeni sayfa gelene kadar gösterilen iskelet (`loading.tsx`, shadcn Skeleton).
  * Next `loading.tsx`'i geçişin hemen başında (üretimde önceden yüklenmiş olarak) çizer; adres de
  * o anda değişir, bu yüzden hangi sayfaya gidildiği `usePathname`'den okunur ve iskelet onun
- * yerleşimine benzer (`skeletonKind`). Kütüphane listelerinde ve Ayarlar'da sekmeler gerçektir:
- * seçilen sekme hemen etkin görünür.
+ * yerleşimine benzer (`skeletonKind`). Kütüphane listelerinde sekmeler gerçektir: seçilen sekme
+ * hemen etkin görünür.
+ *
+ * Ayarlar'ın sekmeleri buradan yalnız bölüme başka yerden girilirken gelir (düzeni henüz yüklenmemişse).
+ * Ayarlar'ın kendi sekmeleri arasında bu sınır görünmez: Next sınırı çocuk segmentin anahtarıyla kurar
+ * (`layout-router`, `TemplateContext.Provider key={stateKey}`) ve buradaki sınırın anahtarı `settings` kalır.
+ * O geçişin iskeleti `settings/loading.tsx` (`SettingsTabSkeleton`): sekmeler düzende, yalnız başlık ve gövde.
  */
 export function RouteSkeleton() {
   const kind = skeletonKind(usePathname());
@@ -21,15 +26,9 @@ export function RouteSkeleton() {
   // Ayarlar'ın düzeni (`settings/layout.tsx`): sekmeler, altında `gap-5` ile sayfa (başlık + form).
   if (kind === 'settings') {
     return (
-      <div className="flex flex-col gap-5" aria-busy="true">
-        <span role="status" className="sr-only">
-          Sayfa yükleniyor…
-        </span>
+      <div className="flex flex-col gap-5">
         <SettingsTabs />
-        <div className="flex flex-col gap-6">
-          <HeaderSkeleton crumbs={false} gutter={false} />
-          <BodySkeleton kind={kind} />
-        </div>
+        <SettingsTabSkeleton />
       </div>
     );
   }
@@ -43,6 +42,19 @@ export function RouteSkeleton() {
       <HeaderSkeleton crumbs={kind === 'detail' || kind === 'form' || kind === 'client'} gutter={kind !== 'library'} />
       {kind === 'client' ? <Skeleton className="h-8 w-full max-w-md" /> : null}
       <BodySkeleton kind={kind} />
+    </div>
+  );
+}
+
+/** Ayarlar'ın sekmesi değişirken (`settings/loading.tsx`): sekmeler yerinde (Ayarlar düzeni), yalnız başlık ve form. */
+export function SettingsTabSkeleton() {
+  return (
+    <div className="flex flex-col gap-6" aria-busy="true">
+      <span role="status" className="sr-only">
+        Sayfa yükleniyor…
+      </span>
+      <HeaderSkeleton crumbs={false} gutter={false} />
+      <BodySkeleton kind="settings" />
     </div>
   );
 }

@@ -4,18 +4,12 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { TabsNav, TabsNavLink } from '@/components/ui/tabs';
 import { USER_MENU_SPOT } from '@/components/user-menu-spot';
-
-/** Ayarlar bölümünün sayfaları; avatar menüsündeki tek "Ayarlar" öğesi bölümün girişine (Görünüm) açılır. */
-const SETTINGS_SECTIONS = [
-  { href: '/dashboard/settings', label: 'Görünüm' },
-  { href: '/dashboard/settings/ai', label: 'Yapay zekâ' },
-  { href: '/dashboard/settings/updates', label: 'Sürüm' },
-] as const;
+import { SETTINGS_SECTIONS } from '@/lib/navigation';
 
 /**
- * Ayarlar bölümünün sekmeleri: Görünüm · Yapay zekâ · Sürüm. Her sekme kendi sayfasıdır (adres
- * değişir, geri tuşu çalışır): gezinme, `tablist` değil (`TabsNav`). Etkin sekme adresle birebir
- * eşleşir (sondaki `/` sayılmaz); Görünüm bölümün kökü olduğu için önek eşleşmesi yapılmaz.
+ * Ayarlar bölümünün sekmeleri: Görünüm · Yapay zekâ · Sürüm (`SETTINGS_SECTIONS`, `lib/navigation.ts`). Her
+ * sekme kendi sayfasıdır (adres değişir, geri tuşu çalışır): gezinme, `tablist` değil (`TabsNav`). Etkin sekme
+ * adresle birebir eşleşir (sondaki `/` sayılmaz); Görünüm bölümün kökü olduğu için önek eşleşmesi yapılmaz.
  *
  * Sekmeler sayfanın ilk satırıdır; sağ üstteki kullanıcı menüsüne Kütüphane sekmeleri gibi yer
  * bırakır (`USER_MENU_SPOT`, `flex-wrap-reverse`: sığmazsa sekmeler menünün altındaki satıra iner).

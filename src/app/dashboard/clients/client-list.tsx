@@ -32,11 +32,6 @@ export type ClientCardData = {
   work: { access: AccessState; password: ReturnType<typeof passwordState>; health: HealthWork | null } | null;
 };
 
-/**
- * Kartın danışan özetinden gelen kısmı (sonradan akar): dikkat maddelerinin sayısı (`urgent`: sağlık güvenliği
- * maddesi var) ve "Son antrenman 23 Eki" ya da "Son 35 günde antrenman yok". Arşivdeki ya da özeti okunamayan
- * danışanda yok.
- */
 export type ClientSectionData = { status: ClientStatus; label: string; cards: ClientCardData[] };
 
 const HEALTH_VARIANT: Record<HealthWork['tone'], 'outline' | 'secondary'> = { waiting: 'outline', info: 'secondary' };

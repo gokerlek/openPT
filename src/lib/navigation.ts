@@ -88,8 +88,17 @@ export function notFoundBackLink(pathname: string): { href: string; label: strin
 /** Kütüphane bölümünün listeleri (sekmeleriyle açılan sayfalar). */
 const LIBRARY_LISTS = ['/dashboard/templates', '/dashboard/exercises', '/dashboard/devices', '/dashboard/attachments'];
 
-/** Ayarlar bölümünün sayfaları (`settings/settings-tabs.tsx`'teki sekmeler). */
-const SETTINGS_PAGES = ['/dashboard/settings', '/dashboard/settings/ai', '/dashboard/settings/updates'];
+/**
+ * Ayarlar bölümünün sayfaları, sekme sırasıyla (tek yer): sekmeleri `settings/settings-tabs.tsx` çizer, geçiş
+ * iskeleti (`skeletonKind`) buradan tanır. Avatar menüsündeki tek "Ayarlar" öğesi bölümün girişine (Görünüm) açılır.
+ */
+export const SETTINGS_SECTIONS = [
+  { href: '/dashboard/settings', label: 'Görünüm' },
+  { href: '/dashboard/settings/ai', label: 'Yapay zekâ' },
+  { href: '/dashboard/settings/updates', label: 'Sürüm' },
+] as const;
+
+const SETTINGS_PAGES: readonly string[] = SETTINGS_SECTIONS.map((section) => section.href);
 
 /**
  * Sayfa geçişinde yüklenirken gösterilecek iskeletin biçimi; hedef sayfanın yerleşimine benzer

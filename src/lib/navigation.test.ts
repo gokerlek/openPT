@@ -1,6 +1,6 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { loginPath, navigationHref, notFoundBackLink, safeReturnPath, skeletonKind } from './navigation.ts';
+import { loginPath, navigationHref, notFoundBackLink, safeReturnPath, SETTINGS_SECTIONS, skeletonKind } from './navigation.ts';
 import type { LinkClick } from './unsaved-changes.ts';
 
 const HERE = 'http://localhost:3000/dashboard/templates';
@@ -127,6 +127,8 @@ describe('skeletonKind: geçişte hedef sayfaya benzeyen iskelet', () => {
     assert.equal(skeletonKind('/dashboard/settings/'), 'settings');
     assert.equal(skeletonKind('/dashboard/settings/ai'), 'settings');
     assert.equal(skeletonKind('/dashboard/settings/updates'), 'settings');
+    // Sekmelerin listesi tek yerde: her sekme Ayarlar iskeletiyle açılır.
+    for (const section of SETTINGS_SECTIONS) assert.equal(skeletonKind(section.href), 'settings', section.label);
     // Bilinmeyen alt sayfa Ayarlar'ın sekmeleriyle açılmaz.
     assert.equal(skeletonKind('/dashboard/settings/baska'), 'detail');
   });
