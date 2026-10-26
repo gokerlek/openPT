@@ -4,21 +4,20 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { TabsNav, TabsNavLink } from '@/components/ui/tabs';
 
-type Tab = { key: string; label: string; href: string; active: (pathname: string) => boolean; ready: boolean };
+type Tab = { key: string; label: string; href: string; active: (pathname: string) => boolean };
 
 /**
  * Danışanın sekmeleri: Genel · Program · Antrenmanlar · İlerleme · Sağlık. Her sekme kendi sayfasıdır
  * (adres değişir, geri tuşu çalışır): gezinme, `tablist` değil (`TabsNav`). Alt sayfalar (programı
  * düzenle, ölçüm gir, antrenmanın detayı, AI taslağını düzenle) kendi sekmesinde açık görünür; giriş
  * daveti (`/invite`, Genel'in Giriş kartından açılır) Genel'de sayılır. AI koç sekme değil, paneldir
- * (`CoachLauncher`). Henüz hazır olmayan bir sekme (`ready: false`) pasif ve "yakında" yazar.
+ * (`CoachLauncher`).
  *
  * "Sağlık" (tasarım `kisit-tarama.md` §1) Kısıtlar, Ölçümler ve Tarama'nın çatısıdır: üç adresin birindeyken
  * etkin; bağlantısı modülde seçili ilk parça (layout hesaplar, `healthHref`). İçindeki ikinci şerit
  * `HealthTabs`.
  *
- * Telefonda (375 px) beş sekme de tek satıra sığmaz: şerit yatay kayar, taşan kenar solar. Pasif bir sekme
- * telefonda görsel olarak sona alınır ki hazır sekmeler ekran dışında kalmasın; okuma sırası (DOM) aynı.
+ * Telefonda (375 px) beş sekme de tek satıra sığmaz: şerit yatay kayar, taşan kenar solar.
  */
 export function ClientTabs({ clientId, healthHref }: { clientId: string; healthHref: string }) {
   const pathname = usePathname();
@@ -31,7 +30,6 @@ export function ClientTabs({ clientId, healthHref }: { clientId: string; healthH
       label: 'Genel',
       href: base,
       active: (p) => p === base || p === `${base}/edit` || under(`${base}/invite`)(p),
-      ready: true,
     },
     {
       key: 'program',
@@ -39,27 +37,20 @@ export function ClientTabs({ clientId, healthHref }: { clientId: string; healthH
       href: `${base}/program`,
       // AI taslağının düzenleyicisi (`/coach/drafts/…`) bir program düzenleyicisi; dönüşü de Program'a.
       active: (p) => under(`${base}/program`)(p) || under(`${base}/coach/drafts`)(p),
-      ready: true,
     },
-    { key: 'antrenmanlar', label: 'Antrenmanlar', href: `${base}/sessions`, active: under(`${base}/sessions`), ready: true },
-    { key: 'ilerleme', label: 'İlerleme', href: `${base}/ilerleme`, active: under(`${base}/ilerleme`), ready: true },
-    { key: 'saglik', label: 'Sağlık', href: healthHref, active: (p) => health.some((match) => match(p)), ready: true },
+    { key: 'antrenmanlar', label: 'Antrenmanlar', href: `${base}/sessions`, active: under(`${base}/sessions`) },
+    { key: 'ilerleme', label: 'İlerleme', href: `${base}/ilerleme`, active: under(`${base}/ilerleme`) },
+    { key: 'saglik', label: 'Sağlık', href: healthHref, active: (p) => health.some((match) => match(p)) },
   ];
   const current = tabs.find((tab) => tab.active(pathname))?.key ?? 'genel';
 
   return (
     <TabsNav aria-label="Danışan bölümleri">
-      {tabs.map((tab) =>
-        tab.ready ? (
-          <TabsNavLink key={tab.key} active={tab.key === current} render={<Link href={tab.href} />}>
-            {tab.label}
-          </TabsNavLink>
-        ) : (
-          <TabsNavLink key={tab.key} disabled note="yakında" className="max-sm:order-last">
-            {tab.label}
-          </TabsNavLink>
-        ),
-      )}
+      {tabs.map((tab) => (
+        <TabsNavLink key={tab.key} active={tab.key === current} render={<Link href={tab.href} />}>
+          {tab.label}
+        </TabsNavLink>
+      ))}
     </TabsNav>
   );
 }
