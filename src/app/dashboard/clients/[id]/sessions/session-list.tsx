@@ -46,14 +46,16 @@ export function SessionList({ clientId, months }: { clientId: string; months: Hi
 export function SessionRow({ clientId, row }: { clientId: string; row: HistoryRow }) {
   return (
     <Item variant="outline" size="sm" className="h-full touch:min-h-11" render={<Link href={`/dashboard/clients/${clientId}/sessions/${row.id}`} />}>
-      <ItemMedia className="w-9 flex-col gap-0 leading-tight" aria-hidden>
+      <ItemMedia className="w-12 flex-col gap-0 leading-tight" aria-hidden>
         <span className="font-heading text-lg font-semibold tabular-nums">{row.dayOfMonth}</span>
-        <span className="text-xs text-muted-foreground">{row.weekday}</span>
+        <span className="text-xs text-muted-foreground">
+          {row.month} {row.weekday}
+        </span>
       </ItemMedia>
       <ItemContent className="min-w-0">
         <ItemTitle className="line-clamp-none flex-wrap gap-1.5">
           <span className="sr-only">
-            {row.dayOfMonth} {row.weekday} ·{' '}
+            {row.dayOfMonth} {row.month} {row.weekday} ·{' '}
           </span>
           {row.title}
           {row.prs > 0 ? (

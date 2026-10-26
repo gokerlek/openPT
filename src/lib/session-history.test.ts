@@ -43,6 +43,7 @@ describe('geçmiş listesi', () => {
     assert.deepEqual(list.months[0]?.rows[0], {
       id: 's_bbbbbbbb',
       dayOfMonth: '28',
+      month: 'Eyl',
       weekday: 'Pzt',
       title: 'Gün B · 11 dk',
       meta: '1 set · 625 kg',
@@ -80,7 +81,7 @@ describe('"Daha fazla göster"', () => {
     const month = (key: string, ids: string[]): HistoryMonth => ({
       key,
       label: key,
-      rows: ids.map((id) => ({ id, dayOfMonth: '1', weekday: 'Pzt', title: 'Gün A', meta: '', otherDay: false, unfinished: false, prs: 0 })),
+      rows: ids.map((id) => ({ id, dayOfMonth: '1', month: 'Eyl', weekday: 'Pzt', title: 'Gün A', meta: '', otherDay: false, unfinished: false, prs: 0 })),
     });
     const months = [month('2026-09', ['a', 'b']), month('2026-08', ['c', 'd']), month('2026-07', ['e'])];
     assert.deepEqual(

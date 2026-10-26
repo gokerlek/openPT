@@ -27,8 +27,9 @@ export const HISTORY_RECENT_DAYS = 30;
 
 export type HistoryRow = {
   id: string;
-  /** Takvim günü: "26" ve "Cmt". */
+  /** Takvim günü: "26", "Eyl" ve "Cmt". */
   dayOfMonth: string;
+  month: string;
   weekday: string;
   /** "Gün A · 52 dk". */
   title: string;
@@ -44,6 +45,7 @@ export type HistoryMonth = { key: string; label: string; rows: HistoryRow[] };
 export type HistoryList = { recent: string | null; months: HistoryMonth[]; count: number };
 
 const weekdayFormat = new Intl.DateTimeFormat('tr-TR', { weekday: 'short', timeZone: 'UTC' });
+const monthShortFormat = new Intl.DateTimeFormat('tr-TR', { month: 'short', timeZone: 'UTC' });
 const monthFormat = new Intl.DateTimeFormat('tr-TR', { month: 'long', year: 'numeric', timeZone: 'UTC' });
 
 /** Yarım antrenmanın süresi eski index satırlarında ya da setsizse (bitiş son sete göre kısılamaz) şişik olabilir; bundan uzunu gösterilmez. */
@@ -70,6 +72,7 @@ function rowOf(row: SessionIndexRow): HistoryRow {
   return {
     id: row.id,
     dayOfMonth: String(date.getUTCDate()),
+    month: monthShortFormat.format(date),
     weekday: weekdayFormat.format(date),
     title,
     meta,
