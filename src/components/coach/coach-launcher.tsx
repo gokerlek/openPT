@@ -53,7 +53,8 @@ function CoachNudge({ clientId, onOpen }: { clientId: string; onOpen: () => void
     const next = [...new Set([...dismissed, ...active.map(item => item.id)])].slice(-90);
     setDismissed(next); try { sessionStorage.setItem(`coach-dismissed:${clientId}`, JSON.stringify(next)); } catch { /* Dismissal still works in memory. */ }
   };
-  return <aside aria-label="Koçtan mesaj" className="fixed right-4 bottom-[calc(var(--dock-clearance,6rem)+1rem)] z-40 max-h-[35dvh] w-[min(22rem,calc(100vw-2rem))] overflow-y-auto rounded-xl border bg-popover p-4 shadow-lg">
+  // Düzenleyicinin yüzen Kaydet'i görünürken onun üstünde durur (`--editor-save-space`).
+  return <aside aria-label="Koçtan mesaj" className="fixed right-4 bottom-[calc(var(--dock-clearance,6rem)+1rem+var(--editor-save-space,0px))] z-40 max-h-[35dvh] w-[min(22rem,calc(100vw-2rem))] overflow-y-auto rounded-xl border bg-popover p-4 shadow-lg">
     <div className="flex items-center justify-between"><p className="font-semibold">Koçtan mesaj</p><Button size="icon" variant="ghost" className="size-11" aria-label="Koç mesajını kapat" onClick={close}><X /></Button></div>
     {active.map(item => <p key={item.id} className="mt-2 text-sm leading-relaxed">{item.text}</p>)}
     <Button variant="outline" className="mt-3 h-11 w-full" onClick={() => { close(); onOpen(); }}>Önerileri aç</Button>
