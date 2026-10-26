@@ -117,6 +117,11 @@ test('catalog muscle/equipment filters and unavailable health are respected; one
   assert.ok(ids.every(id => EXERCISES.get(id)!.primaryMuscles.includes('chest_lower')));
   assert.ok('error' in assistantProgram({ ...f.context, healthUnavailable: true }, selection, 'program', f.deps.id));
   assert.ok('error' in assistantProgram(f.context, { ...selection, conditions: { ...selection.conditions, equipment: ['cardio_machine'] } }, 'program', f.deps.id));
+  // Uygun hareket yoksa danışana PT'den alternatif istemesi, PT'ye kütüphaneyi genişletmesi söylenir.
+  const none = { ...selection, conditions: { ...selection.conditions, equipment: ['cardio_machine' as const] } };
+  const forClient = assistantProgram(f.context, none, 'program', f.deps.id, 'client'), forPt = assistantProgram(f.context, none, 'program', f.deps.id, 'pt');
+  assert.match('error' in forClient ? forClient.error! : '', /PT’den alternatif iste/);
+  assert.ok('error' in forPt && !forPt.error!.includes('PT’den') && forPt.error!.includes('kütüphaneye'));
 });
 test('Gemini gets only current goal/labels, not records or history; fabricated values are rejected', async () => {
   const expected = { intent: 'fitness', goal: 'general_fitness', fullBody: true, muscles: [], weekdays: null, minutes: null, equipment: null };

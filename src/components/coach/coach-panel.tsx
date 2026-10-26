@@ -27,6 +27,26 @@ import { answerCoach } from '@/lib/ai/coach-engine';
 import { BODY_MUSCLES, isBodyMuscle } from '@/lib/muscles';
 import { EMPTY_CARE } from '@/lib/constraint-filter';
 
+/**
+ * Program sekmesinin metni role göre: danışan kendi programını ister ("sen"), PT danışan için taslak hazırlar
+ * (danışandan üçüncü kişi olarak söz edilir). Aynı panel iki rolde de açılır.
+ */
+const PROGRAM_COPY = {
+  client: { title: 'Programını hazırlayalım', goal: 'Ne yapmak istiyorsun?', manual: 'Kendim seçeyim', muscles: 'Çalıştırmak istediğin kasları seç', unclear: 'Hedef netleşmedi. Aşağıdan hedef ve kaslarını seçebilirsin.' },
+  pt: { title: 'Danışan için program taslağı', goal: 'Danışanın hedefi ne?', manual: 'Koşulları ben seçeyim', muscles: 'Çalışılacak kasları seç', unclear: 'Hedef netleşmedi. Danışanın hedefini ve çalışılacak kasları aşağıdan seçebilirsin.' },
+} as const;
+
+/**
+ * Yorumlanmayan hassas hedefin notu. Danışana koçun kendi yanıtı (`answerCoach`: "antrenörüne bildir"); PT'ye
+ * metnin neden hedefe çevrilmediği ve elle seçim yolu: danışana yazılmış yanıt PT'ye gösterilmez.
+ */
+function sensitiveNotice(intent: 'support' | 'health_question', role: 'pt' | 'client'): string {
+  if (role === 'client') return answerCoach({ intent, exerciseIds: [] }, { facts: [], exercises: [], care: EMPTY_CARE, existingExerciseIds: [], healthUnavailable: false, today: '' }).answer;
+  return intent === 'support'
+    ? 'Metin ceza, telafi ya da yeme kaygısı içeriyor; AI bunu program hedefine çevirmez. Koşulları elle seçerek devam edebilirsin.'
+    : 'Metin ağrı, tanı ya da tedavi içeriyor; AI bundan hedef çıkarmaz, tanı ya da tedavi önermez. Koşulları elle seçerek devam edebilirsin.';
+}
+
 export function CoachPanel({ clientId, role, page: _page = 'overview', general = false, initialTab, autoReview = false, onAutoReview, transport = fetchJson }: { clientId: string; role: 'pt' | 'client'; page?: typeof COACH_PAGES[number]; general?: boolean; initialTab?: 'review' | 'program'; autoReview?: boolean; onAutoReview?: () => void; transport?: typeof fetchJson }) {
   const endpoint = general ? '/api/coach' : role === 'pt' ? `/api/clients/${clientId}/coach` : '/api/me/coach';
   const cache = useQueryClient(), instance = useId();
@@ -36,6 +56,7 @@ export function CoachPanel({ clientId, role, page: _page = 'overview', general =
   const [text, setText] = useState(''), [notice, setNotice] = useState(''), [error, setError] = useState(''), [busy, setBusy] = useState(false), [formOpen, setFormOpen] = useState(false);
   const [goal, setGoal] = useState<AssistantSelection['goal'] | ''>(''), [fullBody, setFullBody] = useState(true), [muscles, setMuscles] = useState<AssistantSelection['muscles']>([]);
   const [weekdays, setWeekdays] = useState<number[]>([]), [equipment, setEquipment] = useState<AssistantSelection['conditions']['equipment']>([]), [minutes, setMinutes] = useState(45);
+  const copy = PROGRAM_COPY[role];
   const ready = !!goal && weekdays.length > 0 && equipment.length > 0 && Number.isInteger(minutes) && minutes >= 15 && minutes <= 120 && (fullBody || muscles.length > 0);
   async function action(run: () => Promise<unknown>) {
     if (busy) return;
@@ -52,7 +73,7 @@ export function CoachPanel({ clientId, role, page: _page = 'overview', general =
       if (data.interpreted) {
         const result = data.interpreted;
         if (result.intent !== 'fitness') {
-          setNotice(result.intent === 'unclear' ? 'Hedef netleşmedi. Aşağıdan hedef ve kaslarını seçebilirsin.' : answerCoach({ intent: result.intent, exerciseIds: [] }, { facts: [], exercises: [], care: EMPTY_CARE, existingExerciseIds: [], healthUnavailable: false, today: '' }).answer);
+          setNotice(result.intent === 'unclear' ? copy.unclear : sensitiveNotice(result.intent, role));
           if (result.intent !== 'unclear') { setFormOpen(false); return; }
         } else {
           setNotice('Yazdıkların seçimlere dönüştü. Belirtmediğin alanlar doldurulmadı; kontrol edip eksikleri tamamla.');
@@ -93,16 +114,16 @@ export function CoachPanel({ clientId, role, page: _page = 'overview', general =
         </Card>
       </TabsContent>
       {!general ? <TabsContent value="program" className="flex flex-col gap-4">
-        <Card><CardHeader><CardTitle>Programını hazırlayalım</CardTitle><CardDescription>Hedefi ve koşulları belirle; taslağı oluşturucuda düzenle.</CardDescription></CardHeader><CardContent>
-          <FieldGroup><Field><FieldLabel htmlFor={`${instance}-goal`}>Ne yapmak istiyorsun?</FieldLabel><Textarea id={`${instance}-goal`} placeholder="Bütün beden, haftada 2 gün, 45 dakika, dambıl." value={text} onChange={e => setText(e.target.value)} rows={3} maxLength={1500} disabled={busy} /></Field>
-            <div className="flex flex-wrap gap-2"><Button disabled={busy || !text.trim() || !data.connection} onClick={() => void request({ action: 'interpret', text: text.trim() })}>Hedefi yorumla</Button><Button variant="outline" disabled={busy} onClick={() => { setFormOpen(true); setNotice(''); }}>Kendim seçeyim</Button></div>
+        <Card><CardHeader><CardTitle>{copy.title}</CardTitle><CardDescription>Hedefi ve koşulları belirle; taslağı oluşturucuda düzenle.</CardDescription></CardHeader><CardContent>
+          <FieldGroup><Field><FieldLabel htmlFor={`${instance}-goal`}>{copy.goal}</FieldLabel><Textarea id={`${instance}-goal`} placeholder="Bütün beden, haftada 2 gün, 45 dakika, dambıl." value={text} onChange={e => setText(e.target.value)} rows={3} maxLength={1500} disabled={busy} /></Field>
+            <div className="flex flex-wrap gap-2"><Button disabled={busy || !text.trim() || !data.connection} onClick={() => void request({ action: 'interpret', text: text.trim() })}>Hedefi yorumla</Button><Button variant="outline" disabled={busy} onClick={() => { setFormOpen(true); setNotice(''); }}>{copy.manual}</Button></div>
           </FieldGroup>
         </CardContent></Card>
         {notice ? <Alert role="status"><AlertDescription>{notice}</AlertDescription></Alert> : null}
         {formOpen ? <Card><CardHeader><CardTitle>Antrenman koşulları</CardTitle></CardHeader><CardContent><FieldGroup>
           <Field><FieldLabel htmlFor={`${instance}-selection`}>Hedef</FieldLabel><Select value={goal || null} onValueChange={value => setGoal(value as AssistantSelection['goal'])} disabled={busy} items={GOALS.map(g => ({ value: g, label: GOAL_LABELS[g] }))}><SelectTrigger id={`${instance}-selection`} className="w-full"><SelectValue placeholder="Hedef seç" /></SelectTrigger><SelectContent><SelectGroup>{GOALS.map(g => <SelectItem key={g} value={g}>{GOAL_LABELS[g]}</SelectItem>)}</SelectGroup></SelectContent></Select></Field>
           <Field orientation="horizontal"><Checkbox id={`${instance}-full`} checked={fullBody} disabled={busy} onCheckedChange={setFullBody} /><FieldLabel htmlFor={`${instance}-full`}>Bütün beden</FieldLabel></Field>
-          {!fullBody ? <MuscleMap label="Çalıştırmak istediğin kasları seç" selected={muscles.filter(isBodyMuscle)} disabled={busy ? BODY_MUSCLES : []} onToggle={m => setMuscles(muscles.includes(m) ? muscles.filter(x => x !== m) : [...muscles, m])} /> : null}
+          {!fullBody ? <MuscleMap label={copy.muscles}selected={muscles.filter(isBodyMuscle)} disabled={busy ? BODY_MUSCLES : []} onToggle={m => setMuscles(muscles.includes(m) ? muscles.filter(x => x !== m) : [...muscles, m])} /> : null}
           <Field><FieldLabel id={`${instance}-weekdays`}>Antrenman günleri</FieldLabel><WeekdayToggle id={`${instance}-weekdays`} value={weekdays} onChange={setWeekdays} disabled={busy} /></Field>
           <Field><FieldLabel htmlFor={`${instance}-minutes`}>Seans süresi (dakika)</FieldLabel><Input id={`${instance}-minutes`} type="number" min={15} max={120} step={1} value={minutes || ''} placeholder="15–120" disabled={busy} onChange={e => setMinutes(Number(e.target.value))} /></Field>
           <FieldSet disabled={busy}><FieldLegend>Ekipman</FieldLegend><div className="grid grid-cols-2 gap-3">{EQUIPMENT.filter(value => data.exercises.some(e => e.equipment === value)).map(value => <Field key={value} orientation="horizontal"><Checkbox id={`${instance}-equipment-${value}`} checked={equipment.includes(value)} onCheckedChange={checked => setEquipment(checked ? [...equipment, value] : equipment.filter(x => x !== value))} /><FieldLabel htmlFor={`${instance}-equipment-${value}`}>{EQUIPMENT_LABELS[value]}</FieldLabel></Field>)}</div></FieldSet>

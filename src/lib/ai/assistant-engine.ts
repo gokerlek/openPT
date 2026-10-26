@@ -6,15 +6,21 @@ import { defaultSets, DEFAULT_REST_SECONDS } from '../template-plan.ts';
 import type { ProgramBody } from '../program-plan.ts';
 import { programFormSchema } from '../schemas/program.ts';
 
-/** The provider interprets intent; the application owns catalog selection and numerical targets. */
-export function assistantProgram(context: CoachContext, selection: AssistantSelection, kind: 'workout' | 'program', id: (prefix: string) => string) {
+/**
+ * The provider interprets intent; the application owns catalog selection and numerical targets. `audience`: who asked
+ * (errors tell the PT to extend the library, the client to ask the PT).
+ */
+export function assistantProgram(context: CoachContext, selection: AssistantSelection, kind: 'workout' | 'program', id: (prefix: string) => string, audience: 'pt' | 'client' = 'client') {
   if (context.global) return { error: 'Program için bir danışanın sayfasını aç.' };
   if (context.healthUnavailable) return { error: 'İzinli kısıt kayıtları okunamadı. Kayıtlar okunmadan program hazırlanmıyor.' };
   const eligible = eligibleExercises(context, selection.conditions);
   const moves = eligible.filter(e => selection.goal === 'mobility' ? ['warmup', 'cooldown'].includes(e.category) : !['warmup', 'cooldown'].includes(e.category));
   const wanted = new Set<string>(selection.muscles);
   const pool = selection.fullBody ? moves : moves.filter(e => e.primaryMuscles.some(m => wanted.has(m)));
-  if (!pool.length) return { error: selection.goal === 'mobility' ? 'Bu koşullarda uygun ısınma/soğuma hareketi yok. Hareketlilik için PT uygun hareketleri kütüphaneye eklemeli.' : 'Seçtiğin kaslar, ekipman ve kısıtlar için uygun katalog hareketi yok. Seçimleri değiştir veya PT’den alternatif iste.' };
+  if (!pool.length) {
+    if (selection.goal === 'mobility') return { error: audience === 'pt' ? 'Bu koşullarda uygun ısınma/soğuma hareketi yok. Hareketlilik için kütüphaneye uygun ısınma/soğuma hareketleri ekle.' : 'Bu koşullarda uygun ısınma/soğuma hareketi yok. Hareketlilik için PT uygun hareketleri kütüphaneye eklemeli.' };
+    return { error: audience === 'pt' ? 'Seçilen kaslar, ekipman ve kısıtlar için uygun katalog hareketi yok. Seçimleri değiştir ya da kütüphaneye uygun hareket ekle.' : 'Seçtiğin kaslar, ekipman ve kısıtlar için uygun katalog hareketi yok. Seçimleri değiştir veya PT’den alternatif iste.' };
+  }
   const practiced = new Set(context.existingExerciseIds);
   const ordered = [...pool].sort((a, b) => Number(practiced.has(b.id)) - Number(practiced.has(a.id)) || a.id.localeCompare(b.id));
   const weekdays = [...selection.conditions.weekdays].sort((a, b) => a - b);
@@ -42,7 +48,7 @@ export function assistantProgram(context: CoachContext, selection: AssistantSele
     }) }],
   };
   const parsed = v.safeParse(programFormSchema, body);
-  if (!parsed.success) return { error: 'Taslak program kurallarını karşılamadı. Programın değişmedi.' };
+  if (!parsed.success) return { error: 'Taslak program kurallarını karşılamadı. Mevcut program değişmedi.' };
   const attention = assistantAttention(context, selection, parsed.output);
   return { body: parsed.output, attention, rationale: [
     `${GOAL_LABELS[selection.goal]} hedefi; ${days.length} gün, seans başına ${selection.conditions.minutes} dakikalık planlama bütçesi. Gerçek süre dinlenmeye ve tempoya bağlıdır.`,

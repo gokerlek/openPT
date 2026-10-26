@@ -71,7 +71,7 @@ export async function requestAssistant(deps: AssistantDeps, headers: Headers, or
         interpreted = await deps.interpret(id, who.role, request.text);
       }
     } else if (request.action === 'generate') {
-      const result = assistantProgram(data.context, request.selection, request.kind, prefix => deps.id(prefix));
+      const result = assistantProgram(data.context, request.selection, request.kind, prefix => deps.id(prefix), who.role);
       if ('error' in result) return fail(400, result.error!);
       draft = { id: deps.id(), programId: deps.ownId(), name: `AI · ${request.kind === 'workout' ? 'Antrenman' : 'Program'} ${now.toISOString().slice(0, 10)} ${deps.id().slice(0, 4)}`, at: now.toISOString(), kind: request.kind, selection: request.selection, ...result, contextHash: data.hash, permissionHash: allowed, baseRevision: data.baseRevision, ...(data.baseCreatedAt ? { baseCreatedAt: data.baseCreatedAt } : {}), status: 'draft' };
     } else {
