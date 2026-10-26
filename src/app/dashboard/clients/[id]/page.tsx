@@ -44,18 +44,19 @@ import { SessionRow } from './sessions/session-list';
 /** Genel'in Antrenmanlar kartında en çok bu kadar son antrenman; gerisi sekmesinde. */
 const RECENT_SESSIONS = 3;
 
-/** Genel'in Dikkat kartında en çok bu kadar madde; gerisi yalnız sayı olarak. */
+/** Genel'in Dikkat kartında açık duran madde sayısı; gerisi altında "+n madde daha" ile katlanır. */
 const ATTENTION_SHOWN = 5;
 
 /**
  * Genel'in başındaki Dikkat kartı: Genel bakış'taki "Dikkat gerektirenler"in bu danışana düşen maddeleri, en acili
- * üstte; her madde danışanın ilgili sekmesine götürür. Ad sayfanın başında olduğundan satırlarda yazılmaz (yalnız
- * ekran okuyucuya). Madde yoksa kart da yok.
+ * üstte; her madde danışanın ilgili sekmesine götürür. İlk beşi açık, gerisi "+n madde daha" (`details`) altında:
+ * Genel bakış'ın "+n madde daha"sı buraya getirir, hiçbir madde ulaşılmaz kalmaz. Ad sayfanın başında olduğundan
+ * satırlarda yazılmaz (yalnız ekran okuyucuya). Madde yoksa kart da yok.
  */
 function AttentionSummaryCard({ clientId, name, items }: { clientId: string; name: string; items: readonly AttentionItem[] }) {
   if (items.length === 0) return null;
   const shown = items.slice(0, ATTENTION_SHOWN);
-  const more = items.length - shown.length;
+  const rest = items.slice(ATTENTION_SHOWN);
   return (
     <Card>
       <CardHeader>
@@ -67,17 +68,35 @@ function AttentionSummaryCard({ clientId, name, items }: { clientId: string; nam
           </Badge>
         </CardTitle>
         {/* Ünlemin anlamı yalnız kartta ünlem varken. */}
-        {shown.some((item) => item.tone === 'danger') ? <CardDescription>Kırmızı ünlem sağlık güvenliği.</CardDescription> : null}
+        {items.some((item) => item.tone === 'danger') ? <CardDescription>Kırmızı ünlem sağlık güvenliği.</CardDescription> : null}
       </CardHeader>
       <CardContent className="flex flex-col gap-2">
         <ul role="list" aria-label="Dikkat maddeleri" className="flex flex-col gap-1">
           {shown.map((item) => (
             <li key={item.key}>
-              <AttentionRow clientId={clientId} item={{ ...item, clientName: name }} showClient={false} />
+              <AttentionRow clientId={clientId} item={{ ...item, clientName: name }} />
             </li>
           ))}
         </ul>
-        {more > 0 ? <p className="px-3 text-sm text-muted-foreground">+{formatNumber(more)} madde daha</p> : null}
+        {rest.length > 0 ? (
+          <details className="group/more">
+            <summary className="flex min-h-11 w-fit cursor-pointer list-none items-center gap-1.5 rounded-lg px-3 text-sm text-muted-foreground outline-none select-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 [&::-webkit-details-marker]:hidden">
+              <CaretRight
+                aria-hidden
+                weight="bold"
+                className="size-3.5 shrink-0 motion-safe:transition-transform motion-safe:duration-160 group-open/more:rotate-90"
+              />
+              +{formatNumber(rest.length)} madde daha
+            </summary>
+            <ul role="list" aria-label="Öteki dikkat maddeleri" className="mt-1 flex flex-col gap-1">
+              {rest.map((item) => (
+                <li key={item.key}>
+                  <AttentionRow clientId={clientId} item={{ ...item, clientName: name }} />
+                </li>
+              ))}
+            </ul>
+          </details>
+        ) : null}
       </CardContent>
     </Card>
   );

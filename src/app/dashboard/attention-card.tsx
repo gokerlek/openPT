@@ -93,7 +93,7 @@ export async function AttentionCard({ timeZone, titles }: { timeZone: string; ti
                 <ul role="list" className="flex flex-col gap-1">
                   {group.items.map((item) => (
                     <li key={item.key}>
-                      <AttentionRow clientId={group.clientId} item={{ ...item, clientName: group.clientName }} showClient={false} />
+                      <AttentionRow clientId={group.clientId} item={{ ...item, clientName: group.clientName }} />
                     </li>
                   ))}
                 </ul>

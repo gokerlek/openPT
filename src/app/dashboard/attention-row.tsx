@@ -16,7 +16,7 @@ const ICONS: Record<AttentionKind, typeof CalendarX> = {
 };
 
 /** Maddenin götürdüğü yer: danışanın ilgili sekmesi. */
-export const TARGET_PATHS: Record<AttentionTarget, string> = {
+const TARGET_PATHS: Record<AttentionTarget, string> = {
   client: '',
   sessions: '/sessions',
   program: '/program',
@@ -28,19 +28,10 @@ export const TARGET_PATHS: Record<AttentionTarget, string> = {
 
 /**
  * "Dikkat gerektirenler"in tek maddesi: türün ikonu ve rozeti, metin; satır danışanın ilgili sekmesine götürür.
- * `showClient` açıkken (ve madde `clientName` taşıyorsa) rozetin önünde danışanın adı yazılır; danışana göre
- * gruplu listede ya da danışanın kendi sayfasında ad zaten yukarıda olduğundan kapatılır. Kapalıyken ad verilmişse
- * yalnız ekran okuyucuya söylenir: bağlantılar listesinde de satır kimin olduğunu taşır.
+ * Danışanın adı görünmez (danışana göre gruplu listede ya da danışanın kendi sayfasında zaten yukarıda); madde
+ * `clientName` taşıyorsa yalnız ekran okuyucuya söylenir: bağlantılar listesinde de satır kimin olduğunu taşır.
  */
-export function AttentionRow({
-  clientId,
-  item,
-  showClient = true,
-}: {
-  clientId: string;
-  item: AttentionItem & { clientName?: string };
-  showClient?: boolean;
-}) {
+export function AttentionRow({ clientId, item }: { clientId: string; item: AttentionItem & { clientName?: string } }) {
   const ItemIcon = ICONS[item.kind];
   return (
     <Item size="sm" render={<Link href={`/dashboard/clients/${clientId}${TARGET_PATHS[item.target]}`} />} className="touch:min-h-11">
@@ -49,7 +40,7 @@ export function AttentionRow({
       </ItemMedia>
       <ItemContent className="min-w-0">
         <ItemTitle className="line-clamp-none flex-wrap gap-1.5">
-          {showClient ? item.clientName : item.clientName ? <span className="sr-only">{item.clientName}: </span> : null}
+          {item.clientName ? <span className="sr-only">{item.clientName}: </span> : null}
           <Badge variant="outline">{ATTENTION_LABELS[item.kind]}</Badge>
         </ItemTitle>
         {item.tone === 'danger' ? (
