@@ -32,7 +32,7 @@ import { requirePt } from '@/lib/guards';
 import { loadMeasurements, readHealthIfAllowed } from '@/lib/health';
 import { loadHistory } from '@/lib/history-store';
 import { readLiveResponse } from '@/lib/live-store';
-import { readClientDigest } from '@/lib/notices-store';
+import { readClientDigest, type ClientOverview } from '@/lib/notices-store';
 import type { HistoryList } from '@/lib/session-history';
 import { AttentionRow } from '../../attention-row';
 import { LiveSession } from './live-session';
@@ -68,7 +68,7 @@ function AttentionSummaryCard({ clientId, name, items }: { clientId: string; nam
         {shown.some((item) => item.tone === 'danger') ? <CardDescription>Kırmızı ünlem sağlık güvenliği.</CardDescription> : null}
       </CardHeader>
       <CardContent className="flex flex-col gap-2">
-        <ul role="list" className="flex flex-col gap-1">
+        <ul role="list" aria-label="Dikkat maddeleri" className="flex flex-col gap-1">
           {shown.map((item) => (
             <li key={item.key}>
               <AttentionRow clientId={clientId} item={{ ...item, clientName: name }} showClient={false} />
@@ -83,22 +83,25 @@ function AttentionSummaryCard({ clientId, name, items }: { clientId: string; nam
 
 /**
  * Dikkat kartı kendi akışında: özet önbellekte değilse birkaç GitHub okuması sürer; sayfa onu beklemeden açılır,
- * kart hazır olunca gelir. Özet okunamazsa (sayfanın geri kalanı gibi sessizce) ya da madde yoksa hiçbir şey.
+ * kart hazır olunca gelir. Okuma sayfanın başında, öbür okumalarla birlikte başlar (`digest`); burada yalnız
+ * beklenir. Özet okunamazsa (`null`, sayfanın geri kalanı gibi sessizce) ya da madde yoksa hiçbir şey.
  */
 async function ClientAttention({
   clientId,
   name,
   timeZone,
   exercises,
+  digest,
 }: {
   clientId: string;
   name: string;
   timeZone: string;
   exercises: ReadonlyMap<string, ExerciseWithSource>;
+  digest: Promise<ClientOverview | null>;
 }) {
-  const digest = await readClientDigest(clientId).catch(() => null);
-  if (!digest) return null;
-  const items = attentionItems(digest.attention, {
+  const overview = await digest;
+  if (!overview) return null;
+  const items = attentionItems(overview.attention, {
     now: new Date(),
     timeZone,
     titleOf: (exerciseId) => exercises.get(exerciseId)?.title ?? exerciseId,
@@ -330,6 +333,9 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
   }
 
   const { client } = loaded;
+  // Dikkat özeti hemen başlar ama beklenmez (kartı kendi akışında); `.catch` burada: aşağıdaki okumalardan biri
+  // düşse de sahipsiz bir ret kalmasın.
+  const digest = readClientDigest(id).catch(() => null);
   const [invite, programFile, exercises, measurements, history, live, healthRecord] = await Promise.all([
     readInvite(id),
     // undefined: GitHub'dan okunamadı; sayfa yine açılır.
@@ -360,7 +366,7 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
       {/* Danışanın dikkat maddeleri en üstte: PT sayfayı açınca önce bakılacakları görür. Madde yoksa kart da
           olmadığından yer tutucu yok. */}
       <Suspense fallback={null}>
-        <ClientAttention clientId={id} name={client.name} timeZone={config.timeZone} exercises={exerciseById} />
+        <ClientAttention clientId={id} name={client.name} timeZone={config.timeZone} exercises={exerciseById} digest={digest} />
       </Suspense>
 
       {/* Açık antrenman canlı (tasarım §4.6); kimse çalışmıyorken satır yok. */}
