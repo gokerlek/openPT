@@ -463,7 +463,7 @@ Kurulum metni ekranda testin kartında durur; aşağıdakiler PT'ye dönük kont
  5  Ters kürek (Temiz): ilerlet — Tek Kol Dambıl Row, Barfiks.
  Sıra: ağrı → en düşük sonuç → asimetri. Sonrası senin hedefine göre.
 
- Tarama günleri
+ Test günleri
  12 Eyl 2026 · 8 test · 1 ağrı ›        1 Ağu 2026 · 7 test ›
 ```
 

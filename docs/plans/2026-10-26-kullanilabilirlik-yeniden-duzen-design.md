@@ -143,12 +143,14 @@ Her faz kendi uygulama planıyla ayrı yapılır; sıradaki faz öncekinin iskel
 
 ## Faz 4 · Sağlık ve ölçüm
 
-**PT'nin Sağlık sekmesi — tek merkez**
-1. Durum: modül ve onaylı parçalar, tek satır.
-2. Kısıtlar: karar bekleyen danışan bildirimleri üstte, aktif kısıtlar altta.
-3. Ölçümler: hızlı kart (kilo, bel; son değer + eğilim), "Ölçüm turu başlat", seçilen ölçünün grafiği, ölçüm günleri.
-4. Takip: hazır oluşluk ve ağrı grafikleri (bugün İlerleme'de).
-5. Testler: kamera ölçümü, **Hareket testi** (tek ad), performans testleri, anketler.
+**PT'nin Sağlık sekmesi — onaylı yapı: Kısıtlar · Ölçümler · Hareket** (onay parçası başına bir sekme; SPEC §6,
+`docs/design/kisit-tarama.md` §1). Faz 4 bu üç sekmeyi tek sayfada yeniden birleştirmez; her sekmenin içini düzenler.
+- Üstte durum: modül ve onaylı parçalar, tek satır (şeridin üstü).
+- **Kısıtlar:** karar bekleyen danışan bildirimleri üstte, aktif kısıtlar altta.
+- **Ölçümler** (elle girilenler): hızlı kart (kilo, bel; son değer + eğilim), "Ölçüm turu başlat", seçilen ölçünün
+  grafiği, ölçüm günleri. Performans ve hareketlilik testleri ile anket skorları da burada (aynı ölçüm kaydı).
+- **Hareket** ("Hareket taraması" onayı): kamera ölçümü ve **Hareket testi** (tek ad; PT'nin 8 hareketlik testi).
+- Not · Takip: hazır oluşluk ve ağrı grafikleri bugün İlerleme'de; Faz 4 bunlar için Sağlık'a sekme eklemez.
 
 **Ölçüm turu** (`src/app/dashboard/clients/[id]/measurements/measurement-form.tsx`, `src/lib/measurements.ts`)
 - Ekran başına tek ölçü; ölçüm yeri tek cümle; önceki değer ve tarihi; sol/sağ yan yana; virgül ve nokta kabul;
