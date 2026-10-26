@@ -121,6 +121,13 @@ describe('index satırı', () => {
       notices: [{ kind: 'unfinished', at: at(672), done: 2, planned: 9 }],
     });
     assert.equal(durationOf(doc), 15);
+    // Son setten 10 dk dolmadan kapatıldıysa bitiş anı.
+    const quick = finished('s_cccccccc', 0, {
+      finishedAt: at(7),
+      entries: [sessionEntry('e_aaaaaa', { sets: [workingSet('st_aaaaaaaa', 5)] })],
+      notices: [{ kind: 'unfinished', at: at(7), done: 1, planned: 9 }],
+    });
+    assert.equal(durationOf(quick), 7);
   });
 
   test('bitmiş antrenman bitiş anına göre; yarımda hiç set yoksa da bitiş anı', () => {

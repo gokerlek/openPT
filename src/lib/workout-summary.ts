@@ -3,7 +3,7 @@ import { sessionDayText } from './own-program-text.ts';
 import { mondayOf, type ProgramLogEntry } from './program-plan.ts';
 import type { Category } from './schemas/exercise.ts';
 import type { SessionDoc, SessionEntry, SessionIndex } from './schemas/session.ts';
-import { indexRowOf, upsertIndexRow, volumeOf, waterOf, workingSetCount } from './session-index.ts';
+import { durationOf, indexRowOf, upsertIndexRow, volumeOf, waterOf, workingSetCount } from './session-index.ts';
 import { compareWithLast, recordKey, sessionRecords, type RecordHit, type RepPoint, type TopSet, type Trend } from './session-records.ts';
 import { countsForLoad } from './template-plan.ts';
 import { addDays } from './training-days.ts';
@@ -332,7 +332,8 @@ export function sessionSummary<E extends MuscleSource>(input: {
   const { doc } = input;
   const index = input.index.items.some((row) => row.id === doc.id) ? input.index : upsertIndexRow(input.index, indexRowOf(doc, '0'.repeat(40)));
   const end = doc.finishedAt ?? doc.startedAt;
-  const minutes = Math.max(1, Math.round((Date.parse(end) - Date.parse(doc.startedAt)) / 60_000));
+  // Süre Geçmiş'teki gibi (`durationOf`): yarım bırakılan antrenman son setten en çok 10 dk sonra biter.
+  const minutes = Math.max(1, durationOf(doc) ?? 0);
   const volumeKg = volumeOf(doc);
   const sets = workingSetCount(doc);
 

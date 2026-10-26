@@ -56,8 +56,9 @@ function groups(muscles: readonly string[]) {
   return result;
 }
 
-function sets(prefix: string, values: [number | undefined, number][], overrides: Partial<SessionEntry['sets'][number]> = {}) {
-  return values.map(([kg, reps], i) => workingSet(`st_${prefix}${String(i).padStart(2, '0')}`, i + 1, { kg, reps, plannedSetCount: 3, ...overrides }));
+/** Setler `start` dakikasından sonra birer dakika arayla. */
+function sets(prefix: string, values: [number | undefined, number][], overrides: Partial<SessionEntry['sets'][number]> = {}, start = 0) {
+  return values.map(([kg, reps], i) => workingSet(`st_${prefix}${String(i).padStart(2, '0')}`, start + i + 1, { kg, reps, plannedSetCount: 3, ...overrides }));
 }
 
 function finished(id: string, minute: number, entries: SessionEntry[], overrides: Partial<SessionDoc> = {}): SessionDoc {
@@ -214,9 +215,10 @@ describe('özet', () => {
   const second = finished(
     's_bbbbbbbb',
     3000,
+    // Yarım: setler antrenmanın içinde, son set 3043. dk (süre son setten hesaplanır, `durationOf`).
     [
-      sessionEntry('e_bbbbbb', { rowId: 'r_aaaaaa', status: 'done', sets: sets('bbbbbb', [[62.5, 10], [62.5, 9], [62.5, 8]]) }),
-      sessionEntry('e_cccccc', { exerciseId: 'barbell-row', title: 'Barbell Row', status: 'partial', sets: sets('cccccc', [[50, 10]]) }),
+      sessionEntry('e_bbbbbb', { rowId: 'r_aaaaaa', status: 'done', sets: sets('bbbbbb', [[62.5, 10], [62.5, 9], [62.5, 8]], {}, 3040) }),
+      sessionEntry('e_cccccc', { exerciseId: 'barbell-row', title: 'Barbell Row', status: 'partial', sets: sets('cccccc', [[50, 10]], {}, 3040) }),
       sessionEntry('e_dddddd', { exerciseId: 'plank', title: 'Plank', status: 'skipped', skip: { reason: 'busy', moved: false } }),
     ],
     {
@@ -284,6 +286,17 @@ describe('özet', () => {
       ],
     );
     assert.equal(summary.muscles, summary.worked.length);
+  });
+
+  test("süre Geçmiş'teki gibi: saatlerce açık kalan yarım antrenman son setten 10 dk sonra biter; bitmiş antrenman bitiş anına göre", () => {
+    const input = { index, timeZone: TZ, exercises: LIBRARY, setWeightsOf, muscleGroups: groups, week: null, changes: [], next: null };
+    const open = finished('s_eeeeeeee', 0, [sessionEntry('e_ffffff', { sets: sets('ffffff', [[60, 10], [60, 10]]) })], {
+      finishedAt: at(672),
+      notices: [{ kind: 'unfinished', at: at(672), done: 2, planned: 9 }],
+    });
+    // Son set 2. dk + 10 dk; 11 sa 12 dk değil.
+    assert.equal(sessionSummary({ ...input, doc: open }).minutes, 12);
+    assert.equal(sessionSummary({ ...input, doc: first }).minutes, 52);
   });
 
   test('index satırı yoksa belgeden eklenir; ilk antrenmanda rekor ve karşılaştırma yok, "Gelecek sefer" boşsa null', () => {
