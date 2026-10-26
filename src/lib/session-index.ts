@@ -79,20 +79,29 @@ function exerciseRow(entry: SessionEntry): SessionIndexExercise | null {
 const UNFINISHED_TAIL_MIN = 10;
 
 /**
- * Süre: danışanın onayladığı (`effort.durationMin`), yoksa başlangıçtan bitişe. Yarım bırakılan antrenmanda bitiş son
- * setten en çok `UNFINISHED_TAIL_MIN` sonradır.
+ * Gösterilen bitiş (ISO): `finishedAt`; yarım bırakılan antrenmanda son setten en çok `UNFINISHED_TAIL_MIN`
+ * sonrası. Bitmemişse (`finishedAt` yok) undefined. Saat aralığı ve süre bununla hesaplanır.
+ */
+export function sessionEnd(doc: Pick<SessionDoc, 'finishedAt'> & Partial<Pick<SessionDoc, 'entries' | 'notices'>>): string | undefined {
+  if (!doc.finishedAt) return undefined;
+  if (!doc.notices?.some((notice) => notice.kind === 'unfinished')) return doc.finishedAt;
+  const lastSet = Math.max(0, ...(doc.entries ?? []).flatMap((entry) => entry.sets.map((set) => time(set.at))));
+  if (lastSet === 0) return doc.finishedAt;
+  const capped = lastSet + UNFINISHED_TAIL_MIN * 60_000;
+  return capped < time(doc.finishedAt) ? new Date(capped).toISOString() : doc.finishedAt;
+}
+
+/**
+ * Süre: danışanın onayladığı (`effort.durationMin`), yoksa başlangıçtan bitişe (`sessionEnd`: yarım bırakılan
+ * antrenmanda bitiş son setten en çok `UNFINISHED_TAIL_MIN` sonradır).
  */
 export function durationOf(
   doc: Pick<SessionDoc, 'startedAt' | 'finishedAt' | 'effort'> & Partial<Pick<SessionDoc, 'entries' | 'notices'>>,
 ): number | undefined {
   if (doc.effort?.durationMin !== undefined) return doc.effort.durationMin;
-  if (!doc.finishedAt) return undefined;
-  let end = time(doc.finishedAt);
-  if (doc.notices?.some((notice) => notice.kind === 'unfinished')) {
-    const lastSet = Math.max(0, ...(doc.entries ?? []).flatMap((entry) => entry.sets.map((set) => time(set.at))));
-    if (lastSet > 0) end = Math.min(end, lastSet + UNFINISHED_TAIL_MIN * 60_000);
-  }
-  const minutes = Math.round((end - time(doc.startedAt)) / 60_000);
+  const end = sessionEnd(doc);
+  if (!end) return undefined;
+  const minutes = Math.round((time(end) - time(doc.startedAt)) / 60_000);
   return Math.min(24 * 60, Math.max(0, minutes));
 }
 

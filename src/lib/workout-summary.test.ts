@@ -288,7 +288,7 @@ describe('özet', () => {
     assert.equal(summary.muscles, summary.worked.length);
   });
 
-  test("süre Geçmiş'teki gibi: saatlerce açık kalan yarım antrenman son setten 10 dk sonra biter; bitmiş antrenman bitiş anına göre", () => {
+  test("süre ve saat aralığı Geçmiş'teki gibi: saatlerce açık kalan yarım antrenman son setten 10 dk sonra biter; bitmiş antrenman bitiş anına göre", () => {
     const input = { index, timeZone: TZ, exercises: LIBRARY, setWeightsOf, muscleGroups: groups, week: null, changes: [], next: null };
     const open = finished('s_eeeeeeee', 0, [sessionEntry('e_ffffff', { sets: sets('ffffff', [[60, 10], [60, 10]]) })], {
       finishedAt: at(672),
@@ -297,6 +297,9 @@ describe('özet', () => {
     // Son set 2. dk + 10 dk; 11 sa 12 dk değil.
     assert.equal(sessionSummary({ ...input, doc: open }).minutes, 12);
     assert.equal(sessionSummary({ ...input, doc: first }).minutes, 52);
+    // Saat aralığı da aynı bitişle (İstanbul, UTC+3): 18:00–05:12 değil.
+    assert.equal(sessionSummary({ ...input, doc: open }).when, '26 Eyl Cmt · 18:00–18:12');
+    assert.equal(sessionSummary({ ...input, doc: first }).when, '26 Eyl Cmt · 18:00–18:52');
   });
 
   test('index satırı yoksa belgeden eklenir; ilk antrenmanda rekor ve karşılaştırma yok, "Gelecek sefer" boşsa null', () => {

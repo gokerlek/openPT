@@ -153,6 +153,12 @@ describe('antrenmanın detayı', () => {
     assert.equal(detail.subject, 'Gün A · 26 Eylül 2026 · 2 set ve özeti');
   });
 
+  test('saatlerce açık kalan yarım antrenmanın saat aralığı son setten 10 dk sonra biter', () => {
+    const open = { ...doc, finishedAt: at(672), notices: [{ kind: 'unfinished' as const, at: at(672), done: 2, planned: 3 }] };
+    // Son set 4. dk + 10 dk (İstanbul, UTC+3): 18:00–05:12 değil.
+    assert.equal(sessionDetail(open, TZ).meta, '18:00–18:14 · 2 set · 1.140 kg');
+  });
+
   test('kendi programın antrenmanı: başlıkta programın adı; başka gün rozeti yok', () => {
     const own = finished('s_bbbbbbbb', 0, { program: { revision: 1, dayId: OWN_DAY_B, dayName: 'Gün B', plannedDayId: OWN_DAY_A, programId: OWN_ID, programName: 'Evde' } });
     const detail = sessionDetail(own, TZ);

@@ -2,7 +2,7 @@ import { formatDay, formatKg, formatNumber, todayIn } from './format.ts';
 import { sessionDayText } from './own-program-text.ts';
 import { EFFORT_LABELS } from './progression.ts';
 import type { SessionDoc, SessionIndex, SessionIndexRow, SkipReason } from './schemas/session.ts';
-import { volumeOf, waterOf, workingSetCount } from './session-index.ts';
+import { sessionEnd, volumeOf, waterOf, workingSetCount } from './session-index.ts';
 import { addDays } from './training-days.ts';
 import { FINISH_REASON_LABELS } from './workout-flow.ts';
 import { setValueText } from './workout-session.ts';
@@ -196,7 +196,8 @@ export function sessionDetail(doc: SessionDoc, timeZone: string): SessionDetail 
     exercises.push({ entryId: entry.id, title: entry.title, note, ...(entry.setupNote ? { setupNote: entry.setupNote } : {}), sets });
   }
   const sets = workingSetCount(doc);
-  const end = doc.finishedAt ?? doc.startedAt;
+  // Yarım bırakılan antrenmanın saat aralığı son setten en çok 10 dk sonra biter (`sessionEnd`).
+  const end = sessionEnd(doc) ?? doc.startedAt;
   const dayName = sessionDayText(doc.program);
   const title = `${dayName} · ${formatDay(doc.date)}`;
   return {

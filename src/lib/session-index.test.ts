@@ -2,7 +2,7 @@ import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { gitBlobSha, jsonText } from './github/blob.ts';
 import { emptySessionIndex, sessionPath, type SessionDoc } from './schemas/session.ts';
-import { durationOf, indexRowOf, removeIndexRow, repairIndex, upsertIndexRow, volumeOf, waterOf } from './session-index.ts';
+import { durationOf, indexRowOf, removeIndexRow, repairIndex, sessionEnd, upsertIndexRow, volumeOf, waterOf } from './session-index.ts';
 import { tombstoneOf } from './session-merge.ts';
 import { OWN_DAY_A, OWN_DAY_B, OWN_ID } from './testing/own-fixtures.ts';
 import { at, DAY_A, DAY_B, sessionDoc, sessionEntry, workingSet } from './testing/session-fixtures.ts';
@@ -128,6 +128,16 @@ describe('index satırı', () => {
       notices: [{ kind: 'unfinished', at: at(7), done: 1, planned: 9 }],
     });
     assert.equal(durationOf(quick), 7);
+  });
+
+  test('bitiş: yarımda son set + 10 dk (erken kapatıldıysa bitiş anı); bitmiş antrenmanda ve set yoksa bitiş anı; bitmemişte yok', () => {
+    const entries = [sessionEntry('e_aaaaaa', { sets: [workingSet('st_aaaaaaaa', 3), workingSet('st_bbbbbbbb', 5)] })];
+    const unfinished = [{ kind: 'unfinished' as const, at: at(672), done: 2, planned: 9 }];
+    assert.equal(sessionEnd({ finishedAt: at(672), entries, notices: unfinished }), at(15));
+    assert.equal(sessionEnd({ finishedAt: at(7), entries, notices: unfinished }), at(7));
+    assert.equal(sessionEnd({ finishedAt: at(672), entries, notices: [] }), at(672));
+    assert.equal(sessionEnd({ finishedAt: at(672), entries: [], notices: unfinished }), at(672));
+    assert.equal(sessionEnd({ entries, notices: unfinished }), undefined);
   });
 
   test('bitmiş antrenman bitiş anına göre; yarımda hiç set yoksa da bitiş anı', () => {
