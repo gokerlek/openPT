@@ -83,7 +83,7 @@ export function CoachPanel({ clientId, role, page: _page = 'overview', general =
   if (query.error || !data) return <Alert variant="destructive"><AlertTitle>Öneriler açılamadı</AlertTitle><AlertDescription><Button variant="outline" onClick={() => void query.refetch()}>Yeniden dene</Button></AlertDescription></Alert>;
   const review = data.reviews.at(-1);
   return <div className="flex flex-col gap-6">
-    {data.access !== 'ready' ? <Alert><AlertTitle>AI desteği kapalı</AlertTitle><AlertDescription>{role === 'pt' ? <Button variant="outline" nativeButton={false} render={<Link href={`/dashboard/clients/${clientId}/edit`} />}>Danışan ayarlarını aç</Button> : 'PT, danışan bilgilerinden açabilir.'}</AlertDescription></Alert> :
+    {data.access !== 'ready' ? <Alert><AlertTitle>AI desteği kapalı</AlertTitle><AlertDescription>{role === 'pt' ? <Button variant="outline" nativeButton={false} render={<Link href={`/dashboard/clients/${clientId}/edit`} />}>Danışan ayarlarını aç</Button> : 'Antrenörün AI desteğini açabilir.'}</AlertDescription></Alert> :
     <Tabs value={tab} onValueChange={value => setTab(String(value))}>
       <TabsList><TabsTrigger value="review">Gelişim</TabsTrigger>{!general ? <TabsTrigger value="program">Program hazırla</TabsTrigger> : null}</TabsList>
       <TabsContent value="review" className="flex flex-col gap-4">
