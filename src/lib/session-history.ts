@@ -107,9 +107,9 @@ export function historyList(index: SessionIndex, now: Date, timeZone: string): H
   return { recent: summary, months, count: rows.length };
 }
 
-/** "Son antrenman" (Program sekmesi ve danışan ekranı aynı kural): bitmişlerin en yenisi, yarım dahil. */
-export function lastWorkout(index: SessionIndex | null): SessionIndexRow | null {
-  const rows = (index?.items ?? []).filter((row) => row.finishedAt);
+/** "Son antrenman": programın (null = PT'nin) bitmişlerinin en yenisi, yarım dahil; own-program-text.ts'teki program başına "son" ile aynı. */
+export function lastWorkout(index: SessionIndex | null, programId: string | null = null): SessionIndexRow | null {
+  const rows = (index?.items ?? []).filter((row) => row.finishedAt && (row.programId ?? null) === programId);
   return rows.sort((a, b) => time(b.startedAt ?? b.date) - time(a.startedAt ?? a.date))[0] ?? null;
 }
 

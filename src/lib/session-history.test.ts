@@ -80,6 +80,16 @@ describe('geçmiş listesi', () => {
     assert.equal(lastWorkout(emptySessionIndex()), null);
     assert.equal(lastWorkout(null), null);
   });
+
+  test('son antrenman program başına: kendi programdaki daha yeni antrenman PT programınınkini değiştirmez', () => {
+    const own = finished('s_eeeeeeee', 3500, {
+      date: '2026-09-28',
+      program: { revision: 1, dayId: OWN_DAY_A, dayName: 'Gün A', programId: OWN_ID, programName: 'Evde' },
+    });
+    const withOwn = upsertIndexRow(index, indexRowOf(own, '4'.repeat(40)));
+    assert.equal(lastWorkout(withOwn)?.id, 's_bbbbbbbb');
+    assert.equal(lastWorkout(withOwn, OWN_ID)?.id, 's_eeeeeeee');
+  });
 });
 
 describe('"Daha fazla göster"', () => {
