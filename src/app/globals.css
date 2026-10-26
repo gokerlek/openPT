@@ -206,7 +206,8 @@
     }
 }
 
-/* Dock'un kapladığı alt pay (dock.tsx): büyümüş öğe 64 + iç boşluk 2×8 + kenar 2 = 82 px,
+/* Dock'un kapladığı alt pay (dock.tsx): büyümüş öğe 64 (etiketli düzende ikon 46 + etiket 15 = 61) + iç boşluk
+   2×8 + kenar 2 ≤ 82 px,
    altındaki 0.75rem ve güvenli alan; üstüne 8 px. Görünüme kaydırılan kart dock'un altında kalmaz. */
 :root {
   --dock-clearance: calc(0.75rem + 82px + 8px + env(safe-area-inset-bottom));

@@ -35,7 +35,7 @@ import { cn } from '@/lib/utils';
 
 export type DockEntry = {
   href: string;
-  /** Erişilebilir ad ve masaüstündeki ipucu. */
+  /** Erişilebilir ad ve masaüstündeki ipucu (`labels` yoksa). */
   label: string;
   /**
    * Telefonda (`labels` ile her genişlikte) ikonun altındaki görünür etiket (erişilebilir adın içinde
@@ -109,6 +109,8 @@ function DockItem({
   const size = reduced || labels ? baseItemSize : animated;
 
   const label = item.disabled ? `${item.label} · yakında` : item.label;
+  // Etiketli düzende ipucu çizilmez; üzerine gelmek/odak boşuna yeniden çizdirmesin.
+  const tooltip = !labels;
 
   const content = (
     <>
@@ -119,7 +121,7 @@ function DockItem({
         className={cn(
           'relative flex shrink-0 items-center justify-center rounded-lg border bg-muted text-muted-foreground transition-colors duration-160',
           'group-hover/dock-item:text-foreground',
-          // Aktif sayfa: ana renk tonu + altta nokta (macOS dock'taki gibi). Telefonda nokta yerine etiket.
+          // Aktif sayfa: ana renk tonu + altta nokta (macOS dock'taki gibi). Telefonda (ya da `labels` ile) nokta yerine etiket.
           'group-aria-[current=page]/dock-item:border-primary-text group-aria-[current=page]/dock-item:bg-primary/15 group-aria-[current=page]/dock-item:text-primary-text',
           'group-aria-[current=page]/dock-item:after:absolute group-aria-[current=page]/dock-item:after:-bottom-[7px] group-aria-[current=page]/dock-item:after:left-1/2 group-aria-[current=page]/dock-item:after:size-1 group-aria-[current=page]/dock-item:after:-translate-x-1/2 group-aria-[current=page]/dock-item:after:rounded-full group-aria-[current=page]/dock-item:after:bg-primary-text',
           labels ? 'after:hidden' : 'touch:after:hidden',
@@ -132,13 +134,13 @@ function DockItem({
       <span
         aria-hidden
         className={cn(
-          labels ? 'block' : 'hidden touch:block',
+          labels ? 'block group-hover/dock-item:text-foreground' : 'hidden touch:block',
           'text-[0.6875rem] leading-none font-medium whitespace-nowrap text-muted-foreground transition-colors duration-160 group-aria-[current=page]/dock-item:font-semibold group-aria-[current=page]/dock-item:text-foreground',
         )}>
         {item.shortLabel ?? item.label}
       </span>
       <AnimatePresence>
-        {showLabel && !labels ? (
+        {showLabel ? (
           <motion.span
             className="pointer-events-none absolute bottom-[calc(100%+10px)] left-1/2 rounded-md border bg-popover px-2.5 py-1 text-xs font-medium whitespace-nowrap text-popover-foreground shadow-md touch:hidden"
             role="tooltip"
@@ -161,10 +163,10 @@ function DockItem({
       labels ? 'w-16' : 'touch:w-16',
       'aria-disabled:cursor-default aria-disabled:opacity-40',
     ),
-    onHoverStart: () => setShowLabel(true),
-    onHoverEnd: () => setShowLabel(false),
-    onFocus: () => setShowLabel(true),
-    onBlur: () => setShowLabel(false),
+    onHoverStart: tooltip ? () => setShowLabel(true) : undefined,
+    onHoverEnd: tooltip ? () => setShowLabel(false) : undefined,
+    onFocus: tooltip ? () => setShowLabel(true) : undefined,
+    onBlur: tooltip ? () => setShowLabel(false) : undefined,
     'aria-label': label,
   };
 

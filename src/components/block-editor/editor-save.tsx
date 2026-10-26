@@ -105,7 +105,7 @@ export function SaveButton() {
   );
 }
 
-/** Dock'un kapladığı alt pay (dock 64 px + altındaki 12 px, biraz da nefes): orada kalan düğme görünmez sayılır. */
+/** Dock'un kapladığı alt pay (dock en çok 82 px + altındaki 12 px, biraz da nefes): orada kalan düğme görünmez sayılır. */
 const DOCK_MARGIN = '0px 0px -96px 0px';
 
 /** Öğe (tamamen) ekranın görünen yerinde değil mi; öğe yoksa `false`. */
