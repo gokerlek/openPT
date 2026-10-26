@@ -44,13 +44,13 @@ Danışan yalnız telefondan kullanır (SPEC §6). Gezinme alttaki dock'ta; hesa
 | Sekme | Adres | İçerik | Faz |
 |---|---|---|---|
 | **Bugün** | `/me` | Sıradaki antrenman kartı, "Antrenmana başla", "Başka gün seç", "bu hafta x/3", bugünkü su, yarım kalan antrenman kartı, karar bekleyen kartlar (onay, şifre), antrenmandan ~10 dk sonra "Antrenman ne kadar zordu?" | 1 (kabuk), 3 (antrenman) |
-| **Geçmiş** | `/me/gecmis` | Geçmiş antrenmanlar, detay, silme (§2.10) | 1 (boş), 9 |
-| **İlerleme** | `/me/ilerleme` | Hareket başına grafik (üst ağırlık, e1RM; `progress-chart.tsx`), haftalık tonaj, haftalık kas yükü (gerçekleşen, SPEC §7.4), rekorlar ve başarılar (seri, rozet) | 1 (boş), 10 |
-| **Programlar** | `/me/programlar` | Antrenörünün programı (salt okuma) ve danışanın kendi programları, "Antrenörünle paylaş" (SPEC §6, `kendi-program.md`) | ✓ (`kendi-program.md` §9) |
+| **Program** | `/me/programlar` | Antrenörünün programı (salt okuma) ve danışanın kendi programları, "Antrenörünle paylaş" (SPEC §6, `kendi-program.md`) | ✓ (`kendi-program.md` §9) |
+| **İlerleme** | `/me/ilerleme` | İkinci şeritte üç bölüm (`progress-tabs.tsx`): Özet (`/me/ilerleme`: hareket başına grafik (üst ağırlık, e1RM; `progress-chart.tsx`), haftalık tonaj, haftalık kas yükü (gerçekleşen, SPEC §7.4)) · Geçmiş (`/me/gecmis`: geçmiş antrenmanlar, detay, silme; §2.10) · Rekorlar (`/me/ilerleme/rekorlar`: rekorlar ve başarılar (seri, rozet)) | 1 (boş), 9 (Geçmiş), 10 |
+| **Sağlık** | `/me/saglik` | Kısıtlar, bildirim ve hareket taraması (`kisit-tarama.md` §5.2); kamera ölçümü (`/me/olcum`) da bu sekmede. Yalnız kısıtlar ya da tarama onaylıysa görünür | ✓ (`kisit-tarama.md`) |
 
 - **Avatar menüsü** (var olan `client-menu.tsx`): Ayarlar · Çıkış yap. Ayarlar (`/me/ayarlar`) sağlık onayını ve şifreyi tutar. Dock'a girmez. "Programım" Programlar dock'a girince kalktı (açık soru 12; `kendi-program.md` karar 1).
-- **Dock bileşeni:** `src/components/dock/dock.tsx` aynen (PT'de `src/app/dashboard/nav.tsx`). Telefonda (`touch:`) ikonun altında kısa etiket; öğe ≥ 44 px; `aria-current="page"`; `ariaLabel="Ana menü"`. İkonlar Phosphor: `House` Bugün, `ClockCounterClockwise` Geçmiş, `ChartLineUp` İlerleme, `Notebook` Programlar.
-- **Dock nerede görünmez:** etkin antrenman (`/me/antrenman`) ve özet karuseli (`/me/antrenman/ozet/[id]`) tam ekrandır, dock ve avatar menüsü yoktur (faz 9'da karusel de tam ekran oldu: "Sonraki ›" ve "Bugün'e dön" dock'un yerinde). Ana sayfa ve Geçmiş (detay dahil) dock'la açılır. Önerilen dosya düzeni: `src/app/me/(sekmeler)/layout.tsx` dock'u çizer (Bugün, Geçmiş, İlerleme, özet); `src/app/me/antrenman/page.tsx` bu grubun dışında kalır. Next 16'da route group ve layout davranışı yazmadan önce `node_modules/next/dist/docs/` ile doğrulanır (AGENTS.md).
+- **Dock bileşeni:** `src/components/dock/dock.tsx` aynen (PT'de `src/app/dashboard/nav.tsx`). Telefonda (`touch:`) ikonun altında kısa etiket; öğe ≥ 44 px; `aria-current="page"`; `ariaLabel="Ana menü"`. İkonlar Phosphor: `House` Bugün, `Notebook` Program, `ChartLineUp` İlerleme, `FirstAidKit` Sağlık. Sağlık gizliyken öteki sekmelerin sırası değişmez; Geçmiş'te dock'ta İlerleme, kamera ölçümünde Sağlık etkindir (`src/lib/client-tabs.ts`).
+- **Dock nerede görünmez:** etkin antrenman (`/me/antrenman`) ve özet karuseli (`/me/antrenman/ozet/[id]`) tam ekrandır, dock ve avatar menüsü yoktur (faz 9'da karusel de tam ekran oldu: "Sonraki ›" ve "Bugün'e dön" dock'un yerinde). Ana sayfa ve Geçmiş (detay dahil) dock'la açılır. Önerilen dosya düzeni: `src/app/me/(sekmeler)/layout.tsx` dock'u çizer (Bugün, Program, İlerleme ve Geçmiş, Sağlık ve kamera ölçümü, Ayarlar); `src/app/me/antrenman/page.tsx` bu grubun dışında kalır. Next 16'da route group ve layout davranışı yazmadan önce `node_modules/next/dist/docs/` ile doğrulanır (AGENTS.md).
 - İçerik dock'un altında kalmasın: sayfa alt boşluğu = dock yüksekliği + `env(safe-area-inset-bottom)`.
 
 ```
@@ -66,8 +66,8 @@ Danışan yalnız telefondan kullanır (SPEC §6). Gezinme alttaki dock'ta; hesa
 │ └─────────────────────────────────────┘ │
 │                                         │
 │  ┌───────────────────────────────────┐  │
-│  │   ⌂          ◷          ↗         │  │ dock ≈ 64 px + güvenli alan
-│  │ Bugün     Geçmiş    İlerleme      │  │
+│  │   ⌂       ≡        ↗        +     │  │ dock ≈ 64 px + güvenli alan
+│  │ Bugün  Program  İlerleme  Sağlık  │  │
 │  └───────────────────────────────────┘  │
 └─────────────────────────────────────────┘
 ```

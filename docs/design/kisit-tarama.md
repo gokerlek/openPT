@@ -520,7 +520,7 @@ squat ve denge "Yapılmadı (kısıt)" olarak hazır; istersen değiştir.
 |---|---|---|---|
 | `conditions` (Kısıtlar) | Kısıtlar sayfası kilit uyarısı; düzenleyici sheet'inde tek satır "kısıtlar kullanılamıyor"; süzgeç danışan kısıtı olmadan; kısıt Dikkat ve Bildirimleri yok | Sağlık sayfasında kısıt bölümü ve "bildir" yok; kartta not yok; "Değiştir" sırası normal | §2, §3 |
 | `screening` (Tarama) | Tarama sayfası kilit uyarısı; tarama Dikkat maddeleri yok | tarama bölümü yok | §4 |
-| ikisi de yok | — | avatar menüsünde "Sağlık" yok | |
+| ikisi de yok | — | dock'ta "Sağlık" sekmesi yok | |
 
 - **Sürüm parça başınadır** **[sentez]**: `HEALTH_FIELD_VERSIONS` — `conditions` ve `screening` `2026-10` (amaçları genişledi: danışanın bildirimi, antrenmandaki not, tarama ipuçları), `readiness`, `check_in`, `measurements` `2026-09`. Onay kaydı `versions` taşır (parça → onaylandığı sürüm); `versions`'ı olmayan eski onay her parça için kendi `version`'ını (bugün `2026-09`) taşımış sayılır. `canRecordHealth(client, field)` yalnız o parçanın sürümüne bakar. Böylece sürüm artışı ağrı takibini, kırmızı bayrak sorusunu ve ölçüm girişini **kapatmaz**; yalnız değişen parçalar yeniden sorulur. Modülün yeniden açılması ya da kapsamının genişlemesi (`enabledAt`) bugünkü gibi bütün onayı yeniler (PT'nin bilinçli eylemi, SPEC §9.4).
 - **Onay kartı** (`outdated`): "Kısıtlar ve hareket taraması için yeni onay gerekiyor; ağrı takibi ve ölçümler sürüyor." Onay yeniden verilince bütün parçalar güncel sürümle yazılır.
@@ -531,7 +531,7 @@ squat ve denge "Yapılmadı (kısıt)" olarak hazır; istersen değiştir.
 
 ### 5.2 Danışanın Sağlık sayfası (`/me/saglik`, 375 px)
 
-Avatar menüsünde Programım · **Sağlık** · Ayarlar · Çıkış (yalnız `conditions` ya da `screening` onaylıysa). Ayarlar'daki onay kartının altında "Sağlık sayfan ›". Dock'ta etkin sekme yok (Ayarlar gibi).
+Dock'ta Bugün · Program · İlerleme · **Sağlık** (yalnız `conditions` ya da `screening` onaylıysa); avatar menüsünde yalnız Ayarlar · Çıkış. Ayarlar'daki onay kartının altında "Sağlık sayfan ›". Bu sayfada ve kamera ölçümünde (`/me/olcum`) dock'ta Sağlık etkin.
 
 ```
 ┌─────────────────────────────────────────┐
