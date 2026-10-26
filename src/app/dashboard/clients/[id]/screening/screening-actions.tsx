@@ -75,7 +75,7 @@ export function PainActions({
             <AlertDialogHeader>
               <AlertDialogTitle>{title}: kısıt eklensin mi?</AlertDialogTitle>
               <AlertDialogDescription>
-                {suggestion ?? 'Hareket kısıtı'} · tanısız, taramadan. Kaydedince kısıtın sayfası açılır; bölgeyi, tarafı ve kaçınmaları orada düzelt.
+                {suggestion ?? 'Hareket kısıtı'} · tanısız, hareket testinden. Kaydedince kısıtın sayfası açılır; bölgeyi, tarafı ve kaçınmaları orada düzelt.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
@@ -97,7 +97,7 @@ export function ScreeningDelete({ clientId, date, dateLabel }: { clientId: strin
   const router = useRouter();
   const remove = useServiceMutation({
     fn: () => fetchJson<{ ok: true }>(`/api/clients/${clientId}/screenings/${date}`, { method: 'DELETE' }),
-    notify: { success: 'Tarama silindi.' },
+    notify: { success: 'Hareket testi silindi.' },
     onSuccess: () => {
       router.push(`/dashboard/clients/${clientId}/screening`);
       router.refresh();
@@ -111,7 +111,7 @@ export function ScreeningDelete({ clientId, date, dateLabel }: { clientId: strin
       </AlertDialogTrigger>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>{dateLabel} taraması silinsin mi?</AlertDialogTitle>
+          <AlertDialogTitle>{dateLabel} hareket testi silinsin mi?</AlertDialogTitle>
           <AlertDialogDescription>
             O günün bütün testleri kayıttan çıkar. Danışanın kaydının değişiklik geçmişinde bir kopyası kalır.
           </AlertDialogDescription>

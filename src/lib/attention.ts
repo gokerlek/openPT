@@ -70,7 +70,7 @@ export type AttentionKind = (typeof ATTENTION_KINDS)[number];
 export const ATTENTION_LABELS: Record<AttentionKind, string> = {
   constraint: 'Kısıt',
   missed: 'Kaçan gün',
-  screening: 'Tarama',
+  screening: 'Hareket testi',
   stalled: 'İlerleme',
   phase: 'Evre',
   proposals: 'Öneri',
@@ -662,14 +662,14 @@ export function constraintItems(facts: ConstraintFacts, today: string): Attentio
 export function screeningItems(facts: ScreeningFacts, today: string): AttentionItem[] {
   const items: AttentionItem[] = [];
   if (facts.pain.length > 0) {
-    items.push({ key: 'screening:pain', kind: 'screening', urgency: ATTENTION_URGENCY.screeningPain, text: `Taramada ağrı: ${listText(facts.pain)}`, target: 'screening' });
+    items.push({ key: 'screening:pain', kind: 'screening', urgency: ATTENTION_URGENCY.screeningPain, text: `Hareket testinde ağrı: ${listText(facts.pain)}`, target: 'screening' });
   }
   if (facts.asymmetry && facts.date >= addDays(today, -SCREENING_ALERT_DAYS)) {
     items.push({
       key: 'screening:asymmetry',
       kind: 'screening',
       urgency: ATTENTION_URGENCY.asymmetry,
-      text: `Taramada büyük asimetri: ${facts.asymmetry}`,
+      text: `Hareket testinde büyük asimetri: ${facts.asymmetry}`,
       target: 'screening',
     });
   }

@@ -122,7 +122,7 @@ async function Overview({ client, record, today, query }: { client: Client; reco
   const legacyNote =
     legacy > 0 ? (
       <p className="text-sm text-muted-foreground">
-        Eski biçimde tarama kaydı ({formatNumber(legacy)} gün); yeni protokolle karşılaştırılmaz.
+        Eski biçimde hareket testi kaydı ({formatNumber(legacy)} gün); yeni protokolle karşılaştırılmaz.
       </p>
     ) : null;
 
@@ -194,15 +194,15 @@ async function Overview({ client, record, today, query }: { client: Client; reco
                 <div key={`${cell.date}:${cell.key}`} className="flex flex-col gap-2 rounded-lg border p-3">
                   <p>
                     <span className="font-medium">⚑ Ağrı · {cellTitle(cell.testId, cell.side)}</span>
-                    {carried ? ` · ${formatDay(cell.date)} taramasından; sonra test edilmedi` : ''}
+                    {carried ? ` · ${formatDay(cell.date)} hareket testinden; sonra test edilmedi` : ''}
                     {cell.note ? ` · “${cell.note}”` : ''}
                     {cell.state === 'open' || cell.state === 'reviewed' ? ': önce değerlendirme.' : '.'}
                     {cell.state === 'reviewed' ? <span className="text-muted-foreground"> Gözden geçirildi.</span> : null}
                     {cell.state === 'resolved' && cell.laterDate ? (
-                      <span className="text-muted-foreground"> {formatDay(cell.laterDate)} taramasında ağrı geçti.</span>
+                      <span className="text-muted-foreground"> {formatDay(cell.laterDate)} hareket testinde ağrı geçti.</span>
                     ) : null}
                     {cell.state === 'superseded' && cell.laterDate ? (
-                      <span className="text-muted-foreground"> {formatDay(cell.laterDate)} taramasında da ağrılı; o günün uyarısına bak.</span>
+                      <span className="text-muted-foreground"> {formatDay(cell.laterDate)} hareket testinde de ağrılı; o günün uyarısına bak.</span>
                     ) : null}
                   </p>
                   {cell.state === 'open' ? (
@@ -220,7 +220,7 @@ async function Overview({ client, record, today, query }: { client: Client; reco
             })}
             {gone.map((cell) => (
               <p key={`gone:${cell.date}:${cell.key}`}>
-                <span className="font-medium">✓ Ağrı geçti · {cellTitle(cell.testId, cell.side)}</span>: {formatDay(cell.date)} taramasında ağrılıydı, bu taramada
+                <span className="font-medium">✓ Ağrı geçti · {cellTitle(cell.testId, cell.side)}</span>: {formatDay(cell.date)} hareket testinde ağrılıydı, bu testte
                 ağrısız.
               </p>
             ))}
@@ -384,7 +384,7 @@ export default async function ScreeningPage({
         <Alert variant="destructive">
           <WarningCircle weight="fill" />
           <AlertTitle>Sağlık kaydı okunamadı</AlertTitle>
-          <AlertDescription>{view.problem} Kayıt uygulama dışında değiştirilmiş olabilir; düzeltilene kadar tarama yazılmaz.</AlertDescription>
+          <AlertDescription>{view.problem} Kayıt uygulama dışında değiştirilmiş olabilir; düzeltilene kadar hareket testi yazılmaz.</AlertDescription>
         </Alert>
       ) : null}
       {view.state === 'ok' ? (

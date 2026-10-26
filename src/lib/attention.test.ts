@@ -458,8 +458,8 @@ describe('dikkat: kısıtlar ve tarama (kisit-tarama.md §3.6)', () => {
     assert.deepEqual(
       items.map((item) => [item.urgency, item.text, item.target]),
       [
-        [ATTENTION_URGENCY.screeningPain, 'Taramada ağrı: Kol kaldırma (sağ)', 'screening'],
-        [ATTENTION_URGENCY.asymmetry, 'Taramada büyük asimetri: Split squat', 'screening'],
+        [ATTENTION_URGENCY.screeningPain, 'Hareket testinde ağrı: Kol kaldırma (sağ)', 'screening'],
+        [ATTENTION_URGENCY.asymmetry, 'Hareket testinde büyük asimetri: Split squat', 'screening'],
       ],
     );
     assert.equal(attentionItems(facts({ screening: screeningFactsOf(record) }), { ...ctx, now: new Date('2026-10-20T10:00:00.000Z') }).length, 1);

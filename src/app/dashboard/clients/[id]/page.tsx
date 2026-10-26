@@ -130,7 +130,7 @@ function healthSummary(field: HealthField, record: HealthRecord | null): { text:
   }
   if (field === 'screening') {
     const latest = newestFirst(record.screenings ?? [])[0];
-    if (!latest) return { text: 'henüz tarama yok' };
+    if (!latest) return { text: 'henüz hareket testi yok' };
     // Açık ağrılar (gözden geçirilmemiş, sonra ağrısız test edilmemiş): yeni tarama o testi yapmadıysa eskisininki de.
     const pain = painHistory(record.screenings ?? []).open.length;
     return { text: `son ${formatDayShort(latest.date)}${pain ? ` · ${formatNumber(pain)} ağrı` : ''}` };

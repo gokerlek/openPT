@@ -158,11 +158,11 @@ export const CONDITIONS = {
   pregnancy_second_third_trimester: { label: 'Gebelik (2. ve 3. trimester)', region: 'systemic' },
   // Eski kayıtlarda okunur; hiçbir seçicide çıkmaz (taramadaki ağrı tanısız hareket kısıtı olur, `kisit-tarama.md` §4.4).
   movement_screen_pain_flag: {
-    label: 'Hareket taramasında ağrı',
+    label: 'Hareket testinde ağrı',
     region: 'systemic',
     kind: 'finding',
     redFlag: true,
-    note: 'Hareket taramasında ağrı: önce değerlendirme.',
+    note: 'Hareket testinde ağrı: önce değerlendirme.',
   },
 } as const satisfies Record<string, ConditionInfo>;
 

@@ -243,7 +243,7 @@ function RowMeta({
         </Mark>
       ) : null}
       {mark && (mark.pain.length > 0 || mark.info) ? (
-        <Mark label={mark.pain.length > 0 ? `Tarama: dikkat · ${mark.pain.join(' · ')}` : `${mark.info?.label ?? ''}. ${mark.info?.detail ?? ''}`.trim()}>
+        <Mark label={mark.pain.length > 0 ? `Hareket testi: dikkat · ${mark.pain.join(' · ')}` : `${mark.info?.label ?? ''}. ${mark.info?.detail ?? ''}`.trim()}>
           <PersonSimpleTaiChi aria-hidden weight={mark.pain.length > 0 ? 'fill' : 'regular'} className={mark.pain.length > 0 ? 'text-primary-text' : 'text-muted-foreground'} />
         </Mark>
       ) : null}

@@ -115,10 +115,10 @@ function CareLines({ care }: { care: EditorCare }) {
         <p className="flex flex-wrap items-center gap-x-2 text-muted-foreground">
           <span className="flex items-start gap-1.5">
             <PersonSimpleTaiChi weight="fill" aria-hidden className="mt-0.5 size-4 shrink-0 text-primary-text" />
-            Taramada ağrı: {pain.join(' · ')} · kalıbındaki hareketler dikkat alıyor, yasak değil
+            Hareket testinde ağrı: {pain.join(' · ')} · kalıbındaki hareketler dikkat alıyor, yasak değil
           </span>
           <Link href={`/dashboard/clients/${care.clientId}/screening`} className="underline-offset-4 hover:underline">
-            Tarama ›
+            Hareket ›
           </Link>
         </p>
       ) : null}

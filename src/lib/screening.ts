@@ -272,7 +272,7 @@ export const OUTCOME_LABELS: Record<Outcome, string> = {
   easier: 'Kolaylaştırılmış',
   unable: 'Yapılamadı',
   pain: 'Ağrılı',
-  not_tested: 'Bu taramada yapılmadı',
+  not_tested: 'Bu hareket testinde yapılmadı',
 };
 
 export const OUTCOME_CLIENT_LABELS: Record<Outcome, string> = {
@@ -281,7 +281,7 @@ export const OUTCOME_CLIENT_LABELS: Record<Outcome, string> = {
   easier: 'Kolaylaştırılmış sürümle',
   unable: 'Henüz yapılamıyor',
   pain: 'Ağrı not edildi. Antrenörün seninle konuşacak.',
-  not_tested: 'Bu taramada yapılmadı',
+  not_tested: 'Bu hareket testinde yapılmadı',
 };
 
 export const RESULT_CHOICES = ['standard', 'easier', 'unable', 'not_tested'] as const;
@@ -465,7 +465,7 @@ export function withScreening(
 ): HealthRecord {
   const list = record.screenings ?? [];
   const existing = list.find((item) => item.date === input.date);
-  if (options.replace && !existing) throw new ConstraintError('Bu tarihte tarama yok; silinmiş olabilir.', 404);
+  if (options.replace && !existing) throw new ConstraintError('Bu tarihte hareket testi yok; silinmiş olabilir.', 404);
   const tests = normalizeTests(input.tests);
   if (Object.keys(tests).length === 0) throw new ConstraintError('En az bir test gir; boş testler kaydedilmez.', 400);
   const next: Screening = { date: input.date, protocol: SCREENING_PROTOCOL, tests };
@@ -479,7 +479,7 @@ export function withScreening(
 
 export function withoutScreening(record: HealthRecord, date: string): HealthRecord {
   const list = record.screenings ?? [];
-  if (!list.some((item) => item.date === date)) throw new ConstraintError('Bu tarihte tarama yok; zaten silinmiş olabilir.', 404);
+  if (!list.some((item) => item.date === date)) throw new ConstraintError('Bu tarihte hareket testi yok; zaten silinmiş olabilir.', 404);
   return { ...record, screenings: list.filter((item) => item.date !== date) };
 }
 
@@ -487,7 +487,7 @@ export function withoutScreening(record: HealthRecord, date: string): HealthReco
 export function withPainReviewed(record: HealthRecord, date: string, key: string, now: string): HealthRecord {
   const list = record.screenings ?? [];
   const day = list.find((item) => item.date === date);
-  if (!day) throw new ConstraintError('Bu tarihte tarama yok; silinmiş olabilir.', 404);
+  if (!day) throw new ConstraintError('Bu tarihte hareket testi yok; silinmiş olabilir.', 404);
   if (!painCells(day).some((cell) => cell.key === key)) throw new ConstraintError('Bu testte ağrı kaydı yok.', 409);
   if (day.painReviewedAt?.[key]) return record;
   const next: Screening = { ...day, painReviewedAt: { ...day.painReviewedAt, [key]: now } };

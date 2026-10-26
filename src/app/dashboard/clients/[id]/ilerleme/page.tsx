@@ -120,7 +120,7 @@ export default async function ClientProgressPage({
           <ScreeningCard viewer="pt" screening={insights.screening} clientId={id} />
           <WaterCard viewer="pt" name={name} water={insights.water} today={today} />
           {health !== 'granted' ? (
-            <p className="text-sm text-muted-foreground">{HEALTH_STATE_LABELS[health]}: hazır oluşluk, ağrı, çevre ölçümleri ve tarama burada gösterilmez.</p>
+            <p className="text-sm text-muted-foreground">{HEALTH_STATE_LABELS[health]}: hazır oluşluk, ağrı, çevre ölçümleri ve hareket testi burada gösterilmez.</p>
           ) : null}
         </div>
       </div>

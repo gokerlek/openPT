@@ -181,7 +181,7 @@ export function CameraWizard({manualHref,backHref,manualLabel='Manuel ölçüm g
    {pending.length?<section className="flex flex-col gap-3 rounded-xl border p-4"><h3 className="font-medium">Kaydedilmemiş sonuçlar · {pending.length}</h3>{pending.map(record=><div key={record.id} className="flex flex-wrap items-center justify-between gap-2 text-sm"><span>{PROTOCOLS[record.task].title} · {new Date(record.capturedAt).toLocaleTimeString('tr-TR',{timeZone})}</span><Button variant="outline" disabled={Boolean(saving)} onClick={()=>void save(record)}>{saving===record.id?'Kaydediliyor…':'Ölçümü kaydet'}</Button></div>)}</section>:null}
    <CameraHistory clientId={clientId} timeZone={timeZone} records={records} onRepeat={repeat} onTrashChange={(id,removed)=>setTrashChanges(old=>({...old,[id]:removed}))}/>
    <div className="flex flex-wrap gap-3 border-t pt-4"><Button nativeButton={false} variant="ghost" render={<Link href={backHref}/>}>{backLabel}</Button><Button nativeButton={false} variant="outline" render={<Link href={manualHref}/>}>{manualLabel}</Button></div>
-   <p className="text-xs text-muted-foreground">Görüntü yalnız cihazında işlenir, saklanmaz. Açılar 2D tahmindir; sonuçlar PT değerlendirmesini destekler. Program otomatik değişmez.</p>
+   <p className="text-xs text-muted-foreground">Görüntü yalnız cihazında işlenir, saklanmaz. Açılar 2D tahmindir; sonuçlar hareket testini destekler. Program otomatik değişmez.</p>
   </div>
   {overlay?createPortal(overlay,document.body):null}
  </>;
