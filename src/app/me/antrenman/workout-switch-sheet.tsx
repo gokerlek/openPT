@@ -1,9 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Drawer, DrawerContent, DrawerDescription, DrawerFooter, DrawerHeader, DrawerTitle } from '@/components/ui/drawer';
+import { Field, FieldLabel } from '@/components/ui/field';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { fetchJson } from '@/lib/query/errors';
 import type { WorkoutResponse } from '@/lib/workout-routes';
 
@@ -37,18 +39,27 @@ function WorkoutChoice({ onSwitch, onCancel }: { onSwitch: (program: string, day
   const day = selectedDay ?? preview.data?.day?.dayId ?? '';
   const choices = overview.data?.selection?.choices ?? (overview.data?.program ? [{ id: overview.data.program.id ?? null, name: overview.data.program.name ?? 'PT programı' }] : []);
   const error = overview.error || preview.error ? 'Programlar açılamadı. Bağlantını kontrol edip yeniden aç.' : preview.data && !preview.data.day ? preview.data.problem ?? 'Bu programda uygulanabilecek gün yok.' : null;
+  const id = useId();
+  const programItems = choices.map(choice => ({ value: choice.id ?? 'pt', label: choice.name }));
+  const dayItems = (preview.data?.program?.days ?? []).map(item => ({ value: item.id, label: item.name }));
+  // Listede olmayan değer (yüklenirken) ham kimlik olarak görünmesin: boş bırakılır.
+  const shown = (items: { value: string }[], value: string) => (items.some(item => item.value === value) ? value : null);
   return <>
     <div className="flex flex-col gap-4 px-4">
-      <label className="flex flex-col gap-2 text-sm">Program
-        <select className="min-h-11 rounded-lg border bg-background p-2" value={program} disabled={!overview.data} onChange={event => { setProgram(event.target.value); setDay(null); }}>
-          {choices.map(choice => <option key={choice.id ?? 'pt'} value={choice.id ?? 'pt'}>{choice.name}</option>)}
-        </select>
-      </label>
-      <label className="flex flex-col gap-2 text-sm">Antrenman günü
-        <select className="min-h-11 rounded-lg border bg-background p-2" value={day} disabled={!preview.data?.day} onChange={event => setDay(event.target.value)}>
-          {preview.data?.program?.days.map(item => <option value={item.id} key={item.id}>{item.name}</option>)}
-        </select>
-      </label>
+      <Field>
+        <FieldLabel htmlFor={`${id}-program`}>Program</FieldLabel>
+        <Select items={programItems} value={shown(programItems, program)} disabled={!overview.data} onValueChange={next => { if (next === null) return; setProgram(next); setDay(null); }}>
+          <SelectTrigger id={`${id}-program`} className="w-full"><SelectValue /></SelectTrigger>
+          <SelectContent>{programItems.map(item => <SelectItem key={item.value} value={item.value}>{item.label}</SelectItem>)}</SelectContent>
+        </Select>
+      </Field>
+      <Field>
+        <FieldLabel htmlFor={`${id}-day`}>Antrenman günü</FieldLabel>
+        <Select items={dayItems} value={shown(dayItems, day)} disabled={!preview.data?.day} onValueChange={next => { if (next !== null) setDay(next); }}>
+          <SelectTrigger id={`${id}-day`} className="w-full"><SelectValue /></SelectTrigger>
+          <SelectContent>{dayItems.map(item => <SelectItem key={item.value} value={item.value}>{item.label}</SelectItem>)}</SelectContent>
+        </Select>
+      </Field>
       {preview.isFetching ? <p role="status" className="text-sm text-muted-foreground">Program açılıyor…</p> : null}
       {error ? <p role="alert" className="text-sm text-destructive">{error}</p> : null}
     </div>

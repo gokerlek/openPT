@@ -64,14 +64,18 @@ function SelectContent({
   alignOffset = 0,
   // Aşağı doğru açılır (Base UI varsayılanı seçili öğeyi tetikleyicinin üstüne ortalar).
   alignItemWithTrigger = false,
+  container,
   ...props
 }: SelectPrimitive.Popup.Props &
   Pick<
     SelectPrimitive.Positioner.Props,
     "align" | "alignOffset" | "side" | "sideOffset" | "alignItemWithTrigger"
-  >) {
+  > &
+  // Base UI'ın dışındaki bir kaplamada (ör. kendi z-index'li, dışını `inert` yapan tam ekran) listeyi o
+  // kaplamanın içine taşır. Base UI Dialog/Drawer içinde gerekmez: liste zaten onların portalına girer.
+  Pick<SelectPrimitive.Portal.Props, "container">) {
   return (
-    <SelectPrimitive.Portal>
+    <SelectPrimitive.Portal container={container}>
       <SelectPrimitive.Positioner
         side={side}
         sideOffset={sideOffset}

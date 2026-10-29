@@ -7,6 +7,7 @@ import {ArrowLeft,ArrowRight,Camera,Check,X} from '@phosphor-icons/react';
 import {Button} from '@/components/ui/button';
 import {Checkbox} from '@/components/ui/checkbox';
 import {Input} from '@/components/ui/input';
+import {Select,SelectContent,SelectItem,SelectTrigger,SelectValue} from '@/components/ui/select';
 import {UnsavedChangesGuard} from '@/components/unsaved-changes-guard';
 import {CameraPreviewSession,cameraErrorMessage} from '@/lib/camera-preview';
 import {qualityMessages} from '@/lib/pose/geometry';
@@ -45,6 +46,7 @@ export function CameraWizard({manualHref,backHref,manualLabel='Ölçüm gir',cli
  const [chairHeight,setChairHeight]=useState('');const [armSupport,setArmSupport]=useState(false);
  const videoRef=useRef<HTMLVideoElement>(null);
  const headingRef=useRef<HTMLHeadingElement>(null);
+ const overlayRef=useRef<HTMLDivElement>(null);
  const requestTimer=useRef<ReturnType<typeof setTimeout>|null>(null);
  const openRef=useRef(false);
  const consentKey=`axon-camera-processing-v1:${clientId}`;
@@ -113,7 +115,10 @@ export function CameraWizard({manualHref,backHref,manualLabel='Ölçüm gir',cli
   }catch(cause){setError(cause instanceof Error?cause.message:'Kaydetme tamamlanamadı. Sonuç burada duruyor; yeniden deneyebilirsin.');}
   finally{setSaving(null);}
  }
- const cameraPicker=<label className="flex min-w-0 items-center gap-2 text-xs"><Camera className="size-4 shrink-0"/><span className="sr-only">Kamera seç</span><select aria-label="Kamera seç" className="h-10 min-w-0 max-w-48 rounded-lg border bg-background px-2 text-sm" value={deviceId} disabled={capturing || status==='requesting'} onChange={event=>{const id=event.target.value;setDeviceId(id);writeSetting('axon-camera-device-v1',id);if(status==='active')void openCamera(id);}}><option value="">Varsayılan kamera</option>{devices.map((device,index)=><option key={device.deviceId || index} value={device.deviceId}>{device.label || `Kamera ${index+1}`}</option>)}</select></label>;
+ // İzin öncesi kimliği boş kameralar "Varsayılan kamera" ile aynı değeri taşır; listede yinelenmesin.
+ const cameraItems=[{value:'',label:'Varsayılan kamera'},...devices.flatMap((device,index)=>device.deviceId?[{value:device.deviceId,label:device.label || `Kamera ${index+1}`}]:[])];
+ // Liste oturum kaplamasının içine açılır: kaplama z-[70] ve dışındaki her şeyi `inert` yapar.
+ const cameraPicker=<div className="flex min-w-0 items-center gap-2 text-xs"><Camera aria-hidden className="size-4 shrink-0"/><Select items={cameraItems} value={cameraItems.some(item=>item.value===deviceId)?deviceId:''} disabled={capturing || status==='requesting'} onValueChange={next=>{const id=next??'';setDeviceId(id);writeSetting('axon-camera-device-v1',id);if(status==='active')void openCamera(id);}}><SelectTrigger aria-label="Kamera seç" className="min-w-0 max-w-48 data-[size=default]:h-10"><SelectValue/></SelectTrigger><SelectContent container={overlayRef}>{cameraItems.map(item=><SelectItem key={item.value || 'default'} value={item.value}>{item.label}</SelectItem>)}</SelectContent></Select></div>;
  function resultContent(record:CameraMeasurement){
   const protocol=PROTOCOLS[record.task];
   const previous=authoritativeRecords(records,Object.values(drafts).filter(r=>savedIds.includes(r.id)),trashChanges).filter(r=>r.id!==record.id && r.capturedAt<record.capturedAt && comparable(r,record)).sort((a,b)=>b.capturedAt.localeCompare(a.capturedAt))[0];
@@ -127,7 +132,7 @@ export function CameraWizard({manualHref,backHref,manualLabel='Ölçüm gir',cli
    <details className="text-sm"><summary className="cursor-pointer text-muted-foreground">Ölçüm koşulları ve teknik bilgiler</summary><p className="mt-2 text-xs text-muted-foreground">{record.side==='both'?'İki taraf':record.side==='left'?'Sol taraf':'Sağ taraf'} · {(record.durationMs/1000).toFixed(1)} sn · {record.validSamples}/{record.totalSamples} net örnek · {record.width}×{record.height} · Protokol {record.protocol} · 2D tahmin. Kamera eğimi ve perspektif sonucu etkiler. Görüntü saklanmaz.</p></details>
   </div>;
  }
- const overlay=inSession?<div role="dialog" aria-modal="true" aria-labelledby="camera-session-title" data-camera-session="true" className="fixed inset-0 z-[70] flex h-dvh flex-col bg-background text-foreground" onKeyDown={event=>{if(event.key==='Escape' && !capturing && !saving)list();}}>
+ const overlay=inSession?<div ref={overlayRef} role="dialog" aria-modal="true" aria-labelledby="camera-session-title" data-camera-session="true" className="fixed inset-0 z-[70] flex h-dvh flex-col bg-background text-foreground" onKeyDown={event=>{if(event.key==='Escape' && !capturing && !saving)list();}}>
   <header className="flex shrink-0 items-center justify-between gap-3 border-b px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-3 sm:px-6">
    <div className="min-w-0"><p className="truncate text-xs text-muted-foreground">{clientName?`${clientName} · `:''}{flow.index+1}/{flow.queue.length} analiz</p><h2 id="camera-session-title" ref={headingRef} tabIndex={-1} className="truncate font-heading text-lg font-semibold outline-none">{flow.stage==='complete'?'Analiz oturumu özeti':task.title}</h2></div>
    <Button variant="ghost" className="size-11 shrink-0" aria-label="Analiz listesine dön" disabled={capturing || Boolean(saving)} onClick={list}><X/></Button>
