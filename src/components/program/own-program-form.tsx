@@ -16,7 +16,7 @@ import { Button } from '@/components/ui/button';
 import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Item, ItemContent, ItemDescription, ItemMedia, ItemTitle } from '@/components/ui/item';
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { Drawer, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle } from '@/components/ui/drawer';
 import { showUndoToast } from '@/components/undo-toast';
 import { UnsavedChangesGuard, type UnsavedChangesGuardHandle } from '@/components/unsaved-changes-guard';
 import { WeekdayToggle } from '@/components/weekday-toggle';
@@ -466,14 +466,14 @@ export function OwnProgramForm(props: OwnProgramFormProps) {
           </div>
         )}
 
-        <Sheet open={addOpen} onOpenChange={setAddOpen}>
-          <SheetContent side="bottom" showCloseButton={false} className={BOTTOM}>
-            <SheetHeader className="gap-1.5 pt-5">
-              <SheetTitle className="text-lg font-semibold">Gün ekle</SheetTitle>
-              <SheetDescription>
+        <Drawer open={addOpen} onOpenChange={setAddOpen}>
+          <DrawerContent showCloseButton={false} className={BOTTOM}>
+            <DrawerHeader className="gap-1.5 pt-5">
+              <DrawerTitle className="text-lg font-semibold">Gün ekle</DrawerTitle>
+              <DrawerDescription>
                 {programLabel} {formatNumber(days.length)}/{formatNumber(OWN_PROGRAM_LIMITS.days)} gün. Eklenen gün listenin sonuna gelir.
-              </SheetDescription>
-            </SheetHeader>
+              </DrawerDescription>
+            </DrawerHeader>
             <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overscroll-contain px-4 pb-4">
               <ul className="flex flex-col gap-2">
                 <li>
@@ -592,8 +592,8 @@ export function OwnProgramForm(props: OwnProgramFormProps) {
                 Vazgeç
               </Button>
             </div>
-          </SheetContent>
-        </Sheet>
+          </DrawerContent>
+        </Drawer>
 
         <FloatingSaveButton />
       </Form>

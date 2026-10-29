@@ -13,7 +13,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Field, FieldContent, FieldDescription, FieldLabel, FieldTitle } from '@/components/ui/field';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { Drawer, DrawerContent, DrawerDescription, DrawerFooter, DrawerHeader, DrawerTitle } from '@/components/ui/drawer';
 import { Spinner } from '@/components/ui/spinner';
 import { Stepper } from '@/components/ui/stepper';
 import { formatKg, formatNumber } from '@/lib/format';
@@ -161,7 +161,7 @@ export function FinishSheet({
   const rotationShown = asks && rotation !== null;
   const rotationValue = choice ?? rotation?.initial ?? 'advance';
   return (
-    <Sheet
+    <Drawer
       open={open}
       onOpenChange={onOpenChange}
       onOpenChangeComplete={(next) => {
@@ -169,20 +169,20 @@ export function FinishSheet({
         setReason(null);
         setChoice(null);
       }}>
-      <SheetContent side="bottom" showCloseButton={false} className={cn(BOTTOM, 'max-h-[calc(100dvh-max(1rem,env(safe-area-inset-top)))]')} initialFocus={primary}>
-        <SheetHeader className="gap-1.5 pt-5">
+      <DrawerContent showCloseButton={false} className={cn(BOTTOM, 'max-h-[calc(100dvh-max(1rem,env(safe-area-inset-top)))]')} initialFocus={primary}>
+        <DrawerHeader className="gap-1.5 pt-5">
           {all ? <CheckCircle className="mb-1 size-10 text-primary" /> : null}
-          <SheetTitle className="text-lg font-semibold">
+          <DrawerTitle className="text-lg font-semibold">
             {none ? 'Henüz set yok' : all ? 'Antrenman tamamlandı, bitirelim mi?' : 'Antrenmanı bitir?'}
-          </SheetTitle>
-          <SheetDescription className="tabular-nums">
+          </DrawerTitle>
+          <DrawerDescription className="tabular-nums">
             {none
               ? 'Kaydedilmiş set olmadığı için silinecek bir şey de yok.'
               : all
                 ? `${summary.exercises} hareket · ${summary.sets} set · ${formatKg(Math.round(summary.volumeKg))} · ${summary.minutes} dk`
                 : `${summary.doneSets}/${summary.plannedSets} set yapıldı. Yapılmayanlar:`}
-          </SheetDescription>
-        </SheetHeader>
+          </DrawerDescription>
+        </DrawerHeader>
         <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto overscroll-contain px-4">
           {!none && !all ? (
             <ul className="flex flex-col gap-1 text-sm tabular-nums">
@@ -213,7 +213,7 @@ export function FinishSheet({
             </div>
           ) : null}
         </div>
-        <SheetFooter className="pt-3">
+        <DrawerFooter className="pt-3">
           {none ? (
             <>
               <Button ref={primary} size="lg" className="h-14 w-full text-base" onClick={() => onOpenChange(false)}>
@@ -239,9 +239,9 @@ export function FinishSheet({
               </Button>
             </>
           )}
-        </SheetFooter>
-      </SheetContent>
-    </Sheet>
+        </DrawerFooter>
+      </DrawerContent>
+    </Drawer>
   );
 }
 
@@ -280,11 +280,11 @@ export function EditSetSheet({
   // Odak Kaydet'te: ilk odaklanabilir öğe "Seti sil" olurdu (Enter yıkıcı işleme gitmesin).
   const save = useRef<HTMLButtonElement>(null);
   return (
-    <Sheet open={target !== null} onOpenChange={(open) => (open ? undefined : onClose())}>
-      <SheetContent side="bottom" showCloseButton={false} className={BOTTOM} initialFocus={save}>
+    <Drawer open={target !== null} onOpenChange={(open) => (open ? undefined : onClose())}>
+      <DrawerContent showCloseButton={false} className={BOTTOM} initialFocus={save}>
         {target ? <EditSetBody key={target.setId} target={target} saveRef={save} onSave={onSave} onDelete={onDelete} /> : null}
-      </SheetContent>
-    </Sheet>
+      </DrawerContent>
+    </Drawer>
   );
 }
 
@@ -307,17 +307,17 @@ function EditSetBody({
   const grid = weighted ? gridOf(target.spec) : null;
   return (
     <>
-      <SheetHeader className="flex-row items-start justify-between gap-3 pt-5">
+      <DrawerHeader className="flex-row items-start justify-between gap-3 pt-5">
         <div className="flex min-w-0 flex-col gap-0.5">
-          <SheetTitle className="text-lg font-semibold">Seti düzelt</SheetTitle>
-          <SheetDescription className="truncate">
+          <DrawerTitle className="text-lg font-semibold">Seti düzelt</DrawerTitle>
+          <DrawerDescription className="truncate">
             {target.title} · Set {target.position + 1}
-          </SheetDescription>
+          </DrawerDescription>
         </div>
         <Button variant="ghost" className="-mt-1 -mr-2 h-11 px-3 text-destructive hover:text-destructive" onClick={onDelete}>
           Seti sil
         </Button>
-      </SheetHeader>
+      </DrawerHeader>
       <div className="flex flex-col gap-2 px-4">
         {weighted ? (
           <Stepper
@@ -371,7 +371,7 @@ function EditSetBody({
           </div>
         ) : null}
       </div>
-      <SheetFooter className="pt-4">
+      <DrawerFooter className="pt-4">
         <Button
           ref={saveRef}
           size="lg"
@@ -379,7 +379,7 @@ function EditSetBody({
           onClick={() => onSave({ ...(weighted ? { kg } : {}), value, ...(target.effort !== null ? { effort } : {}) })}>
           Kaydet
         </Button>
-      </SheetFooter>
+      </DrawerFooter>
     </>
   );
 }

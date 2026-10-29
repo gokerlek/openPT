@@ -5,7 +5,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Field, FieldContent, FieldDescription, FieldLabel, FieldTitle } from '@/components/ui/field';
-import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { Drawer, DrawerContent, DrawerDescription, DrawerFooter, DrawerHeader, DrawerTitle } from '@/components/ui/drawer';
 import { Spinner } from '@/components/ui/spinner';
 import { formatNumber } from '@/lib/format';
 import { DURATION, tween } from '@/lib/motion';
@@ -60,15 +60,15 @@ export function ProgramUpdateSheet({
   onDismiss: () => void;
 }) {
   return (
-    <Sheet
+    <Drawer
       open={items !== null}
       onOpenChange={(open) => {
         if (!open && !busy) onDismiss();
       }}>
-      <SheetContent side="bottom" showCloseButton={false} className={cn(BOTTOM, 'max-h-[calc(100dvh-max(1rem,env(safe-area-inset-top)))]')}>
+      <DrawerContent showCloseButton={false} className={cn(BOTTOM, 'max-h-[calc(100dvh-max(1rem,env(safe-area-inset-top)))]')}>
         {items ? <UpdateBody key={items.map((item) => item.key).join('|')} items={items} busy={busy} ownName={ownName} onAnswer={onAnswer} /> : null}
-      </SheetContent>
-    </Sheet>
+      </DrawerContent>
+    </Drawer>
   );
 }
 
@@ -112,12 +112,12 @@ function UpdateBody({
         onAnimationComplete={() => title.current?.focus({ preventScroll: true })}>
         {mode === 'summary' ? (
           <>
-            <SheetHeader className="gap-1.5 pt-5">
-              <SheetTitle ref={title} tabIndex={-1} className="text-lg font-semibold outline-none">
+            <DrawerHeader className="gap-1.5 pt-5">
+              <DrawerTitle ref={title} tabIndex={-1} className="text-lg font-semibold outline-none">
                 {ownName ? `${ownName} programını güncelleyelim mi?` : 'Programını güncelleyelim mi?'}
-              </SheetTitle>
-              <SheetDescription>{explainer(items, ownName)}</SheetDescription>
-            </SheetHeader>
+              </DrawerTitle>
+              <DrawerDescription>{explainer(items, ownName)}</DrawerDescription>
+            </DrawerHeader>
             <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto overscroll-contain px-4">
               <ul className="flex flex-col gap-1.5 text-sm">
                 {summary.lines.map((item) => (
@@ -139,7 +139,7 @@ function UpdateBody({
                 </p>
               ) : null}
             </div>
-            <SheetFooter className="pt-3">
+            <DrawerFooter className="pt-3">
               <Button size="lg" className="h-14 w-full text-base" disabled={busy} onClick={() => answer({ answer: 'yes' })}>
                 {busy && pending === 'yes' ? <Spinner data-icon="inline-start" /> : null}
                 {ownName ? `${dative(ownName)} yaz` : 'Evet, güncelle'}
@@ -151,16 +151,16 @@ function UpdateBody({
               <Button variant="link" className="h-11 self-center" disabled={busy} onClick={() => setMode('pick')}>
                 Tek tek seç
               </Button>
-            </SheetFooter>
+            </DrawerFooter>
           </>
         ) : (
           <>
-            <SheetHeader className="gap-1.5 pt-5">
-              <SheetTitle ref={title} tabIndex={-1} className="text-lg font-semibold outline-none">
+            <DrawerHeader className="gap-1.5 pt-5">
+              <DrawerTitle ref={title} tabIndex={-1} className="text-lg font-semibold outline-none">
                 Tek tek seç
-              </SheetTitle>
-              <SheetDescription>{explainer(items, ownName)}</SheetDescription>
-            </SheetHeader>
+              </DrawerTitle>
+              <DrawerDescription>{explainer(items, ownName)}</DrawerDescription>
+            </DrawerHeader>
             <div role="group" aria-label="Program değişiklikleri" className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto overscroll-contain px-4">
               {items.map((item) => {
                 const checked = picked.has(item.key);
@@ -178,12 +178,12 @@ function UpdateBody({
                 );
               })}
             </div>
-            <SheetFooter className="pt-3">
+            <DrawerFooter className="pt-3">
               <Button size="lg" className="h-14 w-full text-base" disabled={busy} onClick={() => answer({ answer: 'pick', picked })}>
                 {busy ? <Spinner data-icon="inline-start" /> : null}
                 Kaydet
               </Button>
-            </SheetFooter>
+            </DrawerFooter>
           </>
         )}
       </motion.div>

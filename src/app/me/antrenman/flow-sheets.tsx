@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '@/components/ui/empty';
 import { InputGroup, InputGroupAddon, InputGroupInput } from '@/components/ui/input-group';
 import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from '@/components/ui/item';
-import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { Drawer, DrawerContent, DrawerDescription, DrawerFooter, DrawerHeader, DrawerTitle } from '@/components/ui/drawer';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Spinner } from '@/components/ui/spinner';
 import { searchExercises } from '@/lib/exercise-search';
@@ -103,7 +103,7 @@ const ROW = 'flex min-h-13 min-w-0 flex-1 items-center gap-2.5 rounded-md pl-1.5
 function DragFlowRow({item,children,className,onReorder,previous,next}:{item:FlowItem;children:ReactNode;className:string;onReorder:(from:string,to:string)=>void;previous?:string;next?:string}){
  const drag=useDraggable({id:item.key});const drop=useDroppable({id:item.key});
  return <li ref={node=>{drag.setNodeRef(node);drop.setNodeRef(node);}} aria-current={item.state==='current'?'step':undefined} className={className} style={{transform:CSS.Translate.toString(drag.transform),position:'relative',zIndex:drag.isDragging?10:undefined}}>
-  <button type="button" {...drag.attributes} {...drag.listeners} aria-label={`${titleOf(item)}: sırayı değiştir`} title="Sürükle veya Alt + yukarı/aşağı ok" onKeyDown={event=>{if(event.altKey && (event.key==='ArrowUp'||event.key==='ArrowDown')){event.preventDefault();const target=event.key==='ArrowUp'?previous:next;if(target)onReorder(item.key,target);}else drag.listeners?.onKeyDown?.(event);}} className="grid size-11 shrink-0 touch-none place-items-center rounded-md text-muted-foreground hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring"><DotsSixVertical className="size-5"/></button>
+  <button type="button" data-base-ui-swipe-ignore {...drag.attributes} {...drag.listeners} aria-label={`${titleOf(item)}: sırayı değiştir`} title="Sürükle veya Alt + yukarı/aşağı ok" onKeyDown={event=>{if(event.altKey && (event.key==='ArrowUp'||event.key==='ArrowDown')){event.preventDefault();const target=event.key==='ArrowUp'?previous:next;if(target)onReorder(item.key,target);}else drag.listeners?.onKeyDown?.(event);}} className="grid size-11 shrink-0 touch-none place-items-center rounded-md text-muted-foreground hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring"><DotsSixVertical className="size-5"/></button>
   {children}
  </li>;
 }
@@ -133,19 +133,19 @@ export function FlowSheet({
   const title = useRef<HTMLHeadingElement>(null);
   const sensors=useSensors(useSensor(PointerSensor,{activationConstraint:{distance:8}}),useSensor(KeyboardSensor));
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="bottom" showCloseButton={false} className={TALL} initialFocus={title}>
-        <SheetHeader className="gap-1 pt-5 pb-3">
+    <Drawer open={open} onOpenChange={onOpenChange}>
+      <DrawerContent showCloseButton={false} className={TALL} initialFocus={title}>
+        <DrawerHeader className="gap-1 pt-5 pb-3">
           <div className="flex items-baseline justify-between gap-3">
-            <SheetTitle ref={title} tabIndex={-1} className="text-lg font-semibold outline-none">
+            <DrawerTitle ref={title} tabIndex={-1} className="text-lg font-semibold outline-none">
               Antrenman akışı
-            </SheetTitle>
+            </DrawerTitle>
             <span className="shrink-0 text-sm text-muted-foreground tabular-nums">
               {view.doneSets}/{view.plannedSets} set
             </span>
           </div>
-          <SheetDescription>Tutamacı sürükleyerek sırayı değiştir. Klavyede Alt + yukarı/aşağı ok kullan. Alet doluysa Geç; harekete dokunarak hemen başlayabilirsin.</SheetDescription>
-        </SheetHeader>
+          <DrawerDescription>Tutamacı sürükleyerek sırayı değiştir. Klavyede Alt + yukarı/aşağı ok kullan. Alet doluysa Geç; harekete dokunarak hemen başlayabilirsin.</DrawerDescription>
+        </DrawerHeader>
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4">
           <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={({active,over})=>{if(over)onReorder(String(active.id),String(over.id));}}>
           <ul className="flex flex-col">
@@ -202,14 +202,14 @@ export function FlowSheet({
             </>
           ) : null}
         </div>
-        <SheetFooter className="pt-3">
+        <DrawerFooter className="pt-3">
           <Button variant="outline" size="lg" className="h-12 w-full" onClick={onAdd}>
             <Plus data-icon="inline-start" weight="bold" />
             Hareket ekle
           </Button>
-        </SheetFooter>
-      </SheetContent>
-    </Sheet>
+        </DrawerFooter>
+      </DrawerContent>
+    </Drawer>
   );
 }
 
@@ -270,16 +270,16 @@ export function SwapSheet({
   });
   const groups = query.data?.groups ?? [];
   return (
-    <Sheet open={target !== null} onOpenChange={(open) => (open ? undefined : onClose())}>
-      <SheetContent side="bottom" showCloseButton={false} className={TALL} initialFocus={title}>
-        <SheetHeader className="gap-1 pt-5 pb-2">
-          <SheetTitle ref={title} tabIndex={-1} className="truncate text-lg font-semibold outline-none">
+    <Drawer open={target !== null} onOpenChange={(open) => (open ? undefined : onClose())}>
+      <DrawerContent showCloseButton={false} className={TALL} initialFocus={title}>
+        <DrawerHeader className="gap-1 pt-5 pb-2">
+          <DrawerTitle ref={title} tabIndex={-1} className="truncate text-lg font-semibold outline-none">
             {target?.title} yerine
-          </SheetTitle>
-          <SheetDescription>
+          </DrawerTitle>
+          <DrawerDescription>
             Aynı kaslar, ekipmana göre. {query.data?.careNote ?? 'Geçmişin yoksa rahat bir ağırlıkla başlarsın.'}
-          </SheetDescription>
-        </SheetHeader>
+          </DrawerDescription>
+        </DrawerHeader>
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-4">
           {target?.original ? (
             <section aria-label="Asıl hareket">
@@ -324,8 +324,8 @@ export function SwapSheet({
             ))
           )}
         </div>
-      </SheetContent>
-    </Sheet>
+      </DrawerContent>
+    </Drawer>
   );
 }
 
@@ -370,13 +370,13 @@ export function AddExerciseSheet({
   });
   const results = useMemo(() => searchExercises(query.data?.exercises ?? [], deferred, muscleNames).slice(0, RESULT_LIMIT), [query.data, deferred]);
   return (
-    <Sheet open={open} onOpenChange={onOpenChange} onOpenChangeComplete={(next) => (next ? undefined : setSearch(''))}>
-      <SheetContent side="bottom" showCloseButton={false} className={cn(TALL, 'h-[calc(100dvh-max(1rem,env(safe-area-inset-top)))]')} initialFocus={title}>
-        <SheetHeader className="gap-1 pt-5 pb-3">
-          <SheetTitle ref={title} tabIndex={-1} className="text-lg font-semibold outline-none">
+    <Drawer open={open} onOpenChange={onOpenChange} onOpenChangeComplete={(next) => (next ? undefined : setSearch(''))}>
+      <DrawerContent showCloseButton={false} className={cn(TALL, 'h-[calc(100dvh-max(1rem,env(safe-area-inset-top)))]')} initialFocus={title}>
+        <DrawerHeader className="gap-1 pt-5 pb-3">
+          <DrawerTitle ref={title} tabIndex={-1} className="text-lg font-semibold outline-none">
             Hareket ekle
-          </SheetTitle>
-          <SheetDescription>Yalnız bu antrenmana eklenir; bitişte antrenörüne önerebilirsin.</SheetDescription>
+          </DrawerTitle>
+          <DrawerDescription>Yalnız bu antrenmana eklenir; bitişte antrenörüne önerebilirsin.</DrawerDescription>
           <InputGroup className="mt-2 h-11">
             <InputGroupAddon>
               <MagnifyingGlass />
@@ -395,7 +395,7 @@ export function AddExerciseSheet({
               enterKeyHint="search"
             />
           </InputGroup>
-        </SheetHeader>
+        </DrawerHeader>
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-4">
           {query.isPending ? (
             <div className="flex flex-col gap-2" aria-busy="true">
@@ -451,7 +451,7 @@ export function AddExerciseSheet({
             </div>
           )}
         </div>
-      </SheetContent>
-    </Sheet>
+      </DrawerContent>
+    </Drawer>
   );
 }

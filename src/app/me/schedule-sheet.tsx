@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { CalendarDots } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
 import { Card, CardAction, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { Drawer, DrawerContent, DrawerDescription, DrawerFooter, DrawerHeader, DrawerTitle } from '@/components/ui/drawer';
 import { Spinner } from '@/components/ui/spinner';
 import { WeekdayToggle } from '@/components/weekday-toggle';
 import { formatNumber } from '@/lib/format';
@@ -41,12 +41,12 @@ export function ScheduleSheet({
   own?: ScheduleProgram;
 }) {
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="bottom" showCloseButton={false} className={BOTTOM}>
+    <Drawer open={open} onOpenChange={onOpenChange}>
+      <DrawerContent showCloseButton={false} className={BOTTOM}>
         {/* Her açılışta kayıttaki günlerle başlar. */}
         {open ? <ScheduleBody schedule={schedule} own={own} onSaved={onSaved} onClose={() => onOpenChange(false)} /> : null}
-      </SheetContent>
-    </Sheet>
+      </DrawerContent>
+    </Drawer>
   );
 }
 
@@ -76,16 +76,16 @@ function ScheduleBody({
   const perWeek = own ? undefined : (schedule.daysPerWeek ?? undefined);
   return (
     <>
-      <SheetHeader className="gap-1.5 pt-5">
-        <SheetTitle id="schedule-title" className="text-lg font-semibold">
+      <DrawerHeader className="gap-1.5 pt-5">
+        <DrawerTitle id="schedule-title" className="text-lg font-semibold">
           Antrenman günlerin
-        </SheetTitle>
-        <SheetDescription>
+        </DrawerTitle>
+        <DrawerDescription>
           {own
             ? `${own.name} programına yazılır. Sıra değişmez: sıradaki antrenman seçtiğin ilk güne kayar.`
             : 'Antrenörüne bildirilir. Sıra değişmez: sıradaki antrenman seçtiğin ilk güne kayar.'}
-        </SheetDescription>
-      </SheetHeader>
+        </DrawerDescription>
+      </DrawerHeader>
       <div className="flex flex-col gap-3 px-4">
         <WeekdayToggle id="schedule-title" value={days} onChange={setDays} disabled={save.isPending} />
         {days.length > 0 && frequencyMismatch(days, perWeek) ? (
@@ -102,12 +102,12 @@ function ScheduleBody({
           </div>
         ) : null}
       </div>
-      <SheetFooter className="pt-4">
+      <DrawerFooter className="pt-4">
         <Button size="lg" className="h-14 w-full text-base" disabled={days.length === 0 || unchanged || save.isPending} onClick={() => save.mutate(days)}>
           {save.isPending ? <Spinner data-icon="inline-start" /> : null}
           {days.length === 0 ? 'En az bir gün seç' : 'Kaydet'}
         </Button>
-      </SheetFooter>
+      </DrawerFooter>
     </>
   );
 }

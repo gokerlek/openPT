@@ -10,7 +10,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Field, FieldContent, FieldDescription, FieldLabel, FieldTitle } from '@/components/ui/field';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { Drawer, DrawerContent, DrawerDescription, DrawerFooter, DrawerHeader, DrawerTitle } from '@/components/ui/drawer';
 import { Spinner } from '@/components/ui/spinner';
 import { formatDayShort } from '@/lib/format';
 import { PT_PROGRAM_NAME } from '@/lib/own-programs';
@@ -92,14 +92,14 @@ export function ProgramChip({
         <span className="truncate">{oneOff ? `Bugün: ${name}` : name}</span>
         <CaretDown data-icon="inline-end" />
       </Button>
-      <Sheet open={open} onOpenChange={(next) => (busy ? undefined : setOpen(next))} onOpenChangeComplete={(isOpen) => (isOpen ? undefined : setPicked(undefined))}>
-        <SheetContent side="bottom" showCloseButton={false} className={BOTTOM}>
-          <SheetHeader className="gap-1.5 pt-5">
-            <SheetTitle id="program-choice-title" className="text-lg font-semibold">
+      <Drawer open={open} onOpenChange={(next) => (busy ? undefined : setOpen(next))} onOpenChangeComplete={(isOpen) => (isOpen ? undefined : setPicked(undefined))}>
+        <DrawerContent showCloseButton={false} className={BOTTOM}>
+          <DrawerHeader className="gap-1.5 pt-5">
+            <DrawerTitle id="program-choice-title" className="text-lg font-semibold">
               Hangi programla çalışacaksın?
-            </SheetTitle>
-            <SheetDescription>Sıra ve günler her programda ayrı sürer.</SheetDescription>
-          </SheetHeader>
+            </DrawerTitle>
+            <DrawerDescription>Sıra ve günler her programda ayrı sürer.</DrawerDescription>
+          </DrawerHeader>
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4">
             <RadioGroup aria-labelledby="program-choice-title" value={value ?? 'pt'} onValueChange={(next) => setPicked(next === 'pt' ? null : String(next))}>
               {choices.map((choice) => {
@@ -118,7 +118,7 @@ export function ProgramChip({
               })}
             </RadioGroup>
           </div>
-          <SheetFooter className="pt-4">
+          <DrawerFooter className="pt-4">
             <Button size="lg" className="h-11 w-full" disabled={busy} onClick={onlyToday}>
               Yalnız bugün
             </Button>
@@ -131,9 +131,9 @@ export function ProgramChip({
             <Button variant="ghost" className="h-11 w-full text-muted-foreground" disabled={busy} onClick={() => setOpen(false)}>
               Vazgeç
             </Button>
-          </SheetFooter>
-        </SheetContent>
-      </Sheet>
+          </DrawerFooter>
+        </DrawerContent>
+      </Drawer>
     </>
   );
 }

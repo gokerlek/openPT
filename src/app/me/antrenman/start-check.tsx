@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { WarningCircle } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
-import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { Drawer, DrawerContent, DrawerDescription, DrawerFooter, DrawerHeader, DrawerTitle } from '@/components/ui/drawer';
 import type { CheckInResponse } from '@/lib/check-in-routes';
 import { formatNumber } from '@/lib/format';
 import type { Readiness } from '@/lib/schemas/health';
@@ -173,14 +173,14 @@ export function StartCheck({
     setAnswers((current) => ({ ...current, readiness: { ...current.readiness, [key]: value } }));
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange} disablePointerDismissal>
-      <SheetContent side="bottom" showCloseButton={false} className={cn(BOTTOM, 'max-h-[calc(100dvh-max(1rem,env(safe-area-inset-top)))]')}>
+    <Drawer open={open} onOpenChange={onOpenChange} disablePointerDismissal>
+      <DrawerContent showCloseButton={false} className={cn(BOTTOM, 'max-h-[calc(100dvh-max(1rem,env(safe-area-inset-top)))]')}>
         {step === 'ask' ? (
           <>
-            <SheetHeader className="gap-1 pt-5">
-              <SheetTitle className="text-lg font-semibold">Bugün nasıl hissediyorsun?</SheetTitle>
-              <SheetDescription>Sağlık onayın olduğu için soruluyor; cevapların yalnız sağlık kaydına yazılır. İstersen bugün atla.</SheetDescription>
-            </SheetHeader>
+            <DrawerHeader className="gap-1 pt-5">
+              <DrawerTitle className="text-lg font-semibold">Bugün nasıl hissediyorsun?</DrawerTitle>
+              <DrawerDescription>Sağlık onayın olduğu için soruluyor; cevapların yalnız sağlık kaydına yazılır. İstersen bugün atla.</DrawerDescription>
+            </DrawerHeader>
             <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto overscroll-contain px-4 pb-2">
               {parts.readiness
                 ? READINESS_KEYS.map((key) => {
@@ -253,51 +253,51 @@ export function StartCheck({
                 </>
               ) : null}
             </div>
-            <SheetFooter className="border-t pt-3">
+            <DrawerFooter className="border-t pt-3">
               <Button size="lg" className="h-14 w-full text-base" disabled={!canBegin(parts, answers)} onClick={begin}>
                 Başla
               </Button>
               <Button variant="ghost" className="h-11 w-full text-muted-foreground" onClick={skip}>
                 Bugün atla
               </Button>
-            </SheetFooter>
+            </DrawerFooter>
           </>
         ) : step === 'lighten' ? (
           <>
-            <SheetHeader className="gap-1.5 pt-5">
-              <SheetTitle className="text-lg font-semibold">Hacmi hafifletelim mi?</SheetTitle>
-              <SheetDescription className="tabular-nums">
+            <DrawerHeader className="gap-1.5 pt-5">
+              <DrawerTitle className="text-lg font-semibold">Hacmi hafifletelim mi?</DrawerTitle>
+              <DrawerDescription className="tabular-nums">
                 Hazır oluşluğun {formatNumber(outcome?.score ?? 0)}/100. Bugün ağırlıklar yaklaşık %15 az, 3 ve üstü setli harekette bir set eksik
                 olur. Yalnız bugünün planı değişir; antrenörüne &quot;hafifletildi&quot; diye bildirilir.
-              </SheetDescription>
-            </SheetHeader>
-            <SheetFooter className="pt-3">
+              </DrawerDescription>
+            </DrawerHeader>
+            <DrawerFooter className="pt-3">
               <Button size="lg" className="h-14 w-full text-base" onClick={() => outcome && apply(outcome, true)}>
                 Evet, hafiflet
               </Button>
               <Button variant="outline" className="h-11 w-full" onClick={() => outcome && apply(outcome, false)}>
                 Planı koru
               </Button>
-            </SheetFooter>
+            </DrawerFooter>
           </>
         ) : (
           <>
-            <SheetHeader className="gap-1.5 pt-5">
+            <DrawerHeader className="gap-1.5 pt-5">
               <WarningCircle weight="fill" className="mb-1 size-10 text-destructive" aria-hidden />
-              <SheetTitle className="text-lg font-semibold">Bugün yük yok</SheetTitle>
-              <SheetDescription>{stopText(answers)}</SheetDescription>
-            </SheetHeader>
-            <SheetFooter className="pt-3">
+              <DrawerTitle className="text-lg font-semibold">Bugün yük yok</DrawerTitle>
+              <DrawerDescription>{stopText(answers)}</DrawerDescription>
+            </DrawerHeader>
+            <DrawerFooter className="pt-3">
               <Button size="lg" className="h-14 w-full text-base" onClick={stop}>
                 Bugün&apos;e dön
               </Button>
               <Button variant="ghost" className="h-11 w-full text-muted-foreground" onClick={() => setStep('ask')}>
                 Cevaplarımı düzelt
               </Button>
-            </SheetFooter>
+            </DrawerFooter>
           </>
         )}
-      </SheetContent>
-    </Sheet>
+      </DrawerContent>
+    </Drawer>
   );
 }

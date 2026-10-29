@@ -16,7 +16,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { Drawer, DrawerContent, DrawerDescription, DrawerFooter, DrawerHeader, DrawerTitle } from '@/components/ui/drawer';
 import { Spinner } from '@/components/ui/spinner';
 import { Switch } from '@/components/ui/switch';
 import { fetchJson } from '@/lib/query/errors';
@@ -174,20 +174,20 @@ export function ShareSwitch({ programId, name, shared: initial }: { programId: s
           aria-label="Antrenörünle paylaş"
         />
       </label>
-      <Sheet open={asking} onOpenChange={(open) => (busy ? undefined : setAsking(open))}>
-        <SheetContent side="bottom" showCloseButton={false} className={BOTTOM}>
-          <SheetHeader className="gap-1.5 pt-5">
-            <SheetTitle className="text-lg font-semibold">{name} antrenörünle paylaşılsın mı?</SheetTitle>
-            <SheetDescription render={<div />} className="flex flex-col gap-3">
+      <Drawer open={asking} onOpenChange={(open) => (busy ? undefined : setAsking(open))}>
+        <DrawerContent showCloseButton={false} className={BOTTOM}>
+          <DrawerHeader className="gap-1.5 pt-5">
+            <DrawerTitle className="text-lg font-semibold">{name} antrenörünle paylaşılsın mı?</DrawerTitle>
+            <DrawerDescription render={<div />} className="flex flex-col gap-3">
               <ul className="flex list-disc flex-col gap-1 pl-5">
                 <li>Antrenörün programı görür ve düzenleyebilir.</li>
                 <li>Her değişiklik programın geçmişine kimin yaptığıyla yazılır; öteki taraf haberdar olur.</li>
                 <li>Paylaşımı istediğin an kapatırsın.</li>
               </ul>
               <span>Paylaşmasan da yaptığın antrenmanları antrenörün görür. Programların antrenörünün veri deposunda durur.</span>
-            </SheetDescription>
-          </SheetHeader>
-          <SheetFooter className="pt-4">
+            </DrawerDescription>
+          </DrawerHeader>
+          <DrawerFooter className="pt-4">
             <Button size="lg" className="h-11 w-full" disabled={busy} onClick={() => void share()}>
               {busy ? <Spinner data-icon="inline-start" /> : null}
               Paylaş
@@ -195,9 +195,9 @@ export function ShareSwitch({ programId, name, shared: initial }: { programId: s
             <Button variant="outline" size="lg" className="h-11 w-full" autoFocus disabled={busy} onClick={() => setAsking(false)}>
               Vazgeç
             </Button>
-          </SheetFooter>
-        </SheetContent>
-      </Sheet>
+          </DrawerFooter>
+        </DrawerContent>
+      </Drawer>
     </>
   );
 }

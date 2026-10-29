@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
-import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { Drawer, DrawerContent, DrawerDescription, DrawerFooter, DrawerHeader, DrawerTitle } from '@/components/ui/drawer';
 import { fetchJson } from '@/lib/query/errors';
 import type { WorkoutResponse } from '@/lib/workout-routes';
 
@@ -12,15 +12,15 @@ export function WorkoutSwitchSheet({ open, onOpenChange, onSwitch }: {
   onOpenChange: (open: boolean) => void;
   onSwitch: (program: string, day: string) => void;
 }) {
-  return <Sheet open={open} onOpenChange={onOpenChange}>
-    <SheetContent side="bottom" className="mx-auto max-h-[90dvh] max-w-lg overflow-y-auto rounded-t-2xl">
-      <SheetHeader>
-        <SheetTitle>Antrenmanı değiştir</SheetTitle>
-        <SheetDescription>Yaptığın setler mevcut antrenmanın kaydı olarak korunur. Seçtiğin program/gün ayrı bir antrenman olarak başlar; kayıtlar birbirine karışmaz.</SheetDescription>
-      </SheetHeader>
+  return <Drawer open={open} onOpenChange={onOpenChange}>
+    <DrawerContent className="mx-auto max-h-[90dvh] max-w-lg overflow-y-auto rounded-t-2xl">
+      <DrawerHeader>
+        <DrawerTitle>Antrenmanı değiştir</DrawerTitle>
+        <DrawerDescription>Yaptığın setler mevcut antrenmanın kaydı olarak korunur. Seçtiğin program/gün ayrı bir antrenman olarak başlar; kayıtlar birbirine karışmaz.</DrawerDescription>
+      </DrawerHeader>
       {open ? <WorkoutChoice onSwitch={onSwitch} onCancel={() => onOpenChange(false)} /> : null}
-    </SheetContent>
-  </Sheet>;
+    </DrawerContent>
+  </Drawer>;
 }
 
 function WorkoutChoice({ onSwitch, onCancel }: { onSwitch: (program: string, day: string) => void; onCancel: () => void }) {
@@ -52,9 +52,9 @@ function WorkoutChoice({ onSwitch, onCancel }: { onSwitch: (program: string, day
       {preview.isFetching ? <p role="status" className="text-sm text-muted-foreground">Program açılıyor…</p> : null}
       {error ? <p role="alert" className="text-sm text-destructive">{error}</p> : null}
     </div>
-    <SheetFooter>
+    <DrawerFooter>
       <Button disabled={preview.isFetching || !preview.data?.day || !day || !!error} onClick={() => onSwitch(program, day)}>Setleri koru ve bu antrenmana geç</Button>
       <Button variant="ghost" onClick={onCancel}>Vazgeç</Button>
-    </SheetFooter>
+    </DrawerFooter>
   </>;
 }

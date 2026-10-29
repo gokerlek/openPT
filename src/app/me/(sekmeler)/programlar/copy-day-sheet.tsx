@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { CopySimple, Plus } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
 import { Item, ItemContent, ItemDescription, ItemMedia, ItemTitle } from '@/components/ui/item';
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { Drawer, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle } from '@/components/ui/drawer';
 import { OWN_PROGRAM_LIMITS } from '@/lib/own-programs';
 
 const BOTTOM = 'gap-0 rounded-t-2xl pb-[env(safe-area-inset-bottom)] max-h-[calc(100dvh-max(1rem,env(safe-area-inset-top)))]';
@@ -34,12 +34,12 @@ export function CopyDaySheet({
         <CopySimple data-icon="inline-start" />
         Kendi programına kopyala
       </Button>
-      <Sheet open={open} onOpenChange={setOpen}>
-        <SheetContent side="bottom" className={BOTTOM}>
-          <SheetHeader className="gap-1.5 pt-5">
-            <SheetTitle className="text-lg font-semibold">{dayName} nereye kopyalansın?</SheetTitle>
-            <SheetDescription>Kopya o anki hâliyle alınır; antrenörün günü sonra değiştirse de kopyan değişmez.</SheetDescription>
-          </SheetHeader>
+      <Drawer open={open} onOpenChange={setOpen}>
+        <DrawerContent className={BOTTOM}>
+          <DrawerHeader className="gap-1.5 pt-5">
+            <DrawerTitle className="text-lg font-semibold">{dayName} nereye kopyalansın?</DrawerTitle>
+            <DrawerDescription>Kopya o anki hâliyle alınır; antrenörün günü sonra değiştirse de kopyan değişmez.</DrawerDescription>
+          </DrawerHeader>
           <div className="flex flex-col gap-2 overflow-y-auto px-4 pb-4">
             {canCreate ? (
               <Item variant="outline" className="touch:min-h-11" render={<Link href={`/me/programlar/yeni?${query}`} onClick={() => setOpen(false)} />}>
@@ -76,8 +76,8 @@ export function CopyDaySheet({
               );
             })}
           </div>
-        </SheetContent>
-      </Sheet>
+        </DrawerContent>
+      </Drawer>
     </>
   );
 }

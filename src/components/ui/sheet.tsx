@@ -1,5 +1,8 @@
 "use client"
 
+// Yan paneller (sağ/sol/üst) için. Alttan açılan paneller `Drawer` (drawer.tsx): üstte tutamaç, aşağı
+// kaydırınca kapanır; `side="bottom"` yerine onu kullan.
+
 import * as React from "react"
 import { Dialog as SheetPrimitive } from "@base-ui/react/dialog"
 import { cn } from "cn"

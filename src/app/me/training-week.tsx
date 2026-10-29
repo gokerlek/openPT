@@ -7,7 +7,7 @@ import { Check } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
 import { Field, FieldContent, FieldDescription, FieldLabel, FieldTitle } from '@/components/ui/field';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { Drawer, DrawerContent, DrawerDescription, DrawerFooter, DrawerHeader, DrawerTitle } from '@/components/ui/drawer';
 import { Skeleton } from '@/components/ui/skeleton';
 import { formatDayShort } from '@/lib/format';
 import {
@@ -182,17 +182,17 @@ export function OtherDayButton({ clientId }: { clientId: string }) {
       <Button variant="ghost" className="h-11 w-full text-muted-foreground" onClick={() => setOpen(true)}>
         Başka gün seç
       </Button>
-      <Sheet open={open} onOpenChange={setOpen} onOpenChangeComplete={(isOpen) => (isOpen ? undefined : setPicked(null))}>
-        <SheetContent side="bottom" showCloseButton={false} className={cn(BOTTOM, 'max-h-[calc(100dvh-max(1rem,env(safe-area-inset-top)))]')}>
-          <SheetHeader className="gap-1.5 pt-5">
-            <SheetTitle id="other-day-title" className="text-lg font-semibold">
+      <Drawer open={open} onOpenChange={setOpen} onOpenChangeComplete={(isOpen) => (isOpen ? undefined : setPicked(null))}>
+        <DrawerContent showCloseButton={false} className={cn(BOTTOM, 'max-h-[calc(100dvh-max(1rem,env(safe-area-inset-top)))]')}>
+          <DrawerHeader className="gap-1.5 pt-5">
+            <DrawerTitle id="other-day-title" className="text-lg font-semibold">
               Hangi günü yapacaksın?
-            </SheetTitle>
+            </DrawerTitle>
             {/* Kendi programda PT'ye bildirilmez (`docs/design/kendi-program.md` §3.4). */}
-            <SheetDescription>
+            <DrawerDescription>
               {data?.program?.source === 'own' ? 'Sıra seçtiğin günden devam eder.' : 'Antrenörüne bildirilir. Sıra seçtiğin günden devam eder.'}
-            </SheetDescription>
-          </SheetHeader>
+            </DrawerDescription>
+          </DrawerHeader>
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4">
             <RadioGroup aria-labelledby="other-day-title" value={selected} onValueChange={(value) => setPicked(String(value))}>
               {days.map((day) => (
@@ -210,7 +210,7 @@ export function OtherDayButton({ clientId }: { clientId: string }) {
               ))}
             </RadioGroup>
           </div>
-          <SheetFooter className="pt-4">
+          <DrawerFooter className="pt-4">
             <Button
               size="lg"
               className="h-14 w-full text-base"
@@ -224,9 +224,9 @@ export function OtherDayButton({ clientId }: { clientId: string }) {
               }}>
               Bu günle başla
             </Button>
-          </SheetFooter>
-        </SheetContent>
-      </Sheet>
+          </DrawerFooter>
+        </DrawerContent>
+      </Drawer>
     </>
   );
 }
