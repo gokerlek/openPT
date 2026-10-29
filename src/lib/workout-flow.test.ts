@@ -5,7 +5,7 @@ import { sessionDocSchema, type SessionDoc } from './schemas/session.ts';
 import { at, DAY_A, DAY_B, programFile, singleBlock, W1, workingSet } from './testing/session-fixtures.ts';
 import { BENCH, CRUNCH, DB_PRESS, dayWithBlocks, DEVICES, PLANK, PUSH_UP, workoutDay } from './testing/workout-fixtures.ts';
 import { mergeAll } from './session-merge.ts';
-import { addExtraRound, cursorOf, easyShortcut, logSet, newSessionDoc, nextSet, setViews } from './workout-session.ts';
+import { addExtraRound, afterLog, cursorOf, easyShortcut, logSet, newSessionDoc, nextSet, setViews } from './workout-session.ts';
 import { nextMemberLetter } from './workout-groups.ts';
 import {
   addExercise,
@@ -520,5 +520,38 @@ describe('liste + odak: imleç', () => {
     const day = threeDay();
     const dropped = dropAt(day, start(day), 'b_bbbbbb', stamp(1));
     assert.equal(nextSet(day, dropped, null, 'b_bbbbbb'), null);
+  });
+
+  test('odakta birim bitince sıradaki birim: sırada ilk bitmemiş', () => {
+    const day = threeDay();
+    let doc = start(day);
+    // Önce Goblet'i (3. birim) bitir; Bench ve Plank bekliyor.
+    let after: ReturnType<typeof afterLog> | null = null;
+    for (let minute = 1; minute <= 2; minute += 1) {
+      const next = nextSet(day, doc, null, 'b_dddddd');
+      assert.ok(next);
+      const logged = logSet(day, doc, { rowId: next.rowId, setIndex: next.setIndex, kg: next.kg, value: next.value, stamp: stamp(minute), random: sequence() }).doc;
+      after = afterLog(day, doc, logged, 'b_dddddd');
+      doc = logged;
+    }
+    assert.deepEqual(after, { kind: 'next', restSeconds: 60, nextKey: 'b_aaaaaa' });
+  });
+
+  test('odakta son set "done"', () => {
+    const day = threeDay();
+    let doc = start(day);
+    for (let minute = 1; minute <= 6; minute += 1) doc = logNext(day, doc, minute);
+    const next = nextSet(day, doc, null, 'b_dddddd');
+    assert.ok(next);
+    const logged = logSet(day, doc, { rowId: next.rowId, setIndex: next.setIndex, kg: next.kg, value: next.value, stamp: stamp(7), random: sequence() }).doc;
+    assert.deepEqual(afterLog(day, doc, logged, 'b_dddddd'), { kind: 'done' });
+  });
+
+  test('odaksız afterLog da sıradaki birimi söyler', () => {
+    const day = threeDay();
+    let doc = start(day);
+    doc = logNext(day, logNext(day, doc, 1), 2);
+    const logged = logNext(day, doc, 3); // Bench'in son seti
+    assert.deepEqual(afterLog(day, doc, logged), { kind: 'next', restSeconds: 90, nextKey: 'b_bbbbbb' });
   });
 });

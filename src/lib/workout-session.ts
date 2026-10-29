@@ -472,24 +472,31 @@ export type AfterLog =
   | { kind: 'same'; restSeconds: number }
   /** Grupta aynı turun sıradaki üyesi: dinlenme yok; devrede istasyon geçişi sayar. */
   | { kind: 'member'; transitionSeconds: number }
-  /** Hareket bitti: sıradaki hareket gelir, dinlenme onun üstünde açılır. */
-  | { kind: 'next'; restSeconds: number }
+  /** Hareket bitti: sıradaki birim (`nextKey`, sırada ilk bitmemiş) gelir, dinlenme onun üstünde açılır. */
+  | { kind: 'next'; restSeconds: number; nextKey: string | null }
   /** Son hareketin son seti: dinlenme yok, bitirme sorusu. */
   | { kind: 'done' };
 
 /**
  * `before`: set kaydedilmeden önceki belge; dinlenme o setin ardındaki (`restAfterSeconds`). Grupta
  * tur sürerken (aynı birim, aynı tur, başka üye) dinlenme yok: süperset ve komplekste 0, devrede
- * istasyon geçişi; tur sonunda blok dinlenmesi.
+ * istasyon geçişi; tur sonunda blok dinlenmesi. `focus` verilince set o birimde sayılır (liste + odak);
+ * birim bitince sıradaki birim odaksız imleçten.
  */
-export function afterLog(day: WorkoutDay, before: Pick<SessionDoc, 'entries' | 'order'>, after: Pick<SessionDoc, 'entries' | 'order'>): AfterLog {
-  const was = cursorOf(day, before);
-  const now = cursorOf(day, after);
-  if (!now.next) return { kind: 'done' };
+export function afterLog(
+  day: WorkoutDay,
+  before: Pick<SessionDoc, 'entries' | 'order'>,
+  after: Pick<SessionDoc, 'entries' | 'order'>,
+  focus?: string | null,
+): AfterLog {
+  const was = cursorOf(day, before, focus);
+  const now = cursorOf(day, after, focus);
+  const overall = cursorOf(day, after);
+  if (!overall.next) return { kind: 'done' };
   const restSeconds = was.next?.restAfterSeconds ?? 0;
   const oldUnit = was.next ? was.units[was.next.unit]?.key : undefined;
-  const newUnit = now.units[now.next.unit]?.key;
-  if (oldUnit !== newUnit) return { kind: 'next', restSeconds };
+  const newUnit = now.next ? now.units[now.next.unit]?.key : undefined;
+  if (!now.next || oldUnit !== newUnit) return { kind: 'next', restSeconds, nextKey: overall.units[overall.next.unit]?.key ?? null };
   if (was.next && now.next.round === was.next.round && now.next.member !== was.next.member) return { kind: 'member', transitionSeconds: restSeconds };
   return { kind: 'same', restSeconds };
 }
