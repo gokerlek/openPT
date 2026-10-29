@@ -11,9 +11,6 @@ import { formatNumber } from '@/lib/format';
 import { DURATION, tween } from '@/lib/motion';
 import { feedbackSummary, type FeedbackItem } from '@/lib/program-feedback';
 import { dative } from '@/lib/turkish';
-import { cn } from '@/lib/utils';
-
-const BOTTOM = 'gap-0 rounded-t-2xl pb-[env(safe-area-inset-bottom)]';
 
 /** Sheet'in alt metni: neyin hemen değiştiği, neyin antrenöre gittiği. */
 function explainer(items: readonly FeedbackItem[], ownName: string | null): string {
@@ -65,7 +62,7 @@ export function ProgramUpdateSheet({
       onOpenChange={(open) => {
         if (!open && !busy) onDismiss();
       }}>
-      <DrawerContent showCloseButton={false} className={cn(BOTTOM, 'max-h-[calc(100dvh-max(1rem,env(safe-area-inset-top)))]')}>
+      <DrawerContent showCloseButton={false} className="gap-0" data-base-ui-swipe-ignore={busy || undefined}>
         {items ? <UpdateBody key={items.map((item) => item.key).join('|')} items={items} busy={busy} ownName={ownName} onAnswer={onAnswer} /> : null}
       </DrawerContent>
     </Drawer>

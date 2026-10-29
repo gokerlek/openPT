@@ -26,8 +26,6 @@ import { DELETE_BODY } from '@/lib/session-history';
 import { DeleteDialog } from '../delete-dialog';
 import { AmrapReps, EffortPrompt, type EffortPromptView } from './rest-panel';
 
-const BOTTOM = 'gap-0 rounded-t-2xl pb-[env(safe-area-inset-bottom)]';
-
 /** "Neden? (isteğe bağlı)": kapalı gelir; tek seçim, yeniden dokunmak kaldırır. "Ağrı" yalnız sağlık onayı varken. */
 function ReasonPicker({ pain, value, onChange }: { pain: boolean; value: FinishReason | null; onChange: (reason: FinishReason | null) => void }) {
   const [open, setOpen] = useState(value !== null);
@@ -169,7 +167,7 @@ export function FinishSheet({
         setReason(null);
         setChoice(null);
       }}>
-      <DrawerContent showCloseButton={false} className={cn(BOTTOM, 'max-h-[calc(100dvh-max(1rem,env(safe-area-inset-top)))]')} initialFocus={primary}>
+      <DrawerContent showCloseButton={false} className="gap-0" initialFocus={primary}>
         <DrawerHeader className="gap-1.5 pt-5">
           {all ? <CheckCircle className="mb-1 size-10 text-primary" /> : null}
           <DrawerTitle className="text-lg font-semibold">
@@ -281,7 +279,7 @@ export function EditSetSheet({
   const save = useRef<HTMLButtonElement>(null);
   return (
     <Drawer open={target !== null} onOpenChange={(open) => (open ? undefined : onClose())}>
-      <DrawerContent showCloseButton={false} className={BOTTOM} initialFocus={save}>
+      <DrawerContent showCloseButton={false} className="gap-0" initialFocus={save}>
         {target ? <EditSetBody key={target.setId} target={target} saveRef={save} onSave={onSave} onDelete={onDelete} /> : null}
       </DrawerContent>
     </Drawer>

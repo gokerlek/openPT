@@ -51,8 +51,6 @@ import { normalizeWeekdays } from '@/lib/training-days';
 import { cn } from '@/lib/utils';
 import { ownProgramDraftKey, PROGRAM_DRAFT_BASE } from '@/lib/unsaved-changes';
 
-/** Sheet'ler telefonda alttan; dokunma hedefleri 44 px. */
-const BOTTOM = 'gap-0 rounded-t-2xl pb-[env(safe-area-inset-bottom)] max-h-[calc(100dvh-max(1rem,env(safe-area-inset-top)))]';
 const FREQUENCY_LABELS: Record<string, string> = {
   none: 'Belirtme',
   ...Object.fromEntries(Array.from({ length: PROGRAM_LIMITS.daysPerWeek }, (_, index) => [String(index + 1), `${index + 1} gün`])),
@@ -468,7 +466,7 @@ export function OwnProgramForm(props: OwnProgramFormProps) {
         )}
 
         <Drawer open={addOpen} onOpenChange={setAddOpen}>
-          <DrawerContent showCloseButton={false} className={BOTTOM}>
+          <DrawerContent showCloseButton={false} className="gap-0">
             <DrawerHeader className="gap-1.5 pt-5">
               <DrawerTitle className="text-lg font-semibold">Gün ekle</DrawerTitle>
               <DrawerDescription>

@@ -4,7 +4,8 @@ import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { PersonSimpleTaiChi, WarningCircle } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
-import { Sheet, SheetClose, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { ResponsiveSheet, ResponsiveSheetContent } from '@/components/ui/responsive-sheet';
+import { SheetClose, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { useMediaQuery } from '@/hooks/use-media-query';
 import type { EditorCare } from '@/lib/constraint-filter';
 import { sheetStatus } from '@/lib/edit-messages';
@@ -44,7 +45,8 @@ type SheetProps = {
 };
 
 /**
- * Hareket kütüphanesi sheet'i (SPEC §6): ≥sm sağdan, telefonda tam ekran. Dokunulan hareket
+ * Hareket kütüphanesi sheet'i (SPEC §6): ≥40rem sağdan sheet, telefonda alttan ekran boyu çekmece (aşağı
+ * kaydırınca kapanır; antrenman ekranının kütüphanesiyle aynı). Dokunulan hareket
  * sona (ya da grubun sonuna) eklenir ve sheet açık kalır (durum satırında kısa onay). Esc,
  * dışarıya dokunma, Kapat ve "Bitti" kapatır; odak açan düğmeye döner. Editörde "Değiştir"
  * yok (sil + ekle); ExercisePicker'ın değiştirme kipi antrenmandaki "Muadil" için kalır.
@@ -62,17 +64,17 @@ export function ExerciseSheet(props: SheetProps) {
   const shownState = state ?? last;
 
   return (
-    <Sheet open={state !== null} onOpenChange={(open) => !open && onClose()} onOpenChangeComplete={(open) => !open && onClosed()}>
-      <SheetContent
+    <ResponsiveSheet bottom={!wide} open={state !== null} onOpenChange={(open) => !open && onClose()} onOpenChangeComplete={(open) => !open && onClosed()}>
+      <ResponsiveSheetContent
         ref={popupRef}
-        side={wide ? 'right' : 'bottom'}
         // Dokunmatikte arama kutusuna odaklanılmaz (klavye açılmasın); popup odak alır.
         initialFocus={(type) => (coarse || type === 'touch' ? popupRef.current : searchRef.current)}
         finalFocus={() => finalFocus() ?? true}
-        className="gap-0 p-0 data-[side=bottom]:top-0 data-[side=bottom]:h-dvh data-[side=bottom]:border-t-0 data-[side=right]:w-full data-[side=right]:sm:max-w-md">
+        // Alt güvenli alanı "Bitti" satırı kendisi bırakır (p-0).
+        className={wide ? 'gap-0 p-0 data-[side=right]:w-full data-[side=right]:sm:max-w-md' : 'h-[calc(100dvh-max(1rem,env(safe-area-inset-top)))] gap-0 p-0'}>
         {shownState ? <SheetBody key={shownState.kind === 'add' ? 'add' : shownState.blockId} {...props} searchRef={searchRef} /> : null}
-      </SheetContent>
-    </Sheet>
+      </ResponsiveSheetContent>
+    </ResponsiveSheet>
   );
 }
 

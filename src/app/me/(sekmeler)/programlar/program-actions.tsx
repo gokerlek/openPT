@@ -32,7 +32,6 @@ import { clearLocalWorkout, clearWorkoutCache } from '../../workout-storage';
  */
 
 const JSON_HEADERS = { 'Content-Type': 'application/json' };
-const BOTTOM = 'gap-0 rounded-t-2xl pb-[env(safe-area-inset-bottom)]';
 /** Kapatmanın "Geri al" süresi (§2.7). */
 const UNSHARE_DELAY_MS = 8000;
 const TOAST_BUTTONS = { actionButton: 'touch:min-h-11 touch:px-3! touch:text-sm!' };
@@ -176,7 +175,7 @@ export function ShareSwitch({ programId, name, shared: initial }: { programId: s
         />
       </label>
       <Drawer open={asking} onOpenChange={(open) => (busy ? undefined : setAsking(open))}>
-        <DrawerContent showCloseButton={false} className={BOTTOM}>
+        <DrawerContent showCloseButton={false} className="gap-0" data-base-ui-swipe-ignore={busy || undefined}>
           <DrawerHeader className="gap-1.5 pt-5">
             <DrawerTitle className="text-lg font-semibold">{name} antrenörünle paylaşılsın mı?</DrawerTitle>
             <DrawerDescription render={<div />} className="flex flex-col gap-3">

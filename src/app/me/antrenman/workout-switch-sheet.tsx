@@ -15,7 +15,7 @@ export function WorkoutSwitchSheet({ open, onOpenChange, onSwitch }: {
   onSwitch: (program: string, day: string) => void;
 }) {
   return <Drawer open={open} onOpenChange={onOpenChange}>
-    <DrawerContent className="mx-auto max-h-[90dvh] max-w-lg overflow-y-auto rounded-t-2xl">
+    <DrawerContent className="mx-auto max-w-lg">
       <DrawerHeader>
         <DrawerTitle>Antrenmanı değiştir</DrawerTitle>
         <DrawerDescription>Yaptığın setler mevcut antrenmanın kaydı olarak korunur. Seçtiğin program/gün ayrı bir antrenman olarak başlar; kayıtlar birbirine karışmaz.</DrawerDescription>
@@ -44,19 +44,20 @@ function WorkoutChoice({ onSwitch, onCancel }: { onSwitch: (program: string, day
   const dayItems = (preview.data?.program?.days ?? []).map(item => ({ value: item.id, label: item.name }));
   // Listede olmayan değer (yüklenirken) ham kimlik olarak görünmesin: boş bırakılır.
   const shown = (items: { value: string }[], value: string) => (items.some(item => item.value === value) ? value : null);
+  const loading = 'Yükleniyor…';
   return <>
-    <div className="flex flex-col gap-4 px-4">
+    <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overscroll-contain px-4">
       <Field>
         <FieldLabel htmlFor={`${id}-program`}>Program</FieldLabel>
         <Select items={programItems} value={shown(programItems, program)} disabled={!overview.data} onValueChange={next => { if (next === null) return; setProgram(next); setDay(null); }}>
-          <SelectTrigger id={`${id}-program`} className="w-full"><SelectValue /></SelectTrigger>
+          <SelectTrigger id={`${id}-program`} className="w-full"><SelectValue placeholder={overview.isPending ? loading : undefined} /></SelectTrigger>
           <SelectContent>{programItems.map(item => <SelectItem key={item.value} value={item.value}>{item.label}</SelectItem>)}</SelectContent>
         </Select>
       </Field>
       <Field>
         <FieldLabel htmlFor={`${id}-day`}>Antrenman günü</FieldLabel>
         <Select items={dayItems} value={shown(dayItems, day)} disabled={!preview.data?.day} onValueChange={next => { if (next !== null) setDay(next); }}>
-          <SelectTrigger id={`${id}-day`} className="w-full"><SelectValue /></SelectTrigger>
+          <SelectTrigger id={`${id}-day`} className="w-full"><SelectValue placeholder={!error && (preview.isPending || preview.isFetching) ? loading : undefined} /></SelectTrigger>
           <SelectContent>{dayItems.map(item => <SelectItem key={item.value} value={item.value}>{item.label}</SelectItem>)}</SelectContent>
         </Select>
       </Field>

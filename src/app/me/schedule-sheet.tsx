@@ -15,8 +15,6 @@ import { frequencyMismatch, sameWeekdays, weekdaysText, type Weekday } from '@/l
 import type { WorkoutSchedule } from '@/lib/workout-plan';
 import type { ScheduleResponse } from '@/lib/workout-routes';
 
-const BOTTOM = 'gap-0 rounded-t-2xl pb-[env(safe-area-inset-bottom)]';
-
 /**
  * "Günlerini değiştir" (tasarım §2.11): haftanın 7 günü (çoklu, 44 px), antrenörün planladığı sıklıktan
  * farklıysa küçük uyarı (engel değil), Kaydet. Doğrudan uygulanır: program geçmişine danışan değişikliği
@@ -42,7 +40,7 @@ export function ScheduleSheet({
 }) {
   return (
     <Drawer open={open} onOpenChange={onOpenChange}>
-      <DrawerContent showCloseButton={false} className={BOTTOM}>
+      <DrawerContent showCloseButton={false} className="gap-0">
         {/* Her açılışta kayıttaki günlerle başlar. */}
         {open ? <ScheduleBody schedule={schedule} own={own} onSaved={onSaved} onClose={() => onOpenChange(false)} /> : null}
       </DrawerContent>

@@ -25,12 +25,10 @@ import {
   type StartAnswers,
   type StartOutcome,
 } from '@/lib/session-check';
-import { cn } from '@/lib/utils';
 import type { LocalWorkout } from '@/lib/workout-outbox';
 import { checkAsked, fetchCheckContext, flushCheckIns, markCheckAsked, queueCheckIn, readCheckCache } from '../check-in-storage';
 import { ChoiceField, ScaleField } from '../check-scale';
 
-const BOTTOM = 'gap-0 rounded-t-2xl pb-[env(safe-area-inset-bottom)]';
 const FIVE = [1, 2, 3, 4, 5] as const;
 const ELEVEN = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10] as const;
 
@@ -158,8 +156,14 @@ export function StartCheck({
     onLeave('Bugün yük yok. Antrenörüne haber ver.', 'info');
   };
 
-  const onOpenChange = (next: boolean) => {
+  const onOpenChange = (next: boolean, details: { reason: string }) => {
     if (next) return;
+    // Soruda aşağı kaydırma (ya da ekran okuyucunun gizli "Kapat"ı) yalnız kapatır: cevap da atlama da
+    // sayılmaz, yoklama bir sonraki açılışta yeniden sorulur. Öteki adımlar sürüklenmez; seçim düğmelerle.
+    if (step === 'ask' && (details.reason === 'swipe' || details.reason === 'close-press')) {
+      setOpen(false);
+      return;
+    }
     // Escape: adımın geri çıkışı.
     if (step === 'stop') stop();
     else if (step === 'lighten' && outcome) apply(outcome, false);
@@ -174,7 +178,7 @@ export function StartCheck({
 
   return (
     <Drawer open={open} onOpenChange={onOpenChange} disablePointerDismissal>
-      <DrawerContent showCloseButton={false} className={cn(BOTTOM, 'max-h-[calc(100dvh-max(1rem,env(safe-area-inset-top)))]')}>
+      <DrawerContent showCloseButton={false} swipeable={step === 'ask'} className="gap-0">
         {step === 'ask' ? (
           <>
             <DrawerHeader className="gap-1 pt-5">

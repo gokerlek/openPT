@@ -9,8 +9,6 @@ import { Item, ItemContent, ItemDescription, ItemMedia, ItemTitle } from '@/comp
 import { Drawer, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle } from '@/components/ui/drawer';
 import { OWN_PROGRAM_LIMITS } from '@/lib/own-programs';
 
-const BOTTOM = 'gap-0 rounded-t-2xl pb-[env(safe-area-inset-bottom)] max-h-[calc(100dvh-max(1rem,env(safe-area-inset-top)))]';
-
 /**
  * Antrenörünün programında günün altındaki "Kendi programına kopyala" (`docs/design/kendi-program.md` §2.2): sheet
  * "Yeni programa" ya da var olan programlar (7 günü dolu olan pasif). Kopya anlık görüntüdür; var olan programa
@@ -36,7 +34,7 @@ export function CopyDaySheet({
         Kendi programına kopyala
       </Button>
       <Drawer open={open} onOpenChange={setOpen}>
-        <DrawerContent className={BOTTOM}>
+        <DrawerContent className="gap-0">
           <DrawerHeader className="gap-1.5 pt-5">
             <DrawerTitle className="text-lg font-semibold">{dayName} nereye kopyalansın?</DrawerTitle>
             <DrawerDescription>Kopya o anki hâliyle alınır; antrenörün günü sonra değiştirse de kopyan değişmez.</DrawerDescription>

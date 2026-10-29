@@ -24,9 +24,6 @@ import { cn } from '@/lib/utils';
 import { optionText, type FlowItem, type FlowView } from '@/lib/workout-flow';
 import type { AlternativesResponse, LibraryItem, LibraryResponse, SwapOption } from '@/lib/workout-routes';
 
-/** Telefonda alttan açılan, en çok ekran boyu sheet: başlık ve alt düğme sabit, arası kayar. */
-const TALL = 'max-h-[calc(100dvh-max(1rem,env(safe-area-inset-top)))] gap-0 rounded-t-2xl pb-[env(safe-area-inset-bottom)]';
-
 /** Kütüphanede en çok bu kadar sonuç; gerisi için arama daraltılır. */
 const RESULT_LIMIT = 50;
 
@@ -135,7 +132,7 @@ export function FlowSheet({
   const sensors=useSensors(useSensor(PointerSensor,{activationConstraint:{distance:8}}),useSensor(KeyboardSensor));
   return (
     <Drawer open={open} onOpenChange={onOpenChange}>
-      <DrawerContent showCloseButton={false} className={TALL} initialFocus={title}>
+      <DrawerContent showCloseButton={false} className="gap-0" initialFocus={title}>
         <DrawerHeader className="gap-1 pt-5 pb-3">
           <div className="flex items-baseline justify-between gap-3">
             <DrawerTitle ref={title} tabIndex={-1} className="text-lg font-semibold outline-none">
@@ -272,7 +269,7 @@ export function SwapSheet({
   const groups = query.data?.groups ?? [];
   return (
     <Drawer open={target !== null} onOpenChange={(open) => (open ? undefined : onClose())}>
-      <DrawerContent showCloseButton={false} className={TALL} initialFocus={title}>
+      <DrawerContent showCloseButton={false} className="gap-0" initialFocus={title}>
         <DrawerHeader className="gap-1 pt-5 pb-2">
           <DrawerTitle ref={title} tabIndex={-1} className="truncate text-lg font-semibold outline-none">
             {target?.title} yerine
@@ -372,7 +369,7 @@ export function AddExerciseSheet({
   const results = useMemo(() => searchExercises(query.data?.exercises ?? [], deferred, muscleNames).slice(0, RESULT_LIMIT), [query.data, deferred]);
   return (
     <Drawer open={open} onOpenChange={onOpenChange} onOpenChangeComplete={(next) => (next ? undefined : setSearch(''))}>
-      <DrawerContent showCloseButton={false} className={cn(TALL, 'h-[calc(100dvh-max(1rem,env(safe-area-inset-top)))]')} initialFocus={title}>
+      <DrawerContent showCloseButton={false} className="h-[calc(100dvh-max(1rem,env(safe-area-inset-top)))] gap-0" initialFocus={title}>
         <DrawerHeader className="gap-1 pt-5 pb-3">
           <DrawerTitle ref={title} tabIndex={-1} className="text-lg font-semibold outline-none">
             Hareket ekle

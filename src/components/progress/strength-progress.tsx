@@ -7,7 +7,7 @@ import { MuscleMap, MuscleStatusSwatch, type MuscleStatusTone } from '@/componen
 import { ProgressChart } from '@/components/progress-chart';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Sheet, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { summarizeMuscles, type BodyMuscle } from '@/lib/muscles';
 import {
@@ -41,7 +41,7 @@ import {
 import { MUSCLE_LABELS } from '@/lib/schemas/exercise';
 import { cn } from '@/lib/utils';
 import { ProgressCard, SubHeading } from './progress-card';
-import { ProgressSheetContent } from './progress-sheet';
+import { ProgressSheet, ProgressSheetContent } from './progress-sheet';
 
 /** Listelerde önce bu kadar satır; gerisi "Tümünü göster". */
 const LIST_LIMIT = 5;
@@ -393,8 +393,8 @@ function MuscleSheet({
   const changes = Array.isArray(circumference) ? circumference.filter((change) => related.includes(change.id)) : [];
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <ProgressSheetContent viewer={viewer} initialFocus={title} finalFocus={finalFocus}>
+    <ProgressSheet viewer={viewer} open={open} onOpenChange={onOpenChange}>
+      <ProgressSheetContent initialFocus={title} finalFocus={finalFocus}>
         {shown ? (
           <>
             <SheetHeader className="gap-1 pt-5 pb-3 pr-14">
@@ -481,6 +481,6 @@ function MuscleSheet({
           </>
         ) : null}
       </ProgressSheetContent>
-    </Sheet>
+    </ProgressSheet>
   );
 }

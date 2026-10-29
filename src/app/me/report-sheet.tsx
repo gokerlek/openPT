@@ -51,8 +51,6 @@ const SIDE_CHOICES: { value: ConstraintSide; label: string }[] = [
   { value: 'both', label: 'İkisi' },
 ];
 
-const TALL = 'max-h-[calc(100dvh-max(1rem,env(safe-area-inset-top)))] gap-0 rounded-t-2xl pb-[env(safe-area-inset-bottom)]';
-
 /**
  * "Antrenörüne bildir" (tasarım `kisit-tarama.md` §2.4): tek, kaydırılan sheet. Başta acil metin (yoklamanın
  * "Bugün yük yok" ekranıyla aynı ayrım; Finucane 2020), Gönder'in üstünde öteki işaretler (Ottawa kuralları, Stiell
@@ -76,7 +74,7 @@ export function ReportSheet({
   const title = useRef<HTMLHeadingElement>(null);
   return (
     <Drawer open={open} onOpenChange={onOpenChange}>
-      <DrawerContent className={TALL} initialFocus={title}>
+      <DrawerContent className="gap-0" initialFocus={title}>
         {open ? <ReportBody key={editing ?? 'new'} titleRef={title} editing={editing} initial={initial} onSent={onSent} /> : null}
       </DrawerContent>
     </Drawer>

@@ -23,6 +23,7 @@ import {CameraHistory} from './camera-history';
 import {PoseOverlay} from './pose-overlay';
 import {usePoseDetection} from './use-pose-detection';
 const SETTINGS_EVENT='axon-camera-settings';
+const DEFAULT_CAMERA='default';
 function subscribe(listener:()=>void){window.addEventListener('storage',listener);window.addEventListener(SETTINGS_EVENT,listener);return()=>{window.removeEventListener('storage',listener);window.removeEventListener(SETTINGS_EVENT,listener);};}
 function readSetting(key:string){try{return localStorage.getItem(key)??'';}catch{return '';}}
 function writeSetting(key:string,value:string){try{localStorage.setItem(key,value);}catch{}window.dispatchEvent(new Event(SETTINGS_EVENT));}
@@ -116,10 +117,11 @@ export function CameraWizard({manualHref,backHref,manualLabel='Ölçüm gir',cli
   }catch(cause){setError(cause instanceof Error?cause.message:'Kaydetme tamamlanamadı. Sonuç burada duruyor; yeniden deneyebilirsin.');}
   finally{setSaving(null);}
  }
- // İzin öncesi kimliği boş kameralar "Varsayılan kamera" ile aynı değeri taşır; listede yinelenmesin.
- const cameraItems=[{value:'',label:'Varsayılan kamera'},...devices.flatMap((device,index)=>device.deviceId?[{value:device.deviceId,label:device.label || `Kamera ${index+1}`}]:[])];
+ // "Varsayılan kamera" seçilmiş bir değer (`DEFAULT_CAMERA`); ayarda ve kamerayı açarken boş kimliktir. İzin öncesi
+ // kimliği boş kameralar onunla aynı anlama gelir; listede yinelenmesin.
+ const cameraItems=[{value:DEFAULT_CAMERA,label:'Varsayılan kamera'},...devices.flatMap((device,index)=>device.deviceId && device.deviceId!==DEFAULT_CAMERA?[{value:device.deviceId,label:device.label || `Kamera ${index+1}`}]:[])];
  // Liste oturum kaplamasının içine açılır: kaplama z-[70] ve dışındaki her şeyi `inert` yapar.
- const cameraPicker=<div className="flex min-w-0 items-center gap-2 text-xs"><Camera aria-hidden className="size-4 shrink-0"/><Select items={cameraItems} value={cameraItems.some(item=>item.value===deviceId)?deviceId:''} disabled={capturing || status==='requesting'} onValueChange={next=>{const id=next??'';setDeviceId(id);writeSetting('axon-camera-device-v1',id);if(status==='active')void openCamera(id);}}><SelectTrigger aria-label="Kamera seç" className="min-w-0 max-w-48 data-[size=default]:h-10"><SelectValue/></SelectTrigger><SelectContent container={overlayRef}>{cameraItems.map(item=><SelectItem key={item.value || 'default'} value={item.value}>{item.label}</SelectItem>)}</SelectContent></Select></div>;
+ const cameraPicker=<div className="flex min-w-0 items-center gap-2 text-xs"><Camera aria-hidden className="size-4 shrink-0"/><Select items={cameraItems} value={deviceId && cameraItems.some(item=>item.value===deviceId)?deviceId:DEFAULT_CAMERA} disabled={capturing || status==='requesting'} onValueChange={next=>{const id=next && next!==DEFAULT_CAMERA?next:'';setDeviceId(id);writeSetting('axon-camera-device-v1',id);if(status==='active')void openCamera(id);}}><SelectTrigger aria-label="Kamera seç" className="min-w-0 max-w-48 data-[size=default]:h-10"><SelectValue/></SelectTrigger><SelectContent container={overlayRef}>{cameraItems.map(item=><SelectItem key={item.value} value={item.value}>{item.label}</SelectItem>)}</SelectContent></Select></div>;
  function resultContent(record:CameraMeasurement){
   const protocol=PROTOCOLS[record.task];
   const previous=authoritativeRecords(records,Object.values(drafts).filter(r=>savedIds.includes(r.id)),trashChanges).filter(r=>r.id!==record.id && r.capturedAt<record.capturedAt && comparable(r,record)).sort((a,b)=>b.capturedAt.localeCompare(a.capturedAt))[0];

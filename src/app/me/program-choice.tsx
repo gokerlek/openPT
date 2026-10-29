@@ -28,8 +28,6 @@ import { clearWorkoutCache } from './workout-storage';
  * - "Antrenörün Evde programını düzenledi" satırı: telefonda görülmediyse, [Gör] programı açar (görüldü olur).
  */
 
-const BOTTOM = 'gap-0 rounded-t-2xl pb-[env(safe-area-inset-bottom)] max-h-[calc(100dvh-max(1rem,env(safe-area-inset-top)))]';
-
 export type ProgramChoice = { id: string | null; name: string; lastDate?: string };
 
 /** Kalıcı seçimi yazar; Bugün'ün yanıtları ve telefondaki plan eskir. */
@@ -93,7 +91,7 @@ export function ProgramChip({
         <CaretDown data-icon="inline-end" />
       </Button>
       <Drawer open={open} onOpenChange={(next) => (busy ? undefined : setOpen(next))} onOpenChangeComplete={(isOpen) => (isOpen ? undefined : setPicked(undefined))}>
-        <DrawerContent showCloseButton={false} className={BOTTOM}>
+        <DrawerContent showCloseButton={false} className="gap-0" data-base-ui-swipe-ignore={busy || undefined}>
           <DrawerHeader className="gap-1.5 pt-5">
             <DrawerTitle id="program-choice-title" className="text-lg font-semibold">
               Hangi programla çalışacaksın?
