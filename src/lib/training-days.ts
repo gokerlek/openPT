@@ -178,7 +178,7 @@ export type WeekPlanDay = StripDay & { state: WeekPlanState; label: string | nul
  * Bugün'ün hafta şeridi (Faz 2): her gün yapıldı (oturumun adı; aynı gün birden çoksa sonuncusu) · kaçtı ·
  * sırada (bugün dahil ilk yapılmamış seçili gün) · planlı · dinlenme. Program modeli dönüş sırası olduğundan
  * sıradaki ve sonraki seçili günlerin adı dönüşten tahmindir (`rotation.next`'ten başlayıp sarar; tam sayı
- * değilse 0, eksi ya da listeden büyükse listeye sarılır: sıradaki gün bulunamadığında -1 gelebilir); Faz 3'te
+ * değilse baştan, eksi ya da listeden büyükse listeye sarılarak: bozuk sıra adları düşürmez); Faz 3'te
  * gün ↔ antrenman eşlemesi gelince bu tahmin kalkar.
  */
 export function weekPlan(input: {

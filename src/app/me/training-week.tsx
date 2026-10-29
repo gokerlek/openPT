@@ -10,7 +10,19 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Skeleton } from '@/components/ui/skeleton';
 import { formatDayShort } from '@/lib/format';
-import { todayState, todayStatusText, WEEKDAY_NAMES, WEEKDAY_SHORT, weekStrip, weekTarget, type StripDay } from '@/lib/training-days';
+import {
+  dayShortName,
+  relativeDayText,
+  todayState,
+  todayStatusText,
+  WEEKDAY_NAMES,
+  WEEKDAY_SHORT,
+  weekPlan,
+  weekStrip,
+  weekTarget,
+  type WeekPlanDay,
+  type WeekPlanState,
+} from '@/lib/training-days';
 import { cn } from '@/lib/utils';
 import type { WorkoutSchedule } from '@/lib/workout-plan';
 import type { WorkoutResponse } from '@/lib/workout-routes';
@@ -22,8 +34,9 @@ import { clearWorkoutCache, readWorkoutCache } from './workout-storage';
  * Bugün kartının antrenman günleri parçaları (tasarım §2.1, §2.3, §2.11) — istemcide, `GET /api/me/workout`
  * yanıtından (`useWorkoutOverview`):
  * - üst satır: "Bugün antrenman günün · Gün B" ya da "Dinlenme günü · sıradaki antrenman Çarşamba (Gün B)";
- * - 7 günlük şerit (pazartesi başlar): seçili günler halkalı, yapılanlar dolu, kaçanlar soluk; altında
- *   "Günlerini değiştir";
+ * - 7 günlük şerit (pazartesi başlar): seçili günler halkalı, yapılanlar dolu, kaçanlar soluk, sıradaki kalın
+ *   halkalı; halkanın altında günün antrenmanı (yapılanda oturumun adı, ilerisinde dönüşten tahmin, `weekPlan`),
+ *   kaçanda "kaçtı"; altında "Sırada: yarın · Gün B" ve "Günlerini değiştir";
  * - "Başka gün seç": gün sheet'i, antrenörüne bildirilir (kendi programda değil), sıra seçilen günden sürer;
  * - telefondaki gün planının tazeliği: sunucuda taze okunan programın damgası saklanan planınkinden
  *   farklıysa (PT programı değiştirdi) saklanan plan atılır, "Antrenmana başla" güncel planı açar.
@@ -39,22 +52,44 @@ export function DayStatus({ clientId, dayName }: { clientId: string; dayName: st
   return <>{todayStatusText(state, data.today, dayName)}</>;
 }
 
-function dayLabel(day: StripDay): string {
-  const parts = [WEEKDAY_NAMES[day.weekday], day.today ? 'bugün' : null, day.selected ? 'antrenman günü' : 'dinlenme günü', day.done ? 'antrenman yapıldı' : day.missed ? 'kaçırıldı' : null];
-  return parts.filter(Boolean).join(', ');
+/** Halkanın altındaki kelime ve ekran okuyucu satırındaki karşılığı; seçili ama pencereden önceki gün "dinlenme" değil. */
+function stateText(day: WeekPlanDay): string {
+  const text: Record<WeekPlanState, string> = { done: 'yapıldı', missed: 'kaçtı', next: 'sırada', planned: 'antrenman günü', rest: 'dinlenme' };
+  return day.state === 'rest' && day.selected ? 'antrenman günü' : text[day.state];
 }
 
-/** Yedi günlük şerit ve "Günlerini değiştir". */
+/** Ekran okuyucu: "Çarşamba, bugün, sırada: Gün B", "Pazartesi, yapıldı: Gün A", "Salı, dinlenme". */
+function dayLabel(day: WeekPlanDay): string {
+  const state = stateText(day);
+  return [WEEKDAY_NAMES[day.weekday], day.today ? 'bugün' : null, day.label ? `${state}: ${day.label}` : state].filter(Boolean).join(', ');
+}
+
+/**
+ * Şeridin günleri: program varsa `weekPlan` (dönüş `nextDayId`'nin sırasından; bulunamazsa ilk gün, "Başka gün
+ * seç" gibi); yoksa bugünkü şerit (sıradaki işaretlenmez, ad yok). Program kurulmadan, günler değişmeden ya da
+ * danışan katılmadan önceki günler kaçmış sayılmaz (Genel bakış'la aynı kural).
+ */
+function planOf(data: WorkoutResponse, schedule: WorkoutSchedule): WeekPlanDay[] {
+  const base = { today: data.today, weekdays: schedule.weekdays, since: schedule.since };
+  if (!data.program) {
+    return weekStrip({ ...base, doneDays: data.week.days }).map((day): WeekPlanDay => ({ ...day, state: day.done ? 'done' : day.missed ? 'missed' : 'rest', label: null }));
+  }
+  const { days, nextDayId } = data.program;
+  const next = Math.max(0, days.findIndex((day) => day.id === nextDayId));
+  return weekPlan({ ...base, doneDays: data.week.days, sessions: data.week.sessions ?? [], rotation: { names: days.map((day) => day.name), next } });
+}
+
+/** Yedi günlük şerit, sıradaki gün ve "Günlerini değiştir". */
 export function WeekStrip({ clientId }: { clientId: string }) {
   const { data, isPending } = useWorkoutOverview(clientId);
   const queryClient = useQueryClient();
   const program = useWorkoutProgram();
   const [open, setOpen] = useState(false);
-  if (isPending && !data) return <Skeleton className="h-[6.25rem] w-full rounded-lg" />;
+  if (isPending && !data) return <Skeleton className="h-[9.5rem] w-full rounded-lg" />;
   if (!data?.schedule) return null;
   const schedule = data.schedule;
-  // Program kurulmadan, günler değişmeden ya da danışan katılmadan önceki günler kaçmış sayılmaz (Genel bakış'la aynı kural).
-  const strip = weekStrip({ today: data.today, weekdays: schedule.weekdays, doneDays: data.week.days, since: schedule.since });
+  const days = planOf(data, schedule);
+  const upcoming = days.find((day) => day.state === 'next');
 
   const saved = (next: WorkoutSchedule) => {
     // Hemen görünsün; sonra sunucudan taze (plan damgası değişti, telefondaki plan da yenilenir).
@@ -68,25 +103,51 @@ export function WeekStrip({ clientId }: { clientId: string }) {
   return (
     <div className="flex flex-col gap-1">
       <ol className="grid grid-cols-7 gap-1" aria-label="Bu haftanın günleri">
-        {strip.map((day) => (
-          <li key={day.date} className={cn('flex flex-col items-center gap-1.5 rounded-lg py-1.5', day.today && 'bg-muted')}>
-            <span className="sr-only">{dayLabel(day)}</span>
-            <span aria-hidden className={cn('text-xs', day.today ? 'font-semibold text-foreground' : 'text-muted-foreground')}>
-              {WEEKDAY_SHORT[day.weekday]}
-            </span>
-            <span
-              aria-hidden
-              className={cn(
-                'flex size-7 items-center justify-center rounded-full',
-                day.done && 'bg-primary text-primary-foreground',
-                !day.done && day.selected && !day.missed && 'ring-2 ring-primary-text ring-inset',
-                day.missed && 'opacity-40 ring-2 ring-muted-foreground ring-inset',
-              )}>
-              {day.done ? <Check weight="bold" className="size-3.5" /> : !day.selected ? <span className="size-1.5 rounded-full bg-muted-foreground/40" /> : null}
-            </span>
-          </li>
-        ))}
+        {days.map((day) => {
+          const isNext = day.state === 'next';
+          const short = day.state === 'missed' ? stateText(day) : day.label ? dayShortName(day.label) : null;
+          return (
+            <li key={day.date} className={cn('flex min-w-0 flex-col items-center gap-1.5 rounded-lg py-1.5', day.today && 'bg-muted')}>
+              <span className="sr-only">{dayLabel(day)}</span>
+              <span aria-hidden className={cn('text-xs', day.today || isNext ? 'font-semibold text-foreground' : 'text-muted-foreground')}>
+                {WEEKDAY_SHORT[day.weekday]}
+              </span>
+              <span
+                aria-hidden
+                className={cn(
+                  'flex size-7 items-center justify-center rounded-full',
+                  day.done && 'bg-primary text-primary-foreground',
+                  isNext && 'ring-4 ring-primary-text ring-inset',
+                  !day.done && !isNext && day.selected && !day.missed && 'ring-2 ring-primary-text ring-inset',
+                  day.missed && 'opacity-40 ring-2 ring-muted-foreground ring-inset',
+                )}>
+                {day.done ? <Check weight="bold" className="size-3.5" /> : !day.selected ? <span className="size-1.5 rounded-full bg-muted-foreground/40" /> : null}
+              </span>
+              {/* Sütun ~41 px (375 px'te 7 sütun): uzun ad kesilir; py-px Türkçe işaretleri (ç, Ü) kırpılmasın diye. Boşken de yer tutar. */}
+              <span
+                aria-hidden
+                className={cn(
+                  'block w-full truncate px-0.5 py-px text-center text-[0.6875rem] leading-none',
+                  isNext ? 'font-semibold text-foreground' : 'text-muted-foreground',
+                  day.missed && 'opacity-70',
+                )}>
+                {short ?? '\u00a0'}
+              </span>
+            </li>
+          );
+        })}
       </ol>
+      {upcoming ? (
+        <p className="text-center text-sm break-words text-muted-foreground">
+          Sırada: {upcoming.today ? 'bugün' : relativeDayText(upcoming.date, data.today)}
+          {upcoming.label ? (
+            <>
+              {' · '}
+              <span className="font-medium text-foreground">{upcoming.label}</span>
+            </>
+          ) : null}
+        </p>
+      ) : null}
       <Button variant="ghost" className="h-11 self-center px-3 text-muted-foreground" onClick={() => setOpen(true)}>
         {schedule.weekdays.length > 0 ? 'Günlerini değiştir' : 'Antrenman günlerini seç'}
       </Button>
