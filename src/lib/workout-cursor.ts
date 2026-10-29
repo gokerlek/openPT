@@ -72,7 +72,10 @@ export type CursorPosition = {
 export type WorkoutCursor = {
   /** Yapılış sırasında bütün birimler (geçilenler dahil). */
   units: CursorUnit[];
-  /** Sıradaki set; planın setleri bittiyse bekleyen fazladan set olabilir. */
+  /**
+   * Sıradaki set; planın setleri bittiyse bekleyen fazladan set olabilir. Odak verildiyse yalnız o birimin
+   * seti: birim bitince `allDone` false olsa da (başka birimlerde set kalsa da) null.
+   */
   next: CursorPosition | null;
   /** Geçilmemiş her planlı set yapıldı: "Antrenman tamamlandı, bitirelim mi?" (bekleyen fazladan set engellemez). */
   allDone: boolean;
@@ -254,7 +257,8 @@ export function workoutCursor(
   const members = units.flatMap((unit) => unit.members);
   const doneSets = members.reduce((sum, member) => sum + Math.min(member.done, member.planned), 0);
   const plannedSets = members.reduce((sum, member) => sum + (member.skipped ? Math.min(member.done, member.planned) : member.planned), 0);
-  // Odaktaki birim bittiyse "Hareket 2/5" yine o birimin sırası.
+  // Odaktaki birim bittiyse "Hareket 2/5" yine o birimin sırası. Geçilen ya da günde olmayan odakta (ve
+  // odaksız, set kalmadığında) `open.length`.
   const focused = focus == null ? undefined : units.find((unit) => unit.key === focus);
   const current = next
     ? open.indexOf(units[next.unit] as CursorUnit) + 1

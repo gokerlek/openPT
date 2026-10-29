@@ -5,7 +5,7 @@ import { sessionDocSchema, type SessionDoc } from './schemas/session.ts';
 import { at, DAY_A, DAY_B, programFile, singleBlock, W1, workingSet } from './testing/session-fixtures.ts';
 import { BENCH, CRUNCH, DB_PRESS, dayWithBlocks, DEVICES, PLANK, PUSH_UP, workoutDay } from './testing/workout-fixtures.ts';
 import { mergeAll } from './session-merge.ts';
-import { addExtraRound, cursorOf, logSet, newSessionDoc, nextSet, setViews } from './workout-session.ts';
+import { addExtraRound, cursorOf, easyShortcut, logSet, newSessionDoc, nextSet, setViews } from './workout-session.ts';
 import { nextMemberLetter } from './workout-groups.ts';
 import {
   addExercise,
@@ -44,6 +44,13 @@ function logNext(day: WorkoutDay, doc: SessionDoc, minute: number, random = sequ
   const next = nextSet(day, doc);
   if (!next) throw new Error('Set kalmadı.');
   return logSet(day, doc, { rowId: next.rowId, setIndex: next.setIndex, kg: next.kg, value: next.value, extra: next.extra === true, stamp: stamp(minute), random }).doc;
+}
+
+/** Liste + odak: odaktaki birimin sıradaki setini önceden dolu değerleriyle kaydeder. */
+function logFocused(day: WorkoutDay, doc: SessionDoc, focus: string, minute: number): SessionDoc {
+  const next = nextSet(day, doc, null, focus);
+  if (!next) throw new Error('Odakta set kalmadı.');
+  return logSet(day, doc, { rowId: next.rowId, setIndex: next.setIndex, kg: next.kg, value: next.value, stamp: stamp(minute), random: sequence() }).doc;
 }
 
 /** Gün A: Bench (3 set), Plank (2 × 30–45 sn), Goblet Squat (2 set). */
@@ -447,16 +454,26 @@ describe('liste + odak: imleç', () => {
     assert.equal(nextSet(day, doc, null, 'b_dddddd'), null);
     assert.equal(cursorOf(day, doc, 'b_dddddd').next, null);
     assert.equal(cursorOf(day, doc, 'b_dddddd').allDone, false);
+    // "Hareket 3/3" odaktaki birimin sırası kalır; odaksız imleç sıradaki bitmemiş birimde (Bench).
+    assert.equal(cursorOf(day, doc, 'b_dddddd').progress.currentUnit, 3);
+    assert.equal(cursorOf(day, doc).progress.currentUnit, 1);
   });
 
   test('antrenmanın son seti odakta da dinlenmesiz', () => {
     const day = threeDay();
     let doc = start(day);
-    for (let minute = 1; minute <= 5; minute += 1) doc = logNext(day, doc, minute); // Bench ve Plank biter
-    const first = nextSet(day, doc, null, 'b_dddddd');
-    assert.equal(first?.restAfterSeconds, 60);
-    doc = logNext(day, doc, 6);
-    assert.equal(nextSet(day, doc, null, 'b_dddddd')?.restAfterSeconds, 0);
+    // Sıra Bench → Plank → Goblet; danışan sondan başlar: Goblet ve Plank odakta biter, Bench en son.
+    for (let minute = 1; minute <= 2; minute += 1) doc = logFocused(day, doc, 'b_dddddd', minute);
+    for (let minute = 3; minute <= 4; minute += 1) doc = logFocused(day, doc, 'b_bbbbbb', minute);
+    // Biten odak sonda değilken de "Hareket 2/3" (yedek `open.length` 3 olurdu).
+    assert.equal(cursorOf(day, doc, 'b_bbbbbb').progress.currentUnit, 2);
+    const rests: (number | undefined)[] = [];
+    for (let minute = 5; minute <= 7; minute += 1) {
+      rests.push(nextSet(day, doc, null, 'b_aaaaaa')?.restAfterSeconds);
+      doc = logFocused(day, doc, 'b_aaaaaa', minute);
+    }
+    assert.deepEqual(rests, [90, 90, 0]);
+    assert.equal(cursorOf(day, doc).allDone, true);
   });
 
   test('grupta odak üyeler arasında turu izler; harf odaktan', () => {
@@ -473,10 +490,30 @@ describe('liste + odak: imleç', () => {
         ],
       },
     ]);
-    const doc = start(day);
-    assert.equal(nextSet(day, doc, null, 'b_eeeeee')?.rowId, 'r_ffffff');
+    let doc = start(day);
+    const first = nextSet(day, doc, null, 'b_eeeeee');
+    assert.deepEqual([first?.rowId, first?.round, first?.restAfterSeconds], ['r_ffffff', 0, 0]); // tur içinde dinlenme yok
     assert.equal(nextMemberLetter(day, doc, 'b_eeeeee'), 'B');
     assert.equal(nextMemberLetter(day, doc), null); // odaksız imleç tek harekette
+    doc = logFocused(day, doc, 'b_eeeeee', 1); // A, tur 0
+    const second = nextSet(day, doc, null, 'b_eeeeee');
+    // Tur sonu: blok dinlenmesi (Bench beklediği için antrenmanın son seti değil).
+    assert.deepEqual([second?.rowId, second?.round, second?.restAfterSeconds], ['r_eeeeee', 0, 90]);
+    assert.equal(nextMemberLetter(day, doc, 'b_eeeeee'), null);
+    doc = logFocused(day, doc, 'b_eeeeee', 2); // B, tur 0
+    const third = nextSet(day, doc, null, 'b_eeeeee');
+    assert.deepEqual([third?.rowId, third?.round], ['r_ffffff', 1]);
+  });
+
+  test('"Kolaydı" kısayolu odaktaki birimin sıradaki setine bakar', () => {
+    const day = threeDay();
+    const next = nextSet(day, start(day), null, 'b_dddddd');
+    assert.ok(next);
+    // Goblet'in ilk seti aralığın tepesinde (12); odaksız imleç Bench'te.
+    const { doc, setId } = logSet(day, start(day), { rowId: next.rowId, setIndex: next.setIndex, kg: next.kg, value: 12, stamp: stamp(1), random: sequence() });
+    // Goblet'in sıradaki seti 4 → 6 kg (Bench'in ağırlığı değil).
+    assert.deepEqual(easyShortcut(day, doc, setId, 'b_dddddd'), { kg: 6, taken: false });
+    assert.equal(easyShortcut(day, doc, setId), null);
   });
 
   test('geçilen birime odak: set yok (önce "Geri al")', () => {
