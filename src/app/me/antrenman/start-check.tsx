@@ -84,6 +84,8 @@ export function StartCheck({
   const [answers, setAnswers] = useState<StartAnswers>({});
   const [outcome, setOutcome] = useState<StartOutcome | null>(null);
   const latest = useRef(local);
+  // Soruda kaydırarak kapattı: bu açılışta yeniden açılmaz (önbellekten açıldıysa taze girdi gelince de).
+  const dismissed = useRef(false);
   const sessionId = local.doc.id;
 
   useEffect(() => {
@@ -94,12 +96,13 @@ export function StartCheck({
   useEffect(() => {
     void flushCheckIns(clientId);
     if (!isFreshStart(latest.current.doc) || checkAsked(clientId, sessionId)) return;
+    dismissed.current = false;
     const controller = new AbortController();
     const show = (data: CheckInResponse) => {
       const current = latest.current;
       if (current.doc.id !== sessionId || !isFreshStart(current.doc) || checkAsked(clientId, sessionId)) return;
       setContext(data);
-      setOpen(asksAnything(data.parts));
+      if (!dismissed.current) setOpen(asksAnything(data.parts));
     };
     const cached = readCheckCache(clientId);
     if (cached) show(cached.data);
@@ -160,7 +163,9 @@ export function StartCheck({
     if (next) return;
     // Soruda aşağı kaydırma (ya da ekran okuyucunun gizli "Kapat"ı) yalnız kapatır: cevap da atlama da
     // sayılmaz, yoklama bir sonraki açılışta yeniden sorulur. Öteki adımlar sürüklenmez; seçim düğmelerle.
-    if (step === 'ask' && (details.reason === 'swipe' || details.reason === 'close-press')) {
+    // Android'in geri hareketi (`close-watcher`) de kaydırma gibi.
+    if (step === 'ask' && (details.reason === 'swipe' || details.reason === 'close-press' || details.reason === 'close-watcher')) {
+      dismissed.current = true;
       setOpen(false);
       return;
     }
