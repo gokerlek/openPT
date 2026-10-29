@@ -93,8 +93,8 @@ function RowBody({ item }: { item: FlowItem }) {
 const ROW = 'flex min-h-13 min-w-0 flex-1 items-center gap-2.5 rounded-md pl-1.5 text-left';
 
 /**
- * ☰ Antrenman akışı (tasarım §2.6): yapılış sırasında hareketler ve durumları; satıra dokunmak "Şimdi
- * yap", [Geç] tek dokunuşla sona alır (sona alınmışsa Geçilenler'e). Geçilenler'de [Geri al]. En altta
+ * ☰ Antrenman akışı (tasarım §2.6): yapılış sırasında hareketler ve durumları; satıra dokunmak o hareketi
+ * açar (sıra değişmez; biten hareket setleriyle), [Geç] tek dokunuşla sona alır (sona alınmışsa Geçilenler'e). Geçilenler'de [Geri al]. En altta
  * "Hareket ekle" (yalnız bu antrenmana). Sıra değişince satır yerine kayar (`layout`) ve bir an vurgulu
  * kalır (`highlight`, `DRAG.highlightMs`).
  */
@@ -111,7 +111,7 @@ export function FlowSheet({
   onOpenChange,
   view,
   highlight,
-  onJump,
+  onOpen,
   onSkip,
   onRestore,
   onAdd,
@@ -122,7 +122,8 @@ export function FlowSheet({
   view: FlowView;
   /** Az önce yeri değişen birim. */
   highlight: string | null;
-  onJump: (key: string) => void;
+  /** Satıra dokunmak: hareket odakta açılır (Faz 2), sıra yazılmaz. */
+  onOpen: (key: string) => void;
   onSkip: (key: string) => void;
   onRestore: (key: string) => void;
   onAdd: () => void;
@@ -148,7 +149,6 @@ export function FlowSheet({
           <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={({active,over})=>{if(over)onReorder(String(active.id),String(over.id));}}>
           <ul className="flex flex-col">
             {view.active.map((item,index) => {
-              const jumpable = item.state !== 'done' && item.state !== 'current';
               return (
                 <DragFlowRow
                   key={item.key} item={item} onReorder={onReorder} previous={view.active[index-1]?.key} next={view.active[index+1]?.key}
@@ -156,19 +156,13 @@ export function FlowSheet({
                     'flex items-center gap-2 rounded-md border-t transition-colors duration-300 first:border-t-0',
                     (item.state === 'current' || item.key === highlight) && 'border-transparent bg-primary/10 [&+li]:border-t-transparent',
                   )}>
-                  {jumpable ? (
-                    <button
-                      type="button"
-                      aria-label={`${titleOf(item)}: şimdi yap`}
-                      onClick={() => onJump(item.key)}
-                      className={cn(ROW, 'outline-none focus-visible:ring-3 focus-visible:ring-ring/50')}>
-                      <RowBody item={item} />
-                    </button>
-                  ) : (
-                    <div className={ROW}>
-                      <RowBody item={item} />
-                    </div>
-                  )}
+                  <button
+                    type="button"
+                    aria-label={`${titleOf(item)} (${{ done: 'yapıldı', current: 'şimdi', moved: 'sona alındı', pending: 'sırada', skipped: 'geçildi' }[item.state]}): aç`}
+                    onClick={() => onOpen(item.key)}
+                    className={cn(ROW, 'outline-none focus-visible:ring-3 focus-visible:ring-ring/50')}>
+                    <RowBody item={item} />
+                  </button>
                   {item.state !== 'done' ? (
                     <Button variant="outline" className="h-11 shrink-0 px-3.5" aria-label={`${titleOf(item)}: geç`} onClick={() => onSkip(item.key)}>
                       Geç
