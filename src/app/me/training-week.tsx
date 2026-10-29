@@ -16,6 +16,7 @@ import {
   WEEKDAY_NAMES,
   WEEKDAY_SHORT,
   weekPlan,
+  weekRotation,
   weekStrip,
   weekTarget,
   type WeekPlanDay,
@@ -33,8 +34,9 @@ import { clearWorkoutCache, readWorkoutCache } from './workout-storage';
  * yanıtından (`useWorkoutOverview`); kartın başlığı ("Çarşamba · Gün B") sunucuda çizilir (`program-card.tsx`):
  * - 7 günlük şerit (pazartesi başlar): seçili günler halkalı, yapılanlar dolu, kaçanlar ve pencereden önceki
  *   geçmiş seçili günler soluk halkalı, sıradaki kalın halkalı; halkanın altında günün antrenmanı (yapılanda
- *   oturumun adı, ilerisinde dönüşten tahmin, `weekPlan`), kaçanda "kaçtı"; altında "Sırada: yarın · Gün B"
- *   (kart başlığı zaten sıradaki günü söylüyorsa gizlenir, `showNext`) ve "Günlerini değiştir";
+ *   oturumun adı, ilerisinde dönüşten tahmin, `weekPlan`; bugün başlamış yarım antrenman varsa onun gününden),
+ *   kaçanda "kaçtı"; altında "Sırada: yarın · Gün B" (kart başlığı zaten sıradaki günü söylüyorsa gizlenir,
+ *   `showNext`) ve "Günlerini değiştir"; program kartında ve yarım antrenmanın "Devam et" kartında;
  * - "Başka gün seç": gün sheet'i, antrenörüne bildirilir (kendi programda değil), sıra seçilen günden sürer;
  * - telefondaki gün planının tazeliği: sunucuda taze okunan programın damgası saklanan planınkinden
  *   farklıysa (PT programı değiştirdi) saklanan plan atılır, "Antrenmana başla" güncel planı açar.
@@ -59,19 +61,22 @@ function dayLabel(day: WeekPlanDay, today: string): string {
   return [WEEKDAY_NAMES[day.weekday], day.today ? 'bugün' : null, day.label ? `${state}: ${day.label}` : state].filter(Boolean).join(', ');
 }
 
+/** Yarım antrenmanın günü ve başlangıç tarihi (`SessionDoc.program.dayId`, `SessionDoc.date`). */
+export type ActiveDay = { dayId: string; date: string };
+
 /**
- * Şeridin günleri: program varsa `weekPlan` (dönüş `nextDayId`'nin sırasından; bulunamazsa ilk gün, "Başka gün
- * seç" gibi); yoksa bugünkü şerit (sıradaki işaretlenmez, ad yok). Program kurulmadan, günler değişmeden ya da
- * danışan katılmadan önceki günler kaçmış sayılmaz (Genel bakış'la aynı kural).
+ * Şeridin günleri: program varsa `weekPlan` (dönüş `weekRotation`'dan: `nextDayId`'nin sırası, bulunamazsa ilk
+ * gün, "Başka gün seç" gibi; bugün başlamış yarım antrenman varsa onun günü, dönüş yalnız bitişte ilerler); yoksa
+ * bugünkü şerit (sıradaki işaretlenmez, ad yok). Program kurulmadan, günler değişmeden ya da danışan katılmadan
+ * önceki günler kaçmış sayılmaz (Genel bakış'la aynı kural).
  */
-function planOf(data: WorkoutResponse, schedule: WorkoutSchedule): WeekPlanDay[] {
+function planOf(data: WorkoutResponse, schedule: WorkoutSchedule, active: ActiveDay | null): WeekPlanDay[] {
   const base = { today: data.today, weekdays: schedule.weekdays, since: schedule.since };
   if (!data.program) {
     return weekStrip({ ...base, doneDays: data.week.days }).map((day): WeekPlanDay => ({ ...day, state: day.done ? 'done' : day.missed ? 'missed' : 'rest', label: null }));
   }
-  const { days, nextDayId } = data.program;
-  const next = Math.max(0, days.findIndex((day) => day.id === nextDayId));
-  return weekPlan({ ...base, doneDays: data.week.days, sessions: data.week.sessions ?? [], rotation: { names: days.map((day) => day.name), next } });
+  const rotation = weekRotation({ days: data.program.days, nextDayId: data.program.nextDayId, today: data.today, active });
+  return weekPlan({ ...base, doneDays: data.week.days, sessions: data.week.sessions ?? [], rotation });
 }
 
 /**
@@ -79,8 +84,10 @@ function planOf(data: WorkoutResponse, schedule: WorkoutSchedule): WeekPlanDay[]
  *
  * `showNext` (varsayılan açık): şeridin altındaki "Sırada: Çarşamba · Gün B" satırı. Kartın başlığı sıradaki günü
  * zaten söylüyorsa (program kartı, "Çarşamba · Gün B") çağıran `showNext={false}` verir; satır tekrarlanmaz.
+ *
+ * `activeDay`: yarım antrenman varsa ("Devam et" kartı) onun günü; bugün başladıysa şerit o günden sürer.
  */
-export function WeekStrip({ clientId, showNext = true }: { clientId: string; showNext?: boolean }) {
+export function WeekStrip({ clientId, showNext = true, activeDay = null }: { clientId: string; showNext?: boolean; activeDay?: ActiveDay | null }) {
   const { data, isPending } = useWorkoutOverview(clientId);
   const queryClient = useQueryClient();
   const router = useRouter();
@@ -91,7 +98,7 @@ export function WeekStrip({ clientId, showNext = true }: { clientId: string; sho
   if (isPending) return <Skeleton className={cn('w-full rounded-lg', showNext ? 'h-[9.5625rem]' : 'h-[8.0625rem]')} />;
   if (!data?.schedule) return null;
   const schedule = data.schedule;
-  const days = planOf(data, schedule);
+  const days = planOf(data, schedule, activeDay);
   const upcoming = days.find((day) => day.state === 'next');
 
   const saved = (next: WorkoutSchedule) => {

@@ -174,12 +174,26 @@ export function weekStrip(input: { today: string; weekdays: readonly number[]; d
 export type WeekPlanState = 'done' | 'missed' | 'next' | 'planned' | 'rest';
 export type WeekPlanDay = StripDay & { state: WeekPlanState; label: string | null };
 
+/** Hafta şeridinin dönüşü: günlerin adları ve sıranın başladığı yer (`weekPlan`, `weekRotation`). */
+export type WeekRotation = {
+  names: readonly string[];
+  /** Programın sıradaki günü (`nextDayId`'nin sırası). */
+  next: number;
+  /**
+   * Bugün başlamış yarım antrenmanın günü (`names`'teki sırası): dönüş yalnız bitişte ilerler, bugünkü antrenman o
+   * günü yapar ("Başka gün seç"te sıradaki günden farklı). Bugün açık bir antrenman günüyse (seçili, bugün bitmiş
+   * antrenman yok) bugün o gün "sırada"; değilse (dinlenme günü ya da bugün bir antrenman zaten bitti) sonraki seçili
+   * günler onun arkasından sürer. Yoksa (null) `next`.
+   */
+  active?: number | null;
+};
+
 /**
  * Bugün'ün hafta şeridi (Faz 2): her gün yapıldı (oturumun adı; aynı gün birden çoksa sonuncusu) · kaçtı ·
  * sırada (bugün dahil ilk yapılmamış seçili gün) · planlı · dinlenme. Program modeli dönüş sırası olduğundan
- * sıradaki ve sonraki seçili günlerin adı dönüşten tahmindir (`rotation.next`'ten başlayıp sarar; tam sayı
- * değilse baştan, eksi ya da listeden büyükse listeye sarılarak: bozuk sıra adları düşürmez); Faz 3'te
- * gün ↔ antrenman eşlemesi gelince bu tahmin kalkar.
+ * sıradaki ve sonraki seçili günlerin adı dönüşten tahmindir (`rotation.next`'ten, bugün yarım antrenman varsa
+ * `rotation.active`'ten başlayıp sarar; tam sayı değilse baştan, eksi ya da listeden büyükse listeye sarılarak:
+ * bozuk sıra adları düşürmez); Faz 3'te gün ↔ antrenman eşlemesi gelince bu tahmin kalkar.
  */
 export function weekPlan(input: {
   today: string;
@@ -188,14 +202,23 @@ export function weekPlan(input: {
   doneDays?: Iterable<string>;
   sessions: readonly { date: string; dayName: string }[];
   since?: string | null | undefined;
-  rotation: { names: readonly string[]; next: number };
+  rotation: WeekRotation;
 }): WeekPlanDay[] {
   const done = new Map(input.sessions.map((session) => [session.date, session.dayName]));
   const doneDays = new Set([...(input.doneDays ?? []), ...done.keys()]);
   const strip = weekStrip({ today: input.today, weekdays: input.weekdays, doneDays, since: input.since });
-  const { names } = input.rotation;
+  const { names, next, active } = input.rotation;
   const len = names.length;
-  const base = len && Number.isInteger(input.rotation.next) ? ((input.rotation.next % len) + len) % len : 0;
+  const wrap = (value: number) => ((value % len) + len) % len;
+  // Yarım antrenman bugünü kaplar: bugün açık antrenman günü değilse sonraki seçili gün onun arkasındaki gün.
+  const todayOpen = strip.some((day) => day.today && day.selected && !day.done);
+  const base = !len
+    ? 0
+    : typeof active === 'number' && Number.isInteger(active)
+      ? wrap(active + (todayOpen ? 0 : 1))
+      : Number.isInteger(next)
+        ? wrap(next)
+        : 0;
   let step = 0;
   return strip.map((day): WeekPlanDay => {
     if (day.done) return { ...day, state: 'done', label: done.get(day.date) ?? null };
@@ -206,6 +229,24 @@ export function weekPlan(input: {
     step += 1;
     return { ...day, state, label };
   });
+}
+
+/**
+ * Hafta şeridinin dönüşü programın günlerinden (`weekPlan`'ın `rotation`'ı): sıra `nextDayId`'nin yerinden
+ * (bulunamazsa ilk gün, "Başka gün seç" gibi). Yarım antrenman bugün başladıysa ve günü bu günlerdeyse `active`
+ * onun sırası: dönüş bitişte ilerlediği için şerit onun gününden sürer. Önceki günden kalan yarım antrenman tahmine
+ * girmez (bugün sürdürülür mü, bitirilir mi bilinmez); başka evrenin ya da programın günü de.
+ */
+export function weekRotation(input: {
+  days: readonly { id: string; name: string }[];
+  nextDayId: string | null;
+  today: string;
+  active?: { dayId: string; date: string } | null | undefined;
+}): WeekRotation {
+  const { days, active } = input;
+  const next = Math.max(0, days.findIndex((day) => day.id === input.nextDayId));
+  const activeIndex = active && active.date === input.today ? days.findIndex((day) => day.id === active.dayId) : -1;
+  return { names: days.map((day) => day.name), next, active: activeIndex >= 0 ? activeIndex : null };
 }
 
 /**

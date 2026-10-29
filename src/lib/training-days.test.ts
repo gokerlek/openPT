@@ -23,6 +23,7 @@ import {
   weekdaysChangeText,
   weekdaysText,
   weekPlan,
+  weekRotation,
   weekStrip,
   weekTarget,
 } from './training-days.ts';
@@ -226,6 +227,47 @@ describe('hafta planı', () => {
         item.name,
       );
     }
+  });
+
+  test('bugün başlamış yarım antrenman: şerit onun gününden sürer', () => {
+    const pairs = (days: ReturnType<typeof weekPlan>) => days.map((day) => [day.state, day.label]);
+    const rest = ['rest', null];
+    // Çarşamba bugün, sıradaki Gün A ama "Başka gün seç"le Gün B başladı: bugün Gün B, cuma onun arkasından Gün C.
+    assert.deepEqual(
+      pairs(weekPlan({ today: '2026-10-28', weekdays: [1, 3, 5], sessions: [{ date: '2026-10-26', dayName: 'Gün C' }], since: null, rotation: { ...rotation, next: 0, active: 1 } })),
+      [['done', 'Gün C'], rest, ['next', 'Gün B'], rest, ['planned', 'Gün C'], rest, rest],
+    );
+    // Dinlenme günü (salı) başlanan Gün B: bugünü kaplar, sıradaki seçili gün onun arkasındaki Gün C.
+    assert.deepEqual(
+      pairs(weekPlan({ today: '2026-10-27', weekdays: [1, 3, 5], sessions: [{ date: '2026-10-26', dayName: 'Gün A' }], since: null, rotation: { ...rotation, active: 1 } })),
+      [['done', 'Gün A'], rest, ['next', 'Gün C'], rest, ['planned', 'Gün A'], rest, rest],
+    );
+    // Bugün bir antrenman bitti, ikincisi (Gün C) yarım: bugün yapıldı, cuma Gün C'nin arkasından Gün A.
+    assert.deepEqual(
+      pairs(weekPlan({ today: '2026-10-28', weekdays: [1, 3, 5], sessions: [{ date: '2026-10-28', dayName: 'Gün B' }], since: null, rotation: { ...rotation, active: 2 } })),
+      [['missed', null], rest, ['done', 'Gün B'], rest, ['next', 'Gün A'], rest, rest],
+    );
+    // Yarım antrenman yok ya da sırası bozuk: `next`.
+    for (const active of [null, undefined, Number.NaN, 1.5]) {
+      assert.deepEqual(
+        pairs(weekPlan({ today: '2026-10-28', weekdays: [1, 3, 5], sessions: [], since: null, rotation: { ...rotation, active } })).slice(2, 5),
+        [['next', 'Gün B'], rest, ['planned', 'Gün C']],
+        String(active),
+      );
+    }
+  });
+
+  test('şeridin dönüşü programın günlerinden: sıradaki gün, bugünkü yarım antrenmanın günü', () => {
+    const days = [{ id: 'd_a', name: 'Gün A' }, { id: 'd_b', name: 'Gün B' }, { id: 'd_c', name: 'Gün C' }];
+    const today = '2026-10-28';
+    assert.deepEqual(weekRotation({ days, nextDayId: 'd_b', today }), { names: ['Gün A', 'Gün B', 'Gün C'], next: 1, active: null });
+    assert.equal(weekRotation({ days, nextDayId: 'd_x', today }).next, 0, 'bulunamayan sıradaki gün: ilk gün');
+    assert.equal(weekRotation({ days, nextDayId: null, today }).next, 0);
+    assert.equal(weekRotation({ days, nextDayId: 'd_a', today, active: { dayId: 'd_c', date: today } }).active, 2);
+    assert.equal(weekRotation({ days, nextDayId: 'd_a', today, active: { dayId: 'd_c', date: '2026-10-27' } }).active, null, 'dünden kalan yarım antrenman');
+    assert.equal(weekRotation({ days, nextDayId: 'd_a', today, active: { dayId: 'd_x', date: today } }).active, null, 'başka evrenin ya da programın günü');
+    assert.equal(weekRotation({ days, nextDayId: 'd_a', today, active: null }).active, null);
+    assert.deepEqual(weekRotation({ days: [], nextDayId: null, today, active: { dayId: 'd_a', date: today } }), { names: [], next: 0, active: null });
   });
 
   test('kısa ad: "Gün …" → ardından gelen her şey, ötekinde ilk sözcük', () => {
