@@ -5,7 +5,7 @@ import { sessionDocSchema, type SessionDoc } from './schemas/session.ts';
 import { at, DAY_A, DAY_B, programFile, sessionDoc, sessionEntry, singleBlock, W1, workingSet } from './testing/session-fixtures.ts';
 import { BENCH, CRUNCH, DB_PRESS, dayWithBlocks, DEVICES, PLANK, PUSH_UP, workoutDay } from './testing/workout-fixtures.ts';
 import { mergeAll } from './session-merge.ts';
-import { addExtraRound, afterLog, cursorOf, easyShortcut, logSet, newSessionDoc, nextSet, setViews } from './workout-session.ts';
+import { addExtraRound, afterLog, cursorOf, easyShortcut, logSet, logWarmup, newSessionDoc, nextSet, setViews } from './workout-session.ts';
 import { nextMemberLetter } from './workout-groups.ts';
 import {
   addExercise,
@@ -597,17 +597,67 @@ describe('liste + odak: liste', () => {
       ],
     );
     assert.equal(view.current, 'b_dddddd');
-    assert.equal(listView(day, doc, 'b_aaaaaa').current, 'b_aaaaaa');
+    assert.deepEqual([view.doneSets, view.plannedSets, view.allDone], [3, 5, false]);
+    // Odak biten birimdeyse de satırı "bitti"; imlecin birimi "sırada".
+    const focused = listView(day, doc, 'b_aaaaaa');
+    assert.equal(focused.current, 'b_aaaaaa');
+    assert.deepEqual(focused.items.map((item) => item.state), ['done', 'pending', 'skipped']);
+  });
+
+  test('geçersiz odak (günde olmayan ya da atlanan birim) yok sayılır', () => {
+    const day = threeDay();
+    let doc = logNext(day, start(day), 1); // Bench 1/3
+    doc = dropAt(day, doc, 'b_bbbbbb', stamp(2));
+    for (const focus of ['b_zzzzzz', 'b_bbbbbb']) {
+      const view = listView(day, doc, focus);
+      assert.equal(view.current, 'b_aaaaaa', focus);
+      assert.deepEqual(view.items.map((item) => [item.key, item.state]), [['b_aaaaaa', 'current'], ['b_dddddd', 'pending'], ['b_bbbbbb', 'skipped']], focus);
+    }
   });
 
   test('son ağırlık: bugün kaydedilen son çalışma seti; yoksa null', () => {
     const day = threeDay();
     const first = nextSet(day, start(day));
     assert.ok(first);
-    const doc = logSet(day, start(day), { rowId: first.rowId, setIndex: first.setIndex, kg: 42.5, value: 10, stamp: stamp(1), random: sequence() }).doc;
+    let doc = logSet(day, start(day), { rowId: first.rowId, setIndex: first.setIndex, kg: 40, value: 10, stamp: stamp(1), random: sequence() }).doc;
+    const second = nextSet(day, doc);
+    assert.ok(second);
+    doc = logSet(day, doc, { rowId: second.rowId, setIndex: second.setIndex, kg: 42.5, value: 10, stamp: stamp(2), random: sequence() }).doc;
     const [bench, plank] = listView(day, doc).items;
     assert.deepEqual([bench?.lastKg, bench?.lastFrom], [42.5, 'today']);
     assert.deepEqual([plank?.lastKg, plank?.lastFrom], [null, null]);
+  });
+
+  test('son ağırlık grupta ağırlığı olan ilk üyenin', () => {
+    const day = dayWithBlocks([
+      {
+        id: 'b_eeeeee',
+        kind: 'superset',
+        restSeconds: 90,
+        rows: [
+          { id: 'r_eeeeee', exerciseId: 'push-up', sets: [{ min: 8, max: 12 }, { min: 8, max: 12 }] },
+          { id: 'r_ffffff', exerciseId: 'goblet-squat', sets: [{ min: 10, max: 12 }, { min: 10, max: 12 }] },
+        ],
+      },
+    ]);
+    let doc = logNext(day, start(day), 1); // Şınav: ağırlıksız
+    assert.deepEqual(listView(day, doc).items.map((item) => [item.lastKg, item.lastFrom]), [[null, null]]);
+    doc = logSet(day, doc, { rowId: 'r_ffffff', setIndex: 0, kg: 16, value: 10, stamp: stamp(2), random: sequence() }).doc;
+    assert.deepEqual(listView(day, doc).items.map((item) => [item.lastKg, item.lastFrom]), [[16, 'today']]);
+  });
+
+  test('son ağırlık: eklenen hareketin kendi kaydından', () => {
+    const day = threeDay();
+    const extra = rekeyExtra(addedRowFor({ key: 'dumbbell-press', exercise: DB_PRESS, devices: DEVICES, history: [] }), 'e_added1');
+    let doc = addExercise(day, start(day), { entryId: 'e_added1', extra, stamp: stamp(1), random: sequence() });
+    const live = effectiveDay(day, doc, { [extraKey('e_added1', extra.exerciseId)]: extra });
+    const next = nextSet(live, doc, null, 'e_added1');
+    assert.equal(next?.rowId, 'e_added1');
+    doc = logSet(live, doc, { rowId: 'e_added1', setIndex: 0, kg: 12.5, value: 10, stamp: stamp(2), random: sequence() }).doc;
+    // Etkin günde satırı kaydın kimliğiyle, düz günde plan dışı birim: ikisinde de kendi kaydı.
+    for (const view of [listView(live, doc), listView(day, doc)]) {
+      assert.deepEqual(view.items.map((item) => [item.key, item.lastKg, item.lastFrom]).at(-1), ['e_added1', 12.5, 'today']);
+    }
   });
 
   test('son ağırlık bugün yoksa geçen antrenmanın son seti', () => {
@@ -657,5 +707,44 @@ describe('liste + odak: liste', () => {
     assert.ok(last);
     doc = logSet(day, doc, { rowId: last.rowId, setIndex: last.setIndex, kg: last.kg, value: last.value, stamp: stamp(3), random: sequence() }).doc;
     assert.equal(listView(day, doc).current, 'b_aaaaaa');
+  });
+
+  test('"şu an" son set atlanan birimdeyse oraya dönmez', () => {
+    const day = threeDay();
+    let doc = logFocused(day, start(day), 'b_dddddd', 1); // Goblet 1/2
+    assert.equal(listView(day, doc).current, 'b_dddddd');
+    doc = dropAt(day, doc, 'b_dddddd', stamp(2));
+    assert.equal(listView(day, doc).current, 'b_aaaaaa');
+  });
+
+  test('ısınma seti "son set" ve "son ağırlık" sayılmaz', () => {
+    const base = threeDay();
+    const goblet = base.rows.r_dddddd;
+    assert.ok(goblet);
+    const day: WorkoutDay = { ...base, rows: { ...base.rows, r_dddddd: { ...goblet, warmups: [{ kg: 2, reps: 10 }] } } };
+    let doc = logNext(day, start(day), 1); // Bench 1/3
+    doc = logWarmup(day, doc, { rowId: 'r_dddddd', index: 0, stamp: stamp(2), random: sequence() });
+    const view = listView(day, doc);
+    assert.equal(view.current, 'b_aaaaaa');
+    assert.deepEqual(view.items.map((item) => [item.key, item.lastKg, item.lastFrom]).at(-1), ['b_dddddd', null, null]);
+  });
+
+  test('"şu an" bekleyen "+ Set ekle" setini saymaz; odaksız yalnız hepsi bitince null', () => {
+    const base = threeDay();
+    let doc = start(base);
+    for (let minute = 1; minute <= 3; minute += 1) doc = logNext(base, doc, minute); // Bench bitti
+    let day = withExtraRounds(base, addExtraRound(base, doc, 'b_aaaaaa'));
+    // İmleç Bench'in fazladan setinde; "şu an" planı bitmemiş ilk birim (Bugün'ün kartıyla aynı).
+    assert.deepEqual([nextSet(day, doc)?.rowId, nextSet(day, doc)?.extra], ['r_aaaaaa', true]);
+    const view = listView(day, doc);
+    assert.equal(view.current, 'b_bbbbbb');
+    assert.deepEqual(view.items.map((item) => item.state), ['done', 'current', 'pending']);
+    // Planın hepsi bitti, Bench'in fazladan seti bekliyor: "şu an" yok.
+    for (let minute = 4; minute <= 7; minute += 1) doc = logNext(base, doc, minute);
+    day = withExtraRounds(base, addExtraRound(base, doc, 'b_aaaaaa'));
+    assert.equal(nextSet(day, doc)?.extra, true);
+    const done = listView(day, doc);
+    assert.deepEqual([done.current, done.allDone], [null, true]);
+    assert.deepEqual(done.items.map((item) => item.state), ['done', 'done', 'done']);
   });
 });

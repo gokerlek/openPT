@@ -195,7 +195,11 @@ export type ListItem = Omit<FlowItem, 'state'> & {
 export type ListView = {
   /** Yapılış sırasında (atlanan birim `dropAt` ile sıranın sonuna iner). */
   items: ListItem[];
-  /** Şu an: odak; yoksa yarım bırakılan birim (son kaydedilen setinki); yoksa imlecin birimi; hepsi bittiyse null. */
+  /**
+   * Şu an: odak (günde olan, atlanmamış birim); yoksa yarım bırakılan birim (son kaydedilen çalışma setininki);
+   * yoksa planı bitmemiş ilk birim. Odaksız yalnız hepsi bittiyse (`allDone`) null: bekleyen "+ Set ekle" seti
+   * birimi "şu an" tutmaz.
+   */
   current: string | null;
   doneSets: number;
   plannedSets: number;
@@ -204,22 +208,27 @@ export type ListView = {
 
 /**
  * Antrenmanın listesi (tasarım Faz 2): durum (✓ bitti, ▶ şu an, ○ sırada, ⤼ atlandı), ad, yapılan/planlanan set
- * ve son ağırlık (grupta ilk üyenin). Danışan sırayı atlayıp başka bir hareketi yarım bıraktıysa "şu an" odur:
- * listeye dönünce "Devam et" onu gösterir. Biten birim odakta da "bitti" görünür.
+ * ve son ağırlık (grupta ağırlığı olan ilk üyenin). Danışan sırayı atlayıp başka bir hareketi yarım bıraktıysa
+ * "şu an" odur: listeye dönünce "Devam et" onu gösterir. Biten birim odakta da "bitti" görünür; günde olmayan ya
+ * da atlanan birime odak yok sayılır.
  */
 export function listView(day: WorkoutDay, doc: Pick<SessionDoc, 'entries' | 'order'>, focus?: string | null): ListView {
   const cursor = cursorOf(day, doc);
   const flow = flowView(day, doc);
+  const units = new Map(cursor.units.map((unit) => [unit.key, unit]));
   let latest: { entryId: string; at: string } | null = null;
   for (const entry of doc.entries) {
     for (const set of entry.sets) {
+      // Eşit saat yalnız iki cihazda olur: sırada sonraki birimin seti kazanır (kayıtlar yapılış sırasında).
       if (set.type === 'working' && (!latest || set.at >= latest.at)) latest = { entryId: entry.id, at: set.at };
     }
   }
   const inProgress = latest ? cursor.units.find((unit) => unit.members.some((member) => member.entryId === latest?.entryId)) : undefined;
   const active = inProgress && !isSkipped(inProgress) && !isFinished(inProgress) ? inProgress.key : null;
-  const current = focus ?? active ?? (cursor.next ? (cursor.units[cursor.next.unit]?.key ?? null) : null);
-  const units = new Map(cursor.units.map((unit) => [unit.key, unit]));
+  const focused = focus == null ? undefined : units.get(focus);
+  const validFocus = focused && !isSkipped(focused) ? focused.key : null;
+  const firstOpen = cursor.units.find((unit) => !isSkipped(unit) && !isFinished(unit));
+  const current = validFocus ?? active ?? firstOpen?.key ?? null;
   const rank = new Map(cursor.units.map((unit, index) => [unit.key, index]));
   const items = [...flow.active, ...flow.skipped]
     .sort((a, b) => (rank.get(a.key) ?? 0) - (rank.get(b.key) ?? 0))
@@ -231,14 +240,16 @@ export function listView(day: WorkoutDay, doc: Pick<SessionDoc, 'entries' | 'ord
   return { items, current, doneSets: flow.doneSets, plannedSets: flow.plannedSets, allDone: cursor.allDone };
 }
 
+/** Satırın ağırlığı: ağırlığı olan ilk üyenin bugünkü son çalışma seti, yoksa geçen antrenmanın son seti. */
 function lastWeightOf(day: WorkoutDay, doc: Pick<SessionDoc, 'entries'>, unit: CursorUnit | undefined): Pick<ListItem, 'lastKg' | 'lastFrom'> {
-  const member = unit?.members[0];
-  if (!member) return { lastKg: null, lastFrom: null };
-  const entry = member.rowId ? entryForRow(doc.entries, member.rowId) : doc.entries.find((item) => item.id === member.entryId);
-  const today = entry?.sets.filter((set) => set.type === 'working' && set.kg !== undefined).at(-1)?.kg;
-  if (today !== undefined) return { lastKg: today, lastFrom: 'today' };
-  const last = (member.rowId ? day.rows[member.rowId]?.lastTime : undefined)?.filter((set) => set.kg !== undefined).at(-1)?.kg;
-  return last !== undefined ? { lastKg: last, lastFrom: 'last' } : { lastKg: null, lastFrom: null };
+  for (const member of unit?.members ?? []) {
+    const entry = doc.entries.find((item) => item.id === member.entryId);
+    const today = entry?.sets.filter((set) => set.type === 'working' && set.kg !== undefined).at(-1)?.kg;
+    if (today !== undefined) return { lastKg: today, lastFrom: 'today' };
+    const last = (member.rowId ? day.rows[member.rowId]?.lastTime : undefined)?.filter((set) => set.kg !== undefined).at(-1)?.kg;
+    if (last !== undefined) return { lastKg: last, lastFrom: 'last' };
+  }
+  return { lastKg: null, lastFrom: null };
 }
 
 /* --- geç, bugün yapma, geri al, şimdi yap --- */
