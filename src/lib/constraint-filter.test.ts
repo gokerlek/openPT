@@ -198,6 +198,8 @@ describe('sıra ve danışanın notu', () => {
     const rowCare: RowCare = { kind: 'note', label: 'Sol diz', region: 'knee', side: 'left' };
     assert.equal(careLine(rowCare, 'Back Squat'), 'Sol diz için dikkat: Back Squat');
     assert.equal(careLine({ ...rowCare, kind: 'avoid' }, 'Back Squat'), 'Sol diz için değiştir: Back Squat');
+    // Kendi programda hareketi danışan seçti.
+    assert.equal(careLine({ ...rowCare, kind: 'avoid', own: true }, 'Back Squat'), 'Sol diz için önerilmiyor: Back Squat');
     assert.equal(careLine({ ...rowCare, kind: 'report' }, 'Back Squat'), 'Sol diz için dikkat: Back Squat');
   });
 });

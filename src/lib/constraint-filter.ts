@@ -382,7 +382,9 @@ export function rowCareText(care: RowCare): { title: string; text: string } {
 
 /** Bugün önizlemesinde hareketin kısıt satırı: "Sol diz için dikkat: Back Squat"; önerilmeyende "değiştir". */
 export function careLine(care: RowCare, title: string): string {
-  return `${care.label} için ${care.kind === 'avoid' ? 'değiştir' : 'dikkat'}: ${title}`;
+  // Kendi programda hareketi danışan seçti: "değiştir" yerine "önerilmiyor" (antrenman kartıyla aynı dil, `rowCareText`).
+  const verb = care.kind === 'avoid' ? (care.own ? 'önerilmiyor' : 'değiştir') : 'dikkat';
+  return `${care.label} için ${verb}: ${title}`;
 }
 
 /** "Değiştir"deki kısa satır ("Sol diz için dikkatli"). */

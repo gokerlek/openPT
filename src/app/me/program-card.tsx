@@ -27,7 +27,7 @@ import { OtherDayButton, WeekStrip, WorkoutFreshness } from './training-week';
 
 const NO_CARE: TodayCare = { stamp: '', input: null };
 
-/** Bugün kartında görünen kısıt satırı sayısı; fazlası "+n hareket daha". */
+/** Bugün kartında görünen kısıt satırı sayısı; fazlası "+n harekette daha not var". */
 const CARE_LINES = 2;
 
 /**
@@ -38,6 +38,7 @@ function dayCare(
   blocks: readonly TemplateBlock[],
   exercises: ReadonlyMap<string, CareTags & { id: string; title: string }>,
   input: CareInput | null,
+  own: boolean,
 ): { rows: Set<string>; lines: { id: string; text: string }[] } {
   const rows = new Set<string>();
   const lines: { id: string; text: string; avoid: boolean }[] = [];
@@ -51,7 +52,7 @@ function dayCare(
       rows.add(row.id);
       if (seen.has(exercise.id)) continue;
       seen.add(exercise.id);
-      lines.push({ id: exercise.id, text: careLine(rowCare, exercise.title), avoid: rowCare.kind === 'avoid' });
+      lines.push({ id: exercise.id, text: careLine(own ? { ...rowCare, own: true } : rowCare, exercise.title), avoid: rowCare.kind === 'avoid' });
     }
   }
   // `sort` kararlı: aynı türde günün sırası korunur.
@@ -86,7 +87,7 @@ function Unavailable({ children, top }: { children?: React.ReactNode; top?: Reac
  *   yukarıda; başlık kısa tutulur). "Antrenmana başla" tek dokunuştur: plan Bugün açılınca telefona alınmıştır, ağ
  *   beklenmez; telefondaki plan programın bu sürümüne (ya da kısıtların bu hâline) ait değilse atılır
  *   (`WorkoutFreshness`);
- * - kısıt notları (en çok 2, "Sol diz için dikkat: Back Squat", `careLine`; fazlası "+n hareket daha");
+ * - kısıt notları (en çok 2, "Sol diz için dikkat: Back Squat", `careLine`; fazlası "+n harekette daha not var");
  * - günün ilk 3 hareketini dolduran bloklar (`previewBlocks`, grup bölünmez; kısıtlı satırda yara bandı), kalanı
  *   "Tümünü gör (n hareket daha)" altında; numaralar bütün günden;
  * - hafta şeridi (`WeekStrip`; başlık sıradaki günü söylediği için "Sırada" satırı yok).
@@ -239,7 +240,7 @@ export async function ProgramCard({
     return rows.length > 0 ? [{ ...block, rows }] : [];
   });
   const preview = previewBlocks(shownBlocks, 3);
-  const cares = dayCare(shownBlocks, byId, care.input);
+  const cares = dayCare(shownBlocks, byId, care.input, owner !== null);
   // Tek seferlik seçimde antrenman o programla açılır.
   const programQuery = oneOff ? `?program=${encodeURIComponent(shown ?? 'pt')}` : '';
   // Dönüş sırası: sıradaki günün arkasından başlayıp başa sarar.
@@ -283,7 +284,7 @@ export async function ProgramCard({
               ))}
               {cares.lines.length > CARE_LINES ? (
                 <li className="pl-6 text-muted-foreground">
-                  +<span className="tabular-nums">{cares.lines.length - CARE_LINES}</span> hareket daha
+                  +<span className="tabular-nums">{cares.lines.length - CARE_LINES}</span> harekette daha not var
                 </li>
               ) : null}
             </ul>

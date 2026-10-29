@@ -83,6 +83,7 @@ function planOf(data: WorkoutResponse, schedule: WorkoutSchedule): WeekPlanDay[]
 export function WeekStrip({ clientId, showNext = true }: { clientId: string; showNext?: boolean }) {
   const { data, isPending } = useWorkoutOverview(clientId);
   const queryClient = useQueryClient();
+  const router = useRouter();
   const program = useWorkoutProgram();
   const [open, setOpen] = useState(false);
   // Gerçek şeridin yüksekliği: sütun 81 px (py-1.5 + text-xs 16 + gap 6 + halka 28 + gap 6 + ad 13), gap-1 ile
@@ -100,6 +101,8 @@ export function WeekStrip({ clientId, showNext = true }: { clientId: string; sho
     );
     clearWorkoutCache(clientId);
     void queryClient.invalidateQueries({ queryKey: WORKOUT_OVERVIEW_KEY });
+    // Kartın başlığı ve dinlenme satırı sunucuda çizilir (`program-card.tsx`): onlar da yeni günlerle gelsin.
+    router.refresh();
   };
 
   return (
