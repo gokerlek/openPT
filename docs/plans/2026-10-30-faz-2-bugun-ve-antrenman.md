@@ -731,7 +731,8 @@ listeye dönüyor, sıra aynı; listede üçüncü harekete dokununca o açılı
    ▲/▼ düğmeleri (44 px, `aria-label="<ad> yukarı"`), `moveUnit`; uçta düğme devre dışı. Sürükleme kısayol olarak
    kalır: bugünkü `DragFlowRow` mantığı (dnd-kit, tutamaç `DotsSixVertical`, Alt+↑/↓) bu kipe taşınır;
    bırakmada `moveUnitTo(…, active.id, over.id)`, Alt+↑/↓'da `moveUnit`; biten/atlanan satır sürüklenmez ve hedef
-   olmaz. "Bitti" ile kip kapanır. Kipte satıra dokunmak odak açmaz.
+   olmaz. Ekranda kalan `reorderAt` çağrısı (bugün `workout-screen.tsx` ~1613, akış sheet'inin sürüklemesi)
+   `moveUnitTo`'ya geçer; `reorderAt` biten ve atlanan birimi de taşıyabiliyor. "Bitti" ile kip kapanır. Kipte satıra dokunmak odak açmaz.
 
 typecheck, lint, test · Commit: `feat(workout): header menu and reorder mode`
 
@@ -749,13 +750,14 @@ ekran takılmıyor, yeni gün odakla açılıyor.
 1. **Odakta ⋯** (üst çubuktaki menüye odakta iki öğe eklenir): **Muadil seç** — odaktaki birimin şu anki
    üyesinin satırı `canSwap` ise bugünkü `SwapSheet`; değilse öğe devre dışı, notu set kaydedildiyse "Set
    kaydedildi, muadil seçilemez", eklenen harekette "Bu hareketin muadili yok"; **Bu hareketi atla** —
-   `dropWithUndo` (4. görev) + toast'ta "Geri al" (`undoSkip`, bugünkü toast düzeni); ardından `openFocus`
-   sıradaki birime (`cursorOf` odaksız), yoksa listeye. Başlığın yanındaki "Değiştir" düğmesi kalkar; kısıt
+   `dropWithUndo` (4. görev; biten birimde null döner, öğe o zaman devre dışı) + toast'ta "Geri al" (`undoSkip`,
+   bugünkü toast düzeni); ardından `openFocus` sıradaki birime (`listView(…).current`: fazladan setleri saymaz),
+   yoksa listeye. Başlığın yanındaki "Değiştir" düğmesi kalkar; kısıt
    notundaki "Değiştir" kalır. Giriş panelindeki "Hareketi geç ›" kalkar (aynı iş tek yerde, ⋯'de; fazladan
    setteki "Kaldır" kalır); `skipAt`'in çağıranı kalmaz (10. görevde kalkar).
 2. **Biten hareketi yeniden açmak:** 6a odakta biten birimin set tablosunu gösterir. Odaktaki birimde set
    kalmadıysa (`nextSet(…, focus)` null) giriş paneli "Bu hareket bitti" der: birincil **Sıradaki: <ad>**
-   (`openFocus` imlecin birimine) ya da hepsi bittiyse **Antrenmanı bitir**; ikincil **Set ekle** (bugünkü
+   (`openFocus` `listView(…).current`'e) ya da hepsi bittiyse **Antrenmanı bitir**; ikincil **Set ekle** (bugünkü
    fazladan set). Set tablosunda kayıtlı satıra dokunmak bugünkü `EditSetSheet`'i açar. Silinen set birimi yeniden
    bitmemiş yapar: odak o birimde kalır ve sıradaki set onun.
 3. **Dinlenme ekranı kilitlemez:** dinlenme sürerken "‹ Liste"ye basmak dinlenmeyi küçültür (`mode: 'mini'`) ve
