@@ -13,8 +13,6 @@ import { formatDayShort } from '@/lib/format';
 import {
   dayShortName,
   relativeDayText,
-  todayState,
-  todayStatusText,
   WEEKDAY_NAMES,
   WEEKDAY_SHORT,
   weekPlan,
@@ -32,8 +30,7 @@ import { clearWorkoutCache, readWorkoutCache } from './workout-storage';
 
 /**
  * Bugün kartının antrenman günleri parçaları (tasarım §2.1, §2.3, §2.11) — istemcide, `GET /api/me/workout`
- * yanıtından (`useWorkoutOverview`):
- * - üst satır: "Bugün antrenman günün · Gün B" ya da "Dinlenme günü · sıradaki antrenman Çarşamba (Gün B)";
+ * yanıtından (`useWorkoutOverview`); kartın başlığı ("Çarşamba · Gün B") sunucuda çizilir (`program-card.tsx`):
  * - 7 günlük şerit (pazartesi başlar): seçili günler halkalı, yapılanlar dolu, kaçanlar ve pencereden önceki
  *   geçmiş seçili günler soluk halkalı, sıradaki kalın halkalı; halkanın altında günün antrenmanı (yapılanda
  *   oturumun adı, ilerisinde dönüşten tahmin, `weekPlan`), kaçanda "kaçtı"; altında "Sırada: yarın · Gün B"
@@ -45,24 +42,21 @@ import { clearWorkoutCache, readWorkoutCache } from './workout-storage';
 
 const BOTTOM = 'gap-0 rounded-t-2xl pb-[env(safe-area-inset-bottom)]';
 
-/** Kartın üst satırı; gün seçilmemişse ya da yüklenirken "Sıradaki antrenman". */
-export function DayStatus({ clientId, dayName }: { clientId: string; dayName: string }) {
-  const { data } = useWorkoutOverview(clientId);
-  if (!data?.schedule) return <>Sıradaki antrenman</>;
-  const state = todayState({ today: data.today, weekdays: data.schedule.weekdays, doneToday: data.week.days.includes(data.today) });
-  return <>{todayStatusText(state, data.today, dayName)}</>;
-}
-
 const STATE_TEXT: Record<WeekPlanState, string> = { done: 'yapıldı', missed: 'kaçtı', next: 'sırada', planned: 'antrenman günü', rest: 'dinlenme' };
 
-/** Halkanın altındaki kelime ve ekran okuyucu satırındaki karşılığı; seçili ama pencereden önceki gün "dinlenme" değil. */
-function stateText(day: WeekPlanDay): string {
-  return day.state === 'rest' && day.selected ? 'antrenman günü' : STATE_TEXT[day.state];
+/**
+ * Halkanın altındaki kelime ve ekran okuyucu satırındaki karşılığı. Seçili günün "dinlenme" durumu: geçmişteyse
+ * pencereden (`since`) önceki, yapılmamış gün (soluk halka) "antrenman günü, geçti"; ilerideyse (programsız şerit)
+ * "antrenman günü".
+ */
+function stateText(day: WeekPlanDay, today: string): string {
+  if (day.state === 'rest' && day.selected) return day.date < today ? 'antrenman günü, geçti' : 'antrenman günü';
+  return STATE_TEXT[day.state];
 }
 
-/** Ekran okuyucu: "Çarşamba, bugün, sırada: Gün B", "Pazartesi, yapıldı: Gün A", "Salı, dinlenme". */
-function dayLabel(day: WeekPlanDay): string {
-  const state = stateText(day);
+/** Ekran okuyucu: "Çarşamba, bugün, sırada: Gün B", "Pazartesi, yapıldı: Gün A", "Salı, dinlenme", "Pazartesi, antrenman günü, geçti". */
+function dayLabel(day: WeekPlanDay, today: string): string {
+  const state = stateText(day, today);
   return [WEEKDAY_NAMES[day.weekday], day.today ? 'bugün' : null, day.label ? `${state}: ${day.label}` : state].filter(Boolean).join(', ');
 }
 
@@ -117,10 +111,10 @@ export function WeekStrip({ clientId, showNext = true }: { clientId: string; sho
           // Seçili, geçmiş ve yapılmamış: kaçan ya da pencereden (`since`) önceki gün; ikisi de soluk halka (gelecekteki
           // planlı gün gibi görünmez), yalnız kaçan "kaçtı" der.
           const faded = day.selected && !day.done && day.date < data.today;
-          const short = day.state === 'missed' ? stateText(day) : day.label ? dayShortName(day.label) : null;
+          const short = day.state === 'missed' ? stateText(day, data.today) : day.label ? dayShortName(day.label) : null;
           return (
             <li key={day.date} className={cn('flex min-w-0 flex-col items-center gap-1.5 rounded-lg py-1.5', day.today && 'bg-muted')}>
-              <span className="sr-only">{dayLabel(day)}</span>
+              <span className="sr-only">{dayLabel(day, data.today)}</span>
               <span aria-hidden className={cn('text-xs', day.today || isNext ? 'font-semibold text-foreground' : 'text-muted-foreground')}>
                 {WEEKDAY_SHORT[day.weekday]}
               </span>

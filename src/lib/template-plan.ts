@@ -442,6 +442,22 @@ export function rowLabels(template: TemplateBody): Map<string, string> {
   return labels;
 }
 
+/**
+ * Bugün önizlemesi: en az `limit` hareketi dolduran ilk bloklar (grup bölünmez) ve kalanlar; `restRows` kalan
+ * satır sayısı. Kütüphanede olmayan satırları çağıran önceden ayıklar (yoksa "ilk 3" üçten az görünür).
+ */
+export function previewBlocks<T extends { rows: readonly unknown[] }>(blocks: readonly T[], limit: number): { head: T[]; rest: T[]; restRows: number } {
+  const head: T[] = [];
+  let rows = 0;
+  for (const block of blocks) {
+    if (rows >= limit) break;
+    head.push(block);
+    rows += block.rows.length;
+  }
+  const rest = blocks.slice(head.length);
+  return { head, rest, restRows: rest.reduce((sum, block) => sum + block.rows.length, 0) };
+}
+
 export type TemplateSummary = {
   /** Kütüphanede olan hareketler (silinmiş egzersizin satırı sayılmaz). */
   rows: number;

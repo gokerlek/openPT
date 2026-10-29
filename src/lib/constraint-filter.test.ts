@@ -5,6 +5,7 @@ import {
   careCounts,
   careGroup,
   careInputOf,
+  careLine,
   careMap,
   careRank,
   careStampOf,
@@ -18,6 +19,7 @@ import {
   rowCareOf,
   rowCareText,
   type CareInput,
+  type RowCare,
 } from './constraint-filter.ts';
 import { ackClientChange, reportWorse, addConstraint, addOverride, clearConstraint, constraintsOf, reportConstraint, type ConstraintInput } from './constraints.ts';
 import type { HealthRecord } from './schemas/health.ts';
@@ -190,6 +192,13 @@ describe('sıra ve danışanın notu', () => {
   test('muadilin kısa satırı', () => {
     const care = input(record([{ region: 'lower_back', avoid: ['forward_bend'] }]));
     assert.equal(optionCareText(evaluateCare(ex('romanian-deadlift'), care)), 'Bel için dikkatli');
+  });
+
+  test('Bugün önizlemesinin kısıt satırı', () => {
+    const rowCare: RowCare = { kind: 'note', label: 'Sol diz', region: 'knee', side: 'left' };
+    assert.equal(careLine(rowCare, 'Back Squat'), 'Sol diz için dikkat: Back Squat');
+    assert.equal(careLine({ ...rowCare, kind: 'avoid' }, 'Back Squat'), 'Sol diz için değiştir: Back Squat');
+    assert.equal(careLine({ ...rowCare, kind: 'report' }, 'Back Squat'), 'Sol diz için dikkat: Back Squat');
   });
 });
 

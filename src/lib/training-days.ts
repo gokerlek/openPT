@@ -229,8 +229,9 @@ export function nextTrainingDate(today: string, weekdays: readonly number[], opt
   return null;
 }
 
+/** Bugünün durumu (Bugün kartında dinlenme ve yapıldı satırı). */
 export type TodayState =
-  /** Gün seçilmemiş: yalnız "Sıradaki antrenman". */
+  /** Gün seçilmemiş. */
   | { kind: 'none' }
   /** Bugün seçili gün, henüz antrenman yok. */
   | { kind: 'training' }
@@ -256,21 +257,13 @@ export function relativeDayText(date: string, today: string): string {
 }
 
 /**
- * Bugün kartının üst satırı: "Bugün antrenman günün · Gün B", "Dinlenme günü · sıradaki antrenman
- * Çarşamba (Gün B)", "Bugünkü antrenmanını yaptın · sıradaki yarın (Gün C)"; gün seçilmemişse
- * "Sıradaki antrenman".
+ * Bugün kartının başlığı (Faz 2): sıradaki antrenmanın günü ve adı ("Pazartesi · Gün A"); bugünkü antrenman
+ * yapıldıysa bugünden sonraki ilk seçili gün. Gün seçilmemişse yalnız ad. Ad dönüş sırasından (`nextDayId`); Faz 3'e
+ * (gün ↔ antrenman eşlemesi) kadar dinlenme gününde de sıradaki günü söyler.
  */
-export function todayStatusText(state: TodayState, today: string, dayName: string): string {
-  switch (state.kind) {
-    case 'none':
-      return 'Sıradaki antrenman';
-    case 'training':
-      return `Bugün antrenman günün · ${dayName}`;
-    case 'rest':
-      return `Dinlenme günü · sıradaki antrenman ${relativeDayText(state.next, today)} (${dayName})`;
-    case 'done':
-      return state.next ? `Bugünkü antrenmanını yaptın · sıradaki ${relativeDayText(state.next, today)} (${dayName})` : 'Bugünkü antrenmanını yaptın';
-  }
+export function todayCardTitle(input: { today: string; weekdays: readonly number[]; doneToday: boolean; dayName: string }): string {
+  const date = nextTrainingDate(input.today, input.weekdays, { includeToday: !input.doneToday });
+  return date ? `${WEEKDAY_NAMES[isoWeekdayOf(date)]} · ${input.dayName}` : input.dayName;
 }
 
 /* --- değişiklikler --- */

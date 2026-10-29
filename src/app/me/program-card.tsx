@@ -1,12 +1,15 @@
 import Link from 'next/link';
-import { Barbell, Play } from '@phosphor-icons/react/dist/ssr';
+import { Bandaids, Barbell, CaretRight, Play } from '@phosphor-icons/react/dist/ssr';
 import { Plus } from '@/components/line-icons';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { Item, ItemContent, ItemDescription, ItemTitle } from '@/components/ui/item';
+import type { TodayCare } from '@/lib/client-care';
 import { withClientTargets } from '@/lib/client-targets';
+import { careLine, evaluateCare, hasCare, rowCareOf, type CareInput } from '@/lib/constraint-filter';
+import type { CareTags } from '@/lib/constraints';
 import { listExercises } from '@/lib/exercises';
 import { formatDayShort, todayIn } from '@/lib/format';
 import { activeItem, shownProgram } from '@/lib/own-program-index';
@@ -14,12 +17,47 @@ import { lastDateByProgram, ptUpdatedSince } from '@/lib/own-program-text';
 import { PT_PROGRAM_NAME } from '@/lib/own-programs';
 import { readOwnOverview, readOwnProgramOf } from '@/lib/own-programs-store';
 import { currentPhaseOf, frequencyLabel, nextDayId, phaseStatus } from '@/lib/program-plan';
-import { templateSummary } from '@/lib/template-plan';
+import { previewBlocks, rowLabels, templateSummary, type TemplateBlock } from '@/lib/template-plan';
+import { effectiveSchedule, todayCardTitle, todayState } from '@/lib/training-days';
 import { programStamp, type PlanOwner, type PlanProgram } from '@/lib/workout-plan';
 import { ClientDayPlan } from './client-day-plan';
 import { NewPtProgramBanner, ProgramChip, PtEditLine, type ProgramChoice } from './program-choice';
 import { WeekBadge } from './today-workout';
-import { DayStatus, OtherDayButton, WeekStrip, WorkoutFreshness } from './training-week';
+import { OtherDayButton, WeekStrip, WorkoutFreshness } from './training-week';
+
+const NO_CARE: TodayCare = { stamp: '', input: null };
+
+/** Bugün kartında görünen kısıt satırı sayısı; fazlası "+n hareket daha". */
+const CARE_LINES = 2;
+
+/**
+ * Günün kısıt notları (`kisit-tarama.md` §3.5, antrenmandaki kart notuyla aynı kural: `rowCareOf`): notlu satırlar
+ * (önizlemedeki yara bandı) ve hareket başına bir satır ("Sol diz için dikkat: Back Squat"), "değiştir" diyenler önce.
+ */
+function dayCare(
+  blocks: readonly TemplateBlock[],
+  exercises: ReadonlyMap<string, CareTags & { id: string; title: string }>,
+  input: CareInput | null,
+): { rows: Set<string>; lines: { id: string; text: string }[] } {
+  const rows = new Set<string>();
+  const lines: { id: string; text: string; avoid: boolean }[] = [];
+  if (!input || !hasCare(input)) return { rows, lines };
+  const seen = new Set<string>();
+  for (const block of blocks) {
+    for (const row of block.rows) {
+      const exercise = exercises.get(row.exerciseId);
+      const rowCare = exercise ? rowCareOf(evaluateCare(exercise, input), input) : null;
+      if (!exercise || !rowCare) continue;
+      rows.add(row.id);
+      if (seen.has(exercise.id)) continue;
+      seen.add(exercise.id);
+      lines.push({ id: exercise.id, text: careLine(rowCare, exercise.title), avoid: rowCare.kind === 'avoid' });
+    }
+  }
+  // `sort` kararlı: aynı türde günün sırası korunur.
+  lines.sort((a, b) => Number(b.avoid) - Number(a.avoid));
+  return { rows, lines: lines.map(({ id, text }) => ({ id, text })) };
+}
 
 function Unavailable({ children, top }: { children?: React.ReactNode; top?: React.ReactNode }) {
   return (
@@ -37,17 +75,23 @@ function Unavailable({ children, top }: { children?: React.ReactNode; top?: Reac
 }
 
 /**
- * Danışanın sıradaki antrenmanı: gösterilen programın (evreliyse şu anki evrenin) sıradaki
- * günü, yapılış sırasıyla ve setler danışanın dilinde (`ClientDayPlan`); altında diğer günler
- * dönüş sırasıyla. Evresiz programda evreden söz edilmez; haftada kaç gün belirtildiyse yazılır,
- * sağ üstte "Bu hafta x/y" (`WeekBadge`, istemcide). Antrenman günleri (tasarım §2.11): üst satır
- * "Bugün antrenman günün · Gün B" ya da "Dinlenme günü · sıradaki antrenman Çarşamba (Gün B)", 7 günlük
- * şerit ve "Günlerini değiştir"; dinlenme gününde de başlatılabilir. "Antrenmana başla" tek dokunuştur:
- * antrenman ekranını açar (plan Bugün açılınca telefona alınmıştır, ağ beklenmez); telefondaki plan
- * programın bu sürümüne ait değilse atılır (`WorkoutFreshness`). "Başka gün seç" (§2.3) altında; ikisi kartın
- * başında, şeridin ve planın üstünde (kaydırmadan görünür).
- * `children` ana kartın hemen altına (Bugün'ün su kartı). `clientId` oturumdan doğrulanmış kayıttan
- * gelir (`currentClient`).
+ * Danışanın sıradaki antrenmanı (Faz 2: "bugün ne var, başla"): gösterilen programın (evreliyse şu anki evrenin)
+ * sıradaki günü. Yukarıdan aşağı:
+ * - başlık: antrenmanın günü ve adı ("Çarşamba · Gün B", `todayCardTitle`; gün seçilmemişse yalnız ad), sağ üstte
+ *   "Bu hafta x/y" (`WeekBadge`, istemcide); yalnız dinlenme gününde ya da bugünkü antrenman yapıldıysa üstünde kısa
+ *   satır. Faz 3'e (gün ↔ antrenman eşlemesi) kadar dinlenme gününde başlık sıradaki günü söyler, "Antrenmana başla"
+ *   yine bugün başlatır;
+ * - tek satır "N hareket · ≈ N dk" (evreli programda üstünde evre satırı);
+ * - "Antrenmana başla" ve "Başka gün seç" (§2.3) kaydırmadan görünür (Faz 0: 375×812'de düğmenin alt kenarı 700 px'ten
+ *   yukarıda; başlık kısa tutulur). "Antrenmana başla" tek dokunuştur: plan Bugün açılınca telefona alınmıştır, ağ
+ *   beklenmez; telefondaki plan programın bu sürümüne (ya da kısıtların bu hâline) ait değilse atılır
+ *   (`WorkoutFreshness`);
+ * - kısıt notları (en çok 2, "Sol diz için dikkat: Back Squat", `careLine`; fazlası "+n hareket daha");
+ * - günün ilk 3 hareketini dolduran bloklar (`previewBlocks`, grup bölünmez; kısıtlı satırda yara bandı), kalanı
+ *   "Tümünü gör (n hareket daha)" altında; numaralar bütün günden;
+ * - hafta şeridi (`WeekStrip`; başlık sıradaki günü söylediği için "Sırada" satırı yok).
+ * Altında diğer günler dönüş sırasıyla. `children` ana kartın hemen altına (Bugün'ün su kartı). `clientId` oturumdan
+ * doğrulanmış kayıttan gelir (`currentClient`). `care` sayfanın bir kez okuduğu kısıtlar (`loadTodayCare`).
  *
  * Kendi programlar (`docs/design/kendi-program.md` §2.6): gösterilen program adresteki (`programParam`, "Yalnız
  * bugün") ya da kalıcı seçim (`shownProgram`, sunucunun `planSource`'uyla aynı kural); en az bir kendi program
@@ -59,13 +103,13 @@ export async function ProgramCard({
   clientId,
   programParam = null,
   timeZone,
-  careStamp = '',
+  care = NO_CARE,
   children,
 }: {
   clientId: string;
   programParam?: string | null;
   timeZone: string;
-  careStamp?: string;
+  care?: TodayCare;
   children?: React.ReactNode;
 }) {
   const [overview, exercises] = await Promise.all([readOwnOverview(clientId).catch(() => null), listExercises()]);
@@ -166,18 +210,36 @@ export async function ProgramCard({
   // Danışanın kendi tekrar hedefleri (bitişte "Evet, güncelle", tasarım §6.2) günün satırlarında; kendi programda yok.
   const blocks = owner ? day.blocks : withClientTargets(day.blocks, program.clientTargets);
   const summary = templateSummary({ blocks }, byId);
-  const status = phaseStatus(program, new Date());
-  const frequency = frequencyLabel(phase.daysPerWeek);
   const phased = !owner && ptProgram?.phased === true;
+  // Evreli programda evre satırı; ötekinde başlığın altında yalnız "N hareket · ≈ N dk".
+  const status = phaseStatus(program, new Date());
   const context = phased
     ? [
         phase.name,
         phase.weeks !== undefined ? `${Math.min(status.week, phase.weeks)}. hafta / ${phase.weeks}` : null,
-        frequency?.toLocaleLowerCase('tr') ?? null,
+        frequencyLabel(phase.daysPerWeek)?.toLocaleLowerCase('tr') ?? null,
       ]
         .filter(Boolean)
         .join(' · ')
-    : frequency;
+    : null;
+  // Başlık ve kısa satır: geçerli günler iki programda da `effectiveSchedule`; "yapıldı" bugün biten bir antrenman.
+  const today = todayIn(timeZone);
+  const weekdays = effectiveSchedule(program).weekdays;
+  const doneToday = sessions.items.some((row) => Boolean(row.finishedAt) && row.date === today);
+  const title = todayCardTitle({ today, weekdays, doneToday, dayName: day.name });
+  const note = doneToday
+    ? 'Bugünkü antrenmanını yaptın'
+    : todayState({ today, weekdays, doneToday }).kind === 'rest'
+      ? 'Bugün dinlenme günün'
+      : null;
+  // Önizleme: kütüphanede olmayan satırlar önce ayıklanır (çizilmiyorlar; yoksa "ilk 3" üçten az görünür).
+  const labels = rowLabels({ blocks });
+  const shownBlocks = blocks.flatMap((block) => {
+    const rows = block.rows.filter((row) => byId.has(row.exerciseId));
+    return rows.length > 0 ? [{ ...block, rows }] : [];
+  });
+  const preview = previewBlocks(shownBlocks, 3);
+  const cares = dayCare(shownBlocks, byId, care.input);
   // Tek seferlik seçimde antrenman o programla açılır.
   const programQuery = oneOff ? `?program=${encodeURIComponent(shown ?? 'pt')}` : '';
   // Dönüş sırası: sıradaki günün arkasından başlayıp başa sarar.
@@ -187,22 +249,18 @@ export async function ProgramCard({
     <>
       {top}
       {/* Kısıtlar değişince (ya da onay çekilince) telefondaki plan da eskir: kart notu yenilenir. */}
-      <WorkoutFreshness clientId={clientId} stamp={programStamp(program, owner?.programId ?? null) + careStamp} />
+      <WorkoutFreshness clientId={clientId} stamp={programStamp(program, owner?.programId ?? null) + care.stamp} />
       <Card>
         <CardHeader>
           {chip ? <div className="col-span-full flex min-w-0 pb-1">{chip}</div> : null}
-          <CardDescription>
-            <DayStatus clientId={clientId} dayName={day.name} />
-          </CardDescription>
+          {note ? <CardDescription>{note}</CardDescription> : null}
           <CardAction>
             <WeekBadge clientId={clientId} />
           </CardAction>
-          <CardTitle className="text-xl">{day.name}</CardTitle>
+          <CardTitle className="text-xl">{title}</CardTitle>
           <CardDescription>
             {context ? <span className="block">{context}</span> : null}
-            <span className="tabular-nums">{summary.rows}</span> hareket ·{' '}
-            <span className="tabular-nums">{summary.workingSets}</span> set · ≈{' '}
-            <span className="tabular-nums">{summary.minutes}</span> dk
+            <span className="tabular-nums">{summary.rows}</span> hareket · ≈ <span className="tabular-nums">{summary.minutes}</span> dk
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
@@ -215,12 +273,44 @@ export async function ProgramCard({
               <OtherDayButton clientId={clientId} />
             </div>
           ) : null}
-          <WeekStrip clientId={clientId} />
+          {cares.lines.length > 0 ? (
+            <ul className="flex flex-col gap-1.5">
+              {cares.lines.slice(0, CARE_LINES).map((line) => (
+                <li key={line.id} className="flex items-start gap-2">
+                  <Bandaids weight="fill" aria-hidden className="mt-0.5 size-4 shrink-0 text-primary-text" />
+                  <span className="min-w-0">{line.text}</span>
+                </li>
+              ))}
+              {cares.lines.length > CARE_LINES ? (
+                <li className="pl-6 text-muted-foreground">
+                  +<span className="tabular-nums">{cares.lines.length - CARE_LINES}</span> hareket daha
+                </li>
+              ) : null}
+            </ul>
+          ) : null}
           {summary.rows > 0 ? (
-            <ClientDayPlan blocks={blocks} exercises={byId} />
+            <div className="flex flex-col gap-2">
+              <ClientDayPlan blocks={preview.head} exercises={byId} labels={labels} cared={cares.rows} />
+              {preview.rest.length > 0 ? (
+                <details className="group/rest">
+                  <summary className="-mx-3 flex min-h-11 w-fit cursor-pointer list-none items-center gap-1.5 rounded-lg px-3 font-medium text-muted-foreground outline-none select-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 [&::-webkit-details-marker]:hidden">
+                    <CaretRight
+                      aria-hidden
+                      weight="bold"
+                      className="size-3.5 shrink-0 motion-safe:transition-transform motion-safe:duration-160 group-open/rest:rotate-90"
+                    />
+                    Tümünü gör (<span className="tabular-nums">{preview.restRows}</span> hareket daha)
+                  </summary>
+                  <div className="pt-2">
+                    <ClientDayPlan blocks={preview.rest} exercises={byId} labels={labels} cared={cares.rows} />
+                  </div>
+                </details>
+              ) : null}
+            </div>
           ) : (
             <p className="text-sm text-muted-foreground">Bu günün hareketleri şu an açılamıyor. Antrenörüne haber ver.</p>
           )}
+          <WeekStrip clientId={clientId} showNext={false} />
         </CardContent>
       </Card>
       {children}

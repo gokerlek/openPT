@@ -1,7 +1,8 @@
 import type { Metadata } from 'next';
-import { loadCareStamp } from '@/lib/client-care';
+import { loadTodayCare } from '@/lib/client-care';
 import { canRecordHealth, canSetPassword, healthConsentState, outdatedHealthFields } from '@/lib/client-status';
 import { readAppConfig } from '@/lib/config';
+import { todayIn } from '@/lib/format';
 import { currentClient } from '@/lib/guards';
 import { isOwnProgramId } from '@/lib/own-programs';
 import { readClientSession } from '@/lib/session';
@@ -27,7 +28,8 @@ export const metadata: Metadata = { title: 'Bugün' };
  */
 export default async function MePage({ searchParams }: { searchParams: Promise<{ program?: string | string[] }> }) {
   const [client, config, session, query] = await Promise.all([currentClient(), readAppConfig(), readClientSession(), searchParams]);
-  const careStamp = await loadCareStamp(client);
+  // Kısıtlar: gün planının damgası ve Bugün önizlemesinin kısıt satırları (sağlık dosyası bir kez okunur).
+  const care = await loadTodayCare(client, todayIn(config.timeZone));
   // "Yalnız bugün" (docs/design/kendi-program.md §2.6): `?program=op_…|pt`; hiçbir şey yazmaz, sekmeden çıkınca düşer.
   const program = typeof query.program === 'string' && (query.program === 'pt' || isOwnProgramId(query.program)) ? query.program : null;
   const health = healthConsentState(client);
@@ -60,7 +62,7 @@ export default async function MePage({ searchParams }: { searchParams: Promise<{
       {/* Yarım antrenman varsa sıradaki antrenman kartının yerine onun kartı (telefondaki kayıt istemcide okunur). */}
       <WorkoutProgramProvider program={program}>
         <TodayWorkout clientId={client.id}>
-          <ProgramCard clientId={client.id} programParam={program} timeZone={config.timeZone} careStamp={careStamp}>
+          <ProgramCard clientId={client.id} programParam={program} timeZone={config.timeZone} care={care}>
             <WaterCard clientId={client.id} />
           </ProgramCard>
         </TodayWorkout>

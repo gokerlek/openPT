@@ -1,3 +1,4 @@
+import { Bandaids } from '@phosphor-icons/react/dist/ssr';
 import { Badge } from '@/components/ui/badge';
 import { clientSetText } from '@/lib/client-set-text';
 import { BLOCK_KIND_LABELS, describeBlock, groupSkipNote, roundsOf, rowLabels, type PlanExercise, type TemplateBlock } from '@/lib/template-plan';
@@ -7,15 +8,22 @@ import { BLOCK_KIND_LABELS, describeBlock, groupSkipNote, roundsOf, rowLabels, t
  * (`clientSetText`: "3 set: 12, 10 tekrar ve son sette yapabildiğin kadar (en az 8) · ağırlık her
  * sette artar · 1 dk 30 sn dinlenme"). Gruplar rozet ve tur anlatımıyla. Kütüphanede olmayan
  * egzersizin satırı hiç çizilmez. PT'nin görünümü `components/program/day-plan.tsx`.
+ *
+ * Günün bir parçası çizilirken (Bugün önizlemesi, "Tümünü gör") numaralar bütün günden gelir (`labels`,
+ * `rowLabels`): önizlemede 4. hareket yine "4". `cared`: kısıt notu olan satırlar; başlığın yanında yara bandı.
  */
 export function ClientDayPlan({
   blocks,
   exercises,
+  labels: dayLabels,
+  cared,
 }: {
   blocks: readonly TemplateBlock[];
   exercises: ReadonlyMap<string, Pick<PlanExercise, 'title' | 'trackingType'>>;
+  labels?: ReadonlyMap<string, string>;
+  cared?: ReadonlySet<string>;
 }) {
-  const labels = rowLabels({ blocks });
+  const labels = dayLabels ?? rowLabels({ blocks });
   return (
     <ol className="flex flex-col gap-4">
       {blocks.map((block) => {
@@ -39,7 +47,15 @@ export function ClientDayPlan({
                 <div key={row.id} className="flex items-baseline gap-3">
                   <span className="w-6 shrink-0 text-sm font-medium tabular-nums text-muted-foreground">{labels.get(row.id)}</span>
                   <div className="flex min-w-0 flex-col gap-0.5">
-                    <span className="font-medium">{exercise.title}</span>
+                    {cared?.has(row.id) ? (
+                      <span className="flex items-start gap-1.5">
+                        <span className="min-w-0 font-medium">{exercise.title}</span>
+                        <Bandaids weight="fill" aria-hidden className="mt-0.5 size-4 shrink-0 text-primary-text" />
+                        <span className="sr-only">, kısıt notu var</span>
+                      </span>
+                    ) : (
+                      <span className="font-medium">{exercise.title}</span>
+                    )}
                     <span className="text-sm text-muted-foreground">
                       {clientSetText(row.sets, exercise.trackingType, single ? block.restSeconds : undefined)}
                     </span>

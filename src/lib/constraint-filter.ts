@@ -380,6 +380,11 @@ export function rowCareText(care: RowCare): { title: string; text: string } {
   }
 }
 
+/** Bugün önizlemesinde hareketin kısıt satırı: "Sol diz için dikkat: Back Squat"; önerilmeyende "değiştir". */
+export function careLine(care: RowCare, title: string): string {
+  return `${care.label} için ${care.kind === 'avoid' ? 'değiştir' : 'dikkat'}: ${title}`;
+}
+
 /** "Değiştir"deki kısa satır ("Sol diz için dikkatli"). */
 export function optionCareText(result: CareResult): string | null {
   const first = result.reasons.find((reason) => reason.decision === 'warn' || reason.decision === 'cue');

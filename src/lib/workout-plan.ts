@@ -696,10 +696,10 @@ export function afterFinish<
   const known = data.active?.id === doc.id;
   const program = data.program;
   const finished = doc.rotation?.value === 'advance' && program && doc.program ? program.days.findIndex((day) => day.id === doc.program?.dayId) : -1;
-  const nextDayId = program && finished >= 0 ? (program.days[(finished + 1) % program.days.length]?.id ?? null) : undefined;
+  const advancedTo = program && finished >= 0 ? (program.days[(finished + 1) % program.days.length]?.id ?? null) : undefined;
   return {
     ...data,
-    ...(program && nextDayId !== undefined && nextDayId !== program.nextDayId ? { program: { ...program, nextDayId } } : {}),
+    ...(program && advancedTo !== undefined && advancedTo !== program.nextDayId ? { program: { ...program, nextDayId: advancedTo } } : {}),
     week: thisWeek ? { ...data.week, done: days.length, days, sessions } : data.week,
     water: doc.date === data.today ? { ...data.water, sessions: data.water.sessions + waterOf(doc) } : data.water,
     active: known ? null : data.active,

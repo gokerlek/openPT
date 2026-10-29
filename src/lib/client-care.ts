@@ -58,9 +58,19 @@ export async function loadEditorCare(
   return { ...care, screening: marks, ...(pain.length > 0 ? { screeningPain: pain } : {}) };
 }
 
-/** Bugün'ün gün planı damgasının kısıt parçası (`workout-routes.ts` ile aynı hesap); onay yoksa boş. */
-export async function loadCareStamp(client: Client): Promise<string> {
-  if (!canRecordHealth(client, 'conditions')) return '';
+/** Bugün kartının kısıtları: gün planı damgasının kısıt parçası ve önizlemenin kısıt satırları için süzgecin girdisi. */
+export type TodayCare = { stamp: string; input: CareInput | null };
+
+/**
+ * Bugün'ün kısıtları, sağlık dosyası bir kez okunarak. `stamp` gün planı damgasının kısıt parçası (`workout-routes.ts`
+ * ile aynı hesap; onay yoksa boş), `input` süzgecin girdisi (`loadCareInput` ile aynı; onay yoksa ya da dosya
+ * okunamıyorsa null).
+ */
+export async function loadTodayCare(client: Client, today: string): Promise<TodayCare> {
+  if (!canRecordHealth(client, 'conditions')) return { stamp: '', input: null };
   const record = await readHealthIfAllowed(client, ['conditions']).catch(() => null);
-  return careStampOf(record);
+  return {
+    stamp: careStampOf(record),
+    input: record ? careInputOf(record, { today, painConsent: canRecordHealth(client, 'check_in') }) : null,
+  };
 }

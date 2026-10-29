@@ -17,8 +17,8 @@ import {
   relativeDayText,
   resetClientSchedule,
   scheduleSince,
+  todayCardTitle,
   todayState,
-  todayStatusText,
   weekDates,
   weekdaysChangeText,
   weekdaysText,
@@ -98,23 +98,27 @@ describe('antrenman günleri: Bugün kartının satırı', () => {
   });
 
   test('antrenman günü, dinlenme günü, bugün yapıldı, gün seçilmemiş', () => {
-    const training = todayState({ today: '2026-09-23', weekdays: [1, 3, 5], doneToday: false });
-    assert.deepEqual(training, { kind: 'training' });
-    assert.equal(todayStatusText(training, '2026-09-23', 'Gün B'), 'Bugün antrenman günün · Gün B');
+    assert.deepEqual(todayState({ today: '2026-09-23', weekdays: [1, 3, 5], doneToday: false }), { kind: 'training' });
+    assert.deepEqual(todayState({ today: '2026-09-22', weekdays: [1, 3, 5], doneToday: false }), { kind: 'rest', next: '2026-09-23' });
+    assert.deepEqual(todayState({ today: SATURDAY, weekdays: [3], doneToday: false }), { kind: 'rest', next: '2026-09-30' });
+    assert.deepEqual(todayState({ today: '2026-09-23', weekdays: [3], doneToday: true }), { kind: 'done', next: '2026-09-30' });
+    assert.deepEqual(todayState({ today: SATURDAY, weekdays: [], doneToday: true }), { kind: 'none' });
+  });
 
-    const rest = todayState({ today: '2026-09-22', weekdays: [1, 3, 5], doneToday: false });
-    assert.deepEqual(rest, { kind: 'rest', next: '2026-09-23' });
-    assert.equal(todayStatusText(rest, '2026-09-22', 'Gün B'), 'Dinlenme günü · sıradaki antrenman yarın (Gün B)');
-    const later = todayState({ today: SATURDAY, weekdays: [3], doneToday: false });
-    assert.equal(todayStatusText(later, SATURDAY, 'Gün B'), 'Dinlenme günü · sıradaki antrenman Çarşamba (Gün B)');
-
-    const done = todayState({ today: '2026-09-23', weekdays: [3], doneToday: true });
-    assert.deepEqual(done, { kind: 'done', next: '2026-09-30' });
-    assert.equal(todayStatusText(done, '2026-09-23', 'Gün C'), 'Bugünkü antrenmanını yaptın · sıradaki gelecek Çarşamba (Gün C)');
-
-    const none = todayState({ today: SATURDAY, weekdays: [], doneToday: true });
-    assert.equal(todayStatusText(none, SATURDAY, 'Gün A'), 'Sıradaki antrenman');
+  test('göreli gün: yarın, haftanın günü, bir hafta sonrası', () => {
+    assert.equal(relativeDayText('2026-09-27', SATURDAY), 'yarın');
     assert.equal(relativeDayText('2026-09-28', SATURDAY), 'Pazartesi');
+    assert.equal(relativeDayText('2026-09-30', '2026-09-23'), 'gelecek Çarşamba');
+  });
+
+  // 26 Ekim 2026 pazartesi.
+  test('Bugün kartının başlığı: antrenmanın günü ve adı', () => {
+    assert.equal(todayCardTitle({ today: '2026-10-26', weekdays: [1, 3], doneToday: false, dayName: 'Gün A' }), 'Pazartesi · Gün A');
+    assert.equal(todayCardTitle({ today: '2026-10-26', weekdays: [1, 3], doneToday: true, dayName: 'Gün B' }), 'Çarşamba · Gün B');
+    assert.equal(todayCardTitle({ today: '2026-10-27', weekdays: [1, 3], doneToday: false, dayName: 'Gün B' }), 'Çarşamba · Gün B');
+    assert.equal(todayCardTitle({ today: '2026-10-26', weekdays: [], doneToday: false, dayName: 'Gün A' }), 'Gün A');
+    // Tek gün seçili ve bugün yapıldı: bir hafta sonrası.
+    assert.equal(todayCardTitle({ today: '2026-10-26', weekdays: [1], doneToday: true, dayName: 'Gün B' }), 'Pazartesi · Gün B');
   });
 
   test('"bu hafta x/y": y seçili gün sayısı, yoksa sıklık; sıklıktan farklıysa uyarı', () => {

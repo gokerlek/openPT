@@ -20,6 +20,7 @@ import {
   loadIntensity,
   muscleLoadOf,
   normalizeTemplate,
+  previewBlocks,
   randomId,
   roundsOf,
   rowLabels,
@@ -529,6 +530,32 @@ describe('etiketler ve özet', () => {
     assert.equal(summary.rows, 2);
     assert.equal(summary.workingSets, 6);
     assert.deepEqual(summary.missingRowIds, [lost.id]);
+  });
+});
+
+describe('Bugün önizlemesi', () => {
+  test('önizleme: ilk 3 hareketi dolduran bloklar, kalanı ayrı', () => {
+    const blocks = [
+      block('single', [row('bench')], { id: 'b1' }),
+      block('superset', [row('a'), row('b')], { id: 'b2' }),
+      block('single', [row('c')], { id: 'b3' }),
+      block('single', [row('d')], { id: 'b4' }),
+    ];
+    const { head, rest, restRows } = previewBlocks(blocks, 3);
+    assert.deepEqual(head.map((block) => block.id), ['b1', 'b2']);
+    assert.deepEqual(rest.map((block) => block.id), ['b3', 'b4']);
+    assert.equal(restRows, 2);
+  });
+
+  test('önizleme: grup bölünmez; az hareketli günde kalan yok', () => {
+    const circuit = block('circuit', [row('a'), row('b'), row('c'), row('d')], { id: 'c1' });
+    const after = block('single', [row('e')], { id: 's1' });
+    const grouped = previewBlocks([circuit, after], 3);
+    assert.deepEqual(grouped.head.map((block) => block.id), ['c1']);
+    assert.equal(grouped.restRows, 1);
+    const short = previewBlocks([block('single', [row('a')], { id: 'x' })], 3);
+    assert.deepEqual([short.head.length, short.rest.length, short.restRows], [1, 0, 0]);
+    assert.deepEqual(previewBlocks([], 3), { head: [], rest: [], restRows: 0 });
   });
 });
 
