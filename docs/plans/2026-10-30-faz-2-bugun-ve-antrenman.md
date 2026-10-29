@@ -751,6 +751,10 @@ ekran takılmıyor, yeni gün odakla açılıyor.
    listeye döner; listede alt çubuğun üstünde `RestStrip`. Listeden bir harekete dokunmak dinlenmeyi bitirmez;
    odakta "Set bitti" bugünkü gibi dinlenmeyi bitirir. Üst çubuk dinlenmede de dokunulur kalır (bugünkü gibi).
 4. **Kartlarda son değerler:** set tablosunun "Önceki" sütunu aynen; liste satırındaki son ağırlık 6b. görevden.
+5. **"Sıradaki" her an görünür** (kullanıcı isteği, 30 Ekim): odak ekranında giriş panelinin altında tek satır
+   "Sıradaki: <ad>" — odaktaki birimden sonra sırada ilk bitmemiş birim (`listView` sırası; odaktaki birim
+   bitmemişse ondan sonraki, bittiyse imlecin birimi); dokununca `openFocus` o birime. Sıradaki yoksa (son
+   hareket) satır "Son hareket" der. Dinlenme panelindeki "Sıradaki" metniyle aynı kaynaktan.
 
 typecheck, lint, test · Commit: `feat(workout): focus menu, reopen finished exercises, non-blocking rest`
 
