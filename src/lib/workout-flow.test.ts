@@ -802,6 +802,13 @@ describe('liste + odak: sıra ve atlama', () => {
     assert.equal(dropWithUndo(day, result.doc, 'b_bbbbbb', stamp(4)), null);
   });
 
+  test('"Bu hareketi atla" biten birimde yok', () => {
+    const day = threeDay();
+    let doc = start(day);
+    for (let minute = 1; minute <= 3; minute += 1) doc = logNext(day, doc, minute); // Bench bitti
+    assert.equal(dropWithUndo(day, doc, 'b_aaaaaa', stamp(4)), null);
+  });
+
   test('"Geri al" önceki geçme işaretini de geri getirir (Geçilenler\'den dönmüş, sona alınmış birim)', () => {
     const day = threeDay();
     const first = dropWithUndo(day, start(day), 'b_bbbbbb', stamp(1), sequence());

@@ -219,7 +219,8 @@ export function listView(day: WorkoutDay, doc: Pick<SessionDoc, 'entries' | 'ord
   let latest: { entryId: string; at: string } | null = null;
   for (const entry of doc.entries) {
     for (const set of entry.sets) {
-      // Eşit saat yalnız iki cihazda olur: sırada sonraki birimin seti kazanır (kayıtlar yapılış sırasında).
+      // Eşit saat yalnız iki cihazda olur: kayıtların dizisinde sonra gelen kazanır (`order` varsa yapılış sırası,
+      // yoksa kimlik sırası); ikisi de tutarlı bir "şu an" verir.
       if (set.type === 'working' && (!latest || set.at >= latest.at)) latest = { entryId: entry.id, at: set.at };
     }
   }
@@ -383,7 +384,8 @@ export function moveUnitTo(day: WorkoutDay, doc: SessionDoc, key: string, target
 /** "Bu hareketi atla" (odakta ⋯): birim Geçilenler'e; toast'taki "Geri al" (`undoSkip`) için önceki sıra ve durum. */
 export function dropWithUndo(day: WorkoutDay, doc: SessionDoc, key: string, stamp: Stamp, random?: Random): { doc: SessionDoc; undo: SkipUndo } | null {
   const { ready, units, unit, entryId } = prepared(day, doc, key, stamp, random);
-  if (!unit || !entryId || isSkipped(unit)) return null;
+  // Biten birim atlanmaz: "bitti" yerine "atlandı" görünür ve sonraki antrenmanın set artışı bastırılırdı.
+  if (!unit || !entryId || isSkipped(unit) || isFinished(unit)) return null;
   const ids = new Set(entryIdsOf(unit));
   const undo: SkipUndo = {
     key,
