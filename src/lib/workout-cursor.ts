@@ -83,7 +83,10 @@ export type WorkoutCursor = {
     /** "7/17 set": yapılan ve (geçilmemiş birimlerde) planlanan çalışma setleri. */
     doneSets: number;
     plannedSets: number;
-    /** "Hareket 2/5": şu anki birimin sırası ve geçilmemiş birim sayısı. */
+    /**
+     * "Hareket 2/5": şu anki birimin sırası ve geçilmemiş birim sayısı. `currentUnit` odakta, odaktaki birimin
+     * sırası (birim bitse de).
+     */
     currentUnit: number;
     totalUnits: number;
   };

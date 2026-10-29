@@ -472,16 +472,19 @@ export type AfterLog =
   | { kind: 'same'; restSeconds: number }
   /** Grupta aynı turun sıradaki üyesi: dinlenme yok; devrede istasyon geçişi sayar. */
   | { kind: 'member'; transitionSeconds: number }
-  /** Hareket bitti: sıradaki birim (`nextKey`, sırada ilk bitmemiş) gelir, dinlenme onun üstünde açılır. */
+  /**
+   * Hareket bitti: sıradaki birim gelir, dinlenme onun üstünde açılır. `nextKey`: sırada ilk bitmemiş birim
+   * (bekleyen fazladan set dahil).
+   */
   | { kind: 'next'; restSeconds: number; nextKey: string | null }
-  /** Son hareketin son seti: dinlenme yok, bitirme sorusu. */
+  /** Hiçbir yerde yapılacak set kalmadı (istenen fazladan setler dahil): dinlenme yok, bitirme sorusu. */
   | { kind: 'done' };
 
 /**
  * `before`: set kaydedilmeden önceki belge; dinlenme o setin ardındaki (`restAfterSeconds`). Grupta
  * tur sürerken (aynı birim, aynı tur, başka üye) dinlenme yok: süperset ve komplekste 0, devrede
- * istasyon geçişi; tur sonunda blok dinlenmesi. `focus` verilince set o birimde sayılır (liste + odak);
- * birim bitince sıradaki birim odaksız imleçten.
+ * istasyon geçişi; tur sonunda blok dinlenmesi. `focus`: setin seçildiği odak (`nextSet(…, focus)` ile
+ * aynı); set o birimde sayılır (liste + odak), birim bitince sıradaki birim odaksız imleçten.
  */
 export function afterLog(
   day: WorkoutDay,
@@ -491,7 +494,7 @@ export function afterLog(
 ): AfterLog {
   const was = cursorOf(day, before, focus);
   const now = cursorOf(day, after, focus);
-  const overall = cursorOf(day, after);
+  const overall = focus == null ? now : cursorOf(day, after);
   if (!overall.next) return { kind: 'done' };
   const restSeconds = was.next?.restAfterSeconds ?? 0;
   const oldUnit = was.next ? was.units[was.next.unit]?.key : undefined;

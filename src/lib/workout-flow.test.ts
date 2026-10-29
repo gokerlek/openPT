@@ -468,11 +468,16 @@ describe('liste + odak: imleç', () => {
     // Biten odak sonda değilken de "Hareket 2/3" (yedek `open.length` 3 olurdu).
     assert.equal(cursorOf(day, doc, 'b_bbbbbb').progress.currentUnit, 2);
     const rests: (number | undefined)[] = [];
+    const afters: ReturnType<typeof afterLog>[] = [];
     for (let minute = 5; minute <= 7; minute += 1) {
       rests.push(nextSet(day, doc, null, 'b_aaaaaa')?.restAfterSeconds);
-      doc = logFocused(day, doc, 'b_aaaaaa', minute);
+      const logged = logFocused(day, doc, 'b_aaaaaa', minute);
+      afters.push(afterLog(day, doc, logged, 'b_aaaaaa'));
+      doc = logged;
     }
     assert.deepEqual(rests, [90, 90, 0]);
+    // Bench'in son seti antrenmanın son seti: odakta da bitirme sorusu.
+    assert.deepEqual(afters.at(-1), { kind: 'done' });
     assert.equal(cursorOf(day, doc).allDone, true);
   });
 
@@ -491,18 +496,33 @@ describe('liste + odak: imleç', () => {
       },
     ]);
     let doc = start(day);
+    const afters: ReturnType<typeof afterLog>[] = [];
+    const log = (minute: number) => {
+      const logged = logFocused(day, doc, 'b_eeeeee', minute);
+      afters.push(afterLog(day, doc, logged, 'b_eeeeee'));
+      doc = logged;
+    };
     const first = nextSet(day, doc, null, 'b_eeeeee');
     assert.deepEqual([first?.rowId, first?.round, first?.restAfterSeconds], ['r_ffffff', 0, 0]); // tur içinde dinlenme yok
     assert.equal(nextMemberLetter(day, doc, 'b_eeeeee'), 'B');
     assert.equal(nextMemberLetter(day, doc), null); // odaksız imleç tek harekette
-    doc = logFocused(day, doc, 'b_eeeeee', 1); // A, tur 0
+    log(1); // A, tur 0
     const second = nextSet(day, doc, null, 'b_eeeeee');
     // Tur sonu: blok dinlenmesi (Bench beklediği için antrenmanın son seti değil).
     assert.deepEqual([second?.rowId, second?.round, second?.restAfterSeconds], ['r_eeeeee', 0, 90]);
     assert.equal(nextMemberLetter(day, doc, 'b_eeeeee'), null);
-    doc = logFocused(day, doc, 'b_eeeeee', 2); // B, tur 0
+    log(2); // B, tur 0
     const third = nextSet(day, doc, null, 'b_eeeeee');
     assert.deepEqual([third?.rowId, third?.round], ['r_ffffff', 1]);
+    log(3); // A, tur 1
+    log(4); // B, tur 1: grup biter, sıradaki Bench
+    // Odaksız imleç Bench'te olsa da odakta üye geçişi ve tur dinlenmesi gruba göre.
+    assert.deepEqual(afters, [
+      { kind: 'member', transitionSeconds: 0 },
+      { kind: 'same', restSeconds: 90 },
+      { kind: 'member', transitionSeconds: 0 },
+      { kind: 'next', restSeconds: 90, nextKey: 'b_aaaaaa' },
+    ]);
   });
 
   test('"Kolaydı" kısayolu odaktaki birimin sıradaki setine bakar', () => {
@@ -526,15 +546,19 @@ describe('liste + odak: imleç', () => {
     const day = threeDay();
     let doc = start(day);
     // Önce Goblet'i (3. birim) bitir; Bench ve Plank bekliyor.
-    let after: ReturnType<typeof afterLog> | null = null;
+    const afters: ReturnType<typeof afterLog>[] = [];
     for (let minute = 1; minute <= 2; minute += 1) {
       const next = nextSet(day, doc, null, 'b_dddddd');
       assert.ok(next);
       const logged = logSet(day, doc, { rowId: next.rowId, setIndex: next.setIndex, kg: next.kg, value: next.value, stamp: stamp(minute), random: sequence() }).doc;
-      after = afterLog(day, doc, logged, 'b_dddddd');
+      afters.push(afterLog(day, doc, logged, 'b_dddddd'));
       doc = logged;
     }
-    assert.deepEqual(after, { kind: 'next', restSeconds: 60, nextKey: 'b_aaaaaa' });
+    // İlk set odakta "aynı hareket" (odaksız imleç Bench'te olsa da); ikincisi birimi bitirir.
+    assert.deepEqual(afters, [
+      { kind: 'same', restSeconds: 60 },
+      { kind: 'next', restSeconds: 60, nextKey: 'b_aaaaaa' },
+    ]);
   });
 
   test('odakta son set "done"', () => {
