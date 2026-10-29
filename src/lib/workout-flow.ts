@@ -343,6 +343,58 @@ export function skipMessage(outcome: SkipResult['outcome'], title: string, done:
   return { title: `${title} geçildi`, description: done > 0 ? `${done}/${planned} set yapıldı` : 'Geçilenler listesinde' };
 }
 
+/* --- sıra ve atlama (Faz 2: liste + odak) --- */
+
+/** Bitmemiş ve atlanmamış birimlerin yeni sırası; biten ve atlanan yerinde kalır. */
+function reorderMovable(day: WorkoutDay, doc: SessionDoc, key: string, place: (movable: CursorUnit[], from: number) => CursorUnit[] | null, stamp: Stamp, random?: Random): SessionDoc {
+  const { ready, units } = prepared(day, doc, key, stamp, random);
+  const movable = units.filter((unit) => !isSkipped(unit) && !isFinished(unit));
+  const from = movable.findIndex((unit) => unit.key === key);
+  const placed = from < 0 ? null : place(movable, from);
+  if (!placed) return doc;
+  let index = 0;
+  const ordered = units.map((unit) => (movable.includes(unit) ? (placed[index++] as CursorUnit) : unit));
+  return normalizeSession({ ...ready, order: { value: ordered.flatMap(entryIdsOf), updatedAt: stamp.at, by: stamp.by } });
+}
+
+/** "Sırayı değiştir" (liste, Faz 2): birim bir yukarı ya da aşağı. Taşınamıyorsa belge aynen döner. */
+export function moveUnit(day: WorkoutDay, doc: SessionDoc, key: string, direction: -1 | 1, stamp: Stamp, random?: Random): SessionDoc {
+  return reorderMovable(day, doc, key, (movable, from) => {
+    const to = from + direction;
+    if (to < 0 || to >= movable.length) return null;
+    const next = [...movable];
+    [next[from], next[to]] = [next[to] as CursorUnit, next[from] as CursorUnit];
+    return next;
+  }, stamp, random);
+}
+
+/** Sürükleme ("Sırayı değiştir" kipinde): birim bırakıldığı bitmemiş birimin yerine. Hedef biten ya da atlanan ise belge aynen döner. */
+export function moveUnitTo(day: WorkoutDay, doc: SessionDoc, key: string, targetKey: string, stamp: Stamp, random?: Random): SessionDoc {
+  return reorderMovable(day, doc, key, (movable, from) => {
+    const to = movable.findIndex((unit) => unit.key === targetKey);
+    if (to < 0 || to === from) return null;
+    const next = [...movable];
+    const [moved] = next.splice(from, 1);
+    next.splice(to, 0, moved as CursorUnit);
+    return next;
+  }, stamp, random);
+}
+
+/** "Bu hareketi atla" (odakta ⋯): birim Geçilenler'e; toast'taki "Geri al" (`undoSkip`) için önceki sıra ve durum. */
+export function dropWithUndo(day: WorkoutDay, doc: SessionDoc, key: string, stamp: Stamp, random?: Random): { doc: SessionDoc; undo: SkipUndo } | null {
+  const { ready, units, unit, entryId } = prepared(day, doc, key, stamp, random);
+  if (!unit || !entryId || isSkipped(unit)) return null;
+  const ids = new Set(entryIdsOf(unit));
+  const undo: SkipUndo = {
+    key,
+    order: units.flatMap(entryIdsOf),
+    entries: ready.entries
+      .filter((entry) => ids.has(entry.id))
+      .map((entry) => ({ id: entry.id, status: entry.status, ...(entry.skip ? { skip: entry.skip } : {}) })),
+  };
+  return { doc: normalizeSession(dropUnit(dayBody(day), ready, entryId, stamp, overrides(day))), undo };
+}
+
 /* --- değiştir (muadil) --- */
 
 /** "Değiştir" açık mı: programın satırı, çalışma seti kaydedilmemiş (kaydedildiyse "Geç" var). */

@@ -13,11 +13,14 @@ import {
   doNowAt,
   reorderAt,
   dropAt,
+  dropWithUndo,
   effectiveDay,
   finishRotation,
   firstSkippedKey,
   flowView,
   listView,
+  moveUnit,
+  moveUnitTo,
   optionText,
   restoreAt,
   skipAt,
@@ -746,5 +749,70 @@ describe('liste + odak: liste', () => {
     const done = listView(day, doc);
     assert.deepEqual([done.current, done.allDone], [null, true]);
     assert.deepEqual(done.items.map((item) => item.state), ['done', 'done', 'done']);
+  });
+});
+
+describe('liste + odak: sıra ve atlama', () => {
+  test('bitmemiş birimler arasında yukarı/aşağı; biten ve atlanan yerinde', () => {
+    const day = threeDay();
+    let doc = start(day);
+    for (let minute = 1; minute <= 3; minute += 1) doc = logNext(day, doc, minute); // Bench bitti
+    const up = moveUnit(day, doc, 'b_dddddd', -1, stamp(4), sequence());
+    assert.deepEqual(listView(day, up).items.map((item) => item.key), ['b_aaaaaa', 'b_dddddd', 'b_bbbbbb']);
+    // En üstteki bitmemiş birim yukarı çıkamaz: üstünde yalnız biten var.
+    assert.equal(moveUnit(day, up, 'b_dddddd', -1, stamp(5)), up);
+    // Biten birim taşınmaz.
+    assert.equal(moveUnit(day, up, 'b_aaaaaa', 1, stamp(5)), up);
+    valid(up);
+  });
+
+  test('sürükleme: bırakılan bitmemiş birimin yerine; biten hedef olmaz', () => {
+    const day = threeDay();
+    const moved = moveUnitTo(day, start(day), 'b_dddddd', 'b_aaaaaa', stamp(1), sequence());
+    assert.deepEqual(listView(day, moved).items.map((item) => item.key), ['b_dddddd', 'b_aaaaaa', 'b_bbbbbb']);
+    // Kendi yerine bırakmak bir şey yazmaz.
+    assert.equal(moveUnitTo(day, moved, 'b_dddddd', 'b_dddddd', stamp(2)), moved);
+    let done = start(day);
+    for (let minute = 1; minute <= 3; minute += 1) done = logNext(day, done, minute);
+    assert.equal(moveUnitTo(day, done, 'b_dddddd', 'b_aaaaaa', stamp(4)), done);
+    valid(moved);
+  });
+
+  test('"Bu hareketi atla": Geçilenler\'e; "Geri al" sırayı ve durumu geri getirir', () => {
+    const day = threeDay();
+    const doc = logNext(day, start(day), 1);
+    const result = dropWithUndo(day, doc, 'b_bbbbbb', stamp(2), sequence());
+    assert.ok(result);
+    assert.deepEqual(
+      listView(day, result.doc).items.map((item) => [item.key, item.state]),
+      [['b_aaaaaa', 'current'], ['b_dddddd', 'pending'], ['b_bbbbbb', 'skipped']],
+    );
+    // `dropAt` ile aynı yazım: Geçilenler'de ve "bilerek geçildi" (`skip.moved`; geri bildirim bunu okur).
+    const dropped = result.doc.entries.find((entry) => entry.rowId === 'r_bbbbbb');
+    assert.deepEqual([dropped?.status, dropped?.skip?.moved], ['skipped', true]);
+    assert.deepEqual(result.doc, dropAt(day, doc, 'b_bbbbbb', stamp(2), sequence()));
+    valid(result.doc);
+    const back = undoSkip(day, result.doc, result.undo, stamp(3));
+    assert.deepEqual(listView(day, back).items.map((item) => item.key), ['b_aaaaaa', 'b_bbbbbb', 'b_dddddd']);
+    const plank = back.entries.find((entry) => entry.rowId === 'r_bbbbbb');
+    assert.equal(plank?.status, 'pending');
+    assert.equal(plank?.skip, undefined);
+    valid(back);
+    // Zaten atlanmış birim yeniden atlanmaz.
+    assert.equal(dropWithUndo(day, result.doc, 'b_bbbbbb', stamp(4)), null);
+  });
+
+  test('"Geri al" önceki geçme işaretini de geri getirir (Geçilenler\'den dönmüş, sona alınmış birim)', () => {
+    const day = threeDay();
+    const first = dropWithUndo(day, start(day), 'b_bbbbbb', stamp(1), sequence());
+    assert.ok(first);
+    const restored = restoreAt(day, first.doc, 'b_bbbbbb', stamp(2));
+    const again = dropWithUndo(day, restored, 'b_bbbbbb', stamp(3));
+    assert.ok(again);
+    const back = undoSkip(day, again.doc, again.undo, stamp(4));
+    const plank = back.entries.find((entry) => entry.rowId === 'r_bbbbbb');
+    assert.deepEqual([plank?.status, plank?.skip?.moved], ['pending', true]);
+    assert.deepEqual(listView(day, back).items.map((item) => [item.key, item.state]).at(-1), ['b_bbbbbb', 'pending']);
+    valid(back);
   });
 });
