@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
-import { Check } from '@phosphor-icons/react';
+import { Check } from '@/components/line-icons';
 import { Button } from '@/components/ui/button';
 import { Field, FieldContent, FieldDescription, FieldLabel, FieldTitle } from '@/components/ui/field';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
@@ -133,7 +133,7 @@ export function WeekStrip({ clientId, showNext = true }: { clientId: string; sho
                   !day.done && !isNext && day.selected && !faded && 'ring-2 ring-primary-text ring-inset',
                   faded && 'opacity-40 ring-2 ring-muted-foreground ring-inset',
                 )}>
-                {day.done ? <Check weight="bold" className="size-3.5" /> : !day.selected ? <span className="size-1.5 rounded-full bg-muted-foreground/40" /> : null}
+                {day.done ? <Check className="size-3.5" /> : !day.selected ? <span className="size-1.5 rounded-full bg-muted-foreground/40" /> : null}
               </span>
               {/* Sütun ~41 px (375 px'te 7 sütun): uzun ad kesilir; py-px Türkçe işaretleri (ç, Ü) kırpılmasın diye. Boşken de yer tutar.
                   "kaçtı" soldurulmaz: düz muted-foreground AA kontrastı geçer, solukluk halkada. */}
