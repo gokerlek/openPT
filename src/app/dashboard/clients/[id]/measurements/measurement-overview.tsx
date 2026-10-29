@@ -1,5 +1,6 @@
 import Link from 'next/link';
-import { ArrowDown, ArrowUp, CheckCircle, Equals, Ruler, WarningCircle } from '@phosphor-icons/react/dist/ssr';
+import { ArrowDown, ArrowUp, CheckCircle, Ruler, WarningCircle } from '@phosphor-icons/react/dist/ssr';
+import { Equals } from '@/components/line-icons';
 import { ProgressChart, type ProgressSeries } from '@/components/progress-chart';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -277,7 +278,7 @@ function VerdictBadge({ text, tone, title }: { text: string; tone: VerdictTone; 
     ) : tone === 'down' ? (
       <ArrowDown weight="fill" data-icon="inline-start" />
     ) : (
-      <Equals weight="fill" data-icon="inline-start" />
+      <Equals data-icon="inline-start" />
     );
   const variant = tone === 'good' ? 'default' : tone === 'bad' ? 'destructive' : tone === 'flat' ? 'outline' : 'secondary';
   return (

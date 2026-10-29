@@ -1,8 +1,9 @@
 'use client';
 
 import { usePathname } from 'next/navigation';
-import { ChartLineUp, FirstAidKit, House, Notebook } from '@phosphor-icons/react';
+import { FirstAidKit, House, Notebook } from '@phosphor-icons/react';
 import { Dock } from '@/components/dock/dock';
+import { ChartLineUp } from '@/components/line-icons';
 import { CLIENT_TABS, clientTabIndex } from '@/lib/client-tabs';
 
 /** Sekmelerin ikonları (Phosphor, tasarım §0); sıra ve adlar `client-tabs.ts`'te. */

@@ -1,9 +1,10 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
-import { Bandaids, Lightning, ListChecks, Plus, WarningCircle } from '@phosphor-icons/react/dist/ssr';
+import { Bandaids, Lightning, WarningCircle } from '@phosphor-icons/react/dist/ssr';
 import { CoachButton } from '@/components/coach/coach-button';
 import { EditButton } from '@/components/edit-button';
+import { ListChecks, Plus } from '@/components/line-icons';
 import { SectionHeader } from '@/components/section-header';
 import { ChangeLog } from '@/components/program/change-log';
 import { DayPlan } from '@/components/program/day-plan';
@@ -111,7 +112,7 @@ export default async function ProgramPage({ params }: { params: Promise<{ id: st
           <Empty>
             <EmptyHeader>
               <EmptyMedia variant="icon">
-                <ListChecks weight="fill" />
+                <ListChecks />
               </EmptyMedia>
               <EmptyTitle>Henüz program yok</EmptyTitle>
               <EmptyDescription>
@@ -120,7 +121,7 @@ export default async function ProgramPage({ params }: { params: Promise<{ id: st
             </EmptyHeader>
             <EmptyContent className="flex-row flex-wrap justify-center">
               <Button nativeButton={false} render={<Link href={`${detailHref}/program/new`} />}>
-                <Plus data-icon="inline-start" weight="fill" />
+                <Plus data-icon="inline-start" />
                 Program oluştur
               </Button>
               {draftButton}

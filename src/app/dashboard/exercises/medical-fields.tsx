@@ -1,8 +1,8 @@
 'use client';
 
 import { Field as FormField, setInput, type useForm } from '@formisch/react';
-import { Plus, X } from '@phosphor-icons/react';
 import { GroupedSelect } from '@/components/labeled-select';
+import { Plus, X } from '@/components/line-icons';
 import { Button } from '@/components/ui/button';
 import { Field, FieldDescription, FieldError, FieldLabel, FieldSet } from '@/components/ui/field';
 import { Toggle } from '@/components/ui/toggle';

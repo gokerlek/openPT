@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
-import { ArrowUp, CaretDown, CaretRight, Check, LockSimple } from '@phosphor-icons/react';
+import { ArrowUp, CaretDown, CaretRight, LockSimple } from '@phosphor-icons/react';
+import { Check } from '@/components/line-icons';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Stepper } from '@/components/ui/stepper';

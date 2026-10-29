@@ -1,7 +1,8 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { Check, Plus, Trash } from '@phosphor-icons/react';
+import { Trash } from '@phosphor-icons/react';
+import { Check, Plus } from '@/components/line-icons';
 import {
   AlertDialog,
   AlertDialogAction,

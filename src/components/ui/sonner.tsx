@@ -2,7 +2,8 @@
 
 import { useTheme } from "next-themes"
 import { Toaster as Sonner, type ToasterProps } from "sonner"
-import { CheckCircleIcon, InfoIcon, WarningIcon, XCircleIcon, SpinnerIcon } from "@phosphor-icons/react"
+import { CheckCircleIcon, InfoIcon, WarningIcon, XCircleIcon } from "@phosphor-icons/react"
+import { Spinner as SpinnerIcon } from "@/components/line-icons"
 import { useMediaQuery } from "@/hooks/use-media-query"
 
 /** `touch:` varyantıyla aynı sorgu: kaba işaretçi ya da 40rem'den dar ekran. */

@@ -1,7 +1,8 @@
 'use client';
 
 import { getDeepError } from '@formisch/react';
-import { Copy, FileText, Plus, Square, WarningCircle } from '@phosphor-icons/react';
+import { Copy, FileText, Square, WarningCircle } from '@phosphor-icons/react';
+import { Plus } from '@/components/line-icons';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { blankDay, canAddDay, copyDay, programIdSource, addDay, type ProgramPhase } from '@/lib/program-plan';

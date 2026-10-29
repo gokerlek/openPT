@@ -1,7 +1,8 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { CaretRight, Notebook, Plus } from '@phosphor-icons/react/dist/ssr';
+import { CaretRight, Notebook } from '@phosphor-icons/react/dist/ssr';
 import { CoachButton } from '@/components/coach/coach-button';
+import { Plus } from '@/components/line-icons';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';

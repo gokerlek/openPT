@@ -18,8 +18,8 @@ import * as React from "react"
 import { Drawer as DrawerPrimitive } from "@base-ui/react/drawer"
 import { cn } from "cn"
 
+import { X } from "@/components/line-icons"
 import { Button } from "@/components/ui/button"
-import { X } from "@phosphor-icons/react"
 
 function Drawer({
   ...props

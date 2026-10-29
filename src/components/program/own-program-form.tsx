@@ -3,7 +3,7 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Form, getInput, setErrors, setInput, useField, useForm } from '@formisch/react';
-import { ArrowClockwise, Bandaids, CopySimple, FileText, Plus, Square, Trash, UserCircle, WarningCircle } from '@phosphor-icons/react';
+import { ArrowClockwise, Bandaids, CopySimple, FileText, Square, Trash, UserCircle, WarningCircle } from '@phosphor-icons/react';
 import { toast } from 'sonner';
 import { BlockEditor } from '@/components/block-editor/block-editor';
 import type { BlocksFormStore } from '@/components/block-editor/block-items';
@@ -11,6 +11,7 @@ import { DraftAutosave, DraftNotice, useEditorDraft } from '@/components/block-e
 import { keepLineEnter } from '@/components/block-editor/enter-key';
 import { EditorSaveProvider, FloatingSaveButton, SaveButton } from '@/components/block-editor/editor-save';
 import { LabeledSelect } from '@/components/labeled-select';
+import { Plus } from '@/components/line-icons';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/field';

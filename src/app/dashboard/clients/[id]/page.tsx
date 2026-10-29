@@ -1,9 +1,10 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Suspense } from 'react';
-import { ArrowSquareOut, Barbell, CaretRight, ListChecks, Plus, QrCode, WarningCircle } from '@phosphor-icons/react/dist/ssr';
+import { ArrowSquareOut, Barbell, CaretRight, QrCode, WarningCircle } from '@phosphor-icons/react/dist/ssr';
 import { CoachButton } from '@/components/coach/coach-button';
 import { EditButton } from '@/components/edit-button';
+import { ListChecks, Plus } from '@/components/line-icons';
 import { SectionHeader } from '@/components/section-header';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -228,7 +229,7 @@ function ProgramCard({
   const openButton = (
     <CardFooter>
       <Button variant="outline" nativeButton={false} render={<Link href={href} />}>
-        <ListChecks data-icon="inline-start" weight="fill" />
+        <ListChecks data-icon="inline-start" />
         Programı aç
       </Button>
     </CardFooter>
@@ -255,7 +256,7 @@ function ProgramCard({
         </CardHeader>
         <CardFooter>
           <Button nativeButton={false} render={<Link href={`${href}/new`} />}>
-            <Plus data-icon="inline-start" weight="fill" />
+            <Plus data-icon="inline-start" />
             Program oluştur
           </Button>
         </CardFooter>

@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { getInput, setInput, useField, useFieldArray } from '@formisch/react';
-import { CheckSquare, LinkSimple, Plus, Trash } from '@phosphor-icons/react';
+import { CheckSquare, Trash } from '@phosphor-icons/react';
+import { LinkSimple, Plus } from '@/components/line-icons';
 import type { EditorCare } from '@/lib/constraint-filter';
 import { AnimatePresence, motion, type Variants } from 'motion/react';
 import { toast } from 'sonner';

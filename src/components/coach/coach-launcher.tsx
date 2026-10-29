@@ -2,8 +2,8 @@
 import { useEffect, useEffectEvent, useState, type MouseEvent } from 'react';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
-import { X } from '@phosphor-icons/react';
 import { useQuery } from '@tanstack/react-query';
+import { X } from '@/components/line-icons';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { CoachPanel } from './coach-panel';

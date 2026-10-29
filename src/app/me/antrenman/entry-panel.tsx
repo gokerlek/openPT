@@ -1,7 +1,8 @@
 'use client';
 
 import { motion } from 'motion/react';
-import { ArrowRight, CaretRight, Check, FlagCheckered, Play, Stop, WarningCircle } from '@phosphor-icons/react';
+import { ArrowRight, CaretRight, FlagCheckered, Play, Stop, WarningCircle } from '@phosphor-icons/react';
+import { Check } from '@/components/line-icons';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Stepper } from '@/components/ui/stepper';

@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { CaretRight, FirstAidKit, PencilSimple, Plus, WarningCircle } from '@phosphor-icons/react/dist/ssr';
+import { CaretRight, FirstAidKit, PencilSimple, WarningCircle } from '@phosphor-icons/react/dist/ssr';
+import { Plus } from '@/components/line-icons';
 import { SectionHeader } from '@/components/section-header';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
@@ -358,7 +359,7 @@ export default async function ConstraintsPage({ params }: { params: Promise<{ id
         actions={
           view.state === 'ok' ? (
             <Button nativeButton={false} render={<Link href={`/dashboard/clients/${id}/constraints/new`} />}>
-              <Plus data-icon="inline-start" weight="fill" />
+              <Plus data-icon="inline-start" />
               Kısıt ekle
             </Button>
           ) : null

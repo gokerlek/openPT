@@ -4,8 +4,9 @@ import { DatePicker } from '@/components/date-picker';
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowCounterClockwise, Check, CheckCircle, PencilSimple, Trash, X } from '@phosphor-icons/react';
+import { ArrowCounterClockwise, CheckCircle, PencilSimple, Trash } from '@phosphor-icons/react';
 import { ChoiceChips } from '@/components/choice-chips';
+import { Check, X } from '@/components/line-icons';
 import {
   AlertDialog,
   AlertDialogAction,

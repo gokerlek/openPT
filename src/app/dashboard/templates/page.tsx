@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { ClipboardText, Plus } from '@phosphor-icons/react/dist/ssr';
+import { ClipboardText } from '@phosphor-icons/react/dist/ssr';
+import { Plus } from '@/components/line-icons';
 import { TemplateMuscleMap } from '@/components/muscle-map/template-muscle-map';
 import { PageHeader } from '@/components/page-header';
 import { Badge } from '@/components/ui/badge';
@@ -38,7 +39,7 @@ export default async function TemplatesPage() {
         }
         actions={
           <Button nativeButton={false} render={<Link href="/dashboard/templates/new" />}>
-            <Plus data-icon="inline-start" weight="fill" />
+            <Plus data-icon="inline-start" />
             Yeni şablon
           </Button>
         }
@@ -58,7 +59,7 @@ export default async function TemplatesPage() {
           </EmptyHeader>
           <EmptyContent>
             <Button nativeButton={false} render={<Link href="/dashboard/templates/new" />}>
-              <Plus data-icon="inline-start" weight="fill" />
+              <Plus data-icon="inline-start" />
               İlk şablonu oluştur
             </Button>
           </EmptyContent>

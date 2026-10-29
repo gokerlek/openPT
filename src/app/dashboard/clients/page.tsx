@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { Plus, UsersThree } from '@phosphor-icons/react/dist/ssr';
+import { UsersThree } from '@phosphor-icons/react/dist/ssr';
+import { Plus } from '@/components/line-icons';
 import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -83,7 +84,7 @@ export default async function ClientsPage() {
         description={<span className="tabular-nums">{summary}.</span>}
         actions={
           <Button nativeButton={false} render={<Link href="/dashboard/clients/new" />}>
-            <Plus data-icon="inline-start" weight="fill" />
+            <Plus data-icon="inline-start" />
             Yeni danışan
           </Button>
         }
@@ -103,7 +104,7 @@ export default async function ClientsPage() {
             </EmptyHeader>
             <EmptyContent>
               <Button nativeButton={false} render={<Link href="/dashboard/clients/new" />}>
-                <Plus data-icon="inline-start" weight="fill" />
+                <Plus data-icon="inline-start" />
                 İlk danışanı ekle
               </Button>
             </EmptyContent>

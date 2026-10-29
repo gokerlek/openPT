@@ -1,8 +1,8 @@
 'use client';
 
 import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useState } from 'react';
-import { Check } from '@phosphor-icons/react';
 import { AnimatePresence, motion } from 'motion/react';
+import { Check } from '@/components/line-icons';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
 import { DURATION, EASE, tween } from '@/lib/motion';

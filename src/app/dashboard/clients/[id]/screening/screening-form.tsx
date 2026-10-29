@@ -3,8 +3,9 @@ import { DatePicker } from '@/components/date-picker';
 
 import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { useRouter } from 'next/navigation';
-import { Check, CheckCircle, WarningCircle, X } from '@phosphor-icons/react';
+import { CheckCircle, WarningCircle } from '@phosphor-icons/react';
 import { ChoiceChips } from '@/components/choice-chips';
+import { Check, X } from '@/components/line-icons';
 import { SectionHeader } from '@/components/section-header';
 import { UnsavedChangesGuard } from '@/components/unsaved-changes-guard';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';

@@ -2,8 +2,9 @@
 
 import { useState } from 'react';
 import { setInput, useField, useFieldArray } from '@formisch/react';
-import { ArrowDown, ArrowRight, ArrowUp, Copy, DotsThreeVertical, Info, Plus, PushPin, Rows, Trash } from '@phosphor-icons/react';
+import { ArrowDown, ArrowRight, ArrowUp, Copy, Info, PushPin, Rows, Trash } from '@phosphor-icons/react';
 import { keepLineEnter } from '@/components/block-editor/enter-key';
+import { DotsThreeVertical, Plus } from '@/components/line-icons';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';

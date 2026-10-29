@@ -1,7 +1,8 @@
 'use client';
 
 import { useMemo, useRef, useState } from 'react';
-import { CaretRight, Equals, Ruler, TrendDown, TrendUp } from '@phosphor-icons/react';
+import { CaretRight, Ruler, TrendDown, TrendUp } from '@phosphor-icons/react';
+import { Equals } from '@/components/line-icons';
 import { MuscleMap, MuscleStatusSwatch, type MuscleStatusTone } from '@/components/muscle-map/muscle-map';
 import { ProgressChart } from '@/components/progress-chart';
 import { Badge } from '@/components/ui/badge';

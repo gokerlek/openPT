@@ -1,6 +1,7 @@
 'use client';
 
-import { CheckCircle, Plus } from '@phosphor-icons/react';
+import { CheckCircle } from '@phosphor-icons/react';
+import { Plus } from '@/components/line-icons';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import type { FlowItem } from '@/lib/workout-flow';

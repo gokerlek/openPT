@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { Plus } from '@phosphor-icons/react/dist/ssr';
+import { Plus } from '@/components/line-icons';
 import { SectionHeader } from '@/components/section-header';
 import { Button } from '@/components/ui/button';
 import { requirePt } from '@/lib/guards';
@@ -56,7 +56,7 @@ export default async function MeasurementsPage({
         actions={
           view.state === 'ok' ? (
             <Button nativeButton={false} render={<Link href={`${base}/new`} />}>
-              <Plus data-icon="inline-start" weight="fill" />
+              <Plus data-icon="inline-start" />
               Ölçüm gir
             </Button>
           ) : null

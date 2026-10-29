@@ -3,8 +3,9 @@
 import { useMemo } from 'react';
 import Link from 'next/link';
 import { getInput, useField } from '@formisch/react';
-import { ArrowLeft, ArrowRight, ArrowSquareRight, Copy, DotsThreeVertical, FloppyDisk, Trash } from '@phosphor-icons/react';
+import { ArrowLeft, ArrowRight, ArrowSquareRight, Copy, FloppyDisk, Trash } from '@phosphor-icons/react';
 import { BlockEditor, useBlocks } from '@/components/block-editor/block-editor';
+import { DotsThreeVertical } from '@/components/line-icons';
 import type { EditorCare } from '@/lib/constraint-filter';
 import type { BlocksFormStore } from '@/components/block-editor/block-items';
 import type { RowClientTarget } from '@/components/block-editor/editor-context';

@@ -2,9 +2,10 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { getDeepError, setInput, useField, useFieldArray } from '@formisch/react';
-import { ArrowsSplit, Bandaids, Barbell, CaretDown, LinkBreak, NoteBlank, PersonSimpleTaiChi, Plus, TrendUp, Trash, UserCircle, WarningCircle } from '@phosphor-icons/react';
+import { ArrowsSplit, Bandaids, Barbell, CaretDown, NoteBlank, PersonSimpleTaiChi, TrendUp, Trash, UserCircle, WarningCircle } from '@phosphor-icons/react';
 import { ARMED, CardBadge, CardFace, CardGrabber, ExerciseCard, ExerciseCardSection, PLACEHOLDER } from '@/components/exercise-card';
 import { LabeledSelect } from '@/components/labeled-select';
+import { LinkBreak, Plus } from '@/components/line-icons';
 import { SwipeRow, type SwipeAction } from '@/components/swipe/swipe-row';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';

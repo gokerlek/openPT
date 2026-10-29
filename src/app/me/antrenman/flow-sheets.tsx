@@ -5,7 +5,8 @@ import {DndContext,PointerSensor,KeyboardSensor,useSensor,useSensors,useDraggabl
 import {CSS} from '@dnd-kit/utilities';
 import type {ReactNode} from 'react';
 import { motion } from 'motion/react';
-import { ArrowBendUpRight, ArrowClockwise, CaretRight, DotsSixVertical, Check, Circle, MagnifyingGlass, Play, Plus, WarningCircle } from '@phosphor-icons/react';
+import { ArrowBendUpRight, ArrowClockwise, CaretRight, Circle, MagnifyingGlass, Play, WarningCircle } from '@phosphor-icons/react';
+import { Check, DotsSixVertical, Plus } from '@/components/line-icons';
 import { Button } from '@/components/ui/button';
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '@/components/ui/empty';
 import { InputGroup, InputGroupAddon, InputGroupInput } from '@/components/ui/input-group';

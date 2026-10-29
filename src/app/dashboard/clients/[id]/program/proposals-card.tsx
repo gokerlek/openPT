@@ -3,7 +3,8 @@
 import { useState, useSyncExternalStore } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Check, Lightbulb, X } from '@phosphor-icons/react';
+import { Lightbulb } from '@phosphor-icons/react';
+import { Check, X } from '@/components/line-icons';
 import {
   AlertDialog,
   AlertDialogCancel,

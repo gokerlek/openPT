@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion, useIsPresent, useReducedMotion } from 'motion/react';
-import { ArrowBendUpRight, ArrowDown, ArrowsLeftRight, ArrowUp, Bandaids, Check, Equals, NotePencil, Play, Plus, Sparkle, Wrench, X } from '@phosphor-icons/react';
+import { ArrowBendUpRight, ArrowDown, ArrowsLeftRight, ArrowUp, Bandaids, NotePencil, Play, Sparkle, Wrench } from '@phosphor-icons/react';
+import { Check, Equals, Plus, X } from '@/components/line-icons';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';

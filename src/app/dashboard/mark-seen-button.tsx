@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { Checks } from '@phosphor-icons/react';
+import { Checks } from '@/components/line-icons';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
 import { fetchJson } from '@/lib/query/errors';

@@ -1,5 +1,6 @@
 import Link from 'next/link';
-import { Barbell, Play, Plus } from '@phosphor-icons/react/dist/ssr';
+import { Barbell, Play } from '@phosphor-icons/react/dist/ssr';
+import { Plus } from '@/components/line-icons';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';

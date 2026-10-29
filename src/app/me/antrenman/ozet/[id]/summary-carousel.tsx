@@ -3,8 +3,9 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { animate, motion, useMotionValue, useReducedMotion, useTransform } from 'motion/react';
-import { ArrowDown, ArrowUp, CaretLeft, CaretRight, Equals, Sparkle, Trophy } from '@phosphor-icons/react';
+import { ArrowDown, ArrowUp, CaretLeft, CaretRight, Sparkle, Trophy } from '@phosphor-icons/react';
 import { CoachButton } from '@/components/coach/coach-button';
+import { Equals } from '@/components/line-icons';
 import { TemplateMuscleMap } from '@/components/muscle-map/template-muscle-map';
 import { Button } from '@/components/ui/button';
 import { Carousel, CarouselContent, CarouselItem, type CarouselApi } from '@/components/ui/carousel';

@@ -1,6 +1,6 @@
 'use client';
 
-import { X } from '@phosphor-icons/react';
+import { X } from '@/components/line-icons';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { NumberField } from '@base-ui/react/number-field';
-import { Minus, Plus } from '@phosphor-icons/react';
+import { Minus, Plus } from '@/components/line-icons';
 import { cn } from '@/lib/utils';
 
 /**

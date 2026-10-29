@@ -1,7 +1,8 @@
 'use client';
 
 import { useDeferredValue, useMemo, useState } from 'react';
-import { Check, MagnifyingGlass, PersonSimpleTaiChi, Plus, WarningCircle } from '@phosphor-icons/react';
+import { MagnifyingGlass, PersonSimpleTaiChi, WarningCircle } from '@phosphor-icons/react';
+import { Check, Plus } from '@/components/line-icons';
 import {
   AlertDialog,
   AlertDialogAction,

@@ -11,15 +11,14 @@ import {
   Heartbeat,
   Lightbulb,
   MagnifyingGlass,
-  Plus,
   Prohibit,
   Question,
   Warning,
   WarningCircle,
-  X,
   YoutubeLogo,
   type Icon,
 } from '@phosphor-icons/react';
+import { Plus, X } from '@/components/line-icons';
 import { MuscleMap } from '@/components/muscle-map/muscle-map';
 import { PageHeader } from '@/components/page-header';
 import { TrainingTabs } from '../training-tabs';

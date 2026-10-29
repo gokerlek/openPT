@@ -14,8 +14,9 @@ import {
   setInput,
   useForm,
 } from "@formisch/react";
-import { Heartbeat, Plus, PushPin, WarningCircle, X } from "@phosphor-icons/react";
+import { Heartbeat, PushPin, WarningCircle } from "@phosphor-icons/react";
 import { toast } from "sonner";
+import { Plus, X } from "@/components/line-icons";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";

@@ -2,9 +2,10 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { CheckCircle, Plus } from '@phosphor-icons/react';
+import { CheckCircle } from '@phosphor-icons/react';
 import { toast } from 'sonner';
 import { ChoiceChips } from '@/components/choice-chips';
+import { Plus } from '@/components/line-icons';
 import {
   AlertDialog,
   AlertDialogAction,

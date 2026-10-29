@@ -1,7 +1,8 @@
 'use client';
 
 import { useDeferredValue, useMemo, useRef, useState } from 'react';
-import { CaretDown, Check, MagnifyingGlass } from '@phosphor-icons/react';
+import { CaretDown, MagnifyingGlass } from '@phosphor-icons/react';
+import { Check } from '@/components/line-icons';
 import { ProgressChart } from '@/components/progress-chart';
 import { Badge } from '@/components/ui/badge';
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '@/components/ui/empty';

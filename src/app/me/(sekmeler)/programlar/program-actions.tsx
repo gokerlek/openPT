@@ -2,9 +2,10 @@
 
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { useRouter } from 'next/navigation';
-import { CaretDown, Check } from '@phosphor-icons/react';
+import { CaretDown } from '@phosphor-icons/react';
 import { toast } from 'sonner';
 import { discardDraft } from '@/components/block-editor/editor-draft';
+import { Check } from '@/components/line-icons';
 import {
   AlertDialog,
   AlertDialogCancel,
