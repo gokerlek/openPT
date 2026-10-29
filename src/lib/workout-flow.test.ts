@@ -6,6 +6,7 @@ import { at, DAY_A, DAY_B, programFile, singleBlock, W1, workingSet } from './te
 import { BENCH, CRUNCH, DB_PRESS, dayWithBlocks, DEVICES, PLANK, PUSH_UP, workoutDay } from './testing/workout-fixtures.ts';
 import { mergeAll } from './session-merge.ts';
 import { addExtraRound, cursorOf, logSet, newSessionDoc, nextSet, setViews } from './workout-session.ts';
+import { nextMemberLetter } from './workout-groups.ts';
 import {
   addExercise,
   canSwap,
@@ -419,4 +420,68 @@ test('reordering changes execution order without changing recorded sets',()=>{
  assert.deepEqual(flowView(day,moved).active.map(item=>item.key),['b_dddddd','b_aaaaaa','b_bbbbbb']);
  assert.equal(nextSet(day,moved)?.rowId,'r_dddddd');
  assert.deepEqual(moved.entries.flatMap(e=>e.sets),doc.entries.flatMap(e=>e.sets));valid(moved);
+});
+
+describe('liste + odak: imleç', () => {
+  test('odaktaki birimin sıradaki seti; sıra değişmez', () => {
+    const day = threeDay();
+    const doc = logNext(day, start(day), 1); // Bench 1/3
+    const focused = nextSet(day, doc, null, 'b_dddddd');
+    assert.equal(focused?.rowId, 'r_dddddd');
+    assert.equal(focused?.position, 0);
+    // Odaksız imleç Bench'te kalır; sıra yazılmaz.
+    assert.equal(nextSet(day, doc)?.rowId, 'r_aaaaaa');
+    assert.deepEqual(cursorOf(day, doc, 'b_dddddd').units.map((unit) => unit.key), ['b_aaaaaa', 'b_bbbbbb', 'b_dddddd']);
+  });
+
+  test('odaktaki birim bitince sıradaki set yok; dinlenme bütün antrenmana göre', () => {
+    const day = threeDay();
+    let doc = start(day);
+    for (let minute = 1; minute <= 2; minute += 1) {
+      const next = nextSet(day, doc, null, 'b_dddddd');
+      assert.ok(next);
+      // Başka birimlerde set kaldığı için son setin ardında da bloğun dinlenmesi var.
+      assert.equal(next.restAfterSeconds, 60);
+      doc = logSet(day, doc, { rowId: next.rowId, setIndex: next.setIndex, kg: next.kg, value: next.value, stamp: stamp(minute), random: sequence() }).doc;
+    }
+    assert.equal(nextSet(day, doc, null, 'b_dddddd'), null);
+    assert.equal(cursorOf(day, doc, 'b_dddddd').next, null);
+    assert.equal(cursorOf(day, doc, 'b_dddddd').allDone, false);
+  });
+
+  test('antrenmanın son seti odakta da dinlenmesiz', () => {
+    const day = threeDay();
+    let doc = start(day);
+    for (let minute = 1; minute <= 5; minute += 1) doc = logNext(day, doc, minute); // Bench ve Plank biter
+    const first = nextSet(day, doc, null, 'b_dddddd');
+    assert.equal(first?.restAfterSeconds, 60);
+    doc = logNext(day, doc, 6);
+    assert.equal(nextSet(day, doc, null, 'b_dddddd')?.restAfterSeconds, 0);
+  });
+
+  test('grupta odak üyeler arasında turu izler; harf odaktan', () => {
+    // Kimlikler fikstürün Gün B'siyle (b_cccccc, r_cccccc) çakışmaz: program şeması kimliklerin benzersizliğini ister.
+    const day = dayWithBlocks([
+      { id: 'b_aaaaaa', kind: 'single', restSeconds: 90, rows: [{ id: 'r_aaaaaa', exerciseId: 'bench-press', sets: [{ min: 8, max: 10 }] }] },
+      {
+        id: 'b_eeeeee',
+        kind: 'superset',
+        restSeconds: 90,
+        rows: [
+          { id: 'r_ffffff', exerciseId: 'goblet-squat', sets: [{ min: 10, max: 12 }, { min: 10, max: 12 }] },
+          { id: 'r_eeeeee', exerciseId: 'push-up', sets: [{ min: 8, max: 12 }, { min: 8, max: 12 }] },
+        ],
+      },
+    ]);
+    const doc = start(day);
+    assert.equal(nextSet(day, doc, null, 'b_eeeeee')?.rowId, 'r_ffffff');
+    assert.equal(nextMemberLetter(day, doc, 'b_eeeeee'), 'B');
+    assert.equal(nextMemberLetter(day, doc), null); // odaksız imleç tek harekette
+  });
+
+  test('geçilen birime odak: set yok (önce "Geri al")', () => {
+    const day = threeDay();
+    const dropped = dropAt(day, start(day), 'b_bbbbbb', stamp(1));
+    assert.equal(nextSet(day, dropped, null, 'b_bbbbbb'), null);
+  });
 });

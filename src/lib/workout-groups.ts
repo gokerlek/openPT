@@ -114,10 +114,10 @@ export function groupView(
 
 /**
  * "Set bitti → B": sıradaki setten sonra aynı turda başka bir üye geliyorsa onun harfi (dinlenme yok);
- * tur bitiyorsa ya da grup değilse null.
+ * tur bitiyorsa ya da grup değilse null. `focus`: sıradaki set odaktaki birimden (`cursorOf`).
  */
-export function nextMemberLetter(day: WorkoutDay, doc: Pick<SessionDoc, 'entries' | 'order'>): string | null {
-  const cursor = cursorOf(day, doc);
+export function nextMemberLetter(day: WorkoutDay, doc: Pick<SessionDoc, 'entries' | 'order'>, focus?: string | null): string | null {
+  const cursor = cursorOf(day, doc, focus);
   const next = cursor.next;
   const unit = next ? cursor.units[next.unit] : undefined;
   if (!next || !unit || unit.kind === 'single') return null;

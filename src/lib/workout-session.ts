@@ -119,8 +119,9 @@ export function cursorOverrides(day: Pick<WorkoutDay, 'rows' | 'extraRounds'>): 
   };
 }
 
-export function cursorOf(day: WorkoutDay, doc: Pick<SessionDoc, 'entries' | 'order'>): WorkoutCursor {
-  return workoutCursor(dayBody(day), doc, cursorOverrides(day));
+/** Günün imleci; `focus` (birim anahtarı) verilince sıradaki set yalnız o birimde aranır (`workoutCursor`). */
+export function cursorOf(day: WorkoutDay, doc: Pick<SessionDoc, 'entries' | 'order'>, focus?: string | null): WorkoutCursor {
+  return workoutCursor(dayBody(day), doc, cursorOverrides(day), focus);
 }
 
 export function templateRowOf(day: WorkoutDay, rowId: string): TemplateRow | undefined {
@@ -241,9 +242,12 @@ export type NextSet = {
   extra?: true;
 };
 
-/** Sıradaki set ve önceden dolu değerleri; hepsi yapıldıysa null. */
-export function nextSet(day: WorkoutDay, doc: Pick<SessionDoc, 'entries' | 'order'>, draft?: SetDraft | null): NextSet | null {
-  const cursor = cursorOf(day, doc);
+/**
+ * Sıradaki set ve önceden dolu değerleri; hepsi yapıldıysa null. `focus`: yalnız o birimin sıradaki seti
+ * (birimde set kalmadıysa null).
+ */
+export function nextSet(day: WorkoutDay, doc: Pick<SessionDoc, 'entries' | 'order'>, draft?: SetDraft | null, focus?: string | null): NextSet | null {
+  const cursor = cursorOf(day, doc, focus);
   const position = cursor.next;
   if (!position?.rowId) return null;
   const row = day.rows[position.rowId];
@@ -601,15 +605,16 @@ export function setEntryEffort(doc: SessionDoc, entryId: string, effort: Effort,
  * "Kolaydı · sonraki set X kg" (§2.5): az önce kaydedilen set aralığın tepesindeyse ve sıradaki set
  * aynı hareketin aynı yükteki setiyse, o sete `easy` yazmak sonraki seti bir adım artırır
  * (`nextSetInPlan`). Artmıyorsa (cihazın en ağır ayarı, başka yüzde, AMRAP) null. `taken`: dokunuldu.
+ * `focus`: sıradaki set odaktaki birimden (`nextSet`).
  */
-export function easyShortcut(day: WorkoutDay, doc: SessionDoc, setId: string): { kg: number; taken: boolean } | null {
+export function easyShortcut(day: WorkoutDay, doc: SessionDoc, setId: string, focus?: string | null): { kg: number; taken: boolean } | null {
   const found = findSet(doc, setId);
   const set = found?.set;
   if (!found || !set || set.type !== 'working' || set.extra || !set.target || set.target.amrap || (set.reps ?? 0) < set.target.max) return null;
-  const next = nextSet(day, doc);
+  const next = nextSet(day, doc, null, focus);
   if (!next || next.kg === undefined || next.rowId !== found.entry.rowId) return null;
   if (set.effort === 'easy') return next.kg > (set.kg ?? 0) ? { kg: next.kg, taken: true } : null;
-  const raised = nextSet(day, setSetEffort(doc, setId, 'easy', { at: set.editedAt ?? set.at, by: set.by ?? doc.writer }));
+  const raised = nextSet(day, setSetEffort(doc, setId, 'easy', { at: set.editedAt ?? set.at, by: set.by ?? doc.writer }), null, focus);
   return raised?.kg !== undefined && raised.kg > next.kg ? { kg: raised.kg, taken: false } : null;
 }
 

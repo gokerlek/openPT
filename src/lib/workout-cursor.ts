@@ -210,8 +210,17 @@ export function workoutUnits(plan: TemplateBody, session: Pick<SessionDoc, 'entr
     .map((item) => item.unit);
 }
 
-/** Sıradaki set, ilerleme ve bitiş durumu. */
-export function workoutCursor(plan: TemplateBody, session: Pick<SessionDoc, 'entries' | 'order'>, overrides: PlanOverrides = {}): WorkoutCursor {
+/**
+ * Sıradaki set, ilerleme ve bitiş durumu. `focus` (Faz 2, liste + odak): sıradaki set yalnız o birimde aranır,
+ * sıra değişmez; birimde set kalmadıysa `next` null. Dinlenme yine bütün antrenmana göre: başka hiçbir yerde
+ * yapılmamış set kalmadıysa setin ardında dinlenme yok.
+ */
+export function workoutCursor(
+  plan: TemplateBody,
+  session: Pick<SessionDoc, 'entries' | 'order'>,
+  overrides: PlanOverrides = {},
+  focus?: string | null,
+): WorkoutCursor {
   const units = workoutUnits(plan, session, overrides);
   const open = units.filter((unit) => !unitSkipped(unit));
 
@@ -219,10 +228,11 @@ export function workoutCursor(plan: TemplateBody, session: Pick<SessionDoc, 'ent
   let pendingAfter = false;
   for (const [unitIndex, unit] of units.entries()) {
     if (unitSkipped(unit)) continue;
+    const candidate = focus == null || unit.key === focus;
     for (const slot of unit.slots) {
       const member = unit.members[slot.member];
       if (!member || slotDone(unit, slot)) continue;
-      if (next) {
+      if (next || !candidate) {
         pendingAfter = true;
         break;
       }
@@ -237,14 +247,20 @@ export function workoutCursor(plan: TemplateBody, session: Pick<SessionDoc, 'ent
         ...(slot.extra !== undefined ? { extra: slot.extra } : {}),
       };
     }
-    if (pendingAfter) break;
+    if (next && pendingAfter) break;
   }
   if (next && !pendingAfter) next = { ...next, restAfterSeconds: 0 };
 
   const members = units.flatMap((unit) => unit.members);
   const doneSets = members.reduce((sum, member) => sum + Math.min(member.done, member.planned), 0);
   const plannedSets = members.reduce((sum, member) => sum + (member.skipped ? Math.min(member.done, member.planned) : member.planned), 0);
-  const current = next ? open.indexOf(units[next.unit] as CursorUnit) + 1 : open.length;
+  // Odaktaki birim bittiyse "Hareket 2/5" yine o birimin sırası.
+  const focused = focus == null ? undefined : units.find((unit) => unit.key === focus);
+  const current = next
+    ? open.indexOf(units[next.unit] as CursorUnit) + 1
+    : focused && !unitSkipped(focused)
+      ? open.indexOf(focused) + 1
+      : open.length;
   const allDone = open.every((unit) => !remaining(unit));
   return { units, next, allDone, progress: { doneSets, plannedSets, currentUnit: current, totalUnits: open.length } };
 }
