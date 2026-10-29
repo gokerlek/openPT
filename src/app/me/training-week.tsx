@@ -40,7 +40,6 @@ import { clearWorkoutCache, readWorkoutCache } from './workout-storage';
  *   farklıysa (PT programı değiştirdi) saklanan plan atılır, "Antrenmana başla" güncel planı açar.
  */
 
-const BOTTOM = 'gap-0 rounded-t-2xl pb-[env(safe-area-inset-bottom)]';
 
 const STATE_TEXT: Record<WeekPlanState, string> = { done: 'yapıldı', missed: 'kaçtı', next: 'sırada', planned: 'antrenman günü', rest: 'dinlenme' };
 
@@ -189,7 +188,7 @@ export function OtherDayButton({ clientId }: { clientId: string }) {
         Başka gün seç
       </Button>
       <Drawer open={open} onOpenChange={setOpen} onOpenChangeComplete={(isOpen) => (isOpen ? undefined : setPicked(null))}>
-        <DrawerContent showCloseButton={false} className={cn(BOTTOM, 'max-h-[calc(100dvh-max(1rem,env(safe-area-inset-top)))]')}>
+        <DrawerContent showCloseButton={false} className="gap-0">
           <DrawerHeader className="gap-1.5 pt-5">
             <DrawerTitle id="other-day-title" className="text-lg font-semibold">
               Hangi günü yapacaksın?
