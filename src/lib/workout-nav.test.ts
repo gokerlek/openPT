@@ -10,9 +10,18 @@ describe('antrenman adresi', () => {
     assert.equal(workoutHref('/me/antrenman', '?liste=1', { list: false }), '/me/antrenman');
   });
 
-  test('odak yalnız birim anahtarı biçiminde: blok ya da eklenen hareketin kaydı', () => {
+  test('boş adresten, yalnız bitir düşerken ve odak yerinde değişirken', () => {
+    assert.equal(workoutHref('/me/antrenman', '', { list: true }), '/me/antrenman?liste=1');
+    assert.equal(workoutHref('/me/antrenman', '?bitir=1&day=d_abc123', {}), '/me/antrenman?day=d_abc123');
+    assert.equal(workoutHref('/me/antrenman', '?hareket=b_aaaaaa&program=pt', { focus: 'e_bbbbbb' }), '/me/antrenman?hareket=e_bbbbbb&program=pt');
+    // Boş odak "odak yok" demektir: boş parametre yazılmaz.
+    assert.equal(workoutHref('/me/antrenman', '?hareket=b_aaaaaa', { focus: '' }), '/me/antrenman');
+  });
+
+  test('odak yalnız birim anahtarı biçiminde: blok ya da plan dışı birimin kaydı', () => {
     assert.equal(focusOf(new URLSearchParams('hareket=b_k2m9x4')), 'b_k2m9x4');
     assert.equal(focusOf(new URLSearchParams('hareket=e_k2m9x4')), 'e_k2m9x4');
+    assert.equal(focusOf(new URLSearchParams('hareket=r_k2m9x4')), null); // satır kimliği birim değil
     assert.equal(focusOf(new URLSearchParams('hareket=../x')), null);
     assert.equal(focusOf(new URLSearchParams('')), null);
   });

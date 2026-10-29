@@ -7,28 +7,32 @@ import { BLOCK_ID_PATTERN } from './template-plan.ts';
  * Next yerel geçmiş çağrılarını yönlendiriciye bağlar, sunucuya gidilmez (çevrimdışı salon). `bitir` bir kez
  * okunur, sonraki adreslerde düşer.
  *
- * Birim anahtarı blok kimliğidir (`b_…`), eklenen harekette kaydın kimliği (`e_…`); desenler yerlerinden gelir.
- * İstemci paketine girer (`workout-screen.tsx`); import zinciri yalnız saf modüllerdir.
+ * Birim anahtarı blok kimliğidir (`b_…`); plan dışı birimde kaydın kimliği (`e_…`: eklenen hareket ya da
+ * programdan kalkmış satırın kaydı). Desenler yerlerinden gelir. İstemci paketine girer (`workout-screen.tsx`);
+ * import zinciri yalnız saf modüllerdir.
  */
 
 /** Odaktaki birimin adres parametresi. */
 export const FOCUS_PARAM = 'hareket';
 /** Liste işaretinin adres parametresi (değeri `1`). */
 export const LIST_PARAM = 'liste';
+/** Açılışta bitiş sorusunu açan parametre (`?bitir=1`); bir kez okunur. */
+export const FINISH_PARAM = 'bitir';
 
 const isUnitKey = (value: string) => BLOCK_ID_PATTERN.test(value) || ENTRY_ID_PATTERN.test(value);
 
 /**
- * Şu anki adresten yeni antrenman adresi: `list` true/false işareti koyar/kaldırır, `focus` metinse odağı koyar,
- * null'sa kaldırır; verilmeyen alan dokunulmaz. Diğer parametreler (`program` …) kalır, `bitir` her zaman düşer.
+ * Şu anki adresten yeni antrenman adresi: `list` true/false işareti koyar/kaldırır, `focus` doluysa odağı koyar,
+ * null ya da boşsa kaldırır; verilmeyen alan dokunulmaz. Diğer parametreler (`program` …) kalır, `bitir` her
+ * zaman düşer.
  */
 export function workoutHref(pathname: string, search: string, change: { focus?: string | null; list?: boolean }): string {
   const params = new URLSearchParams(search);
-  params.delete('bitir');
+  params.delete(FINISH_PARAM);
   if (change.list === true) params.set(LIST_PARAM, '1');
   if (change.list === false) params.delete(LIST_PARAM);
-  if (typeof change.focus === 'string') params.set(FOCUS_PARAM, change.focus);
-  if (change.focus === null) params.delete(FOCUS_PARAM);
+  if (change.focus) params.set(FOCUS_PARAM, change.focus);
+  else if (change.focus !== undefined) params.delete(FOCUS_PARAM);
   const query = params.toString();
   return query ? `${pathname}?${query}` : pathname;
 }
