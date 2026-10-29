@@ -2,7 +2,7 @@ import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as v from 'valibot';
 import { sessionDocSchema, type SessionDoc } from './schemas/session.ts';
-import { at, DAY_A, DAY_B, programFile, singleBlock, W1, workingSet } from './testing/session-fixtures.ts';
+import { at, DAY_A, DAY_B, programFile, sessionDoc, sessionEntry, singleBlock, W1, workingSet } from './testing/session-fixtures.ts';
 import { BENCH, CRUNCH, DB_PRESS, dayWithBlocks, DEVICES, PLANK, PUSH_UP, workoutDay } from './testing/workout-fixtures.ts';
 import { mergeAll } from './session-merge.ts';
 import { addExtraRound, afterLog, cursorOf, easyShortcut, logSet, newSessionDoc, nextSet, setViews } from './workout-session.ts';
@@ -17,6 +17,7 @@ import {
   finishRotation,
   firstSkippedKey,
   flowView,
+  listView,
   optionText,
   restoreAt,
   skipAt,
@@ -577,5 +578,84 @@ describe('liste + odak: imleç', () => {
     doc = logNext(day, logNext(day, doc, 1), 2);
     const logged = logNext(day, doc, 3); // Bench'in son seti
     assert.deepEqual(afterLog(day, doc, logged), { kind: 'next', restSeconds: 90, nextKey: 'b_bbbbbb' });
+  });
+});
+
+describe('liste + odak: liste', () => {
+  test('durumlar: bitti, şu an (odak ya da imleç), sırada, atlandı; sıra yapılış sırası, atlanan sona iner', () => {
+    const day = threeDay();
+    let doc = start(day);
+    for (let minute = 1; minute <= 3; minute += 1) doc = logNext(day, doc, minute); // Bench bitti
+    doc = dropAt(day, doc, 'b_bbbbbb', stamp(4));
+    const view = listView(day, doc);
+    assert.deepEqual(
+      view.items.map((item) => [item.key, item.state, `${item.done}/${item.planned}`]),
+      [
+        ['b_aaaaaa', 'done', '3/3'],
+        ['b_dddddd', 'current', '0/2'],
+        ['b_bbbbbb', 'skipped', '0/2'],
+      ],
+    );
+    assert.equal(view.current, 'b_dddddd');
+    assert.equal(listView(day, doc, 'b_aaaaaa').current, 'b_aaaaaa');
+  });
+
+  test('son ağırlık: bugün kaydedilen son çalışma seti; yoksa null', () => {
+    const day = threeDay();
+    const first = nextSet(day, start(day));
+    assert.ok(first);
+    const doc = logSet(day, start(day), { rowId: first.rowId, setIndex: first.setIndex, kg: 42.5, value: 10, stamp: stamp(1), random: sequence() }).doc;
+    const [bench, plank] = listView(day, doc).items;
+    assert.deepEqual([bench?.lastKg, bench?.lastFrom], [42.5, 'today']);
+    assert.deepEqual([plank?.lastKg, plank?.lastFrom], [null, null]);
+  });
+
+  test('son ağırlık bugün yoksa geçen antrenmanın son seti', () => {
+    // Geçen antrenman: Bench 60, sonra 57,5. Gün A'nın iki satırı da Bench: "Önceki" ikisine de gelir.
+    const history = [
+      sessionDoc({
+        id: 's_aaaaaaaa',
+        status: 'finished',
+        startedAt: at(-1000),
+        finishedAt: at(-960),
+        entries: [
+          sessionEntry('e_aaaaaa', {
+            rowId: 'r_aaaaaa',
+            status: 'done',
+            sets: [workingSet('st_aaaaaaaa', -999, { setIndex: 0, kg: 60 }), workingSet('st_bbbbbbbb', -998, { setIndex: 1, kg: 57.5 })],
+          }),
+        ],
+      }),
+    ];
+    const day = workoutDay({ history });
+    const pick = (doc: SessionDoc) => listView(day, doc).items.map((item) => [item.key, item.lastKg, item.lastFrom]);
+    assert.deepEqual(pick(start(day)), [
+      ['b_aaaaaa', 57.5, 'last'],
+      ['b_bbbbbb', 57.5, 'last'],
+    ]);
+    const first = nextSet(day, start(day));
+    assert.ok(first);
+    const doc = logSet(day, start(day), { rowId: first.rowId, setIndex: first.setIndex, kg: 62.5, value: 10, stamp: stamp(1), random: sequence() }).doc;
+    // Bugünkü set geçen antrenmanınkini geçer; öteki satır geçen antrenmanda kalır.
+    assert.deepEqual(pick(doc), [
+      ['b_aaaaaa', 62.5, 'today'],
+      ['b_bbbbbb', 57.5, 'last'],
+    ]);
+  });
+
+  test('"şu an" odak yoksa yarım bırakılan birim (son kaydedilen set); o bitince imleç', () => {
+    const day = threeDay();
+    let doc = logNext(day, start(day), 1); // Bench 1/3
+    const goblet = nextSet(day, doc, null, 'b_dddddd');
+    assert.ok(goblet);
+    doc = logSet(day, doc, { rowId: goblet.rowId, setIndex: goblet.setIndex, kg: goblet.kg, value: goblet.value, stamp: stamp(2), random: sequence() }).doc;
+    // Goblet yarım: listeye dönünce "Devam et" Goblet'i gösterir, Bench'i değil.
+    assert.equal(listView(day, doc).current, 'b_dddddd');
+    // İmlecin birimi (Bench) "şu an" değilse satırı "sırada".
+    assert.deepEqual(listView(day, doc).items.map((item) => item.state), ['pending', 'pending', 'current']);
+    const last = nextSet(day, doc, null, 'b_dddddd');
+    assert.ok(last);
+    doc = logSet(day, doc, { rowId: last.rowId, setIndex: last.setIndex, kg: last.kg, value: last.value, stamp: stamp(3), random: sequence() }).doc;
+    assert.equal(listView(day, doc).current, 'b_aaaaaa');
   });
 });

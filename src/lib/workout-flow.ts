@@ -181,6 +181,66 @@ export function flowView(day: WorkoutDay, doc: Pick<SessionDoc, 'entries' | 'ord
   };
 }
 
+/* --- liste (Faz 2: liste + odak) --- */
+
+export type ListState = 'done' | 'current' | 'pending' | 'skipped';
+
+export type ListItem = Omit<FlowItem, 'state'> & {
+  state: ListState;
+  /** Satırdaki ağırlık: bugün kaydedilen son çalışma setinin kilosu, yoksa geçen antrenmanın son setininki. */
+  lastKg: number | null;
+  lastFrom: 'today' | 'last' | null;
+};
+
+export type ListView = {
+  /** Yapılış sırasında (atlanan birim `dropAt` ile sıranın sonuna iner). */
+  items: ListItem[];
+  /** Şu an: odak; yoksa yarım bırakılan birim (son kaydedilen setinki); yoksa imlecin birimi; hepsi bittiyse null. */
+  current: string | null;
+  doneSets: number;
+  plannedSets: number;
+  allDone: boolean;
+};
+
+/**
+ * Antrenmanın listesi (tasarım Faz 2): durum (✓ bitti, ▶ şu an, ○ sırada, ⤼ atlandı), ad, yapılan/planlanan set
+ * ve son ağırlık (grupta ilk üyenin). Danışan sırayı atlayıp başka bir hareketi yarım bıraktıysa "şu an" odur:
+ * listeye dönünce "Devam et" onu gösterir. Biten birim odakta da "bitti" görünür.
+ */
+export function listView(day: WorkoutDay, doc: Pick<SessionDoc, 'entries' | 'order'>, focus?: string | null): ListView {
+  const cursor = cursorOf(day, doc);
+  const flow = flowView(day, doc);
+  let latest: { entryId: string; at: string } | null = null;
+  for (const entry of doc.entries) {
+    for (const set of entry.sets) {
+      if (set.type === 'working' && (!latest || set.at >= latest.at)) latest = { entryId: entry.id, at: set.at };
+    }
+  }
+  const inProgress = latest ? cursor.units.find((unit) => unit.members.some((member) => member.entryId === latest?.entryId)) : undefined;
+  const active = inProgress && !isSkipped(inProgress) && !isFinished(inProgress) ? inProgress.key : null;
+  const current = focus ?? active ?? (cursor.next ? (cursor.units[cursor.next.unit]?.key ?? null) : null);
+  const units = new Map(cursor.units.map((unit) => [unit.key, unit]));
+  const rank = new Map(cursor.units.map((unit, index) => [unit.key, index]));
+  const items = [...flow.active, ...flow.skipped]
+    .sort((a, b) => (rank.get(a.key) ?? 0) - (rank.get(b.key) ?? 0))
+    .map((item): ListItem => {
+      const state: ListState =
+        item.state === 'skipped' ? 'skipped' : item.state === 'done' ? 'done' : item.key === current ? 'current' : 'pending';
+      return { ...item, state, ...lastWeightOf(day, doc, units.get(item.key)) };
+    });
+  return { items, current, doneSets: flow.doneSets, plannedSets: flow.plannedSets, allDone: cursor.allDone };
+}
+
+function lastWeightOf(day: WorkoutDay, doc: Pick<SessionDoc, 'entries'>, unit: CursorUnit | undefined): Pick<ListItem, 'lastKg' | 'lastFrom'> {
+  const member = unit?.members[0];
+  if (!member) return { lastKg: null, lastFrom: null };
+  const entry = member.rowId ? entryForRow(doc.entries, member.rowId) : doc.entries.find((item) => item.id === member.entryId);
+  const today = entry?.sets.filter((set) => set.type === 'working' && set.kg !== undefined).at(-1)?.kg;
+  if (today !== undefined) return { lastKg: today, lastFrom: 'today' };
+  const last = (member.rowId ? day.rows[member.rowId]?.lastTime : undefined)?.filter((set) => set.kg !== undefined).at(-1)?.kg;
+  return last !== undefined ? { lastKg: last, lastFrom: 'last' } : { lastKg: null, lastFrom: null };
+}
+
 /* --- geç, bugün yapma, geri al, şimdi yap --- */
 
 function overrides(day: WorkoutDay) {
