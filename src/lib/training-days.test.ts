@@ -198,7 +198,8 @@ describe('hafta planı', () => {
         expected: [['missed', null], rest, ['next', null], rest, ['planned', null], rest, rest],
       },
       {
-        name: 'sıradaki gün bulunamadı (-1): listenin sonundan sarar',
+        // Çağıranlar bulunamayan sıradaki günü 0'a çevirir (`training-week.tsx` → `planOf`); burada yalnız sarma.
+        name: 'eksi sıra: sarılır',
         input: { rotation: { names: rotation.names, next: -1 } },
         expected: [['missed', null], rest, ['next', 'Gün C'], rest, ['planned', 'Gün A'], rest, rest],
       },

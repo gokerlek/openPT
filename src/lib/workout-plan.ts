@@ -667,11 +667,23 @@ export function weekOf(index: SessionIndex, program: PlanProgram | null, now: Da
  * sonuna). Oturumun kimliği listede olmadığından tekrar kuralı: o günün son oturumu aynı adlıysa yenisi eklenmez
  * (aynı bitiş iki kez uygulanırsa ya da sunucunun taze yanıtı bitişi zaten içeriyorsa çift satır olmaz; aynı
  * gün aynı günü ikinci kez yapmak şeritte zaten aynı adı gösterirdi: "aynı gün sonuncusu").
+ *
+ * Sıradaki gün (`program.nextDayId`): sunucu rotasyonu yalnız seansın kipi "advance" iken ilerletir
+ * (`session-finish.ts` → `completeDay`; seçim seansa `rotation.value` olarak yazılır), sıra biten günün arkasındaki
+ * gün olur (`nextDayId`: sonda başa döner, başka gün seçildiyse ondan sürer). Burada da öyle; biten gün bu yanıtın
+ * günlerinde değilse (başka programın Bugün sorgusu: `setQueriesData` hepsine uygulanır) ya da kip "keep" ise ya da
+ * belgede kip yoksa sıra aynen kalır. Biten günden hesaplandığı için aynı bitiş iki kez uygulansa da bir kez ilerler.
+ * Sunucunun öteki koşulu (seans son tamamlanandan sonra başlamış) telefonda bilinmez; taze yanıt düzeltir.
  */
-export function afterFinish<T extends { today: string; week: WeekCount; water: { file: number; sessions: number }; active: Pick<SessionDoc, 'id'> | null }>(
-  data: T,
-  doc: Pick<SessionDoc, 'id' | 'date' | 'waterTaps'> & Partial<Pick<SessionDoc, 'program'>>,
-): T {
+export function afterFinish<
+  T extends {
+    today: string;
+    week: WeekCount;
+    water: { file: number; sessions: number };
+    active: Pick<SessionDoc, 'id'> | null;
+    program?: { nextDayId: string | null; days: readonly { id: string }[] } | null;
+  },
+>(data: T, doc: Pick<SessionDoc, 'id' | 'date' | 'waterTaps'> & Partial<Pick<SessionDoc, 'program' | 'rotation'>>): T {
   const thisWeek = mondayOf(doc.date) === data.week.start && doc.date <= data.today;
   const counted = thisWeek && !data.week.days.includes(doc.date);
   const days = counted ? [...data.week.days, doc.date].sort() : data.week.days;
@@ -682,8 +694,12 @@ export function afterFinish<T extends { today: string; week: WeekCount; water: {
     a.date < b.date ? -1 : a.date > b.date ? 1 : 0,
   );
   const known = data.active?.id === doc.id;
+  const program = data.program;
+  const finished = doc.rotation?.value === 'advance' && program && doc.program ? program.days.findIndex((day) => day.id === doc.program?.dayId) : -1;
+  const nextDayId = program && finished >= 0 ? (program.days[(finished + 1) % program.days.length]?.id ?? null) : undefined;
   return {
     ...data,
+    ...(program && nextDayId !== undefined && nextDayId !== program.nextDayId ? { program: { ...program, nextDayId } } : {}),
     week: thisWeek ? { ...data.week, done: days.length, days, sessions } : data.week,
     water: doc.date === data.today ? { ...data.water, sessions: data.water.sessions + waterOf(doc) } : data.water,
     active: known ? null : data.active,

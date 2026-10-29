@@ -405,6 +405,53 @@ describe('Bugün: index\'ten', () => {
     const unnamed = afterFinish(data, { id: 's_ffffffff', date: '2026-09-25', waterTaps: [], program: { ...gunB, dayName: '' } }).week.sessions;
     assert.deepEqual(unnamed?.at(-1), { date: '2026-09-25', dayName: 'Antrenman' });
   });
+
+  describe('bitişten hemen sonra: sıradaki gün (sunucu yalnız "advance"te ilerletir)', () => {
+    const DAY_C = 'd_cccccc';
+    const days = [
+      { id: DAY_A, name: 'Gün A' },
+      { id: DAY_B, name: 'Gün B' },
+      { id: DAY_C, name: 'Gün C' },
+    ];
+    const data = {
+      today: '2026-09-25',
+      week: { done: 1, target: 3, days: ['2026-09-22'], start: '2026-09-21' },
+      water: { file: 0, sessions: 0 },
+      active: null,
+      program: { revision: 1, nextDayId: DAY_A, days },
+    };
+    const finished = (dayId: string, value?: 'advance' | 'keep') => ({
+      id: 's_dddddddd',
+      date: '2026-09-25',
+      waterTaps: [],
+      program: { revision: 1, dayId, dayName: days.find((day) => day.id === dayId)?.name ?? 'Gün X' },
+      ...(value ? { rotation: { value, updatedAt: at(3) } } : {}),
+    });
+
+    test('advance: biten günün arkasındaki gün sıradaki (sonda başa döner; başka gün seçildiyse ondan sürer)', () => {
+      const next = afterFinish(data, finished(DAY_A, 'advance'));
+      assert.equal(next.program.nextDayId, DAY_B);
+      assert.deepEqual(next.program.days, days);
+      assert.equal(next.program.revision, 1);
+      assert.equal(afterFinish(data, finished(DAY_C, 'advance')).program.nextDayId, DAY_A);
+      assert.equal(afterFinish({ ...data, program: { ...data.program, nextDayId: DAY_A } }, finished(DAY_B, 'advance')).program.nextDayId, DAY_C);
+      // Aynı bitiş iki kez uygulanırsa sıra iki kez ilerlemez (biten günden hesaplanır).
+      assert.equal(afterFinish(next, finished(DAY_A, 'advance')).program.nextDayId, DAY_B);
+    });
+
+    test('keep (ya da yanıtta rotasyon yok): sıradaki gün aynen kalır', () => {
+      assert.deepEqual(afterFinish(data, finished(DAY_A, 'keep')).program, data.program);
+      assert.deepEqual(afterFinish(data, finished(DAY_A)).program, data.program);
+    });
+
+    test('gün bu programda yok (başka programın Bugün sorgusu) ya da program yok: dokunulmaz', () => {
+      assert.deepEqual(afterFinish(data, finished('d_ownaaa', 'advance')).program, data.program);
+      const { program: _program, ...withoutProgram } = data;
+      assert.ok(!('program' in afterFinish(withoutProgram, finished(DAY_A, 'advance'))));
+      assert.equal(afterFinish({ ...data, program: null }, finished(DAY_A, 'advance')).program, null);
+      assert.equal(afterFinish({ ...data, program: { ...data.program, days: [] } }, finished(DAY_A, 'advance')).program.nextDayId, DAY_A);
+    });
+  });
 });
 
 describe('kendi programlar ve geçmiş penceresi (kendi-program.md §3.9)', () => {

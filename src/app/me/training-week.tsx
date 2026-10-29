@@ -34,9 +34,10 @@ import { clearWorkoutCache, readWorkoutCache } from './workout-storage';
  * Bugün kartının antrenman günleri parçaları (tasarım §2.1, §2.3, §2.11) — istemcide, `GET /api/me/workout`
  * yanıtından (`useWorkoutOverview`):
  * - üst satır: "Bugün antrenman günün · Gün B" ya da "Dinlenme günü · sıradaki antrenman Çarşamba (Gün B)";
- * - 7 günlük şerit (pazartesi başlar): seçili günler halkalı, yapılanlar dolu, kaçanlar soluk, sıradaki kalın
- *   halkalı; halkanın altında günün antrenmanı (yapılanda oturumun adı, ilerisinde dönüşten tahmin, `weekPlan`),
- *   kaçanda "kaçtı"; altında "Sırada: yarın · Gün B" ve "Günlerini değiştir";
+ * - 7 günlük şerit (pazartesi başlar): seçili günler halkalı, yapılanlar dolu, kaçanlar ve pencereden önceki
+ *   geçmiş seçili günler soluk halkalı, sıradaki kalın halkalı; halkanın altında günün antrenmanı (yapılanda
+ *   oturumun adı, ilerisinde dönüşten tahmin, `weekPlan`), kaçanda "kaçtı"; altında "Sırada: yarın · Gün B"
+ *   (kart başlığı zaten sıradaki günü söylüyorsa gizlenir, `showNext`) ve "Günlerini değiştir";
  * - "Başka gün seç": gün sheet'i, antrenörüne bildirilir (kendi programda değil), sıra seçilen günden sürer;
  * - telefondaki gün planının tazeliği: sunucuda taze okunan programın damgası saklanan planınkinden
  *   farklıysa (PT programı değiştirdi) saklanan plan atılır, "Antrenmana başla" güncel planı açar.
@@ -52,10 +53,11 @@ export function DayStatus({ clientId, dayName }: { clientId: string; dayName: st
   return <>{todayStatusText(state, data.today, dayName)}</>;
 }
 
+const STATE_TEXT: Record<WeekPlanState, string> = { done: 'yapıldı', missed: 'kaçtı', next: 'sırada', planned: 'antrenman günü', rest: 'dinlenme' };
+
 /** Halkanın altındaki kelime ve ekran okuyucu satırındaki karşılığı; seçili ama pencereden önceki gün "dinlenme" değil. */
 function stateText(day: WeekPlanDay): string {
-  const text: Record<WeekPlanState, string> = { done: 'yapıldı', missed: 'kaçtı', next: 'sırada', planned: 'antrenman günü', rest: 'dinlenme' };
-  return day.state === 'rest' && day.selected ? 'antrenman günü' : text[day.state];
+  return day.state === 'rest' && day.selected ? 'antrenman günü' : STATE_TEXT[day.state];
 }
 
 /** Ekran okuyucu: "Çarşamba, bugün, sırada: Gün B", "Pazartesi, yapıldı: Gün A", "Salı, dinlenme". */
@@ -79,13 +81,20 @@ function planOf(data: WorkoutResponse, schedule: WorkoutSchedule): WeekPlanDay[]
   return weekPlan({ ...base, doneDays: data.week.days, sessions: data.week.sessions ?? [], rotation: { names: days.map((day) => day.name), next } });
 }
 
-/** Yedi günlük şerit, sıradaki gün ve "Günlerini değiştir". */
-export function WeekStrip({ clientId }: { clientId: string }) {
+/**
+ * Yedi günlük şerit, sıradaki gün ve "Günlerini değiştir".
+ *
+ * `showNext` (varsayılan açık): şeridin altındaki "Sırada: Çarşamba · Gün B" satırı. Kartın başlığı sıradaki günü
+ * zaten söylüyorsa (program kartı, "Çarşamba · Gün B") çağıran `showNext={false}` verir; satır tekrarlanmaz.
+ */
+export function WeekStrip({ clientId, showNext = true }: { clientId: string; showNext?: boolean }) {
   const { data, isPending } = useWorkoutOverview(clientId);
   const queryClient = useQueryClient();
   const program = useWorkoutProgram();
   const [open, setOpen] = useState(false);
-  if (isPending && !data) return <Skeleton className="h-[9.5rem] w-full rounded-lg" />;
+  // Gerçek şeridin yüksekliği: sütun 81 px (py-1.5 + text-xs 16 + gap 6 + halka 28 + gap 6 + ad 13), gap-1 ile
+  // "Sırada" satırı (text-sm 20) ve h-11 düğme: 153 px; satırsız 129 px.
+  if (isPending) return <Skeleton className={cn('w-full rounded-lg', showNext ? 'h-[9.5625rem]' : 'h-[8.0625rem]')} />;
   if (!data?.schedule) return null;
   const schedule = data.schedule;
   const days = planOf(data, schedule);
@@ -105,6 +114,9 @@ export function WeekStrip({ clientId }: { clientId: string }) {
       <ol className="grid grid-cols-7 gap-1" aria-label="Bu haftanın günleri">
         {days.map((day) => {
           const isNext = day.state === 'next';
+          // Seçili, geçmiş ve yapılmamış: kaçan ya da pencereden (`since`) önceki gün; ikisi de soluk halka (gelecekteki
+          // planlı gün gibi görünmez), yalnız kaçan "kaçtı" der.
+          const faded = day.selected && !day.done && day.date < data.today;
           const short = day.state === 'missed' ? stateText(day) : day.label ? dayShortName(day.label) : null;
           return (
             <li key={day.date} className={cn('flex min-w-0 flex-col items-center gap-1.5 rounded-lg py-1.5', day.today && 'bg-muted')}>
@@ -118,18 +130,18 @@ export function WeekStrip({ clientId }: { clientId: string }) {
                   'flex size-7 items-center justify-center rounded-full',
                   day.done && 'bg-primary text-primary-foreground',
                   isNext && 'ring-4 ring-primary-text ring-inset',
-                  !day.done && !isNext && day.selected && !day.missed && 'ring-2 ring-primary-text ring-inset',
-                  day.missed && 'opacity-40 ring-2 ring-muted-foreground ring-inset',
+                  !day.done && !isNext && day.selected && !faded && 'ring-2 ring-primary-text ring-inset',
+                  faded && 'opacity-40 ring-2 ring-muted-foreground ring-inset',
                 )}>
                 {day.done ? <Check weight="bold" className="size-3.5" /> : !day.selected ? <span className="size-1.5 rounded-full bg-muted-foreground/40" /> : null}
               </span>
-              {/* Sütun ~41 px (375 px'te 7 sütun): uzun ad kesilir; py-px Türkçe işaretleri (ç, Ü) kırpılmasın diye. Boşken de yer tutar. */}
+              {/* Sütun ~41 px (375 px'te 7 sütun): uzun ad kesilir; py-px Türkçe işaretleri (ç, Ü) kırpılmasın diye. Boşken de yer tutar.
+                  "kaçtı" soldurulmaz: düz muted-foreground AA kontrastı geçer, solukluk halkada. */}
               <span
                 aria-hidden
                 className={cn(
                   'block w-full truncate px-0.5 py-px text-center text-[0.6875rem] leading-none',
                   isNext ? 'font-semibold text-foreground' : 'text-muted-foreground',
-                  day.missed && 'opacity-70',
                 )}>
                 {short ?? '\u00a0'}
               </span>
@@ -137,7 +149,7 @@ export function WeekStrip({ clientId }: { clientId: string }) {
           );
         })}
       </ol>
-      {upcoming ? (
+      {showNext && upcoming ? (
         <p className="text-center text-sm break-words text-muted-foreground">
           Sırada: {upcoming.today ? 'bugün' : relativeDayText(upcoming.date, data.today)}
           {upcoming.label ? (
