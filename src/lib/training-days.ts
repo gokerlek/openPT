@@ -171,6 +171,47 @@ export function weekStrip(input: { today: string; weekdays: readonly number[]; d
   });
 }
 
+export type WeekPlanState = 'done' | 'missed' | 'next' | 'planned' | 'rest';
+export type WeekPlanDay = StripDay & { state: WeekPlanState; label: string | null };
+
+/**
+ * Bugün'ün hafta şeridi (Faz 2): her gün yapıldı (oturumun adı; aynı gün birden çoksa sonuncusu) · kaçtı ·
+ * sırada (bugün dahil ilk yapılmamış seçili gün) · planlı · dinlenme. Program modeli dönüş sırası olduğundan
+ * sıradaki ve sonraki seçili günlerin adı dönüşten tahmindir (`rotation.next`'ten başlayıp sarar); Faz 3'te
+ * gün ↔ antrenman eşlemesi gelince bu tahmin kalkar.
+ */
+export function weekPlan(input: {
+  today: string;
+  weekdays: readonly number[];
+  /** Yapılan günler (`week.days`); adlar `sessions`'tan. Ad yoksa gün yine "yapıldı". */
+  doneDays?: Iterable<string>;
+  sessions: readonly { date: string; dayName: string }[];
+  since?: string | null | undefined;
+  rotation: { names: readonly string[]; next: number };
+}): WeekPlanDay[] {
+  const done = new Map(input.sessions.map((session) => [session.date, session.dayName]));
+  const doneDays = new Set([...(input.doneDays ?? []), ...done.keys()]);
+  const strip = weekStrip({ today: input.today, weekdays: input.weekdays, doneDays, since: input.since });
+  const { names } = input.rotation;
+  let step = 0;
+  return strip.map((day): WeekPlanDay => {
+    if (day.done) return { ...day, state: 'done', label: done.get(day.date) ?? null };
+    if (day.missed) return { ...day, state: 'missed', label: null };
+    if (!day.selected || day.date < input.today) return { ...day, state: 'rest', label: null };
+    const label = names.length > 0 ? (names[(input.rotation.next + step) % names.length] ?? null) : null;
+    const state: WeekPlanState = step === 0 ? 'next' : 'planned';
+    step += 1;
+    return { ...day, state, label };
+  });
+}
+
+/** Şeritteki kısa ad: "Gün A" → "A"; öteki adlarda ilk sözcük. */
+export function dayShortName(name: string): string {
+  const trimmed = name.trim();
+  const letter = trimmed.match(/^gün\s+(\S+)$/iu)?.[1];
+  return letter ?? trimmed.split(/\s+/u)[0] ?? trimmed;
+}
+
 /** Sıradaki antrenman günü: bugünden sonraki (ya da `includeToday` ise bugünden başlayan) ilk seçili gün. */
 export function nextTrainingDate(today: string, weekdays: readonly number[], options: { includeToday?: boolean } = {}): string | null {
   const selected = new Set(normalizeWeekdays(weekdays));

@@ -7,6 +7,7 @@ import { programFile } from './testing/session-fixtures.ts';
 import {
   addDays,
   applyClientSchedule,
+  dayShortName,
   effectiveSchedule,
   frequencyMismatch,
   isoWeekdayOf,
@@ -21,6 +22,7 @@ import {
   weekDates,
   weekdaysChangeText,
   weekdaysText,
+  weekPlan,
   weekStrip,
   weekTarget,
 } from './training-days.ts';
@@ -123,6 +125,57 @@ describe('antrenman günleri: Bugün kartının satırı', () => {
     assert.equal(frequencyMismatch([1, 3, 5], 3), false);
     assert.equal(frequencyMismatch([1, 3], undefined), false);
     assert.equal(frequencyMismatch([], 3), false);
+  });
+});
+
+describe('hafta planı', () => {
+  // 26 Ekim 2026 pazartesi.
+  const rotation = { names: ['Gün A', 'Gün B', 'Gün C'], next: 1 };
+
+  test('yapılanın adı, sıradaki ve dönüşe göre sonraki; seçili olmayan gün dinlenme', () => {
+    const days = weekPlan({ today: '2026-10-28', weekdays: [1, 3, 5], sessions: [{ date: '2026-10-26', dayName: 'Gün A' }], since: null, rotation });
+    assert.deepEqual(
+      days.map((day) => [day.date, day.state, day.label]),
+      [
+        ['2026-10-26', 'done', 'Gün A'],
+        ['2026-10-27', 'rest', null],
+        ['2026-10-28', 'next', 'Gün B'],
+        ['2026-10-29', 'rest', null],
+        ['2026-10-30', 'planned', 'Gün C'],
+        ['2026-10-31', 'rest', null],
+        ['2026-11-01', 'rest', null],
+      ],
+    );
+  });
+
+  test('kaçan gün adsız; seçili olmayan günde yapılan da "yapıldı"; pencere öncesi kaçmış sayılmaz', () => {
+    const days = weekPlan({
+      today: '2026-10-30',
+      weekdays: [1, 3, 5],
+      sessions: [{ date: '2026-10-26', dayName: 'Gün A' }, { date: '2026-10-27', dayName: 'Gün B' }],
+      since: null,
+      rotation: { names: ['Gün A', 'Gün B', 'Gün C'], next: 2 },
+    });
+    assert.deepEqual(days.slice(0, 5).map((day) => [day.state, day.label]), [
+      ['done', 'Gün A'],
+      ['done', 'Gün B'],
+      ['missed', null],
+      ['rest', null],
+      ['next', 'Gün C'],
+    ]);
+    const fresh = weekPlan({ today: '2026-10-30', weekdays: [1, 3, 5], sessions: [], since: '2026-10-28', rotation });
+    assert.deepEqual(fresh.slice(0, 3).map((day) => day.state), ['rest', 'rest', 'rest']);
+  });
+
+  test('bugünkü antrenman yapıldıysa sıradaki sonraki seçili gün', () => {
+    const days = weekPlan({ today: '2026-10-26', weekdays: [1, 3], sessions: [{ date: '2026-10-26', dayName: 'Gün A' }], since: null, rotation });
+    assert.deepEqual(days.slice(0, 3).map((day) => [day.state, day.label]), [['done', 'Gün A'], ['rest', null], ['next', 'Gün B']]);
+  });
+
+  test('kısa ad: "Gün A" → "A", ötekinde ilk sözcük', () => {
+    assert.equal(dayShortName('Gün A'), 'A');
+    assert.equal(dayShortName('Üst vücut'), 'Üst');
+    assert.equal(dayShortName('Bacak'), 'Bacak');
   });
 });
 

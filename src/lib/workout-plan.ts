@@ -632,6 +632,11 @@ export type WeekCount = {
   days: string[];
   /** Haftanın pazartesisi. */
   start: string;
+  /**
+   * Bu haftanın bitmiş antrenmanları, `(date, startedAt)` sırasıyla (aynı gün ikisi de): şeridin gün adları
+   * (`weekPlan`). Bellekteki eski yanıtta yok; okuyan `week.sessions ?? []` der.
+   */
+  sessions?: { date: string; dayName: string }[];
 };
 
 /**
@@ -642,28 +647,34 @@ export type WeekCount = {
 export function weekOf(index: SessionIndex, program: PlanProgram | null, now: Date, timeZone: string): WeekCount {
   const today = todayIn(timeZone, now);
   const start = mondayOf(today);
-  const days = [...new Set(index.items.flatMap((row) => (row.finishedAt && row.date >= start && row.date <= today ? [row.date] : [])))].sort();
+  const rows = index.items
+    .filter((row) => row.finishedAt && row.date >= start && row.date <= today)
+    .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : time(a.startedAt) - time(b.startedAt)));
+  const days = [...new Set(rows.map((row) => row.date))].sort();
+  const sessions = rows.map((row) => ({ date: row.date, dayName: row.dayName || 'Antrenman' }));
   const daysPerWeek = program ? currentPhaseOf(program)?.phase.daysPerWeek : undefined;
   const weekdays = program ? effectiveSchedule(program).weekdays : [];
-  return { done: days.length, target: weekTarget(weekdays, daysPerWeek), days, start };
+  return { done: days.length, target: weekTarget(weekdays, daysPerWeek), days, start, sessions };
 }
 
 /**
  * Bitişten hemen sonra Bugün'ün sayıları, sunucudan taze gelene kadar (iyimser; telefon bitişin yanıtıyla
  * yazar): antrenmanın günü bu haftadaysa "Bu hafta x/y"ye girer (gün başına bir, `weekOf` gibi; aynı gün
- * ikinci antrenman sayıyı değiştirmez), suyu bugünün bitmiş antrenmanlarına geçer, yarım antrenman kartı
- * düşer. Önbellekteki eski sayı bir an bile görünmesin.
+ * ikinci antrenman sayıyı değiştirmez, adı yine şeride eklenir), suyu bugünün bitmiş antrenmanlarına geçer,
+ * yarım antrenman kartı düşer. Önbellekteki eski sayı bir an bile görünmesin.
  */
 export function afterFinish<T extends { today: string; week: WeekCount; water: { file: number; sessions: number }; active: Pick<SessionDoc, 'id'> | null }>(
   data: T,
-  doc: Pick<SessionDoc, 'id' | 'date' | 'waterTaps'>,
+  doc: Pick<SessionDoc, 'id' | 'date' | 'waterTaps'> & Partial<Pick<SessionDoc, 'program'>>,
 ): T {
-  const counted = mondayOf(doc.date) === data.week.start && doc.date <= data.today && !data.week.days.includes(doc.date);
+  const thisWeek = mondayOf(doc.date) === data.week.start && doc.date <= data.today;
+  const counted = thisWeek && !data.week.days.includes(doc.date);
   const days = counted ? [...data.week.days, doc.date].sort() : data.week.days;
+  const sessions = [...(data.week.sessions ?? []), { date: doc.date, dayName: doc.program?.dayName ?? 'Antrenman' }];
   const known = data.active?.id === doc.id;
   return {
     ...data,
-    week: counted ? { ...data.week, done: days.length, days } : data.week,
+    week: thisWeek ? { ...data.week, done: days.length, days, sessions } : data.week,
     water: doc.date === data.today ? { ...data.water, sessions: data.water.sessions + waterOf(doc) } : data.water,
     active: known ? null : data.active,
   };

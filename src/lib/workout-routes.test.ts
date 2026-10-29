@@ -96,7 +96,7 @@ describe('GET /api/me/workout', () => {
     assert.equal(data.today, '2026-09-26');
     assert.equal(data.day?.dayId, DAY_A);
     assert.equal(data.day?.rows.r_aaaaaa?.plan.reason, 'first_time');
-    assert.deepEqual(data.week, { done: 0, target: null, days: [], start: '2026-09-21' });
+    assert.deepEqual(data.week, { done: 0, target: null, days: [], start: '2026-09-21', sessions: [] });
     assert.deepEqual(data.water, { file: 0, sessions: 0 });
     assert.equal(data.active, null);
     assert.deepEqual(data.program?.days.map((day) => day.id), [DAY_A, DAY_B]);
@@ -161,7 +161,16 @@ describe('GET /api/me/workout', () => {
     assert.equal(row?.plan.reason, 'increase');
     assert.equal(row?.plan.topWeightKg, 62.5);
     assert.deepEqual(row?.lastTime.map((item) => item.value), [10, 10, 10]);
-    assert.deepEqual(data.week, { done: 2, target: null, days: ['2026-09-22', '2026-09-26'], start: '2026-09-21' });
+    assert.deepEqual(data.week, {
+      done: 2,
+      target: null,
+      days: ['2026-09-22', '2026-09-26'],
+      start: '2026-09-21',
+      sessions: [
+        { date: '2026-09-22', dayName: 'Gün A' },
+        { date: '2026-09-26', dayName: 'Gün A' },
+      ],
+    });
     assert.deepEqual(data.water, { file: 1, sessions: 2 });
   });
 

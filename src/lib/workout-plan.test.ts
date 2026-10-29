@@ -271,9 +271,16 @@ describe('Bugün: index\'ten', () => {
     assert.deepEqual(historyRows(index(), new Set(['squat'])), []);
   });
 
-  test('"bu hafta x/y": pazartesiden; hedef seçili gün sayısı, yoksa evrenin sıklığı; yapılan günler', () => {
+  test('"bu hafta x/y": pazartesiden; hedef seçili gün sayısı, yoksa evrenin sıklığı; yapılan günler ve oturumları', () => {
     const now = new Date('2026-09-26T16:00:00.000Z');
-    const week = { days: ['2026-09-22', '2026-09-26'], start: '2026-09-21' };
+    const week = {
+      days: ['2026-09-22', '2026-09-26'],
+      start: '2026-09-21',
+      sessions: [
+        { date: '2026-09-22', dayName: 'Gün A' },
+        { date: '2026-09-26', dayName: 'Gün A' },
+      ],
+    };
     assert.deepEqual(weekOf(index(), parsedProgram(), now, TZ), { done: 2, target: null, ...week });
     const raw = programFile();
     (raw.phases as { daysPerWeek?: number }[])[0]!.daysPerWeek = 3;
@@ -285,6 +292,32 @@ describe('Bugün: index\'ten', () => {
       'danışanın günleri geçerli',
     );
     assert.deepEqual(weekOf(index(), null, now, TZ), { done: 2, target: null, ...week });
+  });
+
+  test('"bu hafta"nın oturumları: aynı gün ikisi de, (gün, başlangıç) sırasıyla; adsız satır "Antrenman"', () => {
+    const now = new Date('2026-09-26T16:00:00.000Z');
+    const done = (id: string, iso: string, n: number) =>
+      row(
+        sessionDoc({
+          id,
+          status: 'finished',
+          date: iso.slice(0, 10),
+          startedAt: iso,
+          finishedAt: new Date(Date.parse(iso) + 3_600_000).toISOString(),
+          program: { revision: 1, dayId: DAY_B, dayName: 'Gün B' },
+        }),
+        n,
+      );
+    // Gün adı olmadan yazılmış eski satır.
+    const { dayName: _unnamed, ...early } = done('s_gggggggg', '2026-09-26T06:00:00.000Z', 7);
+    const items = [done('s_ffffffff', '2026-09-26T09:00:00.000Z', 6), early, done('s_hhhhhhhh', '2026-09-23T06:00:00.000Z', 8), done('s_iiiiiiii', '2026-09-20T06:00:00.000Z', 9)];
+    const week = weekOf({ version: 1, items, deleted: [] }, null, now, TZ);
+    assert.deepEqual(week.sessions, [
+      { date: '2026-09-23', dayName: 'Gün B' },
+      { date: '2026-09-26', dayName: 'Antrenman' },
+      { date: '2026-09-26', dayName: 'Gün B' },
+    ]);
+    assert.deepEqual(week.days, ['2026-09-23', '2026-09-26']);
   });
 
   test('"bu hafta": ertesi gün bitirilen antrenman başladığı günde sayılır (Geçmiş\'le aynı)', () => {
@@ -320,9 +353,16 @@ describe('Bugün: index\'ten', () => {
       { id: 'wt_00000002', d: 1 as const, at: at(2) },
     ];
     const next = afterFinish(data, { id: 's_dddddddd', date: '2026-09-25', waterTaps: taps });
-    assert.deepEqual(next, { today: '2026-09-25', week: { done: 2, target: 3, days: ['2026-09-22', '2026-09-25'], start: '2026-09-21' }, water: { file: 1, sessions: 2 }, active: null });
-    // Aynı gün ikinci antrenman sayıyı değiştirmez; başka haftanın antrenmanı (geç gelen bitiş) sayılmaz.
-    assert.deepEqual(afterFinish(next, { id: 's_eeeeeeee', date: '2026-09-25', waterTaps: [] }).week, next.week);
+    assert.deepEqual(next, {
+      today: '2026-09-25',
+      week: { done: 2, target: 3, days: ['2026-09-22', '2026-09-25'], start: '2026-09-21', sessions: [{ date: '2026-09-25', dayName: 'Antrenman' }] },
+      water: { file: 1, sessions: 2 },
+      active: null,
+    });
+    // Aynı gün ikinci antrenman sayıyı değiştirmez (adı şeride eklenir); başka haftanın antrenmanı (geç gelen bitiş) sayılmaz.
+    const second = afterFinish(next, { id: 's_eeeeeeee', date: '2026-09-25', waterTaps: [], program: { revision: 1, dayId: DAY_B, dayName: 'Gün B' } }).week;
+    assert.deepEqual({ done: second.done, days: second.days }, { done: next.week.done, days: next.week.days });
+    assert.deepEqual(second.sessions, [{ date: '2026-09-25', dayName: 'Antrenman' }, { date: '2026-09-25', dayName: 'Gün B' }]);
     assert.deepEqual(afterFinish(data, { id: 's_eeeeeeee', date: '2026-09-18', waterTaps: taps }), { ...data });
   });
 });
