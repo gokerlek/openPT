@@ -4,6 +4,7 @@ import {
   ChartLineUpIcon,
   CheckIcon,
   ChecksIcon,
+  CircleDashedIcon,
   DotsNineIcon,
   DotsSixIcon,
   DotsSixVerticalIcon,
@@ -43,7 +44,8 @@ const LINE_WEIGHT: IconWeight = 'bold';
 
 function line(Glyph: Icon, name: string): Icon {
   const LineIcon = forwardRef<SVGSVGElement, IconProps>(function LineIcon({ weight, ...props }, ref) {
-    return <Glyph ref={ref} {...props} weight={weight && weight !== 'fill' ? weight : LINE_WEIGHT} />;
+    // `fill` ve `duotone` bu gliflerde kutu (duotone'da %20 saydam kutu): çizgiye döner.
+    return <Glyph ref={ref} {...props} weight={weight && weight !== 'fill' && weight !== 'duotone' ? weight : LINE_WEIGHT} />;
   });
   LineIcon.displayName = name;
   return LineIcon;
@@ -52,6 +54,7 @@ function line(Glyph: Icon, name: string): Icon {
 export const ChartLineUp = line(ChartLineUpIcon, 'ChartLineUp');
 export const Check = line(CheckIcon, 'Check');
 export const Checks = line(ChecksIcon, 'Checks');
+export const CircleDashed = line(CircleDashedIcon, 'CircleDashed');
 export const DotsNine = line(DotsNineIcon, 'DotsNine');
 export const DotsSix = line(DotsSixIcon, 'DotsSix');
 export const DotsSixVertical = line(DotsSixVerticalIcon, 'DotsSixVertical');

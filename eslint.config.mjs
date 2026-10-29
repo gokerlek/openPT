@@ -11,6 +11,7 @@ const LINE_GLYPHS = [
   'ChartLineUp',
   'Check',
   'Checks',
+  'CircleDashed',
   'DotsNine',
   'DotsSix',
   'DotsSixVertical',
@@ -57,6 +58,8 @@ export default defineConfig([
             importNames: LINE_GLYPH_IMPORTS,
             message: LINE_GLYPH_MESSAGE,
           })),
+          // Derin yollar da (`@phosphor-icons/react/Minus`, `/dist/csr/Plus`, `/dist/ssr/Spinner`).
+          patterns: [{ regex: `^@phosphor-icons/react/(?:dist/(?:csr|ssr|icons)/)?(?:${LINE_GLYPHS.join('|')})$`, message: LINE_GLYPH_MESSAGE }],
         },
       ],
     },

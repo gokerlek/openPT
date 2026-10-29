@@ -7,7 +7,6 @@ import { AnimatePresence, motion } from 'motion/react';
 import {
   CaretDown,
   CheckCircle,
-  CircleDashed,
   Heartbeat,
   Lightbulb,
   MagnifyingGlass,
@@ -18,6 +17,7 @@ import {
   YoutubeLogo,
   type Icon,
 } from '@phosphor-icons/react';
+import { CircleDashed } from '@/components/line-icons';
 import { Plus, X } from '@/components/line-icons';
 import { MuscleMap } from '@/components/muscle-map/muscle-map';
 import { PageHeader } from '@/components/page-header';

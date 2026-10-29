@@ -1,16 +1,16 @@
 'use client';
 
 import { usePathname } from 'next/navigation';
-import { FirstAidKit, House, Notebook } from '@phosphor-icons/react';
+import { ChartBar, FirstAidKit, House, Notebook } from '@phosphor-icons/react';
 import { Dock } from '@/components/dock/dock';
-import { ChartLineUp } from '@/components/line-icons';
 import { CLIENT_TABS, clientTabIndex } from '@/lib/client-tabs';
 
 /** Sekmelerin ikonları (Phosphor, tasarım §0); sıra ve adlar `client-tabs.ts`'te. */
 const ICONS: Record<(typeof CLIENT_TABS)[number]['href'], React.ReactNode> = {
   '/me': <House />,
   '/me/programlar': <Notebook />,
-  '/me/ilerleme': <ChartLineUp />,
+  // Dolu ve kendiliğinden katı bir glif: komşuları (ev, defter, ilk yardım) gibi dolu görünür.
+  '/me/ilerleme': <ChartBar />,
   '/me/saglik': <FirstAidKit />,
 };
 
