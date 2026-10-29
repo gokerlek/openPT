@@ -177,7 +177,8 @@ export type WeekPlanDay = StripDay & { state: WeekPlanState; label: string | nul
 /**
  * Bugün'ün hafta şeridi (Faz 2): her gün yapıldı (oturumun adı; aynı gün birden çoksa sonuncusu) · kaçtı ·
  * sırada (bugün dahil ilk yapılmamış seçili gün) · planlı · dinlenme. Program modeli dönüş sırası olduğundan
- * sıradaki ve sonraki seçili günlerin adı dönüşten tahmindir (`rotation.next`'ten başlayıp sarar); Faz 3'te
+ * sıradaki ve sonraki seçili günlerin adı dönüşten tahmindir (`rotation.next`'ten başlayıp sarar; tam sayı
+ * değilse 0, eksi ya da listeden büyükse listeye sarılır: sıradaki gün bulunamadığında -1 gelebilir); Faz 3'te
  * gün ↔ antrenman eşlemesi gelince bu tahmin kalkar.
  */
 export function weekPlan(input: {
@@ -193,23 +194,28 @@ export function weekPlan(input: {
   const doneDays = new Set([...(input.doneDays ?? []), ...done.keys()]);
   const strip = weekStrip({ today: input.today, weekdays: input.weekdays, doneDays, since: input.since });
   const { names } = input.rotation;
+  const len = names.length;
+  const base = len && Number.isInteger(input.rotation.next) ? ((input.rotation.next % len) + len) % len : 0;
   let step = 0;
   return strip.map((day): WeekPlanDay => {
     if (day.done) return { ...day, state: 'done', label: done.get(day.date) ?? null };
     if (day.missed) return { ...day, state: 'missed', label: null };
     if (!day.selected || day.date < input.today) return { ...day, state: 'rest', label: null };
-    const label = names.length > 0 ? (names[(input.rotation.next + step) % names.length] ?? null) : null;
+    const label = len > 0 ? (names[(base + step) % len] ?? null) : null;
     const state: WeekPlanState = step === 0 ? 'next' : 'planned';
     step += 1;
     return { ...day, state, label };
   });
 }
 
-/** Şeritteki kısa ad: "Gün A" → "A"; öteki adlarda ilk sözcük. */
+/**
+ * Şeritteki kısa ad: "Gün" ile başlayanda ardından gelen her şey ("Gün A" → "A"; uygulamanın kopyaladığı
+ * "Gün A 2" → "A 2", ikisi şeritte ayırt edilsin); öteki adlarda ilk sözcük ("Üst vücut" → "Üst").
+ */
 export function dayShortName(name: string): string {
   const trimmed = name.trim();
-  const letter = trimmed.match(/^gün\s+(\S+)$/iu)?.[1];
-  return letter ?? trimmed.split(/\s+/u)[0] ?? trimmed;
+  const rest = trimmed.match(/^gün\s+(.+)$/iu)?.[1];
+  return rest ?? trimmed.split(/\s+/u)[0] ?? trimmed;
 }
 
 /** Sıradaki antrenman günü: bugünden sonraki (ya da `includeToday` ise bugünden başlayan) ilk seçili gün. */

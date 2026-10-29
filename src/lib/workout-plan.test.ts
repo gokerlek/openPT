@@ -365,6 +365,46 @@ describe('Bugün: index\'ten', () => {
     assert.deepEqual(second.sessions, [{ date: '2026-09-25', dayName: 'Antrenman' }, { date: '2026-09-25', dayName: 'Gün B' }]);
     assert.deepEqual(afterFinish(data, { id: 's_eeeeeeee', date: '2026-09-18', waterTaps: taps }), { ...data });
   });
+
+  test('bitişten hemen sonra: şeridin oturumları güne göre sıralı, aynı bitiş iki kez eklenmez', () => {
+    const gunB = { revision: 1, dayId: DAY_B, dayName: 'Gün B' };
+    const data: Parameters<typeof afterFinish>[0] = {
+      today: '2026-09-25',
+      week: {
+        done: 2,
+        target: 3,
+        days: ['2026-09-22', '2026-09-25'],
+        start: '2026-09-21',
+        sessions: [
+          { date: '2026-09-22', dayName: 'Gün A' },
+          { date: '2026-09-25', dayName: 'Gün C' },
+          { date: '2026-09-25', dayName: 'Gün A' },
+        ],
+      },
+      water: { file: 0, sessions: 0 },
+      active: null,
+    };
+    // Dün başlayıp bugün bitirilen: kendi gününe girer, bugünkülerin sırası korunur.
+    const late = afterFinish(data, { id: 's_dddddddd', date: '2026-09-24', waterTaps: [], program: gunB });
+    assert.deepEqual(late.week.sessions, [
+      { date: '2026-09-22', dayName: 'Gün A' },
+      { date: '2026-09-24', dayName: 'Gün B' },
+      { date: '2026-09-25', dayName: 'Gün C' },
+      { date: '2026-09-25', dayName: 'Gün A' },
+    ]);
+    assert.deepEqual(late.week.days, ['2026-09-22', '2026-09-24', '2026-09-25']);
+    // Aynı bitiş ikinci kez: o günün son oturumu aynı adlı, eklenmez.
+    assert.deepEqual(afterFinish(late, { id: 's_dddddddd', date: '2026-09-24', waterTaps: [], program: gunB }).week.sessions, late.week.sessions);
+    // Aynı gün son oturumdan farklı ad eklenir (sonuncusu şeritte görünür); boş ad "Antrenman".
+    const other = afterFinish(late, { id: 's_eeeeeeee', date: '2026-09-25', waterTaps: [], program: gunB }).week.sessions;
+    assert.deepEqual(other?.slice(-3), [
+      { date: '2026-09-25', dayName: 'Gün C' },
+      { date: '2026-09-25', dayName: 'Gün A' },
+      { date: '2026-09-25', dayName: 'Gün B' },
+    ]);
+    const unnamed = afterFinish(data, { id: 's_ffffffff', date: '2026-09-25', waterTaps: [], program: { ...gunB, dayName: '' } }).week.sessions;
+    assert.deepEqual(unnamed?.at(-1), { date: '2026-09-25', dayName: 'Antrenman' });
+  });
 });
 
 describe('kendi programlar ve geçmiş penceresi (kendi-program.md §3.9)', () => {

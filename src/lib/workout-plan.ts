@@ -662,6 +662,11 @@ export function weekOf(index: SessionIndex, program: PlanProgram | null, now: Da
  * yazar): antrenmanın günü bu haftadaysa "Bu hafta x/y"ye girer (gün başına bir, `weekOf` gibi; aynı gün
  * ikinci antrenman sayıyı değiştirmez, adı yine şeride eklenir), suyu bugünün bitmiş antrenmanlarına geçer,
  * yarım antrenman kartı düşer. Önbellekteki eski sayı bir an bile görünmesin.
+ *
+ * `week.sessions` `weekOf` gibi güne göre sıralı kalır (kararlı: aynı günün sırası korunur, yeni bitiş o günün
+ * sonuna). Oturumun kimliği listede olmadığından tekrar kuralı: o günün son oturumu aynı adlıysa yenisi eklenmez
+ * (aynı bitiş iki kez uygulanırsa ya da sunucunun taze yanıtı bitişi zaten içeriyorsa çift satır olmaz; aynı
+ * gün aynı günü ikinci kez yapmak şeritte zaten aynı adı gösterirdi: "aynı gün sonuncusu").
  */
 export function afterFinish<T extends { today: string; week: WeekCount; water: { file: number; sessions: number }; active: Pick<SessionDoc, 'id'> | null }>(
   data: T,
@@ -670,7 +675,12 @@ export function afterFinish<T extends { today: string; week: WeekCount; water: {
   const thisWeek = mondayOf(doc.date) === data.week.start && doc.date <= data.today;
   const counted = thisWeek && !data.week.days.includes(doc.date);
   const days = counted ? [...data.week.days, doc.date].sort() : data.week.days;
-  const sessions = [...(data.week.sessions ?? []), { date: doc.date, dayName: doc.program?.dayName ?? 'Antrenman' }];
+  const previous = data.week.sessions ?? [];
+  const dayName = doc.program?.dayName || 'Antrenman';
+  const repeated = previous.filter((session) => session.date === doc.date).at(-1)?.dayName === dayName;
+  const sessions = (repeated ? [...previous] : [...previous, { date: doc.date, dayName }]).sort((a, b) =>
+    a.date < b.date ? -1 : a.date > b.date ? 1 : 0,
+  );
   const known = data.active?.id === doc.id;
   return {
     ...data,

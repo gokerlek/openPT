@@ -172,10 +172,64 @@ describe('hafta planı', () => {
     assert.deepEqual(days.slice(0, 3).map((day) => [day.state, day.label]), [['done', 'Gün A'], ['rest', null], ['next', 'Gün B']]);
   });
 
-  test('kısa ad: "Gün A" → "A", ötekinde ilk sözcük', () => {
+  test('kenarlar: aynı gün iki oturum, adsız yapılan gün, gün yok, dönüş boş, sıra listenin dışında', () => {
+    // Çarşamba bugün; Pzt geçti, Çar sırada, Cum planlı.
+    const base = { today: '2026-10-28', weekdays: [1, 3, 5], sessions: [], since: null, rotation };
+    const rest = ['rest', null];
+    const cases: { name: string; input: Partial<Parameters<typeof weekPlan>[0]>; expected: (string | null)[][] }[] = [
+      {
+        name: 'aynı gün iki oturum: sonuncunun adı',
+        input: { sessions: [{ date: '2026-10-26', dayName: 'Gün A' }, { date: '2026-10-26', dayName: 'Gün C' }] },
+        expected: [['done', 'Gün C'], rest, ['next', 'Gün B'], rest, ['planned', 'Gün C'], rest, rest],
+      },
+      {
+        name: 'yapılan günün oturumu yok (eski yanıt): yapıldı, adsız',
+        input: { doneDays: ['2026-10-26'] },
+        expected: [['done', null], rest, ['next', 'Gün B'], rest, ['planned', 'Gün C'], rest, rest],
+      },
+      {
+        name: 'gün seçilmemiş: hepsi dinlenme, yapılan yine yapıldı',
+        input: { weekdays: [], sessions: [{ date: '2026-10-27', dayName: 'Gün A' }] },
+        expected: [rest, ['done', 'Gün A'], rest, rest, rest, rest, rest],
+      },
+      {
+        name: 'dönüş boş: sıradaki ve planlı adsız',
+        input: { rotation: { names: [], next: 0 } },
+        expected: [['missed', null], rest, ['next', null], rest, ['planned', null], rest, rest],
+      },
+      {
+        name: 'sıradaki gün bulunamadı (-1): listenin sonundan sarar',
+        input: { rotation: { names: rotation.names, next: -1 } },
+        expected: [['missed', null], rest, ['next', 'Gün C'], rest, ['planned', 'Gün A'], rest, rest],
+      },
+      {
+        name: 'sıra listeden büyük (5 / 3 ad): sarılır',
+        input: { rotation: { names: rotation.names, next: 5 } },
+        expected: [['missed', null], rest, ['next', 'Gün C'], rest, ['planned', 'Gün A'], rest, rest],
+      },
+      {
+        name: 'sıra sayı değil (NaN): baştan',
+        input: { rotation: { names: rotation.names, next: Number.NaN } },
+        expected: [['missed', null], rest, ['next', 'Gün A'], rest, ['planned', 'Gün B'], rest, rest],
+      },
+    ];
+    for (const item of cases) {
+      const days = weekPlan({ ...base, ...item.input });
+      assert.deepEqual(
+        days.map((day) => [day.state, day.label]),
+        item.expected,
+        item.name,
+      );
+    }
+  });
+
+  test('kısa ad: "Gün …" → ardından gelen her şey, ötekinde ilk sözcük', () => {
     assert.equal(dayShortName('Gün A'), 'A');
+    assert.equal(dayShortName('Gün A 2'), 'A 2');
+    assert.equal(dayShortName('  gün  B  '), 'B');
     assert.equal(dayShortName('Üst vücut'), 'Üst');
     assert.equal(dayShortName('Bacak'), 'Bacak');
+    assert.equal(dayShortName('Gün'), 'Gün');
   });
 });
 
