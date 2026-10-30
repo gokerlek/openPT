@@ -4,6 +4,7 @@ import { normalizeSession, withDeletions } from './session-merge.ts';
 import { isStraight } from './set-plan.ts';
 import { BLOCK_KIND_LABELS, FALLBACK_REST_SECONDS, ROW_ID_PATTERN, type BlockKind, type TemplateBlock } from './template-plan.ts';
 import { defaultRotation, doNow, dropUnit, entryForRow, entryStatusOf, remaining, restoreUnit, skipUnit, type CursorUnit, type Stamp } from './workout-cursor.ts';
+import type { LocalWorkout } from './workout-outbox.ts';
 import { dayBody, entryPlanOf, extraKey, type ExtraRow, type ExtraRows, type WorkoutDay, type WorkoutRow } from './workout-plan.ts';
 import { cursorOf, cursorOverrides, ensureEntries, newRowEntryId } from './workout-session.ts';
 
@@ -89,6 +90,15 @@ export function withExtraRounds(day: WorkoutDay, rounds: Readonly<Record<string,
   return { ...day, extraRounds: Object.fromEntries(kept) };
 }
 
+/**
+ * Telefondaki antrenmanın günün etkin hâli verilen belgeyle: başlangıçtaki gün + muadiller + eklenen hareketler
+ * (`effectiveDay`) + "+ Set ekle"nin istenen turları (`withExtraRounds`). Antrenman ekranı ve Bugün'ün "Devam et"
+ * kartı aynı planla çalışır.
+ */
+export function localWorkoutDay(local: Pick<LocalWorkout, 'plan' | 'extras' | 'extraRounds'>, doc: Pick<SessionDoc, 'entries'>): WorkoutDay {
+  return withExtraRounds(effectiveDay(local.plan, doc, local.extras), local.extraRounds);
+}
+
 /* --- akış sheet'i --- */
 
 export type FlowState =
@@ -136,6 +146,14 @@ function entryIdsOf(unit: CursorUnit): string[] {
 export function unitTitle(day: WorkoutDay, doc: Pick<SessionDoc, 'entries'>, unit: CursorUnit): string {
   return unit.members
     .map((member) => (member.rowId ? day.rows[member.rowId]?.title : undefined) ?? doc.entries.find((entry) => entry.id === member.entryId)?.title ?? '')
+    .filter(Boolean)
+    .join(' + ');
+}
+
+/** Listenin (ya da akışın) satırının adı: tek harekette başlık, grupta "A + B" (`unitTitle` gibi). */
+export function itemName(item: { members: readonly { title: string }[] }): string {
+  return item.members
+    .map((member) => member.title)
     .filter(Boolean)
     .join(' + ');
 }
@@ -239,6 +257,26 @@ export function listView(day: WorkoutDay, doc: Pick<SessionDoc, 'entries' | 'ord
       return { ...item, state, ...lastWeightOf(day, doc, units.get(item.key)) };
     });
   return { items, current, doneSets: flow.doneSets, plannedSets: flow.plannedSets, allDone: cursor.allDone };
+}
+
+export type ListWindow<T> = {
+  shown: T[];
+  /** Pencerenin üstünde ve altında kalan hareketler (grupta her üye ayrı hareket): "Önceki n hareket", "+n hareket daha". */
+  before: number;
+  after: number;
+};
+
+/**
+ * Kısa liste penceresi (Bugün'ün "Devam et" kartı): en çok `limit` birim, "şu an" hep içinde. Şu an ilk `limit`
+ * birimdeyse baştan; değilse pencere kayar, şu anın üstünde bir birim bağlam kalır (`limit` 1 ise yalnız o) ve liste
+ * sonuna yaslanınca sondaki `limit` birim. Şu an yoksa (hepsi bitti) ya da listede değilse baştan.
+ */
+export function listWindow<T extends { key: string; members: readonly unknown[] }>(items: readonly T[], current: string | null, limit: number): ListWindow<T> {
+  const size = Math.max(1, Math.floor(limit));
+  const index = current === null ? -1 : items.findIndex((item) => item.key === current);
+  const start = index >= size ? Math.min(Math.max(index - 1, index - size + 1), items.length - size) : 0;
+  const count = (list: readonly T[]) => list.reduce((sum, item) => sum + item.members.length, 0);
+  return { shown: items.slice(start, start + size), before: count(items.slice(0, start)), after: count(items.slice(start + size)) };
 }
 
 /** Satırın ağırlığı: ağırlığı olan ilk üyenin bugünkü son çalışma seti, yoksa geçen antrenmanın son seti. */

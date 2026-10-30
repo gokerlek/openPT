@@ -18,7 +18,10 @@ import {
   finishRotation,
   firstSkippedKey,
   flowView,
+  itemName,
   listView,
+  listWindow,
+  localWorkoutDay,
   moveUnit,
   moveUnitTo,
   optionText,
@@ -821,5 +824,48 @@ describe('liste + odak: sıra ve atlama', () => {
     assert.deepEqual([plank?.status, plank?.skip?.moved], ['pending', true]);
     assert.deepEqual(listView(day, back).items.map((item) => [item.key, item.state]).at(-1), ['b_bbbbbb', 'pending']);
     valid(back);
+  });
+});
+
+describe('liste + odak: Bugün\'ün kısa listesi', () => {
+  /** `n` birim; `groups`'taki sıralarda iki üyeli grup. */
+  const units = (n: number, groups: readonly number[] = []) =>
+    Array.from({ length: n }, (_, index) => ({ key: `u${index}`, members: groups.includes(index) ? [{ title: `A${index}` }, { title: `B${index}` }] : [{ title: `A${index}` }] }));
+  const keys = (list: { shown: { key: string }[] }) => list.shown.map((item) => item.key);
+
+  test('pencere: şu an ilk sekizdeyse baştan; değilse kayar, şu an hep içinde (üstünde bir bağlam satırı)', () => {
+    const items = units(20, [1, 18]);
+    const head = listWindow(items, 'u7', 8);
+    assert.deepEqual(keys(head), ['u0', 'u1', 'u2', 'u3', 'u4', 'u5', 'u6', 'u7']);
+    assert.deepEqual([head.before, head.after], [0, 13], 'alttaki 12 birim, biri iki üyeli grup');
+    const middle = listWindow(items, 'u10', 8);
+    assert.deepEqual(keys(middle), ['u9', 'u10', 'u11', 'u12', 'u13', 'u14', 'u15', 'u16']);
+    assert.deepEqual([middle.before, middle.after], [10, 4], 'üstte 9 birim (biri grup), altta 3 (biri grup)');
+    const tail = listWindow(items, 'u18', 8);
+    assert.deepEqual(keys(tail), ['u12', 'u13', 'u14', 'u15', 'u16', 'u17', 'u18', 'u19'], 'sona yaslanır');
+    assert.deepEqual([tail.before, tail.after], [13, 0]);
+  });
+
+  test('pencere: şu an yok ya da listede değil, liste kısa, tek satırlık pencere', () => {
+    const items = units(12);
+    for (const current of [null, 'u99']) {
+      const list = listWindow(items, current, 8);
+      assert.deepEqual([list.shown.length, list.before, list.after], [8, 0, 4], String(current));
+    }
+    assert.deepEqual(listWindow(units(5), 'u4', 8), { shown: units(5), before: 0, after: 0 });
+    assert.deepEqual(keys(listWindow(items, 'u5', 1)), ['u5']);
+  });
+
+  test('satırın adı: tek harekette başlık, grupta "A + B"; boş başlık düşer', () => {
+    assert.equal(itemName({ members: [{ title: 'Bench Press' }] }), 'Bench Press');
+    assert.equal(itemName({ members: [{ title: 'Bench Press' }, { title: '' }, { title: 'Row' }] }), 'Bench Press + Row');
+  });
+
+  test('telefondaki antrenmanın günü: etkin plan ve istenen fazladan turlar', () => {
+    const day = workoutDay();
+    const doc = start(day);
+    assert.equal(localWorkoutDay({ plan: day, extras: {}, extraRounds: {} }, doc), day, 'değişen yoksa aynı gün');
+    const key = day.blocks[0]?.id ?? '';
+    assert.deepEqual(localWorkoutDay({ plan: day, extras: {}, extraRounds: { [key]: 1, b_zzzzzz: 2 } }, doc).extraRounds, { [key]: 1 });
   });
 });

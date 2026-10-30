@@ -19,6 +19,7 @@ import {
   weekRotation,
   weekStrip,
   weekTarget,
+  type ActiveDay,
   type WeekPlanDay,
   type WeekPlanState,
 } from '@/lib/training-days';
@@ -26,7 +27,7 @@ import { cn } from '@/lib/utils';
 import type { WorkoutSchedule } from '@/lib/workout-plan';
 import type { WorkoutResponse } from '@/lib/workout-routes';
 import { ScheduleSheet } from './schedule-sheet';
-import { useWorkoutOverview, useWorkoutProgram, WORKOUT_OVERVIEW_KEY } from './today-workout';
+import { useWorkoutOverview, useWorkoutProgram, WORKOUT_OVERVIEW_KEY } from './workout-overview';
 import { clearWorkoutCache, readWorkoutCache } from './workout-storage';
 
 /**
@@ -61,12 +62,10 @@ function dayLabel(day: WeekPlanDay, today: string): string {
   return [WEEKDAY_NAMES[day.weekday], day.today ? 'bugün' : null, day.label ? `${state}: ${day.label}` : state].filter(Boolean).join(', ');
 }
 
-/** Yarım antrenmanın günü ve başlangıç tarihi (`SessionDoc.program.dayId`, `SessionDoc.date`). */
-export type ActiveDay = { dayId: string; date: string };
-
 /**
  * Şeridin günleri: program varsa `weekPlan` (dönüş `weekRotation`'dan: `nextDayId`'nin sırası, bulunamazsa ilk
- * gün, "Başka gün seç" gibi; bugün başlamış yarım antrenman varsa onun günü, dönüş yalnız bitişte ilerler); yoksa
+ * gün, "Başka gün seç" gibi; bugün başlamış yarım antrenman varsa onun günü, dönüş yalnız bitişte ilerler; bitişte
+ * "keep" seçilmişse yine `nextDayId`); yoksa
  * bugünkü şerit (sıradaki işaretlenmez, ad yok). Program kurulmadan, günler değişmeden ya da danışan katılmadan
  * önceki günler kaçmış sayılmaz (Genel bakış'la aynı kural).
  */
@@ -85,21 +84,29 @@ function planOf(data: WorkoutResponse, schedule: WorkoutSchedule, active: Active
  * `showNext` (varsayılan açık): şeridin altındaki "Sırada: Çarşamba · Gün B" satırı. Kartın başlığı sıradaki günü
  * zaten söylüyorsa (program kartı, "Çarşamba · Gün B") çağıran `showNext={false}` verir; satır tekrarlanmaz.
  *
- * `activeDay`: yarım antrenman varsa ("Devam et" kartı) onun günü; bugün başladıysa şerit o günden sürer.
+ * `activeDay`: yarım antrenman varsa ("Devam et" kartı) onun günü, tarihi ve bitişteki dönüşü (`weekRotation`); bugün
+ * başladıysa şerit o günden sürer. Bugün de şeridin sıradaki günüyse (açık antrenman günü) "Sırada" satırı gizlenir:
+ * kartın başlığı ("Yarım kalan antrenman · Gün B") onu zaten söylüyor. Dinlenme gününde satır kalır (sıradaki gün
+ * ileride). Bunu şerit karar verir: bugünün sıradaki gün olup olmadığını yalnız `weekPlan` bilir.
+ *
+ * Çevrimdışıyken (sorgu duraklatıldı, `networkMode: 'online'`) yanıt yoksa şerit çizilmez: yer tutucu sonsuza dek
+ * dönmez.
  */
 export function WeekStrip({ clientId, showNext = true, activeDay = null }: { clientId: string; showNext?: boolean; activeDay?: ActiveDay | null }) {
-  const { data, isPending } = useWorkoutOverview(clientId);
+  const { data, isPending, fetchStatus } = useWorkoutOverview(clientId);
   const queryClient = useQueryClient();
   const router = useRouter();
   const program = useWorkoutProgram();
   const [open, setOpen] = useState(false);
   // Gerçek şeridin yüksekliği: sütun 81 px (py-1.5 + text-xs 16 + gap 6 + halka 28 + gap 6 + ad 13), gap-1 ile
   // "Sırada" satırı (text-sm 20) ve h-11 düğme: 153 px; satırsız 129 px.
+  if (isPending && fetchStatus === 'paused') return null;
   if (isPending) return <Skeleton className={cn('w-full rounded-lg', showNext ? 'h-[9.5625rem]' : 'h-[8.0625rem]')} />;
   if (!data?.schedule) return null;
   const schedule = data.schedule;
   const days = planOf(data, schedule, activeDay);
   const upcoming = days.find((day) => day.state === 'next');
+  const nextLine = showNext && upcoming && !(upcoming.today && activeDay?.date === data.today) ? upcoming : null;
 
   const saved = (next: WorkoutSchedule) => {
     // Hemen görünsün; sonra sunucudan taze (plan damgası değişti, telefondaki plan da yenilenir).
@@ -152,13 +159,13 @@ export function WeekStrip({ clientId, showNext = true, activeDay = null }: { cli
           );
         })}
       </ol>
-      {showNext && upcoming ? (
+      {nextLine ? (
         <p className="text-center text-sm break-words text-muted-foreground">
-          Sırada: {upcoming.today ? 'bugün' : relativeDayText(upcoming.date, data.today)}
-          {upcoming.label ? (
+          Sırada: {nextLine.today ? 'bugün' : relativeDayText(nextLine.date, data.today)}
+          {nextLine.label ? (
             <>
               {' · '}
-              <span className="font-medium text-foreground">{upcoming.label}</span>
+              <span className="font-medium text-foreground">{nextLine.label}</span>
             </>
           ) : null}
         </p>

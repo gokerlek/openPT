@@ -1,4 +1,5 @@
 import { appendLog, mondayOf, type ClientSchedule, type ProgramLogEntry, type ProgramSchedule } from './program-plan.ts';
+import type { RotationChoice } from './schemas/session.ts';
 
 /**
  * Antrenman günleri (tasarım §2.11, PT kararı 12) — saf. Haftanın günleri, takvim değil.
@@ -184,9 +185,15 @@ export type WeekRotation = {
    * günü yapar ("Başka gün seç"te sıradaki günden farklı). Bugün açık bir antrenman günüyse (seçili, bugün bitmiş
    * antrenman yok) bugün o gün "sırada"; değilse (dinlenme günü ya da bugün bir antrenman zaten bitti) sonraki seçili
    * günler onun arkasından sürer. Yoksa (null) `next`.
+   *
+   * Tahmin antrenmanın dönüşü ilerleterek ("advance") biteceğini varsayar; belgede "keep" zaten seçiliyse
+   * (`SessionDoc.rotation`) dönüş ilerlemeyecek: `weekRotation` bunu vermez, şerit `next`'ten sürer.
    */
   active?: number | null;
 };
+
+/** Yarım antrenmanın şeride giren bilgisi: günü, başlangıç tarihi ve belgede seçilmişse bitişteki dönüş. */
+export type ActiveDay = { dayId: string; date: string; rotation?: RotationChoice | null | undefined };
 
 /**
  * Bugün'ün hafta şeridi (Faz 2): her gün yapıldı (oturumun adı; aynı gün birden çoksa sonuncusu) · kaçtı ·
@@ -235,17 +242,19 @@ export function weekPlan(input: {
  * Hafta şeridinin dönüşü programın günlerinden (`weekPlan`'ın `rotation`'ı): sıra `nextDayId`'nin yerinden
  * (bulunamazsa ilk gün, "Başka gün seç" gibi). Yarım antrenman bugün başladıysa ve günü bu günlerdeyse `active`
  * onun sırası: dönüş bitişte ilerlediği için şerit onun gününden sürer. Önceki günden kalan yarım antrenman tahmine
- * girmez (bugün sürdürülür mü, bitirilir mi bilinmez); başka evrenin ya da programın günü de.
+ * girmez (bugün sürdürülür mü, bitirilir mi bilinmez); başka evrenin ya da programın günü de; bitişte "keep" zaten
+ * seçilmişse de (dönüş ilerlemeyecek, sıra `nextDayId`'de kalır).
  */
 export function weekRotation(input: {
   days: readonly { id: string; name: string }[];
   nextDayId: string | null;
   today: string;
-  active?: { dayId: string; date: string } | null | undefined;
+  active?: ActiveDay | null | undefined;
 }): WeekRotation {
   const { days, active } = input;
   const next = Math.max(0, days.findIndex((day) => day.id === input.nextDayId));
-  const activeIndex = active && active.date === input.today ? days.findIndex((day) => day.id === active.dayId) : -1;
+  const counted = active && active.date === input.today && active.rotation !== 'keep';
+  const activeIndex = counted ? days.findIndex((day) => day.id === active.dayId) : -1;
   return { names: days.map((day) => day.name), next, active: activeIndex >= 0 ? activeIndex : null };
 }
 

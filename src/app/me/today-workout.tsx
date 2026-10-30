@@ -1,11 +1,12 @@
 'use client';
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import Link from 'next/link';
 import { AnimatePresence, motion } from 'motion/react';
 import { useQueryClient } from '@tanstack/react-query';
-import { ArrowBendDownRight, CheckCircle, Circle, Play, PlayCircle } from '@phosphor-icons/react';
+import { FlagCheckered, Play } from '@phosphor-icons/react';
 import { WaterGlass } from '@/components/water-glass';
+import { UNIT_STATE_TEXT, UnitStateIcon } from '@/components/workout/unit-state';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -13,18 +14,18 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { formatNumber, formatRecent, todayIn } from '@/lib/format';
 import { DURATION, tween, WORKOUT } from '@/lib/motion';
 import { fetchJson } from '@/lib/query/errors';
-import { useServiceQuery } from '@/lib/query/use-service';
 import type { SessionDoc, WaterTap } from '@/lib/schemas/session';
 import { waterOf, workingSetCount } from '@/lib/session-index';
 import { randomId } from '@/lib/template-plan';
 import { cn } from '@/lib/utils';
 import { WATER_BATCH_MS, WATER_LIMITS } from '@/lib/water';
 import { parseLocalWorkout } from '@/lib/workout-outbox';
-import { effectiveDay, listView, withExtraRounds, type ListItem, type ListState } from '@/lib/workout-flow';
+import { effectiveDay, itemName, listView, listWindow, localWorkoutDay } from '@/lib/workout-flow';
 import type { WorkoutDay } from '@/lib/workout-plan';
 import type { WorkoutResponse } from '@/lib/workout-routes';
 import { WeekStrip } from './training-week';
-import { localWorkoutText, readPendingWater, savePendingWater, saveWorkoutCache, subscribeLocalWorkout } from './workout-storage';
+import { useWorkoutOverview, WORKOUT_OVERVIEW_KEY } from './workout-overview';
+import { localWorkoutText, readPendingWater, savePendingWater, subscribeLocalWorkout } from './workout-storage';
 
 /**
  * Bugün'ün antrenman parçaları (tasarım §0, §2.1, §4.4) — istemcide:
@@ -37,38 +38,8 @@ import { localWorkoutText, readPendingWater, savePendingWater, saveWorkoutCache,
  *   antrenmanın suyu (çift sayılmaz).
  */
 
-export const WORKOUT_KEY = ['me', 'workout'] as const;
-/** Bugün'ün yanıtları (programa göre); `setQueriesData` ile hepsi birden güncellenir, muadil sorguları değil. */
-export const WORKOUT_OVERVIEW_KEY = [...WORKOUT_KEY, 'overview'] as const;
-
-/**
- * Bugün'ün tek seferlik program seçimi (`?program=op_…|pt`, `docs/design/kendi-program.md` §2.6): Bugün'ün
- * parçaları yanıtı o programla çeker; yoksa kalıcı seçim (sunucu karar verir).
- */
-const WorkoutProgramContext = createContext<string | null>(null);
-
-export function WorkoutProgramProvider({ program, children }: { program: string | null; children: React.ReactNode }) {
-  return <WorkoutProgramContext.Provider value={program}>{children}</WorkoutProgramContext.Provider>;
-}
-
-/** Tek seferlik seçimin adres parçası (`program=…`); yoksa boş. */
-export function useWorkoutProgram(): string | null {
-  return useContext(WorkoutProgramContext);
-}
-
-export function useWorkoutOverview(clientId: string) {
-  const program = useWorkoutProgram();
-  return useServiceQuery<WorkoutResponse>({
-    key: [...WORKOUT_OVERVIEW_KEY, program ?? 'default'],
-    fn: async ({ signal }) => {
-      const data = await fetchJson<WorkoutResponse>(`/api/me/workout${program ? `?program=${encodeURIComponent(program)}` : ''}`, { signal });
-      saveWorkoutCache(clientId, data);
-      return data;
-    },
-    // Bugün'ün sayıları olmasa da sayfa çalışır; hata bildirimi kartın kendisinde.
-    notify: 'none',
-  });
-}
+// Sorgu ve program seçimi `workout-overview.tsx`'te (şerit de oradan okur); eski içe aktarmalar için buradan da.
+export { useWorkoutOverview, useWorkoutProgram, WORKOUT_KEY, WORKOUT_OVERVIEW_KEY, WorkoutProgramProvider } from './workout-overview';
 
 /** Telefondaki yarım antrenman (aynı ve öteki sekmelerdeki değişiklikleri izler). */
 function useLocalWorkout(clientId: string) {
@@ -82,7 +53,9 @@ function useLocalWorkout(clientId: string) {
 
 /** "Bu hafta 1/3" (sıklık yoksa "Bu hafta 1"); yüklenirken yer tutucu. */
 export function WeekBadge({ clientId }: { clientId: string }) {
-  const { data, isPending } = useWorkoutOverview(clientId);
+  const { data, isPending, fetchStatus } = useWorkoutOverview(clientId);
+  // Çevrimdışı (sorgu duraklatıldı): yer tutucu sonsuza dek dönmesin.
+  if (isPending && fetchStatus === 'paused') return null;
   if (isPending) return <Skeleton className="h-5 w-20 rounded-full" />;
   if (!data) return null;
   const { done, target } = data.week;
@@ -95,42 +68,23 @@ export function WeekBadge({ clientId }: { clientId: string }) {
 
 type InProgress = { doc: SessionDoc; plan: WorkoutDay | null };
 
-/** "Devam et" kartının listesi en çok bu kadar birim; fazlası "+n hareket daha". */
+/** "Devam et" kartının listesi en çok bu kadar birim; şu an hep içinde (`listWindow`). */
 const RESUME_LIST_LIMIT = 8;
 
 /**
- * Listenin durum ikonu (`aria-hidden`) ve ekran okuyucu metni; antrenman ekranının listesiyle aynı (✓ bitti, ▶ şu an,
- * ○ sırada, ⤼ atlandı). `Circle`'ın dolu sürümü dolu bir disk: boş halka `regular`.
- */
-const LIST_STATE: Record<ListState, { text: string; icon: React.ReactNode }> = {
-  done: { text: 'bitti', icon: <CheckCircle weight="fill" aria-hidden className="size-5 shrink-0 text-primary" /> },
-  current: { text: 'şu an', icon: <PlayCircle weight="fill" aria-hidden className="size-5 shrink-0 text-primary" /> },
-  pending: { text: 'sırada', icon: <Circle weight="regular" aria-hidden className="size-5 shrink-0 text-muted-foreground" /> },
-  skipped: { text: 'atlandı', icon: <ArrowBendDownRight aria-hidden className="size-5 shrink-0 text-muted-foreground" /> },
-};
-
-/** Birimin adı: tek harekette başlık, grupta "A + B". */
-function itemName(item: ListItem): string {
-  return item.members
-    .map((member) => member.title)
-    .filter(Boolean)
-    .join(' + ');
-}
-
-/**
  * Yarım antrenmanın kartı (Faz 2): "Yarım kalan antrenman · Gün A", birincil "Devam et: <şu anki hareket>" (antrenman
- * ekranı o hareketin odağıyla açılır), "Antrenmanı bitir"; plan biliniyorsa hareketlerin listesi (`listView`: durum,
- * ad, "2/4 set"; ilk 8 birim + "+n"), bilinmiyorsa yapılan set sayısı; en altta hafta şeridi (`strip`).
+ * ekranı o hareketin odağıyla açılır) ve "Antrenmanı bitir"; hepsi bittiyse birincil "Antrenmanı bitir". Plan
+ * biliniyorsa hareketlerin listesi (`listView`: durum, ad, "2/4 set"; en çok 8 birim, şu an hep içinde: üstte
+ * "Önceki n hareket", altta "+n hareket daha"), bilinmiyorsa yapılan set sayısı; en altta hafta şeridi (`strip`).
  */
 function ResumeCard({ progress, timeZone, strip, clientWater }: { progress: InProgress; timeZone: string; strip: React.ReactNode; clientWater: React.ReactNode }) {
   const { doc, plan } = progress;
   const view = plan ? listView(plan, doc) : null;
   const items = view && view.items.length > 0 ? view.items : null;
-  const shown = items?.slice(0, RESUME_LIST_LIMIT) ?? [];
-  // Gizlenen hareketler (grupta her üye ayrı hareket).
-  const hidden = (items?.slice(RESUME_LIST_LIMIT) ?? []).reduce((sum, item) => sum + item.members.length, 0);
+  const list = items && view ? listWindow(items, view.current, RESUME_LIST_LIMIT) : null;
   const current = view?.current ? view.items.find((item) => item.key === view.current) : undefined;
   const currentName = current ? itemName(current) : '';
+  const allDone = view?.allDone === true;
   const dayName = doc.program?.dayName ?? plan?.dayName;
   const lastAt = doc.entries.flatMap((entry) => entry.sets.map((set) => set.at)).sort().at(-1) ?? doc.startedAt;
   return (
@@ -148,20 +102,32 @@ function ResumeCard({ progress, timeZone, strip, clientWater }: { progress: InPr
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
-          <div className="flex flex-col gap-2">
-            <Button size="lg" className="h-12 w-full" nativeButton={false} render={<Link href="/me/antrenman" />}>
-              <Play data-icon="inline-start" weight="fill" />
-              <span className="min-w-0 truncate">{currentName ? `Devam et: ${currentName}` : 'Kaldığın yerden devam et'}</span>
-            </Button>
-            <Button variant="ghost" className="h-11 w-full text-muted-foreground" nativeButton={false} render={<Link href="/me/antrenman?bitir=1" />}>
+          {allDone ? (
+            // Hepsi bitti: tek iş bitirmek (antrenman ekranı bitiş sheet'iyle açılır; kapatınca liste).
+            <Button size="lg" className="h-12 w-full" nativeButton={false} render={<Link href="/me/antrenman?bitir=1" />}>
+              <FlagCheckered data-icon="inline-start" weight="fill" />
               Antrenmanı bitir
             </Button>
-          </div>
-          {items ? (
+          ) : (
+            <div className="flex flex-col gap-2">
+              <Button size="lg" className="h-12 w-full" nativeButton={false} render={<Link href="/me/antrenman" />}>
+                <Play data-icon="inline-start" weight="fill" />
+                <span className="min-w-0 truncate">{currentName ? `Devam et: ${currentName}` : 'Kaldığın yerden devam et'}</span>
+              </Button>
+              <Button variant="ghost" className="h-11 w-full text-muted-foreground" nativeButton={false} render={<Link href="/me/antrenman?bitir=1" />}>
+                Antrenmanı bitir
+              </Button>
+            </div>
+          )}
+          {list ? (
             <div className="flex flex-col gap-1">
+              {list.before > 0 ? (
+                <p className="pl-7.5 text-sm text-muted-foreground">
+                  Önceki <span className="tabular-nums">{list.before}</span> hareket
+                </p>
+              ) : null}
               <ol className="flex flex-col gap-1" aria-label="Antrenmanın hareketleri">
-                {shown.map((item) => {
-                  const state = LIST_STATE[item.state];
+                {list.shown.map((item) => {
                   const isCurrent = item.state === 'current';
                   return (
                     <li
@@ -172,9 +138,9 @@ function ResumeCard({ progress, timeZone, strip, clientWater }: { progress: InPr
                         isCurrent && 'font-semibold',
                         (item.state === 'done' || item.state === 'skipped') && 'text-muted-foreground',
                       )}>
-                      {state.icon}
+                      <UnitStateIcon state={item.state} />
                       <span className="min-w-0 flex-1 break-words">
-                        <span className="sr-only">{state.text}: </span>
+                        <span className="sr-only">{UNIT_STATE_TEXT[item.state]}: </span>
                         {itemName(item)}
                       </span>
                       <span className={cn('shrink-0 tabular-nums', isCurrent ? 'text-foreground' : 'text-muted-foreground')}>
@@ -184,9 +150,9 @@ function ResumeCard({ progress, timeZone, strip, clientWater }: { progress: InPr
                   );
                 })}
               </ol>
-              {hidden > 0 ? (
+              {list.after > 0 ? (
                 <p className="pl-7.5 text-sm text-muted-foreground">
-                  +<span className="tabular-nums">{hidden}</span> hareket daha
+                  +<span className="tabular-nums">{list.after}</span> hareket daha
                 </p>
               ) : null}
             </div>
@@ -207,17 +173,19 @@ function ResumeCard({ progress, timeZone, strip, clientWater }: { progress: InPr
 export function TodayWorkout({ clientId, children }: { clientId: string; children: React.ReactNode }) {
   const local = useLocalWorkout(clientId);
   const { data } = useWorkoutOverview(clientId);
-  // Liste ve sayılar günün etkin planından: muadiller, eklenen hareketler (`effectiveDay`) ve telefondaki "+ Set ekle"
-  // turları (`withExtraRounds`; antrenman ekranıyla aynı "2/4 set").
+  // Liste ve sayılar günün etkin planından: muadiller ve eklenen hareketler (`effectiveDay`). Telefondaki antrenmanda
+  // ekranın planıyla aynı (`localWorkoutDay`, "+ Set ekle" turları dahil; listenin sayılarını değiştirmez).
   const progress: InProgress | null = local
-    ? { doc: local.doc, plan: withExtraRounds(effectiveDay(local.plan, local.doc, local.extras), local.extraRounds) }
+    ? { doc: local.doc, plan: localWorkoutDay(local, local.doc) }
     : data?.active
       ? { doc: data.active, plan: data.day && data.day.dayId === data.active.program?.dayId ? effectiveDay(data.day, data.active, data.extras ?? {}) : null }
       : null;
   if (!progress) return <>{children}</>;
   const timeZone = data?.timeZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
-  // Dönüş yalnız bitişte ilerler: şerit bugün başlamış yarım antrenmanın gününden sürer (`weekRotation`).
-  const activeDay = progress.doc.program ? { dayId: progress.doc.program.dayId, date: progress.doc.date } : null;
+  // Dönüş yalnız bitişte ilerler: şerit bugün başlamış yarım antrenmanın gününden sürer (`weekRotation`; "keep"
+  // seçildiyse sıradaki günden).
+  const { doc } = progress;
+  const activeDay = doc.program ? { dayId: doc.program.dayId, date: doc.date, rotation: doc.rotation?.value ?? null } : null;
   return (
     <ResumeCard
       progress={progress}
