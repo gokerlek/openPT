@@ -795,13 +795,13 @@ ekran takılmıyor, yeni gün odakla açılıyor.
    üyesinin satırı `canSwap` ise bugünkü `SwapSheet`; değilse öğe devre dışı, notu set kaydedildiyse "Set
    kaydedildi, muadil seçilemez", eklenen harekette "Bu hareketin muadili yok"; **Bu hareketi atla** —
    `dropWithUndo` (4. görev; biten birimde null döner, öğe o zaman devre dışı) + toast'ta "Geri al" (`undoSkip`,
-   bugünkü toast düzeni); ardından `openFocus` sıradaki birime (`listView(…).current`: fazladan setleri saymaz),
+   bugünkü toast düzeni); ardından `openFocus` sıradaki birime (`nextUnitAfter(plan, doc, odak)`: fazladan setleri saymaz),
    yoksa listeye. Başlığın yanındaki "Değiştir" düğmesi kalkar; kısıt
    notundaki "Değiştir" kalır. Giriş panelindeki "Hareketi geç ›" kalkar (aynı iş tek yerde, ⋯'de; fazladan
    setteki "Kaldır" kalır); `skipAt`'in çağıranı kalmaz (10. görevde kalkar).
 2. **Biten hareketi yeniden açmak:** 6a odakta biten birimin set tablosunu gösterir. Odaktaki birimde set
    kalmadıysa (`nextSet(…, focus)` null) giriş paneli "Bu hareket bitti" der: birincil **Sıradaki: <ad>**
-   (`openFocus` `listView(…).current`'e) ya da hepsi bittiyse **Antrenmanı bitir**; ikincil **Set ekle** (bugünkü
+   (`openFocus` `nextUnitAfter(plan, doc, odak)`'a) ya da hepsi bittiyse **Antrenmanı bitir**; ikincil **Set ekle** (bugünkü
    fazladan set). Set tablosunda kayıtlı satıra dokunmak bugünkü `EditSetSheet`'i açar. Silinen set birimi yeniden
    bitmemiş yapar: odak o birimde kalır ve sıradaki set onun.
 3. **Dinlenme ekranı kilitlemez:** dinlenme sürerken "‹ Liste"ye basmak dinlenmeyi küçültür (`mode: 'mini'`) ve
@@ -809,9 +809,11 @@ ekran takılmıyor, yeni gün odakla açılıyor.
    odakta "Set bitti" bugünkü gibi dinlenmeyi bitirir. Üst çubuk dinlenmede de dokunulur kalır (bugünkü gibi).
 4. **Kartlarda son değerler:** set tablosunun "Önceki" sütunu aynen; liste satırındaki son ağırlık 6b. görevden.
 5. **"Sıradaki" her an görünür** (kullanıcı isteği, 30 Ekim): odak ekranında giriş panelinin altında tek satır
-   "Sıradaki: <ad>" — odaktaki birimden sonra sırada ilk bitmemiş birim (`listView` sırası; odaktaki birim
-   bitmemişse ondan sonraki, bittiyse imlecin birimi); dokununca `openFocus` o birime. Sıradaki yoksa (son
-   hareket) satır "Son hareket" der. Dinlenme panelindeki "Sıradaki" metniyle aynı kaynaktan.
+   "Sıradaki: <ad>" — kendiliğinden geçişin açacağı birim: `nextUnitAfter(plan, doc, odak)` (yarım bırakılan,
+   yoksa sırada ilk bitmemiş; odaktaki birim hariç; fazladan setleri saymaz). Odaktakinin önünde kalmış bitmemiş
+   bir birim de olabilir: satır, ekranın gerçekten nereye geçeceğini söyler (karar, 6b incelemesi). Dokununca
+   `openFocus` o birime. Yoksa satır "Son hareket" der. Dinlenme panelinin "Sıradaki" metni (odakta ve listede)
+   aynı kaynaktan; bugün listede imlecin sıradaki setinden geliyor ve bekleyen fazladan seti gösterebiliyor.
 
 typecheck, lint, test · Commit: `feat(workout): focus menu, reopen finished exercises, non-blocking rest`
 
