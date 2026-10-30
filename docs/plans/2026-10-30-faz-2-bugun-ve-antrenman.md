@@ -893,6 +893,40 @@ ikinci geri yine soruyor; "Ara ver" Bugün'e. Çevrimdışıyken de aynı. Andro
 sayfa yenilendikten sonra odak → geri denenir: Chrome kullanıcı etkileşimi olmadan itilen girdileri geri tuşunda
 atlayabilir; atlıyorsa bu not edilir (yenileme sonrası kabul edilen sınır).
 
+**Uygulamada (9):**
+- **Korkuluk** `armed` state'te, değeri antrenmanın kimliği (antrenman başına). Açılış kuralının effect'i liste işaretini
+  ittiğinde yazar (`setOpened` ile aynı çizime düşer: dialog bir kare bile açık görünmez). Dialog (`PauseDialog`,
+  `workout-sheets.tsx`) `armed === doc.id && !liste && !hareket && !finishing` iken açık: işaretsiz bir odak adresinde ve
+  bitiş/değiştirme sürerken sormaz. **Devam et** işareti `pushState` ile geri koyar (`pushMark`; `focusPushed`'a dokunmaz),
+  ileri geçmiş (eski odak) düşer. Dialog'u kapatmak (Esc) "Devam et"tir: açıklığı adresten geldiği için başka türlü
+  kapanamazdı. Telefonda "Devam et" birincil, altta ve odakta.
+- **Ara ver** (dialog ve ⋯ menüsü) ikisi de `router.replace('/me')` (`leave()` gibi; 7. görevin `router.push`'u değişti):
+  ara vermek antrenmandan çıkmak. `push` antrenman girdilerinin üstüne Bugün'ü eklerdi; işaretsiz girdiden çıkılınca Bugün'de
+  geri tuşu o girdiye döner, açılış kuralı yeniden iter, danışan antrenmana geri çekilirdi. `replace` ileri geçmişi silmez
+  (tarayıcının ileri tuşu antrenmanın liste girdisine dönebilir; kabul).
+- **İşaretsiz girdide satıra dokunmak:** `openFocus` listeden iterken adreste işaret yoksa önce işareti iter (korkuluk da
+  kurulur), sonra odağı: odağın altında hep işaretli liste. Seçildi, çünkü dialog modal olsa da altındaki toast'ların
+  düğmeleri ("Geri al", "Şimdi yap") odak açabilir; ayrıca sayfa `?hareket=` ile yüklenip "‹ Liste" odağı `replaceState` ile
+  düşürünce liste işaretsiz girdide açık kalır. Dialog'u kapatmanın "Devam et" olması ayrıca (yukarıda).
+- **Antrenmanı değiştir:** `restartWith` korkuluğu sıfırlar; yeni antrenmanın açılış kuralı yeniden kurar. **Kabul edilen
+  sınır:** eski antrenmanın işaretsiz ve `?liste=1` girdileri geçmişte altta kalır; geri tuşuyla oraya inilirse ekran
+  telefondaki (yeni) antrenmanı gösterir: eski liste girdisi liste, eski işaretsiz girdi yine "Ara verilsin mi?" der.
+- **Chrome'un geçmiş müdahalesi** (açılış effect'inin yorumunda): kullanıcı etkileşimi olmadan itilen girdiler geri tuşunda
+  atlanabilir. Yalnız yenilemede değil, her sert yüklemede (işaretsiz adresin yenilenmesi, yer imi, yeni sekme, ana ekran
+  kısayolu, bildirim) açılış kuralı sayfa dokunuş almadan iter; geri tuşu liste ve işaretsiz girdiyi atlayıp çıkabilir.
+  Bugün'den dokunuşla gelince (yumuşak geçiş) etkileşim vardır. Mobil öykünmede denenir.
+- **Yenileme:** sayfa liste ya da odak adresiyle yenilenince korkuluk kurulmaz. Altındaki girdi eski belgenin: geri tuşu onu
+  tam yükler; işaretsiz girdiyse açılış kuralı orada yeniden çalışır (odakla açılır, korkuluk kurulur), yani "doğrudan
+  çıkmak" yerine antrenman yeniden açılabilir. Sonraki geri tuşları yine sorar.
+- **Geçmiş** (B: işaretsiz girdi, L: `?liste=1`, F: `?liste=1&hareket=…`; köşeli parantez: bulunulan girdi):
+  - Taze açılış (Bugün'den): `B, L, [F]`; korkuluk kurulu. Hepsi bitmişse ya da `?bitir=1`: `B, [L]`.
+  - Odaktan geri: `B, [L], F` (liste).
+  - Listeden geri: `[B], L, F` → "Ara verilsin mi?". **Devam et:** `B, [L′]` (ileri geçmiş düşer; ikinci geri yine sorar).
+    **Ara ver:** `[/me], L, F` (B'nin yerine Bugün).
+  - İşaretsiz girdide satıra dokunmak (dialog'u atlayan toast ya da korkuluksuz liste): `B, L′, [F′]`; "‹ Liste" `L′`'ye.
+  - Antrenmanı değiştir (odaktan): `B, L, [B₂]` (F'nin yerine yeni gün) → açılış: `B, L, B₂, L₂, [F₂]`; geri: `L₂`, sonra
+    `B₂`'de soru.
+
 ---
 
 ### Task 10: Temizlik ve belgeler

@@ -445,3 +445,31 @@ export function FinishedElsewhereDialog({
     </AlertDialog>
   );
 }
+
+/**
+ * Listeden geri tuşu (Faz 2, 9. görev): "Ara verilsin mi?". **Devam et** listede kalır (ekran liste işaretini yeniden
+ * iter), **Ara ver** Bugün'e döner (antrenman telefonda kalır). Telefonda düğmeler üst üste: "Devam et" birincil, en altta
+ * (başparmağın düştüğü yer güvenli olan) ve odak onda. Açıklığı adresten gelir (işaretsiz girdi): kapatmak (Esc) "Devam
+ * et"tir, yoksa adres değişmeden dialog yeniden açık sayılırdı.
+ */
+export function PauseDialog({ open, onContinue, onPause }: { open: boolean; onContinue: () => void; onPause: () => void }) {
+  const stay = useRef<HTMLButtonElement>(null);
+  return (
+    <AlertDialog open={open} onOpenChange={(next) => (next ? undefined : onContinue())}>
+      <AlertDialogContent initialFocus={stay}>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Ara verilsin mi?</AlertDialogTitle>
+          <AlertDialogDescription>Antrenmanın telefonunda kalır; Bugün&apos;den devam edersin.</AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <Button ref={stay} className="h-11" onClick={onContinue}>
+            Devam et
+          </Button>
+          <Button variant="outline" className="h-11" onClick={onPause}>
+            Ara ver
+          </Button>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}
