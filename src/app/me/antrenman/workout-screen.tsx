@@ -1,5 +1,4 @@
 'use client';
-import {WorkoutSwitchSheet} from './workout-switch-sheet';
 
 import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
@@ -7,10 +6,9 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { AnimatePresence, motion } from 'motion/react';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { ArrowClockwise, Barbell, CaretLeft, CloudSlash, Drop, WarningCircle } from '@phosphor-icons/react';
+import { ArrowClockwise, Barbell, WarningCircle } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
-import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
 import { formatKg } from '@/lib/format';
 import { DRAG, DURATION, EASE, tween, WORKOUT } from '@/lib/motion';
@@ -20,7 +18,6 @@ import { feedbackItems, feedbackMessage, resolveFeedback, withFeedbackFlags, typ
 import type { FinishFeedback, FinishHealth, RotationChoice, SessionDoc } from '@/lib/schemas/session';
 import {achievementNotice} from '@/lib/workout-achievements';
 import { waterOf } from '@/lib/session-index';
-import { cn } from '@/lib/utils';
 import { rowKeyOf, type CursorUnit } from '@/lib/workout-cursor';
 import {
   addExercise,
@@ -30,6 +27,8 @@ import {
   finishRotation,
   firstSkippedKey,
   listView,
+  moveUnit,
+  moveUnitTo,
   nextUnitAfter,
   restoreAt,
   skipAt,
@@ -94,7 +93,9 @@ import { RestPanel, RestStrip, type EffortPromptView, type RestView } from './re
 import { StartCheck } from './start-check';
 import { useWorkoutOutbox } from './use-workout-outbox';
 import { beep, isIOS, unlockAudio, useWakeLock, vibrate } from './workout-feedback';
-import { LIST_CURRENT_ID, LIST_TITLE_ID, WorkoutList, WorkoutListBar } from './workout-list';
+import { WorkoutHeader, type WorkoutStatus } from './workout-header';
+import { LIST_TITLE_ID, listRowId, WorkoutList, WorkoutListBar } from './workout-list';
+import { WorkoutSwitchSheet } from './workout-switch-sheet';
 import { DeleteSetDialog, EditSetSheet, FinishedElsewhereDialog, FinishSheet, type EditTarget, type EditValues } from './workout-sheets';
 
 /**
@@ -211,11 +212,6 @@ function addressFocus(): string | null {
   return focusOf(new URLSearchParams(window.location.search));
 }
 
-/** Klavye odağı listeye: "şu an" satırı, yoksa (hepsi bitti) listenin başlığı. */
-function focusListTarget() {
-  (document.getElementById(LIST_CURRENT_ID) ?? document.getElementById(LIST_TITLE_ID))?.focus();
-}
-
 /**
  * Etkin antrenman (tasarım §2.4, §2.5, §4.3, §4.4): tam ekran, dock yok. Kaynak telefondur: belge,
  * gönderim kuyruğu, dinlenme ve taslak `localStorage`'da (`workout-outbox.ts`); yenileme ya da çökme
@@ -244,10 +240,11 @@ function focusListTarget() {
  * Zorluk, ısınma, ayar notu ve AMRAP düzeltmesi kendi başına gönderilmez, sonraki set yazımına biner.
  *
  * Liste + odak (Faz 2): adreste odak yoksa ana ekran günün listesi (`WorkoutList`: satıra dokunmak o hareketi açar,
- * atlananı geri alır, "Hareket ekle", altta "Başla/Devam et: <ad>" ya da "Antrenmanı bitir"); odak varsa
- * (`?hareket=<birim>`, `workout-nav.ts`) o hareketin kartı ve giriş paneli: sıradaki set yalnız o birimde aranır, sıra
- * kendiliğinden değişmez, biten birim set tablosuyla açılır, "‹ Liste" ve geri tuşu listeye döner. Ekran şu anki
- * hareketin odağıyla açılır (açılış kuralı: liste işaretli girdinin üstünde odak girdisi).
+ * atlananı geri alır, "Sırayı değiştir", "Hareket ekle", altta "Başla/Devam et: <ad>" ya da "Antrenmanı bitir");
+ * odak varsa (`?hareket=<birim>`, `workout-nav.ts`) o hareketin kartı ve giriş paneli: sıradaki set yalnız o birimde
+ * aranır, sıra kendiliğinden değişmez, biten birim set tablosuyla açılır, "‹ Liste" ve geri tuşu listeye döner. Ekran
+ * şu anki hareketin odağıyla açılır (açılış kuralı: liste işaretli girdinin üstünde odak girdisi). Üst çubuk
+ * `WorkoutHeader` (⋯ menüsünde "Antrenmanı değiştir" ve "Ara ver").
  *
  * Geçme (§2.6): panelde
  * tek dokunuşluk "Hareketi geç ›" (sona alır; 5 sn toast [Bugün yapma] [Geri al]), başlıkta "Değiştir"
@@ -298,8 +295,9 @@ export function WorkoutScreen({
   const [elsewhere, setElsewhere] = useState<{ server: SessionDoc; count: number } | null>(null);
   const [elsewhereBusy, setElsewhereBusy] = useState(false);
   const [announcement, setAnnouncement] = useState('');
-  const [switchOpen,setSwitchOpen]=useState(false);
-  const switchHref=useRef<string|null>(null);
+  const [switchOpen, setSwitchOpen] = useState(false);
+  /** "Antrenmanı değiştir"de seçilen program ve gün: setli antrenman önce bitirilir, bitiş başarılıysa bu açılır. */
+  const switchTarget = useRef<{ program: string; day: string } | null>(null);
   const [swapTarget, setSwapTarget] = useState<SwapTarget | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [addBusy, setAddBusy] = useState<string | null>(null);
@@ -390,8 +388,6 @@ export function WorkoutScreen({
   }, []);
 
   const focusLater = useCallback((id: string, ms: number) => later(ms, () => document.getElementById(id)?.focus({ preventScroll: true })), [later]);
-  /** Klavye odağı listenin "şu an" satırına (yoksa başlığına); satır görünmüyorsa kaydırılır. */
-  const focusList = useCallback((ms: number) => later(ms, focusListTarget), [later]);
 
   /* --- odak: adres (`?hareket=`), sunucuya gidilmeden --- */
 
@@ -400,18 +396,24 @@ export function WorkoutScreen({
   // `replaceState`): "‹ Liste" ona `history.back()` ile döner. Sayfa odak adresiyle yüklendiyse (yenileme) o girdinin
   // altı bilinmez; o girdi odakta kaldıkça bu sayfa onun üstüne itemez, listeden itmek de onu ileri geçmişten siler.
   const focusPushed = useRef(false);
+  // Listeye dönülürken bırakılan hareket: liste çizilince o satıra kaydırılır ve klavye odağı oraya taşınır (aşağıda).
+  const leftUnit = useRef<string | null>(null);
 
   /**
    * Gösterilen hareket değişti (başka hareket ya da liste; dokunuşla ya da geri/ileri tuşuyla): süren set sayacı ve
    * devrenin istasyon geçişi düşer (o hareketindi). Geçerlilik `listView`'ın kuralı (`validFocus`): geçersiz odak
-   * liste sayılır. Taslak zaten yalnız kendi setinde geçerli (`nextSet`).
+   * liste sayılır. Taslak zaten yalnız kendi setinde geçerli (`nextSet`). Listeye dönülüyorsa bırakılan hareket not
+   * edilir (`leftUnit`).
    */
   const leaveShown = useCallback(
     (from: string | null, to: string | null) => {
       const current = localRef.current;
       if (!current || from === to) return;
       const plan = planOf(current);
-      if (validFocus(plan, current.doc, from) === validFocus(plan, current.doc, to)) return;
+      const shownFrom = validFocus(plan, current.doc, from);
+      const shownTo = validFocus(plan, current.doc, to);
+      if (shownFrom === shownTo) return;
+      if (shownTo === null) leftUnit.current = shownFrom;
       if (current.timer) commit({ ...current, timer: null });
       setTransition(null);
     },
@@ -454,7 +456,8 @@ export function WorkoutScreen({
   }, [leaveShown]);
 
   // Adres başka yoldan değişti (geri/ileri tuşu, `router.replace`): eşzamanlı kopya yetişir; gösterilen hareket
-  // değiştiyse sayaç ve geçiş düşer, canlı bölge kipi söyler ("Liste" ya da hareketin adı) ve klavye odağı taşınır.
+  // değiştiyse sayaç ve geçiş düşer, canlı bölge kipi söyler ("Liste" ya da hareketin adı) ve klavye odağı taşınır
+  // (harekete burada; listeye liste çizilince, aşağıdaki effect).
   // `openFocus` ve `goToList` kopyayı adresten önce yazar: adres yetişince ikisi aynıdır, burada bir şey olmaz.
   // Bu effect geçersiz odak effect'inin (aşağıda, `view`'dan sonra) ÜSTÜNDE kalmalı: effect'ler yazılış sırasıyla
   // çalışır; geri tuşu geçersiz bir odağa dönerse kopya önce burada yetişir, o effect ancak o zaman
@@ -474,9 +477,8 @@ export function WorkoutScreen({
       focusLater('exercise-title', DURATION.base);
     } else {
       announce('Liste');
-      focusList(DURATION.base);
     }
-  }, [focus, leaveShown, announce, focusLater, focusList]);
+  }, [focus, leaveShown, announce, focusLater]);
 
   /* --- açılış: telefondaki antrenman → taze plan → sunucu → son okunan plan --- */
 
@@ -571,7 +573,9 @@ export function WorkoutScreen({
    * mi?" korkuluğu); ardından hepsi bitmediyse "şu an"ın odağı da itilir (yeni antrenmanda ilk hareket; yarımda yarım
    * bırakılan ya da sıradaki, `listView`). Hepsi bittiyse ya da bitiş sorusuyla açıldıysa (`?bitir=1`; `workoutHref`
    * onu düşürür, sheet `adopt`'ta açılır) yalnız liste: sheet kapanınca liste görünür. Adres liste ya da odak
-   * taşıyorsa (yenileme, geri/ileri) dokunulmaz; karar yine bu antrenman için verilmiş sayılır.
+   * taşıyorsa (yenileme, geri/ileri) adrese dokunulmaz, yalnız süreli set sayacının kuralı adresin gösterdiği harekete
+   * uygulanır; karar yine bu antrenman için verilmiş sayılır. "Antrenmanı değiştir" bayrağı (`opened`) sıfırlar
+   * (`restartWith`): yeni antrenman da Bugün'den açılmış gibi odakla açılır.
    *
    * Neden ilk mount effect'inde değil: Next'in `pushState`/`replaceState` yaması (`app-router.js`) ata bileşenin
    * (AppRouter) `useEffect`'inde kurulur; sert yüklemede çocuğun mount effect'i ondan önce çalışır ve yamasız
@@ -595,14 +599,18 @@ export function WorkoutScreen({
     // Karar antrenman başına bir kez verilir ve iskeleti kaldırır; adres tarayıcıdan (useSearchParams geçişte gecikir).
     setOpened(openingDoc);
     const address = new URLSearchParams(window.location.search);
-    if (address.has(LIST_PARAM) || address.has(FOCUS_PARAM)) return;
-    window.history.pushState(null, '', workoutHref(window.location.pathname, window.location.search, { list: true }));
+    const fresh = !address.has(LIST_PARAM) && !address.has(FOCUS_PARAM);
     const plan = planOf(current);
     const list = listView(plan, current.doc);
-    const target = finishOnOpen || list.allDone ? null : list.current;
-    // Telefonda kalmış süreli set sayacı yalnız açılan hareketin sıradaki setindeyse sürer (bip boşuna çalmasın).
+    // Açılan hareket: yeni açılışta "şu an" (hepsi bittiyse ya da bitiş sorusuyla açıldıysa yok); adres liste ya da odak
+    // taşıyorsa (yenileme, geri/ileri) adresin gösterdiği (`validFocus`; liste işaretinde yok).
+    const target = fresh ? (finishOnOpen || list.allDone ? null : list.current) : validFocus(plan, current.doc, focusOf(address));
+    // Telefonda kalmış süreli set sayacı yalnız açılan hareketin sıradaki setindeyse sürer (bip boşuna çalmasın): listede
+    // ve başka hareketin odağında yenilenince de düşer.
     const next = target ? nextSet(plan, current.doc, current.draft, target) : null;
     if (current.timer && !(next && current.timer.rowId === next.rowId && current.timer.setIndex === next.setIndex)) commit({ ...current, timer: null });
+    if (!fresh) return;
+    window.history.pushState(null, '', workoutHref(window.location.pathname, window.location.search, { list: true }));
     if (!target) return;
     focusRef.current = target;
     focusPushed.current = true;
@@ -783,6 +791,25 @@ export function WorkoutScreen({
     if (!view || !focus || view.focus !== null || focusRef.current !== focus) return;
     goToList();
   }, [view, focus, goToList]);
+
+  // Odaktan listeye dönüldü ("‹ Liste", geri tuşu, geçersiz odak, odaktaki son hareketi geçmek): liste çizilince az önce
+  // bırakılan hareketin satırına kaydırılır ve klavye odağı oraya taşınır (yoksa "şu an" satırı, o da yoksa başlık).
+  // Sabit bir zamanlayıcı değil: `history.back()` adresi `popstate`'te, Next de bir geçişte günceller; liste ne zaman
+  // çizilirse o zaman. Açılışta (iskeletten listeye) taşınmaz.
+  const shownMode = load.phase === 'ready' && !awaitingOpening && view ? (view.focus === null ? 'list' : 'focus') : null;
+  const listCurrent = view?.list.current ?? null;
+  const lastMode = useRef<'list' | 'focus' | null>(null);
+  useEffect(() => {
+    const previous = lastMode.current;
+    lastMode.current = shownMode;
+    if (shownMode !== 'list' || previous !== 'focus') return;
+    const left = leftUnit.current;
+    leftUnit.current = null;
+    const row = (key: string | null) => (key ? document.getElementById(listRowId(key)) : null);
+    const target = row(left) ?? row(listCurrent) ?? document.getElementById(LIST_TITLE_ID);
+    target?.scrollIntoView({ block: 'center' });
+    target?.focus({ preventScroll: true });
+  }, [shownMode, listCurrent]);
 
   /* --- işler --- */
 
@@ -1085,6 +1112,42 @@ export function WorkoutScreen({
   }, [commit, deleting, outbox, announce, guard]);
 
   /**
+   * "Antrenmanı değiştir"in sonu (eski antrenman silindi ya da bitti, yerel kopyası düştü): seçilen gün açılır.
+   * `router.replace` yalnız arama parametresini değiştirir ve `WorkoutScreen` yeniden bağlanmaz (layout-router'ın
+   * önbellek anahtarı arama parametresini atar: `createRouterCacheKey(segment, true)`): eski antrenmanın durumu elle
+   * sıfırlanır. Bitişin meşguliyeti ve güncelleme sorusu kalkar, durdurulan gönderim kuyruğu yeniden çalışır (yoksa yeni
+   * antrenmanın setleri hiç gönderilmez, "Bitir" meşgul kalırdı), ekran yeni plan gelene kadar iskelette bekler. Açılış
+   * kuralının bayrağı (`opened`) ve `focusPushed` de sıfırlanır: yeni antrenman Bugün'den açılmış gibi önce liste
+   * işaretini, sonra ilk hareketin odağını iter (bayrak `doc.id` başına olduğundan yeni kimlikle zaten yeniden karar
+   * verilirdi; sıfırlamak bunu kimliğe bırakmaz). Gün ve program sayfanın props'larıyla aynıysa (sunucu başka günün yarım
+   * antrenmanını açmıştı) props değişmez, açılış effect'i kendiliğinden çalışmaz: adres yerinde değişir, açılış yeniden
+   * denenir (`attempt`).
+   */
+  const restartWith = useCallback(
+    (target: { program: string; day: string }) => {
+      setFinishing(false);
+      setUpdate(null);
+      setFinishOpen(false);
+      setSaving(null);
+      setTransition(null);
+      setLoad({ phase: 'loading' });
+      setOpened(null);
+      focusPushed.current = false;
+      focusRef.current = null;
+      leftUnit.current = null;
+      outbox.resume();
+      const href = `/me/antrenman?program=${encodeURIComponent(target.program)}&day=${encodeURIComponent(target.day)}`;
+      if (target.program === programParam && target.day === dayParam) {
+        window.history.replaceState(null, '', href);
+        setAttempt((value) => value + 1);
+      } else {
+        router.replace(href);
+      }
+    },
+    [outbox, router, dayParam, programParam],
+  );
+
+  /**
    * Bitişi gönderir (tek commit): `feedback` "Programını güncelleyelim mi?"nin kararları; uygulanmayan ağırlık
    * önce seansa işlenir (`oneOff` / `lighter`). Başarılıysa özet karuseli açılır (§2.8, dock yok); program
    * güncellemesi bir an sonra bildirimle söylenir. Bugün'ün sayıları ("Bu hafta x/y", su, yarım kart) hemen
@@ -1115,10 +1178,10 @@ export function WorkoutScreen({
         void queryClient.invalidateQueries({ queryKey: ['coach', clientId, 'highlights'] });
         queryClient.setQueriesData<WorkoutResponse>({ queryKey: WORKOUT_OVERVIEW_KEY }, (old) => (old ? afterFinish(old, saved) : old));
         release();
-        if (switchHref.current) {
-          const href = switchHref.current;
-          switchHref.current = null;
-          router.replace(href);
+        if (switchTarget.current) {
+          const target = switchTarget.current;
+          switchTarget.current = null;
+          restartWith(target);
           toast.success('Yaptığın setler kaydedildi; seçtiğin antrenman açılıyor.');
         } else {
           router.replace(`/me/antrenman/ozet/${current.doc.id}`);
@@ -1142,7 +1205,7 @@ export function WorkoutScreen({
           leave('Bu antrenman silinmiş.', 'info');
           return;
         }
-        switchHref.current = null;
+        switchTarget.current = null;
         outbox.resume();
         setFinishing(false);
         setUpdate(null);
@@ -1155,7 +1218,7 @@ export function WorkoutScreen({
         );
       }
     },
-    [clientId, outbox, leave, release, router, commit, queryClient],
+    [clientId, outbox, leave, release, restartWith, router, commit, queryClient],
   );
 
   /**
@@ -1265,12 +1328,50 @@ export function WorkoutScreen({
     [saving, commitFlow, openFocus, announce, focusLater],
   );
 
-  /** "‹ Liste" (odakta üst çubuğun solu): listeye döner; canlı bölge "Liste" der, klavye odağı "şu an" satırına. */
+  /**
+   * "‹ Liste" (odakta üst çubuğun solu): listeye döner; canlı bölge "Liste" der. Klavye odağı liste çizilince az önce
+   * bırakılan hareketin satırına (`leftUnit`, liste effect'i).
+   */
   const onList = useCallback(() => {
     goToList();
     announce('Liste');
-    focusList(DURATION.base);
-  }, [goToList, announce, focusList]);
+  }, [goToList, announce]);
+
+  /**
+   * "Sırayı değiştir" kipinde ▲/▼ ya da Alt + ↑/↓: birim bir adım (`moveUnit`; biten ve atlanan yerinde kalır, aradan
+   * atlanır). Kendi başına gönderilmez (`commitFlow`, sonraki set yazımına biner). Canlı bölge "Plank bir yukarı" der.
+   */
+  const onMoveUnit = useCallback(
+    (key: string, direction: -1 | 1) => {
+      const current = localRef.current;
+      if (!current || saving) return;
+      const plan = planOf(current);
+      const unit = cursorOf(plan, current.doc).units.find((item) => item.key === key);
+      const doc = moveUnit(plan, current.doc, key, direction, stampOf(current));
+      if (!unit || doc === current.doc) return;
+      commitFlow(current, doc);
+      highlightUnit(key);
+      announce(`${unitTitle(plan, current.doc, unit)} bir ${direction < 0 ? 'yukarı' : 'aşağı'}`);
+    },
+    [saving, commitFlow, highlightUnit, announce],
+  );
+
+  /** Sürükleyip bırakmak ("Sırayı değiştir" kipinde): birim bırakıldığı bitmemiş birimin yerine (`moveUnitTo`). */
+  const onMoveUnitTo = useCallback(
+    (key: string, targetKey: string) => {
+      const current = localRef.current;
+      if (!current || saving) return;
+      const plan = planOf(current);
+      const unit = cursorOf(plan, current.doc).units.find((item) => item.key === key);
+      const doc = moveUnitTo(plan, current.doc, key, targetKey, stampOf(current));
+      if (!unit || doc === current.doc) return;
+      commitFlow(current, doc);
+      highlightUnit(key);
+      const position = listView(plan, doc).items.findIndex((item) => item.key === key) + 1;
+      announce(`${unitTitle(plan, current.doc, unit)} ${position}. sırada`);
+    },
+    [saving, commitFlow, highlightUnit, announce],
+  );
 
   /**
    * "Hareketi geç ›": tek dokunuş, neden sorulmaz. 5 sn toast: sona alındıysa [Bugün yapma] [Geri al], Geçilenler'e
@@ -1299,8 +1400,8 @@ export function WorkoutScreen({
       highlightUnit(key);
       const message = skipMessage(result.outcome, title, done, planned);
       announce(message.title);
+      // Listeye dönüldüyse klavye odağını liste effect'i taşır.
       if (moved && target) focusLater('exercise-title', DURATION.base);
-      else if (moved) focusList(DURATION.base);
       const sessionId = current.doc.id;
       const alive = () => localRef.current?.doc.id === sessionId;
       const undo = () => {
@@ -1338,7 +1439,7 @@ export function WorkoutScreen({
       });
       finishIfDone(result.doc);
     },
-    [saving, commitFlow, openFocus, goToList, highlightUnit, announce, focusLater, focusList, finishIfDone],
+    [saving, commitFlow, openFocus, goToList, highlightUnit, announce, focusLater, finishIfDone],
   );
 
   /** Geçilenler'de "Geri al": hareket yeniden yapılacaklara, sona. */
@@ -1491,7 +1592,7 @@ export function WorkoutScreen({
       try {
         await fetchJson(`/api/me/sessions/${current.doc.id}`, { method: 'DELETE' });
       } catch (error) {
-        switchHref.current = null;
+        switchTarget.current = null;
         outbox.resume();
         setFinishing(false);
         toast.error(error instanceof ApiError ? error.message : 'Antrenman iptal edilemedi.');
@@ -1500,6 +1601,45 @@ export function WorkoutScreen({
     }
     leave('Antrenman iptal edildi.', 'info');
   }, [outbox, leave]);
+
+  /**
+   * "Antrenmanı değiştir" (⋯ menüsü): set yoksa antrenman silinir (sunucuya yazıldıysa), varsa yapılanlar "başka
+   * antrenmana geçti" nedeniyle bitirilir (`submitFinish`); ikisinde de ardından seçilen gün `restartWith` ile açılır.
+   */
+  const onSwitchWorkout = useCallback(
+    async (program: string, day: string) => {
+      const current = localRef.current;
+      if (!current || finishing) return;
+      if (program === (current.plan.programId ?? 'pt') && day === current.plan.dayId) {
+        toast('Zaten bu antrenmandasın.');
+        return;
+      }
+      setSwitchOpen(false);
+      if (!current.doc.entries.some((entry) => entry.sets.length > 0)) {
+        setFinishing(true);
+        outbox.stop();
+        try {
+          if (current.acked || current.lastSentAt !== null) {
+            await fetchJson(`/api/me/sessions/${current.doc.id}`, { method: 'DELETE' });
+          }
+        } catch (error) {
+          outbox.resume();
+          setFinishing(false);
+          toast.error(error instanceof ApiError ? error.message : 'Antrenman değiştirilemedi.');
+          return;
+        }
+        release();
+        restartWith({ program, day });
+        return;
+      }
+      switchTarget.current = { program, day };
+      const ready = ensureEntries(planOf(current), current.doc, stampOf(current));
+      const changed = withFinishReason(planOf(current), ready, 'other', stampOf(current));
+      commit(withChange(current, changed.doc, { send: false }));
+      await submitFinish(null, undefined, undefined);
+    },
+    [finishing, outbox, release, restartWith, commit, submitFinish],
+  );
 
   const onAddElsewhere = useCallback(async () => {
     const current = localRef.current;
@@ -1562,7 +1702,10 @@ export function WorkoutScreen({
   // "+ Set ekle": birim sınırda değilse (en çok `EXTRA_ROUNDS_MAX` tur).
   const addable = (key: string) => (addExtraRound(plan, doc, key)[key] ?? 0) > (plan.extraRounds?.[key] ?? 0);
   const todayIds = new Set(Object.values(plan.rows).map((item) => item.exerciseId));
-  const progress = cursor.progress;
+  // "Hareket 2/5": listenin "şu an" satırının sırası (odakta odaktaki hareket; listede yarım bırakılan ya da sıradaki,
+  // satırdaki ▶ ve alttaki "Devam et" ile aynı); hepsi bittiyse son. İmlecin sıradaki seti değil.
+  const openItems = list.items.filter((item) => item.state !== 'skipped');
+  const unitIndex = list.current ? openItems.findIndex((item) => item.key === list.current) + 1 : openItems.length;
   const unsent = unsentSets(local);
   const water = waterOf(doc);
   // Süreli setin sayacı yalnız sıradaki setinse çalışıyor sayılır (set silindiyse, düzeltildiyse değil).
@@ -1589,7 +1732,7 @@ export function WorkoutScreen({
   const lastSet = lastSetId ? findSet(doc, lastSetId)?.set : undefined;
   const finishEffort = lastSetId ? promptOf(effortQuestions(plan, doc, lastSetId)) : null;
 
-  const status =
+  const status: WorkoutStatus | null =
     problem === 'session'
       ? { tone: 'warn' as const, text: 'Oturumun kapandı; kayıtların bu telefonda. Antrenörüne yaz.' }
       : problem === 'error'
@@ -1602,58 +1745,20 @@ export function WorkoutScreen({
 
   return (
     <div className="mx-auto flex h-dvh w-full max-w-md flex-col overflow-hidden bg-background">
-      <header className="shrink-0 border-b pt-[env(safe-area-inset-top)]">
-        {/* Orta sütun daralabilir: uzun program adı kısalır, gün, süre ve "Bitir" ekranda kalır. */}
-        <div className="grid h-13 grid-cols-[1fr_minmax(0,auto)_1fr] items-center px-1">
-          {/* Odakta "‹ Liste" (geri tuşuyla aynı yer); listede "‹ Ara ver" (7. görevde ⋯ menüsüne taşınır). */}
-          {listMode ? (
-            <Button variant="ghost" className="h-11 justify-self-start px-2 text-muted-foreground" onClick={() => router.push('/me')}>
-              <CaretLeft data-icon="inline-start" weight="bold" />
-              Ara ver
-            </Button>
-          ) : (
-            <Button variant="ghost" className="h-11 justify-self-start px-2" onClick={onList}>
-              <CaretLeft data-icon="inline-start" weight="bold" />
-              Liste
-            </Button>
-          )}
-          <p className="flex min-w-0 font-heading font-semibold whitespace-nowrap tabular-nums">
-            {plan.source === 'own' && plan.programName ? <span className="truncate">{plan.programName}</span> : null}
-            <span className="shrink-0">
-              {plan.source === 'own' && plan.programName ? '\u00a0· ' : ''}
-              {doc.program?.dayName ?? plan.dayName} · {elapsedText((now - Date.parse(doc.startedAt)) / 1000)}
-            </span>
-          </p>
-          <Button variant="ghost" className="h-11 justify-self-end px-3" onClick={() => setFinishOpen(true)}>
-            Bitir
-          </Button>
-        </div>
-        <div className="flex h-11 items-center gap-3 pr-1 pl-4">
-          <Progress value={progress.plannedSets > 0 ? (progress.doneSets / progress.plannedSets) * 100 : 0} aria-label="Antrenmanın ilerlemesi" className="min-w-16 flex-1" />
-          <span className="text-[0.8125rem] whitespace-nowrap text-muted-foreground tabular-nums">
-            Hareket {progress.currentUnit}/{progress.totalUnits} · {progress.doneSets}/{progress.plannedSets} set
-          </span>
-          {water > 0 ? (
-            <span className="inline-flex items-center gap-0.5 text-[0.8125rem] text-muted-foreground tabular-nums">
-              <Drop className="size-3.5 text-primary" aria-hidden />
-              <span aria-hidden>{water}</span>
-              <span className="sr-only">Su: {water} bardak</span>
-            </span>
-          ) : null}
-          <Button variant="ghost" size="sm" className="h-11 shrink-0" onClick={()=>setSwitchOpen(true)}>Değiştir</Button>
-        </div>
-        {status ? (
-          <div role="status" className={cn('flex min-h-9 items-center gap-2 border-t px-4 text-[0.8125rem]', status.tone === 'warn' ? 'text-destructive' : 'text-muted-foreground')}>
-            {status.tone === 'offline' ? <CloudSlash className="size-4 shrink-0" /> : <WarningCircle className="size-4 shrink-0" />}
-            <span className="min-w-0 flex-1">{status.text}</span>
-            {'retry' in status && status.retry ? (
-              <Button variant="ghost" className="-mr-2 h-9 px-2" onClick={() => outbox.retry()}>
-                Tekrar dene
-              </Button>
-            ) : null}
-          </div>
-        ) : null}
-      </header>
+      <WorkoutHeader
+        program={plan.source === 'own' && plan.programName ? plan.programName : null}
+        day={doc.program?.dayName ?? plan.dayName}
+        elapsed={elapsedText((now - Date.parse(doc.startedAt)) / 1000)}
+        unit={{ index: unitIndex, total: openItems.length }}
+        sets={{ done: list.doneSets, planned: list.plannedSets }}
+        water={water}
+        status={status}
+        onList={listMode ? null : onList}
+        onFinish={() => setFinishOpen(true)}
+        onSwitch={() => setSwitchOpen(true)}
+        onPause={() => router.push('/me')}
+        onRetry={() => outbox.retry()}
+      />
 
       <div className="relative flex min-h-0 flex-1 flex-col">
         {/* Kip değişince kaydırma yeri sıfırlanır (anahtar): listede aşağı kaydırıp açılan hareket kartın başından görünür. */}
@@ -1662,7 +1767,16 @@ export function WorkoutScreen({
           inert={covered}
           className="relative min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain px-4 pt-3 pb-4">
           {listMode ? (
-            <WorkoutList view={list} highlight={flowHighlight} onOpen={onOpenUnit} onRestore={onRestore} onAdd={() => setAddOpen(true)} />
+            <WorkoutList
+              view={list}
+              highlight={flowHighlight}
+              onOpen={onOpenUnit}
+              onRestore={onRestore}
+              onAdd={() => setAddOpen(true)}
+              onMove={onMoveUnit}
+              onMoveTo={onMoveUnitTo}
+              onAnnounce={announce}
+            />
           ) : (
             <AnimatePresence mode="popLayout" initial={false}>
               {row && unitKey ? (
@@ -1816,37 +1930,7 @@ export function WorkoutScreen({
       <WorkoutSwitchSheet
         open={switchOpen}
         onOpenChange={setSwitchOpen}
-        onSwitch={async (program, day) => {
-          const current = localRef.current;
-          if (!current || finishing) return;
-          if (program === (current.plan.programId ?? 'pt') && day === current.plan.dayId) {
-            toast('Zaten bu antrenmandasın.');
-            return;
-          }
-          const href = `/me/antrenman?program=${encodeURIComponent(program)}&day=${encodeURIComponent(day)}`;
-          setSwitchOpen(false);
-          if (!current.doc.entries.some(entry => entry.sets.length > 0)) {
-            setFinishing(true);
-            outbox.stop();
-            try {
-              if (current.acked || current.lastSentAt !== null) {
-                await fetchJson(`/api/me/sessions/${current.doc.id}`, { method: 'DELETE' });
-              }
-              release();
-              router.replace(href);
-            } catch (error) {
-              outbox.resume();
-              setFinishing(false);
-              toast.error(error instanceof ApiError ? error.message : 'Antrenman değiştirilemedi.');
-            }
-            return;
-          }
-          switchHref.current = href;
-          const ready = ensureEntries(planOf(current), current.doc, stampOf(current));
-          const changed = withFinishReason(planOf(current), ready, 'other', stampOf(current));
-          commit(withChange(current, changed.doc, { send: false }));
-          await submitFinish(null, undefined, undefined);
-        }}
+        onSwitch={(program, day) => void onSwitchWorkout(program, day)}
       />
       <SwapSheet target={swapTarget} onClose={() => setSwapTarget(null)} onPick={onPickSwap} />
       <AddExerciseSheet open={addOpen} onOpenChange={setAddOpen} todayIds={todayIds} busyId={addBusy} onPick={(item) => void onPickAdd(item)} />

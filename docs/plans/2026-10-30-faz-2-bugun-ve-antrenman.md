@@ -767,9 +767,15 @@ listeye dönüyor, sıra aynı; listede üçüncü harekete dokununca o açılı
 2. **Antrenmanı değiştir ekranı takılı bırakıyor (bugünkü hata):** `router.replace` yalnız arama parametresi
    değişince `WorkoutScreen` yeniden bağlanmaz (`node_modules/next/dist/client/components/layout-router.js` ~549:
    önbellek anahtarı `createRouterCacheKey(segment, true)` arama parametresini atar). Bu yüzden `onSwitch`'in iki
-   başarı dalında da (set yokken ~1584–1598; setliyken `submitFinish` → `router.replace` ~917–922)
-   `setFinishing(false)`, `setUpdate(null)`, `outbox.resume()` yapılır; açılış kuralının `doc.id` bayrağı ve
-   "‹ Liste" ref'i yeni antrenman için sıfırlanır (6b), böylece yeni antrenman da odakla açılır.
+   başarı dalında da (set yokken DELETE'ten sonra; setliyken `submitFinish`'in başarısında) tek yardımcı
+   `restartWith({ program, day })` çağrılır: `setFinishing(false)`, `setUpdate(null)`, `outbox.resume()` (durdurulan
+   kuyruk yeni antrenmanın setlerini hiç göndermezdi), ekran yeni plan gelene kadar iskelete döner
+   (`setLoad('loading')`); açılış kuralının bayrağı (`opened`) ve `focusPushed` de sıfırlanır, böylece yeni antrenman
+   Bugün'den açılmış gibi liste işaretiyle ve ilk hareketin odağıyla açılır. (6b'nin notu doğru: bayrak `doc.id`
+   başına, yeni antrenmanın kimliği yeni, sıfırlamasa da yeniden karar verilirdi; `focusPushed`'ın değişmezi de
+   bozulmazdı. Sıfırlamak "taze açılış"ı kimliğe bırakmaz, zararsız.) Seçilen gün ve program sayfanın props'larıyla
+   aynıysa (sunucu başka günün yarım antrenmanını açmıştı) props değişmez, açılış effect'i yeniden çalışmaz: adres
+   `replaceState` ile değişir, `attempt` artırılır.
 3. **Sırayı değiştir:** listenin başlığında "Sırayı değiştir" (hayalet). Kipte her bitmemiş, atlanmamış satırda
    ▲/▼ düğmeleri (44 px, `aria-label="<ad> yukarı"`), `moveUnit`; uçta düğme devre dışı. Sürükleme kısayol olarak
    kalır: bugünkü `DragFlowRow` mantığı (dnd-kit, tutamaç `DotsSixVertical`, Alt+↑/↓) bu kipe taşınır;
@@ -783,6 +789,22 @@ typecheck, lint, test · Commit: `feat(workout): header menu and reorder mode`
 **Controller doğrulaması:** ⋯ menüsünde iki öğe; "Ara ver" Bugün'e dönüyor (Bugün'de "Devam et"); "Sırayı
 değiştir"de ▲/▼ yalnız bitmemiş satırlarda; biten satır yerinde; "Antrenmanı değiştir" ile başka güne geçince
 ekran takılmıyor, yeni gün odakla açılıyor.
+
+**Uygulamada (7):**
+- **Üst çubuk** `workout-header.tsx` (`WorkoutHeader`, `WorkoutStatus`): ikinci satırda "Hareket x/y · a/b set" kaldı
+  (tasarım §2.4), ama sayı imleçten değil listeden: `listView().current`'in atlanmamış satırlar içindeki sırası (odakta
+  odaktaki hareket, listede ▶ satırı ve "Devam et" ile aynı; hepsi bittiyse son). ⋯ tetiği 44 px.
+- **Sırayı değiştir** `workout-list.tsx`'te (kip durumu listenin kendi state'i: listeden çıkınca kapanır). Düğme en az
+  iki taşınabilen hareket varken görünür. Kipte "Geri al" ve "Hareket ekle" gizli, sağdaki "2/4 set" sütunu yok (▲/▼'ye
+  yer). ▲/▼ uçta `focusableWhenDisabled` (odak düşmez); aşağı inen satırın düğümü yer değiştirince odak düşer, düğmeye
+  geri verilir. Sürükleme: dnd-kit'in duyuruları Türkçe; bırakmanın sonucunu ekranın canlı bölgesi söyler
+  ("Plank 3. sırada"). Taşıma `commitFlow` ile (gönderilmez). `FlowSheet`/`DragFlowRow` 10. göreve kadar duruyor.
+- **6b incelemesinin bulguları:** satır düğmelerinin kimliği `list-row-<anahtar>` (`listRowId`; `LIST_CURRENT_ID`
+  kalktı). Odaktan listeye dönülünce (‹ Liste, geri tuşu, geçersiz odak, son hareketi geçmek) klavye odağı sabit
+  220 ms zamanlayıcıyla değil, liste çizilince bir effect'le taşınır: az önce bırakılan hareketin satırına kaydırılır
+  ve odaklanır (`leftUnit`, `leaveShown` yazar), yoksa "şu an" satırı, o da yoksa başlık; açılışta taşınmaz. Açılış
+  effect'inde süreli set sayacının kuralı erken dönüşten önce: `?liste=1` ya da başka hareketin odağıyla yenilenince de
+  sayaç düşer (adresteki odak `validFocus`). Listenin `<ol>`'ünde `role="list"`.
 
 ---
 
