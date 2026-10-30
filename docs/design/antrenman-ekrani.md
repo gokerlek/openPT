@@ -43,7 +43,7 @@ Danışan yalnız telefondan kullanır (SPEC §6). Gezinme alttaki dock'ta; hesa
 
 | Sekme | Adres | İçerik | Faz |
 |---|---|---|---|
-| **Bugün** | `/me` | Sıradaki antrenman kartı, "Antrenmana başla", "Başka gün seç", "bu hafta x/3", bugünkü su, yarım kalan antrenman kartı, karar bekleyen kartlar (onay, şifre), antrenmandan ~10 dk sonra "Antrenman ne kadar zordu?" | 1 (kabuk), 3 (antrenman) |
+| **Bugün** | `/me` | Sıradaki antrenman kartı (§2.1: başlık "Cuma · Gün A", "Antrenmana başla", "Başka gün seç", kısıt notu, ilk 3 hareket ve "Tümünü gör", hafta şeridinde günlerin antrenmanı), "bu hafta x/3", bugünkü su, yarım kalan antrenmanın "Devam et" kartı (hareketlerin listesi), karar bekleyen kartlar (onay, şifre), antrenmandan ~10 dk sonra "Antrenman ne kadar zordu?" | 1 (kabuk), 3 (antrenman) |
 | **Program** | `/me/programlar` | Antrenörünün programı (salt okuma) ve danışanın kendi programları, "Antrenörünle paylaş" (SPEC §6, `kendi-program.md`) | ✓ (`kendi-program.md` §9) |
 | **İlerleme** | `/me/ilerleme` | İkinci şeritte üç bölüm (`progress-tabs.tsx`): Özet (`/me/ilerleme`: hareket başına grafik (üst ağırlık, e1RM; `progress-chart.tsx`), haftalık tonaj, haftalık kas yükü (gerçekleşen, SPEC §7.4)) · Geçmiş (`/me/gecmis`: geçmiş antrenmanlar, detay, silme; §2.10) · Rekorlar (`/me/ilerleme/rekorlar`: rekorlar ve başarılar (seri, rozet)) | 1 (boş), 9 (Geçmiş), 10 |
 | **Sağlık** | `/me/saglik` | Kısıtlar, bildirim ve hareket taraması (`kisit-tarama.md` §5.2); kamera ölçümü (`/me/olcum`) da bu sekmede. Yalnız kısıtlar ya da tarama onaylıysa görünür | ✓ (`kisit-tarama.md`) |
@@ -58,7 +58,7 @@ Danışan yalnız telefondan kullanır (SPEC §6). Gezinme alttaki dock'ta; hesa
 │ Merhaba, {ad}                      (AY) │ avatar menüsü, 44 px
 │                                         │
 │ ┌─────────────────────────────────────┐ │
-│ │ Bugün · Gün A          Bu hafta 1/3 │ │
+│ │ Cuma · Gün A           Bu hafta 1/3 │ │
 │ │ …                                   │ │
 │ └─────────────────────────────────────┘ │
 │ ┌─────────────────────────────────────┐ │
@@ -126,18 +126,44 @@ Genel kurallar:
 
 ```
 ┌─────────────────────────────────────────┐
-│ Bugün · Gün A            Bu hafta 1/3   │
-│ Alt vücut A                             │
-│ 5 hareket · 17 set · ~55 dk             │
-│ 1  Goblet Squat    3 set · 8–12 tekrar  │
-│ 2  Leg Press       3 set · 10–12 tekrar │
-│    3 hareket daha                    ⌄  │
-│ [        ▶  Antrenmana başla        ]   │ 56 px
+│ Cuma · Gün A             Bu hafta 1/4   │ başlık `todayCardTitle`
+│ 6 hareket · ≈ 55 dk                     │
+│ [        ▶  Antrenmana başla        ]   │ 48 px
 │            Başka gün seç                │ 44 px, bağlantı görünümü
+│ ✚ Sol diz için değiştir: Lunge          │ kısıt notu: hareket başına bir, en çok 2
+│ ✚ Sol diz için dikkat: Back Squat       │
+│   +1 harekette daha not var             │
+│ 1  Back Squat ✚    3 set · 6–8 tekrar   │ ilk 3 hareket; ✚ kısıt notu var
+│ 2  Leg Press       3 set · 10–12 tekrar │
+│ 3  Bench Press     3 set · 8–10 tekrar  │
+│ › Tümünü gör (3 hareket daha)           │ 44 px; açılınca 4, 5, 6
+│ Pzt  Sal  Çar  Per  Cum  Cmt  Paz       │ hafta şeridi
+│  ✓    ·    ◌    ·    ◉    ○    ·        │ ✓ yapıldı · ◌ kaçtı · ◉ sırada · ○ planlı
+│  C       kaçtı       A    B             │ yapılanın adı; ilerisi dönüşten tahmin
+│           Günlerini değiştir            │ 44 px
 └─────────────────────────────────────────┘
 ```
-- Gün `nextDayId` (A → B → C); "Bu hafta x/3" `weekProgress` (programın ya da evrenin `daysPerWeek` değeri yoksa yalnız "Bu hafta 1").
-- Yarım antrenman varsa kart yerine: **"Yarım kalan antrenman · Gün A · 7/17 set · 25 dk önce"** [Kaldığın yerden devam et] + "Bitir ve özete geç".
+- **Başlık** sıradaki antrenmanın günü ve adı: "Cuma · Gün A" (`todayCardTitle`). Ad `nextDayId`'den (A → B → C); gün bugünden (bugünkü antrenman yapıldıysa yarından) başlayarak ilk seçili gün; gün seçilmemişse yalnız ad. Yalnız dinlenme gününde ya da bugünkü antrenman yapıldıysa başlığın üstünde kısa satır: "Bugün dinlenme günün" / "Bugünkü antrenmanını yaptın". Yeniden düzenin Faz 3'üne (gün ↔ antrenman eşlemesi; `docs/plans/2026-10-26-kullanilabilirlik-yeniden-duzen-design.md`) kadar dinlenme gününde başlık sıradaki antrenman gününü söyler, "Antrenmana başla" yine bugün başlatır. Altında tek satır "N hareket · ≈ N dk" (set sayısı yok; evreli programda üstünde evre satırı). "Antrenmana başla" ve "Başka gün seç" başlığın hemen altında, kaydırmadan görünür. "Bu hafta x/3" `weekProgress` (programın ya da evrenin `daysPerWeek` değeri yoksa yalnız "Bu hafta 1").
+- **Kısıt notu** (kısıtlar onaylıysa; antrenmandaki kart notuyla aynı kural, `kisit-tarama.md` §3.5): hareket başına bir satır, "Sol diz için dikkat: Back Squat" (`careLine`); önerilmeyen harekette "değiştir", kendi programda "önerilmiyor". "Değiştir" diyenler önce; en çok 2 satır, fazlası "+n harekette daha not var". Önizlemede notlu hareketin yanında yara bandı (ekran okuyucuda "kısıt notu var").
+- **Önizleme:** günün ilk 3 hareketini dolduran bloklar (`previewBlocks`; grup bölünmez, kütüphanede olmayan satır sayılmaz), kalanı "Tümünü gör (n hareket daha)" altında (yerel `<details>`). Numaralar bütün günden: açılınca 4. hareket yine "4".
+- **Hafta şeridi** (`WeekStrip`, `weekPlan`; günler §2.11): pazartesiden pazara 7 gün, halkanın altında günün antrenmanının kısa adı (`dayShortName`: "Gün A" → "A", kopya gün "Gün A 2" → "A 2", öteki adlarda ilk sözcük). Yapılan gün dolu ✓, adı oturumdan (aynı gün birden çoksa sonuncusu); sıradaki gün (bugün dahil ilk yapılmamış seçili gün) kalın halka; sonraki seçili günler ince halka; kaçan gün soluk halka ve "kaçtı"; seçili olmayan gün dinlenme. Sıradaki ve sonraki günlerin adı **tahmindir**: dönüş sırası (A → B → C) `nextDayId`'den başlayıp seçili günlere dağıtılır; bugün başlamış yarım antrenman varsa onun gününden (dönüş yalnız bitişte ilerler, `weekRotation`). Gerçek gün ↔ antrenman eşlemesi Faz 3'te; o zaman bu tahmin kalkar. Şeridin altındaki "Sırada: yarın · Gün B" satırı (`relativeDayText`; bugünse "bugün") başlık aynı şeyi söylüyorsa çizilmez: bu kartta hiç, "Devam et" kartında yarım antrenman bugün başladıysa ve bugün sıradaki günse. "Günlerini değiştir" gün sheet'ini açar (§2.11); kaydedince kartın başlığı da yeni günlerle gelir.
+- Yarım antrenman (telefonda ya da sunucuda) varsa kart yerine **"Devam et" kartı**:
+
+```
+┌─────────────────────────────────────────┐
+│ Yarım kalan antrenman · Gün A           │
+│ Kaldığın yerden sürer; … Son kayıt …    │
+│ [     ▶  Devam et: Bench Press      ]   │ 48 px; ekran o hareketin odağıyla açılır
+│            Antrenmanı bitir             │ 44 px
+│ ✓ Goblet Squat                  3/3 set │
+│ ▶ Bench Press                   2/3 set │ şu an, kalın
+│ ○ Face Pull + Curl              0/6 set │ grup tek satır
+│ ⤼ Calf Raise                    0/3 set │
+│ Pzt  Sal  Çar  Per  Cum  Cmt  Paz       │ hafta şeridi ve "Günlerini değiştir"
+└─────────────────────────────────────────┘
+```
+- Birincil **"Devam et: <şu anki hareket>"**: antrenman ekranı o hareketin odağıyla açılır, liste altında (§4.4). Altında "Antrenmanı bitir" (`?bitir=1`: liste ve bitiş sheet'i). Hepsi bittiyse tek birincil düğme "Antrenmanı bitir".
+- Plan biliniyorsa hareketlerin listesi (`listView`, antrenman listesiyle aynı ikonlar, §2.6): her hareket (grupta grubun tamamı, "A + B") bir satır, durum (✓ bitti, ▶ şu an, ○ sırada, ⤼ atlandı), ad ve "2/3 set"; şu an kalın, biten ve atlanan soluk. En çok 8 satır (`listWindow`): şu an hep içinde, kesilen yerde üstte "Önceki n hareket", altta "+n hareket daha". Plan bilinmiyorsa liste yerine yalnız yapılan set sayısı ("7 set yapıldı"). En altta hafta şeridi.
 - 6 saatten eskiyse açılışta sheet: "Yarım kalan antrenman · Gün A · 7/17 set · dün 18:05" [Sürdür] [Bitir ve özete geç]. **"Antrenmanı sil"** eşit düğme değildir: sheet başlığının sağ üstünde üçüncül metin, onaylı (§2.10).
 - Boş program: var olan `Empty` ("Henüz program yok"); başlat yok.
 
