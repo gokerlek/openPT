@@ -209,7 +209,7 @@ describe('antrenman belgesi: sonrası, su, özet', () => {
     };
     assert.deepEqual(after(1), { kind: 'same', restSeconds: 90 });
     after(2);
-    assert.deepEqual(after(3), { kind: 'next', restSeconds: 90, nextKey: 'b_bbbbbb' });
+    assert.deepEqual(after(3), { kind: 'next', restSeconds: 90 });
     assert.deepEqual(after(4), { kind: 'same', restSeconds: 90 });
     assert.deepEqual(after(5), { kind: 'done' });
     assert.equal(cursorOf(day, doc).allDone, true);
@@ -575,7 +575,7 @@ describe('antrenman belgesi: "+ Set ekle"', () => {
     // Bekleyen fazladan set bitirmeyi engellemez.
     assert.equal(workoutSummary(day, doc, new Date(at(10))).remaining.some((item) => item.rowId === 'r_aaaaaa'), false);
     const afterExtra = logAny(day, doc, 7, { value: 11 });
-    assert.deepEqual(afterLog(day, doc, afterExtra), { kind: 'next', restSeconds: 90, nextKey: 'b_bbbbbb' });
+    assert.deepEqual(afterLog(day, doc, afterExtra), { kind: 'next', restSeconds: 90 });
     const set = afterExtra.entries[0]?.sets.at(-1);
     assert.deepEqual(set && { extra: set.extra, setIndex: set.setIndex, kg: set.kg, reps: set.reps, target: set.target, count: set.plannedSetCount }, {
       extra: true,

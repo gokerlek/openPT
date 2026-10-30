@@ -39,7 +39,7 @@ import { localWorkoutText, readPendingWater, savePendingWater, subscribeLocalWor
  */
 
 // Sorgu ve program seçimi `workout-overview.tsx`'te (şerit de oradan okur); eski içe aktarmalar için buradan da.
-export { WORKOUT_KEY, WORKOUT_OVERVIEW_KEY, WorkoutProgramProvider } from './workout-overview';
+export { WorkoutProgramProvider } from './workout-overview';
 
 /** Telefondaki yarım antrenman (aynı ve öteki sekmelerdeki değişiklikleri izler). */
 function useLocalWorkout(clientId: string) {

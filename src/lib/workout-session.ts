@@ -330,7 +330,7 @@ function entryFor(day: WorkoutDay, doc: SessionDoc, rowId: string, stamp: Stamp,
 
 /**
  * Günün her satırının kaydı (henüz yoksa boş, `pending`; geçen seferki ayar notu taşınır). Yapılış sırası
- * (`order`) hareket kimlikleriyle yazıldığı için "geç", "şimdi yap" ve "hareket ekle" önce bunu ister:
+ * (`order`) hareket kimlikleriyle yazıldığı için "atla", "sırayı değiştir" ve "hareket ekle" önce bunu ister:
  * kaydı olmayan hareket sırada yer tutamaz. Hepsi varsa aynı belge.
  */
 export function ensureEntries(day: WorkoutDay, doc: SessionDoc, stamp: Stamp, random?: Random): SessionDoc {
@@ -472,11 +472,8 @@ export type AfterLog =
   | { kind: 'same'; restSeconds: number }
   /** Grupta aynı turun sıradaki üyesi: dinlenme yok; devrede istasyon geçişi sayar. */
   | { kind: 'member'; transitionSeconds: number }
-  /**
-   * Hareket bitti: sıradaki birim gelir, dinlenme onun üstünde açılır. `nextKey`: sırada ilk bitmemiş birim
-   * (bekleyen fazladan set dahil).
-   */
-  | { kind: 'next'; restSeconds: number; nextKey: string | null }
+  /** Hareket bitti: sıradaki birim gelir (ekran `nextUnitAfter` ile seçer), dinlenme onun üstünde açılır. */
+  | { kind: 'next'; restSeconds: number }
   /** Hiçbir yerde yapılacak set kalmadı (istenen fazladan setler dahil): dinlenme yok, bitirme sorusu. */
   | { kind: 'done' };
 
@@ -484,7 +481,7 @@ export type AfterLog =
  * `before`: set kaydedilmeden önceki belge; dinlenme o setin ardındaki (`restAfterSeconds`). Grupta
  * tur sürerken (aynı birim, aynı tur, başka üye) dinlenme yok: süperset ve komplekste 0, devrede
  * istasyon geçişi; tur sonunda blok dinlenmesi. `focus`: setin seçildiği odak (`nextSet(…, focus)` ile
- * aynı); set o birimde sayılır (liste + odak), birim bitince sıradaki birim odaksız imleçten.
+ * aynı); set o birimde sayılır (liste + odak). Birim bitince başka bir yerde set kaldıysa `next`, kalmadıysa `done`.
  */
 export function afterLog(
   day: WorkoutDay,
@@ -499,7 +496,7 @@ export function afterLog(
   const restSeconds = was.next?.restAfterSeconds ?? 0;
   const oldUnit = was.next ? was.units[was.next.unit]?.key : undefined;
   const newUnit = now.next ? now.units[now.next.unit]?.key : undefined;
-  if (!now.next || oldUnit !== newUnit) return { kind: 'next', restSeconds, nextKey: overall.units[overall.next.unit]?.key ?? null };
+  if (!now.next || oldUnit !== newUnit) return { kind: 'next', restSeconds };
   if (was.next && now.next.round === was.next.round && now.next.member !== was.next.member) return { kind: 'member', transitionSeconds: restSeconds };
   return { kind: 'same', restSeconds };
 }

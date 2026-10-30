@@ -58,7 +58,7 @@ export const WORKOUT = {
   groupSlidePx: 12, // px: grup üyeleri arası
   countUpMs: 700, // ms: özet sayılarının sayarak gelmesi
   waterUndoMs: 3000, // ms: "+1 · Geri al" hapı
-  skipToastMs: 5000, // ms: "sona alındı · Bugün yapma · Geri al"
+  skipToastMs: 5000, // ms: "<hareket> atlandı · Geri al" ve "<hareket> eklendi · Şimdi yap" toast'ları
   tapGuardMs: 400, // ms: durum değişiminden sonra alt panelin dokunuş kilidi (çift dokunuş ikinci set yazmasın)
   restWarnSeconds: 10, // sn: son 10 saniyede renk + tek bip
   alarmRepeatMs: 15_000, // ms: dinlenme bitişinin 3 bipi, dokunulana kadar bu aralıkla…

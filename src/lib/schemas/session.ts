@@ -147,7 +147,10 @@ export const sessionEntrySchema = v.object({
   /** SPEC §7.3: ağırlık geçmişi cihaza göre. */
   deviceId: v.optional(slugSchema),
   status: v.picklist(ENTRY_STATUSES),
-  /** `moved`: sona alındı (hâlâ yapılacak); `status: skipped` ile Geçilenler'de. */
+  /**
+   * `moved`: bilerek geçildi (atlandı; geri alınsa da kalır; eski seanslarda "sona alındı"); `status: skipped` ile
+   * atlananlarda.
+   */
   skip: v.optional(v.object({ reason: v.optional(v.picklist(SKIP_REASONS)), moved: v.boolean() })),
   /** "Değiştir" ile gelen muadil: yerini aldığı satır. */
   swappedFrom: v.optional(rowIdSchema),
@@ -244,7 +247,7 @@ export const sessionDocSchema = v.pipe(
     adjust: v.optional(v.literal('lighter')),
     /** Son yazan cihaz; değişiklik karşılaştırmasına girmez. */
     writer: writerIdSchema,
-    /** Hareketlerin yapılış sırası ("sona al", "şimdi yap"). */
+    /** Hareketlerin yapılış sırası ("Sırayı değiştir", atlanan sona iner). */
     order: v.optional(register(v.pipe(v.array(entryIdSchema), v.maxLength(SESSION_LIMITS.entries)))),
     entries: v.pipe(v.array(sessionEntrySchema), v.maxLength(SESSION_LIMITS.entries)),
     deletedSetIds: v.pipe(v.array(setIdSchema), v.maxLength(SESSION_LIMITS.deletedSetIds)),

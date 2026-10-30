@@ -2,7 +2,7 @@ import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { SessionDoc, SessionEntry } from './schemas/session.ts';
 import { at, groupBlock, plan, sessionDoc, sessionEntry, singleBlock, W1, workingSet } from './testing/session-fixtures.ts';
-import { completionOf, doNow, dropUnit, entryForRow, entryStatusOf, prefillSet, restoreUnit, rowKeyOf, skipUnit, workoutCursor, workoutUnits } from './workout-cursor.ts';
+import { completionOf, dropUnit, entryForRow, entryStatusOf, prefillSet, restoreUnit, rowKeyOf, workoutCursor, workoutUnits } from './workout-cursor.ts';
 
 let setCounter = 0;
 /** Harekete `count` çalışma seti ekler. */
@@ -164,29 +164,26 @@ describe('bitişin sayısı: erken bitiş sheet\'i ve PT bildirimi aynı', () =>
   });
 });
 
-describe('geç, sona al, bugün yapma, geri al, şimdi yap', () => {
-  test('"Hareketi geç ›": sona alınır, sıradaki hemen gelir; ikinci geçişte Geçilenler', () => {
-    const moved = skipUnit(day, docWith({}), 'e_aaaaaa', stamp);
-    assert.deepEqual(moved.order?.value, ['e_bbbbbb', 'e_cccccc', 'e_aaaaaa']);
-    assert.equal(moved.entries.find((entry) => entry.id === 'e_aaaaaa')?.skip?.moved, true);
-    assert.equal(moved.entries.find((entry) => entry.id === 'e_aaaaaa')?.updatedAt, stamp.at);
-    assert.equal(workoutCursor(day, moved).next?.rowId, 'r_bbbbbb');
-
-    const again = skipUnit(day, moved, 'e_aaaaaa', { at: at(31), by: W1 });
-    assert.equal(again.entries.find((entry) => entry.id === 'e_aaaaaa')?.status, 'skipped');
-    const cursor = workoutCursor(day, again);
+describe('atla, geri al ve hareket kayıtları', () => {
+  test('"Bu hareketi atla": sona iner, bilerek geçildi; sıradaki hemen gelir', () => {
+    const dropped = dropUnit(day, docWith({}), 'e_aaaaaa', stamp);
+    assert.deepEqual(dropped.order?.value, ['e_bbbbbb', 'e_cccccc', 'e_aaaaaa']);
+    const entry = dropped.entries.find((item) => item.id === 'e_aaaaaa');
+    assert.deepEqual([entry?.status, entry?.skip?.moved, entry?.updatedAt], ['skipped', true, stamp.at]);
+    const cursor = workoutCursor(day, dropped);
+    assert.equal(cursor.next?.rowId, 'r_bbbbbb');
     assert.equal(cursor.progress.totalUnits, 2);
     assert.equal(cursor.progress.plannedSets, 4);
   });
 
-  test('son kalan hareket geçilirse doğrudan Geçilenler (sona alacak yer yok)', () => {
+  test('son kalan hareket atlanırsa hepsi yapılmış sayılır', () => {
     const doc = docWith({ e_aaaaaa: 3, e_bbbbbb: 2 });
-    const skipped = skipUnit(day, doc, 'e_cccccc', stamp);
+    const skipped = dropUnit(day, doc, 'e_cccccc', stamp);
     assert.equal(skipped.entries.find((entry) => entry.id === 'e_cccccc')?.status, 'skipped');
     assert.equal(workoutCursor(day, skipped).allDone, true);
   });
 
-  test('"Bugün yapma" ve "Geri al": durum sayılardan yeniden', () => {
+  test('atlama ve "Geri al": durum sayılardan yeniden', () => {
     const dropped = dropUnit(day, docWith({ e_bbbbbb: 1 }), 'e_bbbbbb', stamp);
     assert.equal(dropped.entries.find((entry) => entry.id === 'e_bbbbbb')?.status, 'skipped');
     const restored = restoreUnit(day, dropped, 'e_bbbbbb', { at: at(32), by: W1 });
@@ -195,18 +192,12 @@ describe('geç, sona al, bugün yapma, geri al, şimdi yap', () => {
     assert.equal(entry?.skip, undefined);
   });
 
-  test('"Şimdi yap": birim kalanların başına; yapılmış birimler yerinde', () => {
-    const doc = docWith({ e_aaaaaa: 3 });
-    const now = doNow(day, doc, 'e_cccccc', stamp);
-    assert.deepEqual(now.order?.value, ['e_aaaaaa', 'e_cccccc', 'e_bbbbbb']);
-    assert.equal(workoutCursor(day, now).next?.rowId, 'r_cccccc');
-  });
-
-  test('grupta geçme bütün grubu taşır', () => {
+  test('grupta atlamak bütün grubu taşır', () => {
     const day2 = plan(groupBlock('b_gggggg', 'superset', [{ id: 'r_aaaaaa', sets: 2 }, { id: 'r_bbbbbb', sets: 2 }]), singleBlock('b_cccccc', 'r_cccccc', 2));
-    const moved = skipUnit(day2, docWith({}), 'e_bbbbbb', stamp);
-    assert.deepEqual(moved.order?.value, ['e_cccccc', 'e_aaaaaa', 'e_bbbbbb']);
-    assert.equal(workoutCursor(day2, moved).next?.rowId, 'r_cccccc');
+    const dropped = dropUnit(day2, docWith({}), 'e_bbbbbb', stamp);
+    assert.deepEqual(dropped.order?.value, ['e_cccccc', 'e_aaaaaa', 'e_bbbbbb']);
+    assert.deepEqual(dropped.entries.filter((entry) => entry.status === 'skipped').map((entry) => entry.id), ['e_aaaaaa', 'e_bbbbbb']);
+    assert.equal(workoutCursor(day2, dropped).next?.rowId, 'r_cccccc');
   });
 
   test('plan dışı eklenen hareket kendi set sayısıyla sona gelir', () => {

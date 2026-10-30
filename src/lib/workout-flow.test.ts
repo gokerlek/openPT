@@ -10,14 +10,11 @@ import { nextMemberLetter } from './workout-groups.ts';
 import {
   addExercise,
   canSwap,
-  doNowAt,
-  reorderAt,
   dropAt,
   dropWithUndo,
   effectiveDay,
   finishRotation,
   firstSkippedKey,
-  flowView,
   itemName,
   listView,
   listWindow,
@@ -27,8 +24,6 @@ import {
   nextUnitAfter,
   optionText,
   restoreAt,
-  skipAt,
-  skipMessage,
   swapRow,
   undoSkip,
   undoSwitchPrep,
@@ -75,19 +70,19 @@ function threeDay(): WorkoutDay {
 const valid = (doc: SessionDoc) => assert.equal(v.safeParse(sessionDocSchema, doc).success, true);
 const nextRow = (day: WorkoutDay, doc: SessionDoc) => cursorOf(day, doc).next?.rowId;
 
-describe('akış sheet\'i', () => {
+describe('listenin satırları', () => {
   test('yapılış sırasında birimler: şu anki, sıradakiler; numara ve set sayıları', () => {
     const day = threeDay();
-    const view = flowView(day, logNext(day, start(day), 1));
+    const view = listView(day, logNext(day, start(day), 1));
     assert.deepEqual(
-      view.active.map((item) => [item.members[0]?.number, item.members[0]?.title, item.state, `${item.done}/${item.planned}`]),
+      view.items.map((item) => [item.members[0]?.number, item.members[0]?.title, item.state, `${item.done}/${item.planned}`]),
       [
         ['1', 'Bench Press', 'current', '1/3'],
         ['2', 'Plank', 'pending', '0/2'],
         ['3', 'Goblet Squat', 'pending', '0/2'],
       ],
     );
-    assert.deepEqual([view.doneSets, view.plannedSets, view.skipped.length], [1, 7, 0]);
+    assert.deepEqual([view.doneSets, view.plannedSets, view.items.filter((item) => item.state === 'skipped').length], [1, 7, 0]);
   });
 
   test('grupta üyeler "3a", "3b" ve türün adı', () => {
@@ -97,126 +92,66 @@ describe('akış sheet\'i', () => {
         { id: 'r_bbbbbb', exerciseId: 'goblet-squat', sets: [{ min: 8, max: 10 }, { min: 8, max: 10 }] },
       ] },
     ]);
-    const item = flowView(day, start(day)).active[0];
+    const item = listView(day, start(day)).items[0];
     assert.deepEqual(item?.members.map((member) => member.number), ['1a', '1b']);
     assert.equal(item?.kindLabel, 'Süperset');
     assert.equal(item?.planned, 4);
   });
 });
 
-describe('"Hareketi geç ›", "Bugün yapma", "Geri al"', () => {
-  test('sona alınır, sıradaki hemen gelir; bütün satırların kaydı açılır (sıra kimliklerle)', () => {
+describe('atlama ve geri alma', () => {
+  test('atlanan sona iner, sıradaki hemen gelir; bütün satırların kaydı açılır (sıra kimliklerle)', () => {
     const day = threeDay();
-    const result = skipAt(day, start(day), 'b_aaaaaa', stamp(1), sequence());
+    const result = dropWithUndo(day, start(day), 'b_aaaaaa', stamp(1), sequence());
     assert.ok(result);
-    assert.equal(result.outcome, 'moved');
     assert.equal(result.doc.entries.length, 3);
     assert.equal(nextRow(day, result.doc), 'r_bbbbbb');
-    const view = flowView(day, result.doc);
-    assert.deepEqual(view.active.map((item) => [item.key, item.state]), [
+    assert.deepEqual(listView(day, result.doc).items.map((item) => [item.key, item.state]), [
       ['b_bbbbbb', 'current'],
       ['b_dddddd', 'pending'],
-      ['b_aaaaaa', 'moved'],
+      ['b_aaaaaa', 'skipped'],
     ]);
+    assert.equal(firstSkippedKey(day, result.doc), 'b_aaaaaa');
     valid(result.doc);
   });
 
-  test('sona alınmış hareket yeniden geçilirse Geçilenler; son kalan hareket doğrudan Geçilenler', () => {
+  test('son kalan hareket atlanırsa antrenman bitti sayılır', () => {
     const day = threeDay();
-    const moved = skipAt(day, start(day), 'b_aaaaaa', stamp(1), sequence());
-    assert.ok(moved);
-    const again = skipAt(day, moved.doc, 'b_aaaaaa', stamp(2));
-    assert.equal(again?.outcome, 'dropped');
-    assert.deepEqual(flowView(day, again?.doc as SessionDoc).skipped.map((item) => item.key), ['b_aaaaaa']);
-    assert.equal(firstSkippedKey(day, again?.doc as SessionDoc), 'b_aaaaaa');
-
     let doc = logNext(day, logNext(day, start(day), 1), 2);
     doc = logNext(day, doc, 3);
     doc = logNext(day, logNext(day, doc, 4), 5);
-    const last = skipAt(day, doc, 'b_dddddd', stamp(6));
-    assert.equal(last?.outcome, 'dropped');
-    assert.equal(cursorOf(day, last?.doc as SessionDoc).allDone, true);
+    const last = dropAt(day, doc, 'b_dddddd', stamp(6));
+    assert.equal(cursorOf(day, last).allDone, true);
   });
 
-  test('toast metni: set yapıldıysa "2/3 set yapıldı; kalanı sona alındı"', () => {
-    assert.deepEqual(skipMessage('moved', 'Bench Press', 0, 3), { title: 'Bench Press sona alındı' });
-    assert.deepEqual(skipMessage('moved', 'Bench Press', 2, 3), { title: '2/3 set yapıldı; kalanı sona alındı' });
-    assert.deepEqual(skipMessage('dropped', 'Plank', 0, 2), { title: 'Plank geçildi', description: 'Geçilenler listesinde' });
-    assert.deepEqual(skipMessage('dropped', 'Plank', 1, 2), { title: 'Plank geçildi', description: '1/2 set yapıldı' });
-  });
-
-  test('"Geri al": sıra ve durum geçmeden önceki hâline; yeni saat eskiyi ezer', () => {
+  test('"Geri al": sıra ve durum atlamadan önceki hâline; yeni saat eskiyi ezer', () => {
     const day = threeDay();
     const doc = logNext(day, start(day), 1);
-    const result = skipAt(day, doc, 'b_aaaaaa', stamp(2), sequence());
+    const result = dropWithUndo(day, doc, 'b_aaaaaa', stamp(2), sequence());
     assert.ok(result);
     const undone = undoSkip(day, result.doc, result.undo, stamp(3));
     assert.equal(nextRow(day, undone), 'r_aaaaaa');
     const bench = undone.entries.find((entry) => entry.rowId === 'r_aaaaaa');
     assert.deepEqual([bench?.status, bench?.skip, bench?.updatedAt], ['partial', undefined, at(3)]);
     assert.equal(undone.order?.updatedAt, at(3));
-    assert.deepEqual(flowView(day, undone).active.map((item) => item.key), ['b_aaaaaa', 'b_bbbbbb', 'b_dddddd']);
+    assert.deepEqual(listView(day, undone).items.map((item) => item.key), ['b_aaaaaa', 'b_bbbbbb', 'b_dddddd']);
     valid(undone);
   });
 
-  test('"Geri al" Geçilenler\'e gideni de sona alınmış hâline döndürür', () => {
+  test('atlanan geri alınınca sonda kalır; "bilerek geçildi" işareti kalır', () => {
     const day = threeDay();
-    const moved = skipAt(day, start(day), 'b_aaaaaa', stamp(1), sequence());
-    const dropped = moved && skipAt(day, moved.doc, 'b_aaaaaa', stamp(2));
-    assert.ok(dropped);
-    const undone = undoSkip(day, dropped.doc, dropped.undo, stamp(3));
-    const bench = undone.entries.find((entry) => entry.rowId === 'r_aaaaaa');
-    assert.deepEqual([bench?.status, bench?.skip?.moved], ['pending', true]);
-    assert.equal(flowView(day, undone).active.at(-1)?.state, 'moved');
-  });
-
-  test('"Bugün yapma" Geçilenler\'e; Geçilenler\'de "Geri al" sonda "sona alındı" olarak döner', () => {
-    const day = threeDay();
-    const moved = skipAt(day, start(day), 'b_aaaaaa', stamp(1), sequence());
-    assert.ok(moved);
-    const dropped = dropAt(day, moved.doc, 'b_aaaaaa', stamp(2));
-    assert.deepEqual(flowView(day, dropped).skipped.map((item) => item.key), ['b_aaaaaa']);
+    const dropped = dropAt(day, start(day), 'b_aaaaaa', stamp(1), sequence());
+    assert.deepEqual(listView(day, dropped).items.filter((item) => item.state === 'skipped').map((item) => item.key), ['b_aaaaaa']);
     assert.equal(cursorOf(day, dropped).progress.plannedSets, 4);
-    const restored = restoreAt(day, dropped, 'b_aaaaaa', stamp(3));
-    const view = flowView(day, restored);
-    assert.deepEqual(view.skipped, []);
-    assert.deepEqual(view.active.map((item) => [item.key, item.state]).at(-1), ['b_aaaaaa', 'moved']);
+    const restored = restoreAt(day, dropped, 'b_aaaaaa', stamp(2));
+    const view = listView(day, restored);
+    assert.deepEqual(view.items.filter((item) => item.state === 'skipped'), []);
+    assert.deepEqual(view.items.map((item) => [item.key, item.state]).at(-1), ['b_aaaaaa', 'pending']);
+    assert.deepEqual(restored.entries.find((entry) => entry.rowId === 'r_aaaaaa')?.skip, { moved: true });
     assert.equal(cursorOf(day, restored).progress.plannedSets, 7);
-    // Yeniden geçilirse doğrudan Geçilenler.
-    assert.equal(skipAt(day, restored, 'b_aaaaaa', stamp(4))?.outcome, 'dropped');
   });
 
-  test('"Şimdi yap": birim kalanların başına, sıra oradan sürer; geçilen de geri gelir', () => {
-    const day = threeDay();
-    const doc = doNowAt(day, logNext(day, start(day), 1), 'b_dddddd', stamp(2), sequence());
-    assert.equal(nextRow(day, doc), 'r_dddddd');
-    assert.deepEqual(flowView(day, doc).active.map((item) => item.key), ['b_dddddd', 'b_aaaaaa', 'b_bbbbbb']);
-    const moved = skipAt(day, doc, 'b_bbbbbb', stamp(3));
-    const dropped = moved && dropAt(day, moved.doc, 'b_bbbbbb', stamp(4));
-    assert.ok(dropped);
-    const back = doNowAt(day, dropped, 'b_bbbbbb', stamp(5));
-    assert.equal(nextRow(day, back), 'r_bbbbbb');
-    assert.deepEqual(flowView(day, back).skipped, []);
-    valid(back);
-  });
-
-  test('"Şimdi yap" bekleyen "+ Set ekle" setinin önüne girer; fazladan set sonra sırasını bulur', () => {
-    const base = dayWithBlocks([
-      { id: 'b_aaaaaa', kind: 'single', restSeconds: 90, rows: [{ id: 'r_aaaaaa', exerciseId: 'bench-press', sets: [{ min: 8, max: 10 }, { min: 8, max: 10 }, { min: 8, max: 10 }] }] },
-      { id: 'b_bbbbbb', kind: 'single', restSeconds: 60, rows: [{ id: 'r_bbbbbb', exerciseId: 'goblet-squat', sets: [{ min: 10, max: 12 }, { min: 10, max: 12 }] }] },
-    ]);
-    let doc = logNext(base, logNext(base, start(base), 1), 2);
-    const day = withExtraRounds(base, addExtraRound(base, doc, 'b_aaaaaa'));
-    doc = logNext(day, doc, 3);
-    assert.deepEqual([nextSet(day, doc)?.rowId, nextSet(day, doc)?.extra], ['r_aaaaaa', true]);
-    let after = doNowAt(day, doc, 'b_bbbbbb', stamp(4));
-    assert.equal(nextSet(day, after)?.rowId, 'r_bbbbbb');
-    after = logNext(day, logNext(day, after, 5), 6);
-    assert.deepEqual([nextSet(day, after)?.rowId, nextSet(day, after)?.extra], ['r_aaaaaa', true]);
-    valid(after);
-  });
-
-  test('grupta geçme bütün grubu sona alır', () => {
+  test('grupta atlamak bütün grubu atlar', () => {
     const day = dayWithBlocks([
       { id: 'b_aaaaaa', kind: 'superset', restSeconds: 90, rows: [
         { id: 'r_aaaaaa', exerciseId: 'bench-press', sets: [{ min: 8, max: 10 }] },
@@ -224,15 +159,15 @@ describe('"Hareketi geç ›", "Bugün yapma", "Geri al"', () => {
       ] },
       { id: 'b_dddddd', kind: 'single', restSeconds: 60, rows: [{ id: 'r_dddddd', exerciseId: 'plank', sets: [{ min: 30, max: 45 }] }] },
     ]);
-    const result = skipAt(day, start(day), 'b_aaaaaa', stamp(1), sequence());
+    const result = dropWithUndo(day, start(day), 'b_aaaaaa', stamp(1), sequence());
     assert.equal(nextRow(day, result?.doc as SessionDoc), 'r_dddddd');
-    assert.equal(result?.doc.entries.filter((entry) => entry.skip?.moved).length, 2);
+    assert.equal(result?.doc.entries.filter((entry) => entry.status === 'skipped' && entry.skip?.moved).length, 2);
   });
 
-  test('iki cihaz: birinde geçmenin açtığı boş kayıt, ötekinde aynı satırın seti; birleşimde tek kayıt, set görünür', () => {
+  test('iki cihaz: birinde atlamanın açtığı boş kayıt, ötekinde aynı satırın seti; birleşimde tek kayıt, set görünür', () => {
     const day = threeDay();
     const server = logNext(day, start(day), 1);
-    const skipped = skipAt(day, server, 'b_bbbbbb', stamp(2), sequence(40));
+    const skipped = dropWithUndo(day, server, 'b_bbbbbb', stamp(2), sequence(40));
     assert.ok(skipped);
     const logged = logSet(day, server, { rowId: 'r_dddddd', setIndex: 0, kg: 20, value: 10, stamp: stamp(3), random: sequence(90) }).doc;
     for (const merged of [mergeAll([skipped.doc, logged]), mergeAll([logged, skipped.doc])] as SessionDoc[]) {
@@ -348,27 +283,25 @@ describe('"Hareket ekle"', () => {
     assert.deepEqual([entry?.added, entry?.rowId, entry?.plannedSets, entry?.title], [true, undefined, 3, 'Şınav']);
     const live = effectiveDay(day, doc, { [extraKey('e_added1', 'push-up')]: extra });
     assert.equal(live.rows.e_added1?.title, 'Şınav');
-    const view = flowView(live, doc);
-    assert.deepEqual(view.active.map((item) => [item.members[0]?.number, item.key, item.added]).at(-1), ['4', 'e_added1', true]);
+    const view = listView(live, doc);
+    assert.deepEqual(view.items.map((item) => [item.members[0]?.number, item.key, item.added]).at(-1), ['4', 'e_added1', true]);
     assert.equal(view.plannedSets, 10);
     valid(doc);
   });
 
-  test('Geçilenler\'in önüne girer; "Şimdi yap" ile hemen yapılır ve setleri kendi kaydına yazılır', () => {
+  test('atlananların önüne girer; "Şimdi yap" odağında hemen yapılır ve setleri kendi kaydına yazılır', () => {
     const day = threeDay();
-    const moved = skipAt(day, start(day), 'b_bbbbbb', stamp(1), sequence());
-    const dropped = moved && dropAt(day, moved.doc, 'b_bbbbbb', stamp(2));
-    assert.ok(dropped);
+    const dropped = dropAt(day, start(day), 'b_bbbbbb', stamp(1), sequence());
     const { extra, doc } = added(day, dropped, 'e_added1');
     const extras = { [extraKey('e_added1', 'push-up')]: extra };
     const live = effectiveDay(day, doc, extras);
-    assert.deepEqual(flowView(live, doc).active.map((item) => item.key), ['b_aaaaaa', 'b_dddddd', 'e_added1']);
-    const now = doNowAt(live, doc, 'e_added1', stamp(6));
-    const next = nextSet(effectiveDay(day, now, extras), now);
-    assert.equal(next?.rowId, 'e_added1');
-    const logged = logNext(effectiveDay(day, now, extras), now, 7);
+    assert.deepEqual(listView(live, doc).items.map((item) => item.key), ['b_aaaaaa', 'b_dddddd', 'e_added1', 'b_bbbbbb']);
+    // "Şimdi yap" odağı açar, sıra yazılmaz.
+    assert.equal(nextSet(live, doc, null, 'e_added1')?.rowId, 'e_added1');
+    const logged = logFocused(live, doc, 'e_added1', 7);
     assert.equal(logged.entries.find((item) => item.id === 'e_added1')?.sets.length, 1);
     assert.equal(logged.entries.length, 4);
+    assert.deepEqual(logged.order, doc.order);
     valid(logged);
   });
 });
@@ -420,7 +353,7 @@ describe('"Antrenmanı değiştir" olmadı: hazırlık geri alınır', () => {
     valid(back);
   });
 
-  test('önceki "sona alındı" işareti geri gelir; o arada başka nedenle yazılan kayda dokunulmaz', () => {
+  test('önceki "bilerek geçildi" işareti geri gelir; o arada başka nedenle yazılan kayda dokunulmaz', () => {
     const day = threeDay();
     const dropped = dropWithUndo(day, logNext(day, start(day), 1), 'b_bbbbbb', stamp(2), sequence());
     assert.ok(dropped);
@@ -488,13 +421,6 @@ describe('bitişte rotasyon satırı (§2.7)', () => {
     assert.equal(finishRotation(legacy, { doneSets: 1, plannedSets: 3 }), null);
     assert.equal(finishRotation({ ...legacy, rotationDays: [{ id: 'd_zzzzzz', name: 'Gün Z' }, { id: 'd_yyyyyy', name: 'Gün Y' }] }, { doneSets: 1, plannedSets: 3 }), null);
   });
-});
-
-test('reordering changes execution order without changing recorded sets',()=>{
- const day=threeDay();const doc=logNext(day,start(day),1);const moved=reorderAt(day,doc,'b_dddddd','b_aaaaaa',stamp(1),sequence());
- assert.deepEqual(flowView(day,moved).active.map(item=>item.key),['b_dddddd','b_aaaaaa','b_bbbbbb']);
- assert.equal(nextSet(day,moved)?.rowId,'r_dddddd');
- assert.deepEqual(moved.entries.flatMap(e=>e.sets),doc.entries.flatMap(e=>e.sets));valid(moved);
 });
 
 describe('liste + odak: imleç', () => {
@@ -589,8 +515,9 @@ describe('liste + odak: imleç', () => {
       { kind: 'member', transitionSeconds: 0 },
       { kind: 'same', restSeconds: 90 },
       { kind: 'member', transitionSeconds: 0 },
-      { kind: 'next', restSeconds: 90, nextKey: 'b_aaaaaa' },
+      { kind: 'next', restSeconds: 90 },
     ]);
+    assert.equal(nextUnitAfter(day, doc, 'b_eeeeee'), 'b_aaaaaa');
   });
 
   test('"Kolaydı" kısayolu odaktaki birimin sıradaki setine bakar', () => {
@@ -625,8 +552,9 @@ describe('liste + odak: imleç', () => {
     // İlk set odakta "aynı hareket" (odaksız imleç Bench'te olsa da); ikincisi birimi bitirir.
     assert.deepEqual(afters, [
       { kind: 'same', restSeconds: 60 },
-      { kind: 'next', restSeconds: 60, nextKey: 'b_aaaaaa' },
+      { kind: 'next', restSeconds: 60 },
     ]);
+    assert.equal(nextUnitAfter(day, doc, 'b_dddddd'), 'b_aaaaaa');
   });
 
   test('odakta son set "done"', () => {
@@ -639,12 +567,13 @@ describe('liste + odak: imleç', () => {
     assert.deepEqual(afterLog(day, doc, logged, 'b_dddddd'), { kind: 'done' });
   });
 
-  test('odaksız afterLog da sıradaki birimi söyler', () => {
+  test('odaksız afterLog da birimin bittiğini söyler', () => {
     const day = threeDay();
     let doc = start(day);
     doc = logNext(day, logNext(day, doc, 1), 2);
     const logged = logNext(day, doc, 3); // Bench'in son seti
-    assert.deepEqual(afterLog(day, doc, logged), { kind: 'next', restSeconds: 90, nextKey: 'b_bbbbbb' });
+    assert.deepEqual(afterLog(day, doc, logged), { kind: 'next', restSeconds: 90 });
+    assert.equal(nextUnitAfter(day, logged, 'b_aaaaaa'), 'b_bbbbbb');
   });
 });
 
@@ -943,7 +872,7 @@ describe('liste + odak: sıra ve atlama', () => {
     assert.equal(dropWithUndo(day, doc, 'b_aaaaaa', stamp(4)), null);
   });
 
-  test('"Geri al" önceki geçme işaretini de geri getirir (Geçilenler\'den dönmüş, sona alınmış birim)', () => {
+  test('"Geri al" önceki geçme işaretini de geri getirir (atlanıp geri alınmış birim)', () => {
     const day = threeDay();
     const first = dropWithUndo(day, start(day), 'b_bbbbbb', stamp(1), sequence());
     assert.ok(first);

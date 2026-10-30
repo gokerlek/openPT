@@ -4,11 +4,7 @@ import { CheckCircle } from '@phosphor-icons/react';
 import { Plus } from '@/components/line-icons';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import type { FlowItem } from '@/lib/workout-flow';
-
-function titleOf(item: FlowItem): string {
-  return item.members.map((member) => member.title).join(' + ');
-}
+import { itemName, type FlowItem } from '@/lib/workout-flow';
 
 /**
  * Bütün hareketler bitti (tasarım §2.7 a): bitirme sorusundaki "Devam et (set ya da hareket ekle)" buraya
@@ -40,7 +36,7 @@ export function DonePanel({
           <ul className="flex flex-col">
             {items.map((item) => {
               const group = item.members.length > 1;
-              const title = titleOf(item);
+              const title = itemName(item);
               return (
                 <li key={item.key} className="flex min-h-13 items-center gap-2 border-t first:border-t-0">
                   <span className="flex min-w-0 flex-1 flex-col py-1.5">

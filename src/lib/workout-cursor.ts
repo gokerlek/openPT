@@ -2,14 +2,14 @@ import type { EntryStatus, RotationChoice, SessionDoc, SessionEntry, SessionSet 
 import { DEFAULT_TRANSITION_SECONDS, type BlockKind, type TemplateBody } from './template-plan.ts';
 
 /**
- * Antrenman imleci (tasarım §2.4, §2.6, §4.4) — saf: sıradaki set hangisi, kaç set kaldı, "sona al",
- * "şimdi yap", "bugün yapma", önceden dolu değerler.
+ * Antrenman imleci (tasarım §2.4, §2.6, §4.4) — saf: sıradaki set hangisi, kaç set kaldı, atlama ve
+ * geri alma, önceden dolu değerler.
  *
  * Girdi günün planı (başlangıçtaki anlık görüntü: bloklar ve satırlar) ve seans belgesidir. Plan
  * satırı hareket kaydına (entry) `rowId` ile, muadille değiştirilmişse `swappedFrom` ile bağlanır;
  * plan dışı eklenen hareket kendi başına bir birimdir (`plannedSets`). Birim, yerinden oynatılan
- * şeydir: tek hareket ya da grubun tamamı (süperset, devre, kompleks); akıştaki "Geç" ve "Şimdi yap"
- * birimi taşır. Sıra `order` kaydındadır (hareket kimlikleri); kayıtta olmayan birim sona düşer.
+ * şeydir: tek hareket ya da grubun tamamı (süperset, devre, kompleks); listedeki "Sırayı değiştir" ve
+ * "Bu hareketi atla" birimi taşır. Sıra `order` kaydındadır (hareket kimlikleri); kayıtta olmayan birim sona düşer.
  *
  * Gruplarda set sırası `setSlots` gibidir: her turda üyeler sırayla, setleri biten üye sonraki turlarda
  * atlanır; süperset ve komplekste üyeler arasında dinlenme yok, devrede istasyon geçişi, tur sonunda
@@ -33,10 +33,8 @@ export type CursorMember = {
   done: number;
   /** "+ Set ekle" ile fazladan yapılan. */
   extra: number;
-  /** Geçilenler'de (`status: skipped`). */
+  /** Atlandı (`status: skipped`). */
   skipped: boolean;
-  /** Sona alındı (hâlâ yapılacak). */
-  moved: boolean;
 };
 
 /**
@@ -119,7 +117,6 @@ function memberOf(entry: SessionEntry | undefined, rowId: string | null, planned
     done: working.filter((set) => !set.extra).length,
     extra: working.filter((set) => set.extra).length,
     skipped: entry?.status === 'skipped',
-    moved: entry?.skip?.moved ?? false,
   };
 }
 
@@ -287,7 +284,7 @@ export function completionOf(units: readonly Pick<CursorUnit, 'members'>[]): { d
   };
 }
 
-/* --- geç, sona al, şimdi yap --- */
+/* --- atla, geri al --- */
 
 export type Stamp = { at: string; by: string };
 
@@ -318,22 +315,9 @@ export function entryStatusOf(member: Pick<CursorMember, 'planned' | 'done' | 's
 }
 
 /**
- * "Hareketi geç ›" (tek dokunuş): birim sona alınır (`skip.moved`). Zaten sona alınmışsa ya da
- * geriye başka yapılacak birim kalmadıysa Geçilenler'e gider (`status: skipped`). Neden sorulmaz.
+ * "Bu hareketi atla": birim atlananlara (`status: skipped`; `skip.moved`: bilerek geçildi, program önerisi bunu
+ * okur), sıranın sonuna. Neden sorulmaz.
  */
-export function skipUnit(plan: TemplateBody, doc: SessionDoc, entryId: string, stamp: Stamp, overrides: PlanOverrides = {}): SessionDoc {
-  const units = workoutUnits(plan, doc, overrides);
-  const unit = unitOfEntry(units, entryId);
-  if (!unit) return doc;
-  const others = units.filter((item) => item !== unit && !unitSkipped(item) && remaining(item));
-  const alreadyMoved = unit.members.some((member) => member.moved);
-  if (alreadyMoved || others.length === 0) return dropUnit(plan, doc, entryId, stamp, overrides);
-  const ids = new Set(entryIdsOf(unit));
-  const moved = updateEntries(doc, ids, (entry) => ({ ...entry, skip: { ...entry.skip, moved: true } }), stamp);
-  return withOrder(moved, [...units.filter((item) => item !== unit), unit], stamp);
-}
-
-/** "Bugün yapma": birim Geçilenler'e (`status: skipped`), sona alınır. */
 export function dropUnit(plan: TemplateBody, doc: SessionDoc, entryId: string, stamp: Stamp, overrides: PlanOverrides = {}): SessionDoc {
   const units = workoutUnits(plan, doc, overrides);
   const unit = unitOfEntry(units, entryId);
@@ -343,7 +327,7 @@ export function dropUnit(plan: TemplateBody, doc: SessionDoc, entryId: string, s
   return withOrder(dropped, [...units.filter((item) => item !== unit), unit], stamp);
 }
 
-/** "Geri al" (Geçilenler'den): durum sayılardan yeniden, geçme işareti kalkar; sıra aynı kalır. */
+/** "Geri al" (atlananlardan): durum sayılardan yeniden, geçme işareti kalkar; sıra aynı kalır. */
 export function restoreUnit(plan: TemplateBody, doc: SessionDoc, entryId: string, stamp: Stamp, overrides: PlanOverrides = {}): SessionDoc {
   const units = workoutUnits(plan, doc, overrides);
   const unit = unitOfEntry(units, entryId);
@@ -358,21 +342,6 @@ export function restoreUnit(plan: TemplateBody, doc: SessionDoc, entryId: string
     },
     stamp,
   );
-}
-
-/**
- * "Şimdi yap": birim, kalanların başına alınır (geçilmişse geri gelir); sıra oradan sürer. Bekleyen
- * "+ Set ekle" seti de kalan iştir: yalnız o kalan birim açık sayılır, yeni birim onun önüne girer.
- */
-export function doNow(plan: TemplateBody, doc: SessionDoc, entryId: string, stamp: Stamp, overrides: PlanOverrides = {}): SessionDoc {
-  const restored = restoreUnit(plan, doc, entryId, stamp, overrides);
-  const units = workoutUnits(plan, restored, overrides);
-  const unit = unitOfEntry(units, entryId);
-  if (!unit) return doc;
-  const rest = units.filter((item) => item !== unit);
-  const firstOpen = rest.findIndex((item) => !unitSkipped(item) && item.slots.some((slot) => !slotDone(item, slot)));
-  const at = firstOpen < 0 ? rest.length : firstOpen;
-  return withOrder(restored, [...rest.slice(0, at), unit, ...rest.slice(at)], stamp);
 }
 
 /* --- önceden dolu değerler (§2.4) --- */

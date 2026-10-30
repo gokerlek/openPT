@@ -23,11 +23,11 @@ import {
   addExercise,
   canSwap,
   dropWithUndo,
-  effectiveDay,
   finishRotation,
   firstSkippedKey,
   itemName,
   listView,
+  localWorkoutDay,
   moveUnit,
   moveUnitTo,
   nextUnitAfter,
@@ -37,7 +37,6 @@ import {
   undoSwitchPrep,
   unitTitle,
   validFocus,
-  withExtraRounds,
   withFinishReason,
   type FinishReason,
 } from '@/lib/workout-flow';
@@ -82,15 +81,16 @@ import {
   type NextSet,
 } from '@/lib/workout-session';
 import { startSetTimer, stopSetTimer, tickSetTimer } from '@/lib/workout-timer';
-import { WORKOUT_KEY, WORKOUT_OVERVIEW_KEY } from '../today-workout';
+import { WORKOUT_KEY, WORKOUT_OVERVIEW_KEY } from '../workout-overview';
 import { clearLocalWorkout, clearWorkoutCache, readLocalWorkout, readWorkoutCache, saveLocalWorkout, saveWorkoutCache, writerId } from '../workout-storage';
+import { AddExerciseSheet } from './add-exercise-sheet';
 import { DonePanel } from './done-panel';
 import { EntryPanel, type TimerView, type TransitionView } from './entry-panel';
 import { ExerciseCard } from './exercise-card';
-import { AddExerciseSheet, SwapSheet, type SwapTarget } from './flow-sheets';
 import { ProgramUpdateSheet, type ProgramAnswer } from './program-update-sheet';
 import { RestPanel, RestStrip, type EffortPromptView, type RestView } from './rest-panel';
 import { StartCheck } from './start-check';
+import { SwapSheet, type SwapTarget } from './swap-sheet';
 import { useWorkoutOutbox } from './use-workout-outbox';
 import { beep, isIOS, unlockAudio, useWakeLock, vibrate } from './workout-feedback';
 import { WorkoutHeader, type FocusActions, type WorkoutStatus } from './workout-header';
@@ -153,24 +153,19 @@ function planChanged(local: LocalWorkout, fresh: WorkoutResponse): boolean {
   return fresh.day !== null && JSON.stringify(fresh.day) !== JSON.stringify(local.plan);
 }
 
-/** Sona alma ve geçme toast'ının düğmeleri: dokunmatikte 44 px (`undo-toast.ts` gibi). */
+/** "Bu hareketi atla" ve "Hareket ekle" toast'larının düğmeleri: dokunmatikte 44 px (`undo-toast.ts` gibi). */
 const TOAST_BUTTONS = { actionButton: 'touch:min-h-11 touch:px-3! touch:text-sm!', cancelButton: 'touch:min-h-11 touch:px-3! touch:text-sm!' };
 
 const effective = new WeakMap<LocalWorkout, WorkoutDay>();
 
-/** Günün etkin hâli verilen belgeyle: başlangıçtaki gün + muadiller + eklenen hareketler + istenen fazladan turlar. */
-function dayFor(local: LocalWorkout, doc: SessionDoc): WorkoutDay {
-  return withExtraRounds(effectiveDay(local.plan, doc, local.extras), local.extraRounds);
-}
-
 /**
- * Günün etkin planı: başlangıçtaki gün + muadiller + eklenen hareketler (`effectiveDay`) + "+ Set ekle"nin
- * turları (`withExtraRounds`). Her kayıt yeni bir `LocalWorkout` olduğu için kayıt başına bir kez kurulur.
+ * Günün etkin planı: başlangıçtaki gün + muadiller + eklenen hareketler + "+ Set ekle"nin turları (`localWorkoutDay`).
+ * Her kayıt yeni bir `LocalWorkout` olduğu için kayıt başına bir kez kurulur.
  */
 function planOf(local: LocalWorkout): WorkoutDay {
   let day = effective.get(local);
   if (!day) {
-    day = dayFor(local, local.doc);
+    day = localWorkoutDay(local, local.doc);
     effective.set(local, day);
   }
   return day;
@@ -306,7 +301,7 @@ export function WorkoutScreen({
   const [swapTarget, setSwapTarget] = useState<SwapTarget | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [addBusy, setAddBusy] = useState<string | null>(null);
-  const [flowHighlight, setFlowHighlight] = useState<string | null>(null);
+  const [listHighlight, setListHighlight] = useState<string | null>(null);
   const highlightTimer = useRef<number | undefined>(undefined);
 
   const guardUntil = useRef(0);
@@ -1406,7 +1401,7 @@ export function WorkoutScreen({
     (current: LocalWorkout, doc: SessionDoc, extra: Partial<LocalWorkout> = {}, focusAfter: string | null = focusRef.current) => {
       const before = nextSet(planOf(current), current.doc, null, focusRef.current);
       const next = { ...current, ...extra };
-      const after = nextSet(dayFor(next, doc), doc, null, focusAfter);
+      const after = nextSet(localWorkoutDay(next, doc), doc, null, focusAfter);
       const shownSomething = focusRef.current !== null || focusAfter !== null;
       const moved = shownSomething && (before?.rowId !== after?.rowId || before?.setIndex !== after?.setIndex);
       commit(withChange(moved ? { ...next, draft: null, timer: null } : next, doc, { send: false }));
@@ -1419,9 +1414,9 @@ export function WorkoutScreen({
 
   /** Listede geri alınan ya da geçilen satır bir an vurgulu (`DRAG.highlightMs`). */
   const highlightUnit = useCallback((key: string) => {
-    setFlowHighlight(key);
+    setListHighlight(key);
     window.clearTimeout(highlightTimer.current);
-    highlightTimer.current = window.setTimeout(() => setFlowHighlight(null), DRAG.highlightMs);
+    highlightTimer.current = window.setTimeout(() => setListHighlight(null), DRAG.highlightMs);
   }, []);
 
   /**
@@ -1613,7 +1608,7 @@ export function WorkoutScreen({
       const title = unitTitle(plan, current.doc, unit);
       const done = unit.members.reduce((sum, member) => sum + Math.min(member.done, member.planned), 0);
       const planned = unit.members.reduce((sum, member) => sum + member.planned, 0);
-      const target = nextUnitAfter(dayFor(current, result.doc), result.doc, key);
+      const target = nextUnitAfter(localWorkoutDay(current, result.doc), result.doc, key);
       startTransition(() => {
         commitFlow(current, result.doc, {}, target);
         if (target) openFocus(target);
@@ -1655,7 +1650,10 @@ export function WorkoutScreen({
     [saving, commitFlow, openFocus, goToList, highlightUnit, announce, focusLater, finishIfDone],
   );
 
-  /** Geçilenler'de "Geri al": hareket yeniden yapılacaklara, sona. */
+  /**
+   * Listede atlanan satırın "Geri al"ı (`restoreAt`): hareket yeniden yapılacak, sonda kalır; odak açılmaz (satıra
+   * dokunmak geri alıp açar, `onOpenUnit`).
+   */
   const onRestore = useCallback(
     (key: string) => {
       const current = localRef.current;
@@ -2026,7 +2024,7 @@ export function WorkoutScreen({
           {listMode ? (
             <WorkoutList
               view={list}
-              highlight={flowHighlight}
+              highlight={listHighlight}
               onOpen={onOpenUnit}
               onRestore={onRestore}
               onAdd={() => setAddOpen(true)}
