@@ -334,7 +334,7 @@ describe('danışanın bildirimi', () => {
     assert.match(afterReportText({ severity: 'mild', type: 'injury', since: 'week' }), /zorlayan hareketleri yapma/);
     assert.match(afterReportText({ severity: 'moderate', type: 'injury', since: 'month' }), /dikkatli ol/);
     // Atlama ve muadil antrenmanda ⋯ menüsünde (kartın "Değiştir"i yalnız kaçınılacak harekette).
-    assert.match(afterReportText({ severity: 'mild', type: 'condition' }), /⋯ menüsünden hareketi atla ya da muadil seç\.$/);
+    assert.match(afterReportText({ severity: 'mild', type: 'condition' }), /antrenmanda ⋯ menüsünden hareketi atla ya da muadil seç\.$/);
   });
 });
 

@@ -85,7 +85,8 @@ function ResumeCard({ progress, timeZone, strip, clientWater }: { progress: InPr
   const list = items && view ? listWindow(items, view.current, RESUME_LIST_LIMIT) : null;
   const current = view?.current ? view.items.find((item) => item.key === view.current) : undefined;
   const currentName = current ? itemName(current) : '';
-  const allDone = view?.allDone === true;
+  // Kalan yalnız plan dışı kayıtsa (`current` null; açılamaz) da tek iş bitirmek.
+  const allDone = view != null && (view.allDone || view.current === null);
   const dayName = doc.program?.dayName ?? plan?.dayName;
   const lastAt = doc.entries.flatMap((entry) => entry.sets.map((set) => set.at)).sort().at(-1) ?? doc.startedAt;
   return (

@@ -1442,6 +1442,7 @@ export function WorkoutScreen({
    * yap": hareket odakta açılır, sıra yazılmaz (Faz 2: sıra kendiliğinden değişmez). Atlanan hareket önce geri alınır;
    * biten hareket setleriyle açılır. Plan dışı kayıt (planda satırı yok, `validFocus`) açılmaz ve geri alınmaz: kartın
    * gösterecek satırı yok; odak itilseydi ekran listeyi çizer, geçersiz odak effect'i adresi hemen geri düşürürdü.
+   * Dokunuş sessiz kalmasın diye toast söyler.
    */
   const onOpenUnit = useCallback(
     (key: string) => {
@@ -1452,7 +1453,10 @@ export function WorkoutScreen({
       if (!unit) return;
       const skipped = unit.members.every((member) => member.skipped);
       const doc = skipped ? restoreAt(plan, current.doc, key, stampOf(current)) : current.doc;
-      if (validFocus(plan, doc, key) === null) return;
+      if (validFocus(plan, doc, key) === null) {
+        toast('Bu hareketin planı bu telefonda yok', { description: 'Setleri listede duruyor.' });
+        return;
+      }
       if (skipped) commitFlow(current, doc, {}, key);
       openFocus(key);
       setFinishOpen(false);

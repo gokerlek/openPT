@@ -1007,7 +1007,9 @@ typecheck, lint, test · Commit: `refactor(workout): drop the flow sheet and do-
   yalnız `workoutUnits`'in plan dışı birimlerinde yok. `validFocus` onu geçersiz sayar (ekran listeyi çizer, geçersiz
   odak effect'i adresi düşürür); `listView`'ın "şu an"ı, `nextUnitAfter` ve `firstSkippedKey` onu seçmez ("Devam et",
   açılış kuralı ve kendiliğinden geçiş açılamayan birimi açmaya çalışmasın); listede satırı setleriyle durur, dokunmak
-  bir şey yapmaz (`onOpenUnit` odak itmez). Kalan yalnız plan dışı kayıtsa alt çubukta "Antrenmanı bitir".
+  odak itmez, toast "Bu hareketin planı bu telefonda yok" der (`onOpenUnit`). Kalan yalnız plan dışı kayıtsa alt
+  çubukta ve Bugün'ün "Devam et" kartında ana düğme "Antrenmanı bitir". Ağrı bildirimi sonrası metin (`afterReportText`)
+  Sağlık'ta ve özette de göründüğünden "antrenmanda ⋯ menüsünden" der.
 
 ---
 
