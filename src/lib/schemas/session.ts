@@ -148,8 +148,8 @@ export const sessionEntrySchema = v.object({
   deviceId: v.optional(slugSchema),
   status: v.picklist(ENTRY_STATUSES),
   /**
-   * `moved`: bilerek geçildi (atlandı; geri alınsa da kalır; eski seanslarda "sona alındı"); `status: skipped` ile
-   * atlananlarda.
+   * `moved`: bilerek geçildi (atlandı; listede geri alınsa da kalır, toast'taki "Geri al" atlamayı hiç olmamış sayar;
+   * eski seanslarda "sona alındı"); `status: skipped` ile atlananlarda.
    */
   skip: v.optional(v.object({ reason: v.optional(v.picklist(SKIP_REASONS)), moved: v.boolean() })),
   /** "Değiştir" ile gelen muadil: yerini aldığı satır. */

@@ -273,8 +273,8 @@ function setsItem(context: RowContext, previous: RowPrevious | undefined): Feedb
 }
 
 /**
- * Bilerek geçildi: atlandı (`skip.moved`, geri alınsa da kalır; eski seanslarda "sona alındı"). Erken bitişte yalnız
- * yapılmadan kalan hareket geçilmiş sayılmaz.
+ * Bilerek geçildi: atlandı (`skip.moved`; listede geri alınsa da kalır, toast'taki "Geri al" atlamayı hiç olmamış
+ * sayar; eski seanslarda "sona alındı"). Erken bitişte yalnız yapılmadan kalan hareket geçilmiş sayılmaz.
  */
 function skippedOn(entry: Pick<SessionEntry, 'status' | 'skip'>): boolean {
   return entry.status === 'skipped' || entry.skip?.moved === true;

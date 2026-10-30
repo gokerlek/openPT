@@ -34,7 +34,7 @@ export type GroupMemberStatus =
   | 'pending'
   /** Setleri bitti: bu turda yok ("sonraki turlarda atlanır"). */
   | 'finished'
-  /** Geçildi (Geçilenler'de); grup kalanlarla sürer. */
+  /** Atlandı (`status: skipped`); grup kalanlarla sürer. */
   | 'skipped';
 
 export type GroupMember = {

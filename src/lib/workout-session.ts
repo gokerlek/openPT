@@ -642,7 +642,7 @@ export type WorkoutSummary = {
   plannedSets: number;
   /** Geçilmemiş her hareketin planlı setleri yapıldı ("Antrenman tamamlandı, bitirelim mi?"). */
   allDone: boolean;
-  /** Yapılmayanlar: planlanan seti tamamlanmamış hareketler; geçilenler (Geçilenler'deki) işaretli. */
+  /** Yapılmayanlar: planlanan seti tamamlanmamış hareketler; atlananlar işaretli. */
   remaining: { rowId: string; title: string; done: number; planned: number; skipped: boolean }[];
 };
 

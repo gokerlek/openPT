@@ -989,6 +989,26 @@ atlayabilir; atlıyorsa bu not edilir (yenileme sonrası kabul edilen sınır).
 
 typecheck, lint, test · Commit: `refactor(workout): drop the flow sheet and do-now`
 
+**Uygulamada (10; 75968c0, 1bb2144 ve incelemenin düzeltmeleri):**
+- **Sheet'ler:** `flow-sheets.tsx` silindi; `SwapSheet` `swap-sheet.tsx`'e, `AddExerciseSheet` `add-exercise-sheet.tsx`'e taşındı.
+  `SwapSheet`'in boş durumu "Alet doluysa hareketi geçebilirsin; sona alınır." diyordu (kalkan "sona al"); şimdi "Alet
+  doluysa ⋯ menüsünden hareketi atlayabilirsin."
+- **Planın dışında da kalkanlar:** `skipUnit` (yalnız `skipAt` çağırıyordu) ve `CursorMember.moved` (yalnız `skipUnit` ve
+  `flowView` okuyordu); `FlowState` tümüyle (`flowView` `listView`'a alınınca üreten kalmadı). `FlowItem` kaldı, durumsuz:
+  `ListItem` = `FlowItem` + durum ve son ağırlık. `AfterLog.nextKey` kalktı (ekran sıradakini `nextUnitAfter` ile
+  seçer). `today-workout.tsx` artık yalnız `WorkoutProgramProvider`'ı yeniden verir; `WORKOUT_KEY` ve
+  `WORKOUT_OVERVIEW_KEY` doğrudan `workout-overview.tsx`'ten. `skip.moved`'u `dropUnit` yazmaya devam eder ("bilerek
+  geçildi"; `program-feedback.ts` okur).
+- **`DonePanel` kalktı** (inceleme): olağan akışta çizilmiyordu (son setten sonra ekran biten hareketin odağında kalır,
+  odaksız liste çizilir). Tek yolu, planda satırı olmayan birimin odağıydı (plan dışı kayıt: başka cihazda plan verisi
+  gelmeden eklenen hareket, PT'nin programdan kaldırdığı satırın kaydı) ve orada yanlışlıkla "Bütün hareketler bitti"
+  diyordu. Kural `workout-flow.ts`'te, testli: birim yalnız üyelerinden birinin günün planında satırı varsa açılır
+  (`hasPlanRow`). Plan bloklarının birimlerinde (biten, gruplu, üyesi bitmiş, muadilli de) her üyenin satırı vardır;
+  yalnız `workoutUnits`'in plan dışı birimlerinde yok. `validFocus` onu geçersiz sayar (ekran listeyi çizer, geçersiz
+  odak effect'i adresi düşürür); `listView`'ın "şu an"ı, `nextUnitAfter` ve `firstSkippedKey` onu seçmez ("Devam et",
+  açılış kuralı ve kendiliğinden geçiş açılamayan birimi açmaya çalışmasın); listede satırı setleriyle durur, dokunmak
+  bir şey yapmaz (`onOpenUnit` odak itmez). Kalan yalnız plan dışı kayıtsa alt çubukta "Antrenmanı bitir".
+
 ---
 
 ## C · Bugün

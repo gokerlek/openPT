@@ -758,6 +758,56 @@ describe('liste + odak: geçerli odak ve sıradaki birim', () => {
     assert.equal(validFocus(day, doc, null), null);
   });
 
+  test('plan dışı kayıt (planda satırı yok) açılmaz: odak, "şu an", sıradaki ve "Geçileni yap" onu seçmez; listede setleriyle durur', () => {
+    const day = threeDay();
+    const extra = rekeyExtra(addedRowFor({ key: 'push-up', exercise: PUSH_UP, devices: DEVICES, history: [] }), 'e_added1');
+    const extras = { [extraKey('e_added1', 'push-up')]: extra };
+    let doc = addExercise(day, start(day), { entryId: 'e_added1', extra, stamp: stamp(1), random: sequence() });
+    const live = effectiveDay(day, doc, extras);
+    doc = logFocused(live, doc, 'e_added1', 2); // son set eklenen harekette
+    // Plan verisi olan cihazda (etkin gün) satırı var: açılır ve "şu an" odur.
+    assert.equal(validFocus(live, doc, 'e_added1'), 'e_added1');
+    assert.equal(listView(live, doc).current, 'e_added1');
+    // Plan verisi gelmeyen cihazda (düz gün) plan dışı kayıt: odak geçersiz, "şu an" planın ilk bitmemiş birimi.
+    assert.equal(validFocus(day, doc, 'e_added1'), null);
+    const view = listView(day, doc, 'e_added1');
+    assert.equal(view.current, 'b_aaaaaa');
+    assert.deepEqual(view.items.map((item) => [item.key, item.state, `${item.done}/${item.planned}`]).at(-1), ['e_added1', 'pending', '1/3']);
+    assert.equal(nextUnitAfter(day, doc, 'b_aaaaaa'), 'b_bbbbbb');
+    // Kalan yalnız plan dışı kayıtsa "şu an" ve sıradaki yok (alt çubukta "Antrenmanı bitir"), antrenman bitmiş sayılmaz.
+    let rest = doc;
+    for (let minute = 3; minute <= 9; minute += 1) rest = logNext(day, rest, minute); // planın 7 seti
+    const left = listView(day, rest);
+    assert.deepEqual([left.current, left.allDone], [null, false]);
+    assert.equal(nextUnitAfter(day, rest, null), null);
+    // "Geçileni yap" atlanan plan dışı kaydı geçer, sıradaki atlanan planlı birimi açar.
+    const skipped = dropAt(day, dropAt(day, doc, 'e_added1', stamp(3)), 'b_bbbbbb', stamp(4));
+    assert.equal(firstSkippedKey(day, skipped), 'b_bbbbbb');
+    assert.equal(firstSkippedKey(effectiveDay(day, skipped, extras), skipped), 'e_added1');
+  });
+
+  test('biten, gruplu ve üyesi bitmiş birimin planda satırı var: odak geçerli', () => {
+    const day = dayWithBlocks([
+      { id: 'b_aaaaaa', kind: 'single', restSeconds: 90, rows: [{ id: 'r_aaaaaa', exerciseId: 'bench-press', sets: [{ min: 8, max: 10 }] }] },
+      {
+        id: 'b_eeeeee',
+        kind: 'superset',
+        restSeconds: 90,
+        rows: [
+          { id: 'r_ffffff', exerciseId: 'goblet-squat', sets: [{ min: 10, max: 12 }] },
+          { id: 'r_eeeeee', exerciseId: 'push-up', sets: [{ min: 8, max: 12 }, { min: 8, max: 12 }] },
+        ],
+      },
+    ]);
+    let doc = logFocused(day, start(day), 'b_aaaaaa', 1); // Bench bitti
+    doc = logFocused(day, doc, 'b_eeeeee', 2); // grubun tek setlik üyesi bitti, öteki sürüyor
+    assert.deepEqual([validFocus(day, doc, 'b_aaaaaa'), validFocus(day, doc, 'b_eeeeee')], ['b_aaaaaa', 'b_eeeeee']);
+    assert.equal(listView(day, doc).current, 'b_eeeeee');
+    doc = logFocused(day, logFocused(day, doc, 'b_eeeeee', 3), 'b_eeeeee', 4); // grup da bitti
+    assert.deepEqual([validFocus(day, doc, 'b_aaaaaa'), validFocus(day, doc, 'b_eeeeee')], ['b_aaaaaa', 'b_eeeeee']);
+    assert.deepEqual(listView(day, doc, 'b_eeeeee').items.map((item) => item.state), ['done', 'done']);
+  });
+
   test('biten birimden sonra sırada ilk bitmemiş; sona kalan birim başa döner', () => {
     const day = threeDay();
     let doc = logFocused(day, start(day), 'b_dddddd', 1);
@@ -841,7 +891,7 @@ describe('liste + odak: sıra ve atlama', () => {
     valid(moved);
   });
 
-  test('"Bu hareketi atla": Geçilenler\'e; "Geri al" sırayı ve durumu geri getirir', () => {
+  test('"Bu hareketi atla": atlananlara; "Geri al" sırayı ve durumu geri getirir', () => {
     const day = threeDay();
     const doc = logNext(day, start(day), 1);
     const result = dropWithUndo(day, doc, 'b_bbbbbb', stamp(2), sequence());
@@ -850,7 +900,7 @@ describe('liste + odak: sıra ve atlama', () => {
       listView(day, result.doc).items.map((item) => [item.key, item.state]),
       [['b_aaaaaa', 'current'], ['b_dddddd', 'pending'], ['b_bbbbbb', 'skipped']],
     );
-    // `dropAt` ile aynı yazım: Geçilenler'de ve "bilerek geçildi" (`skip.moved`; geri bildirim bunu okur).
+    // `dropAt` ile aynı yazım: atlananlarda ve "bilerek geçildi" (`skip.moved`; geri bildirim bunu okur).
     const dropped = result.doc.entries.find((entry) => entry.rowId === 'r_bbbbbb');
     assert.deepEqual([dropped?.status, dropped?.skip?.moved], ['skipped', true]);
     assert.deepEqual(result.doc, dropAt(day, doc, 'b_bbbbbb', stamp(2), sequence()));

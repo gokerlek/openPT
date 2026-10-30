@@ -10,7 +10,7 @@ import { cursorOf, cursorOverrides, ensureEntries, newRowEntryId } from './worko
 
 /**
  * Antrenmanın listesi ve atlama (tasarım §2.6) — saf: liste + odak ekranının listesi, "Sırayı değiştir",
- * "Bu hareketi atla" ve toast'taki "Geri al", atlananı geri alma, "Değiştir" (muadil), "Hareket ekle" ve
+ * "Bu hareketi atla" ve toast'taki "Geri al", atlananı geri alma, "Muadil seç" (muadil), "Hareket ekle" ve
  * bitişteki isteğe bağlı neden. Sıra değişiklikleri imlecin işleridir (`workout-cursor.ts`: birim tek hareket
  * ya da grubun tamamı); burası onları günün etkin planıyla çağırır.
  *
@@ -177,9 +177,10 @@ export type ListView = {
   /** Yapılış sırasında (atlanan birim `dropAt` ile sıranın sonuna iner). */
   items: ListItem[];
   /**
-   * Şu an: odak (günde olan, atlanmamış birim); yoksa yarım bırakılan birim (son kaydedilen çalışma setininki);
-   * yoksa planı bitmemiş ilk birim. Odaksız yalnız hepsi bittiyse (`allDone`) null: bekleyen "+ Set ekle" seti
-   * birimi "şu an" tutmaz.
+   * Şu an: odak (açılabilen birim, `validFocus`); yoksa yarım bırakılan birim (son kaydedilen çalışma setininki);
+   * yoksa planı bitmemiş ilk birim. Üçünde de yalnız açılabilen birim: plan dışı kayıt "şu an" olmaz (açılamaz;
+   * "Devam et" ve açılış kuralı onu açmaya çalışmasın). Odaksız null: hepsi bittiyse (`allDone`) ya da kalan yalnız
+   * plan dışı kayıtsa. Bekleyen "+ Set ekle" seti birimi "şu an" tutmaz.
    */
   current: string | null;
   doneSets: number;
@@ -190,8 +191,8 @@ export type ListView = {
 /**
  * Antrenmanın listesi (tasarım Faz 2): durum (✓ bitti, ▶ şu an, ○ sırada, ⤼ atlandı), ad, yapılan/planlanan set
  * ve son ağırlık (grupta ağırlığı olan ilk üyenin). Danışan sırayı atlayıp başka bir hareketi yarım bıraktıysa
- * "şu an" odur: listeye dönünce "Devam et" onu gösterir. Biten birim odakta da "bitti" görünür; günde olmayan ya
- * da atlanan birime odak yok sayılır.
+ * "şu an" odur: listeye dönünce "Devam et" onu gösterir. Biten birim odakta da "bitti" görünür; açılamayan birime
+ * (günde yok, atlandı, plan dışı kayıt) odak yok sayılır. Plan dışı kayıt listede setleriyle durur.
  */
 export function listView(day: WorkoutDay, doc: Pick<SessionDoc, 'entries' | 'order'>, focus?: string | null): ListView {
   const cursor = cursorOf(day, doc);
@@ -205,9 +206,9 @@ export function listView(day: WorkoutDay, doc: Pick<SessionDoc, 'entries' | 'ord
     }
   }
   const inProgress = latest ? cursor.units.find((unit) => unit.members.some((member) => member.entryId === latest?.entryId)) : undefined;
-  const active = inProgress && !isSkipped(inProgress) && !isFinished(inProgress) ? inProgress.key : null;
-  const firstOpen = cursor.units.find((unit) => !isSkipped(unit) && !isFinished(unit));
-  const current = focusAmong(cursor.units, focus) ?? active ?? firstOpen?.key ?? null;
+  const active = inProgress && openable(day, inProgress) && !isFinished(inProgress) ? inProgress.key : null;
+  const firstOpen = cursor.units.find((unit) => openable(day, unit) && !isFinished(unit));
+  const current = focusAmong(day, cursor.units, focus) ?? active ?? firstOpen?.key ?? null;
   const items = cursor.units.map((unit): ListItem => {
     const state: ListState = isSkipped(unit) ? 'skipped' : isFinished(unit) ? 'done' : unit.key === current ? 'current' : 'pending';
     return { ...itemOf(day, doc, unit, numbers), state, ...lastWeightOf(day, doc, unit) };
@@ -215,30 +216,46 @@ export function listView(day: WorkoutDay, doc: Pick<SessionDoc, 'entries' | 'ord
   return { items, current, doneSets: cursor.progress.doneSets, plannedSets: cursor.progress.plannedSets, allDone: cursor.allDone };
 }
 
-/** Odak geçerli mi: birim günde ve atlanmamış; değilse null (`listView`'ın ve ekranın tek kuralı). */
-function focusAmong(units: readonly CursorUnit[], focus: string | null | undefined): string | null {
+/**
+ * Birimin günün planında satırı var mı. Plan bloklarının birimlerinde her üyenin satırı vardır (gün her blok satırını
+ * `rows`'a yazar; muadil ve plan verisi gelen eklenen hareket de `effectiveDay`'de): biten, gruplu ya da şu anki üyesi
+ * bitmiş birim de. Yoksa plan dışı kayıttır (`workoutUnits`: başka cihazda plan verisi gelmeden eklenen hareket, PT'nin
+ * programdan kaldırdığı satırın kaydı): kartın gösterecek satırı yok.
+ */
+function hasPlanRow(day: WorkoutDay, unit: CursorUnit): boolean {
+  return unit.members.some((member) => member.rowId !== null && day.rows[member.rowId] !== undefined);
+}
+
+/** Odakta açılabilir mi: atlanmamış ve planda satırı var. */
+function openable(day: WorkoutDay, unit: CursorUnit): boolean {
+  return !isSkipped(unit) && hasPlanRow(day, unit);
+}
+
+/** Odak geçerli mi: birim günde ve açılabilir; değilse null (`listView`'ın ve ekranın tek kuralı). */
+function focusAmong(day: WorkoutDay, units: readonly CursorUnit[], focus: string | null | undefined): string | null {
   const unit = focus == null ? undefined : units.find((item) => item.key === focus);
-  return unit && !isSkipped(unit) ? unit.key : null;
+  return unit && openable(day, unit) ? unit.key : null;
 }
 
 /**
- * Adresteki odak gösterilir mi (`listView`'ın kuralı): birim günde ve atlanmamış. Değilse null: antrenman ekranı
- * listeyi çizer ve odağı adresten düşürür (başka cihazda silindi, adres elle değişti, birim atlandı).
+ * Adresteki odak gösterilir mi (`listView`'ın kuralı): birim günde, atlanmamış ve planda satırı var. Değilse null:
+ * antrenman ekranı listeyi çizer ve odağı adresten düşürür (başka cihazda silindi, adres elle değişti, birim atlandı,
+ * plan dışı kayıt).
  */
 export function validFocus(day: WorkoutDay, doc: Pick<SessionDoc, 'entries' | 'order'>, focus: string | null | undefined): string | null {
-  return focus == null ? null : focusAmong(cursorOf(day, doc).units, focus);
+  return focus == null ? null : focusAmong(day, cursorOf(day, doc).units, focus);
 }
 
 /**
  * Açılacak sıradaki birim (odakta kendiliğinden geçiş, odaktaki hareketi geçme; 8. görevin "Sıradaki" satırı):
  * odaksız listenin "şu an"ı (`listView`: yarım bırakılan birim, yoksa sırada planı bitmemiş ilk birim) `except`
- * dışında; "şu an" `except` ise sırada planı bitmemiş, atlanmamış ilk öteki birim. Bekleyen "+ Set ekle" seti
- * birimi sıraya sokmaz (yalnız fazladan seti kalan birime geri dönülmez). Yoksa null.
+ * dışında; "şu an" `except` ise sırada planı bitmemiş ilk öteki açılabilen birim. Bekleyen "+ Set ekle" seti
+ * birimi sıraya sokmaz (yalnız fazladan seti kalan birime geri dönülmez); plan dışı kayıt da açılmaz. Yoksa null.
  */
 export function nextUnitAfter(day: WorkoutDay, doc: Pick<SessionDoc, 'entries' | 'order'>, except: string | null): string | null {
   const view = listView(day, doc);
   if (view.current !== null && view.current !== except) return view.current;
-  return view.items.find((item) => (item.state === 'current' || item.state === 'pending') && item.key !== except)?.key ?? null;
+  return cursorOf(day, doc).units.find((unit) => unit.key !== except && openable(day, unit) && !isFinished(unit))?.key ?? null;
 }
 
 export type ListWindow<T> = {
@@ -328,9 +345,9 @@ export function restoreAt(day: WorkoutDay, doc: SessionDoc, key: string, stamp: 
   return normalizeSession({ ...restored, entries: restored.entries.map((entry) => (ids.has(entry.id) ? { ...entry, skip: { moved: true } } : entry)) });
 }
 
-/** Atlanan ilk birim (bitişte "Geçileni yap"); yoksa null. */
+/** Atlanan ilk birim (bitişte "Geçileni yap": geri alınıp açılır; plan dışı kayıt açılamaz, sayılmaz); yoksa null. */
 export function firstSkippedKey(day: WorkoutDay, doc: Pick<SessionDoc, 'entries' | 'order'>): string | null {
-  return cursorOf(day, doc).units.find(isSkipped)?.key ?? null;
+  return cursorOf(day, doc).units.find((unit) => isSkipped(unit) && hasPlanRow(day, unit))?.key ?? null;
 }
 
 /* --- sıra ve atlama (Faz 2: liste + odak) --- */
@@ -370,7 +387,7 @@ export function moveUnitTo(day: WorkoutDay, doc: SessionDoc, key: string, target
   }, stamp, random);
 }
 
-/** "Bu hareketi atla" (odakta ⋯): birim Geçilenler'e; toast'taki "Geri al" (`undoSkip`) için önceki sıra ve durum. */
+/** "Bu hareketi atla" (odakta ⋯): birim atlananlara; toast'taki "Geri al" (`undoSkip`) için önceki sıra ve durum. */
 export function dropWithUndo(day: WorkoutDay, doc: SessionDoc, key: string, stamp: Stamp, random?: Random): { doc: SessionDoc; undo: SkipUndo } | null {
   const { ready, units, unit, entryId } = prepared(day, doc, key, stamp, random);
   // Biten birim atlanmaz: "bitti" yerine "atlandı" görünür ve sonraki antrenmanın set artışı bastırılırdı.
@@ -450,7 +467,7 @@ export function optionText(extra: ExtraRow): string {
 
 /**
  * "Hareket ekle": yalnız bu antrenmana; kaydı hemen açılır (`added`, planlanan set sayısıyla) ve
- * yapılacakların sonuna (Geçilenler'in önüne) girer. `extra` bu kaydın kimliğiyle anahtarlanmış satır
+ * yapılacakların sonuna (atlananların önüne) girer. `extra` bu kaydın kimliğiyle anahtarlanmış satır
  * (`rekeyExtra`); `day` günün etkin planı.
  */
 export function addExercise(day: WorkoutDay, doc: SessionDoc, input: { entryId: string; extra: ExtraRow; stamp: Stamp; random?: Random }): SessionDoc {

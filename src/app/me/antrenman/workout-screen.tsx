@@ -84,7 +84,6 @@ import { startSetTimer, stopSetTimer, tickSetTimer } from '@/lib/workout-timer';
 import { WORKOUT_KEY, WORKOUT_OVERVIEW_KEY } from '../workout-overview';
 import { clearLocalWorkout, clearWorkoutCache, readLocalWorkout, readWorkoutCache, saveLocalWorkout, saveWorkoutCache, writerId } from '../workout-storage';
 import { AddExerciseSheet } from './add-exercise-sheet';
-import { DonePanel } from './done-panel';
 import { EntryPanel, type TimerView, type TransitionView } from './entry-panel';
 import { ExerciseCard } from './exercise-card';
 import { ProgramUpdateSheet, type ProgramAnswer } from './program-update-sheet';
@@ -154,7 +153,7 @@ function planChanged(local: LocalWorkout, fresh: WorkoutResponse): boolean {
 }
 
 /** "Bu hareketi atla" ve "Hareket ekle" toast'larının düğmeleri: dokunmatikte 44 px (`undo-toast.ts` gibi). */
-const TOAST_BUTTONS = { actionButton: 'touch:min-h-11 touch:px-3! touch:text-sm!', cancelButton: 'touch:min-h-11 touch:px-3! touch:text-sm!' };
+const TOAST_BUTTONS = { actionButton: 'touch:min-h-11 touch:px-3! touch:text-sm!' };
 
 const effective = new WeakMap<LocalWorkout, WorkoutDay>();
 
@@ -249,10 +248,11 @@ function addressFocus(): string | null {
  * ve "Muadil seç" (kendi geçmişiyle; kısıt notunda da "Değiştir"). Ekran günün etkin planıyla çalışır (`planOf`:
  * muadiller ve eklenenler). Atlama, sıra ve muadil de kendi başına gönderilmez; neden yalnız bitişte sorulur.
  *
- * "+ Set ekle" (§2.4): kartın tablosunun altında (grupta "Tur ekle") ve bitmiş antrenmanda "Devam et"ten
- * sonra (`DonePanel`: harekete set ya da yeni hareket). İstek telefonda durur (`extraRounds`), fazladan set
- * `extra` işaretiyle yazılır; iki antrenman üst üste plandan fazla set yapılırsa bitişte antrenöre set önerisi
- * olur (§6.1). Bekleyen fazladan set bitirmeyi engellemez; satırdaki ✕ ya da paneldeki "Kaldır" bırakır.
+ * "+ Set ekle" (§2.4): kartın tablosunun altında (grupta "Tur ekle") ve biten hareketin giriş panelinde ("Bu hareket
+ * bitti" · "Set ekle"; son setten sonra ekran o odakta kalır, bitiş sorusunun "Devam et"i sheet'i kapatır). İstek
+ * telefonda durur (`extraRounds`), fazladan set `extra` işaretiyle yazılır; iki antrenman üst üste plandan fazla set
+ * yapılırsa bitişte antrenöre set önerisi olur (§6.1). Bekleyen fazladan set bitirmeyi engellemez; satırdaki ✕ ya da
+ * paneldeki "Kaldır" bırakır.
  */
 export function WorkoutScreen({
   clientId,
@@ -857,8 +857,8 @@ export function WorkoutScreen({
     if (!local) return null;
     const plan = planOf(local);
     const doc = local.doc;
-    // Odak yoksa liste. Geçersiz odak (birim günde yok ya da atlandı) bir an bile çizilmez: liste çizilir, effect
-    // adresten düşürür (`listView`'ın kuralı).
+    // Odak yoksa liste. Geçersiz odak (birim günde yok, atlandı ya da plan dışı kayıt: kartın satırı yok) bir an bile
+    // çizilmez: liste çizilir, effect adresten düşürür (`listView`'ın kuralı). Geçerli odakta kartın satırı hep var.
     const shownFocus = validFocus(plan, doc, focus);
     const list = listView(plan, doc, shownFocus);
     const cursor = cursorOf(plan, doc, shownFocus);
@@ -889,10 +889,11 @@ export function WorkoutScreen({
     };
   }, [local, saving, focus]);
 
-  // Adresteki odak geçersiz (başka cihazda silindi, adres elle değişti, birim atlandı): listeye dönülür (`goToList`:
-  // altında bu sayfanın liste girdisi varsa geri, yoksa `replaceState`). Odak bu arada yine değiştiyse (`openFocus` ya
-  // da `goToList` kopyayı yazdı, adres henüz çizilmedi) dokunulmaz. Ara verilirken de dokunulmaz (`onPause`: adres
-  // `/me`'ye gidiyor); ara verme biterse effect yeniden çalışır. Odak eşitleme effect'inin altında kalmalı (yukarıda).
+  // Adresteki odak geçersiz (başka cihazda silindi, adres elle değişti, birim atlandı, plan dışı kayıt): listeye
+  // dönülür (`goToList`: altında bu sayfanın liste girdisi varsa geri, yoksa `replaceState`). Odak bu arada yine
+  // değiştiyse (`openFocus` ya da `goToList` kopyayı yazdı, adres henüz çizilmedi) dokunulmaz. Ara verilirken de
+  // dokunulmaz (`onPause`: adres `/me`'ye gidiyor); ara verme biterse effect yeniden çalışır. Odak eşitleme effect'inin
+  // altında kalmalı (yukarıda).
   useEffect(() => {
     if (pausing || !view || !focus || view.focus !== null || focusRef.current !== focus) return;
     goToList();
@@ -993,7 +994,7 @@ export function WorkoutScreen({
           // `history.back()`'in `popstate`'inde değişir.
           // Kaydedilen set geçişle (`startTransition`) bırakılır: Next adresi zaman uyumsuz eylem sarmalayıcısından
           // yazar (`setState` mikro görevde, geçişin dışında, normal öncelikle); geçiş daha düşük öncelikli olduğundan
-          // adres önce (ya da birlikte) çizilir, arada biten birimin "Hareketler bitti" paneli bir kare bile görünmez.
+          // adres önce (ya da birlikte) çizilir, arada biten birimin "Bu hareket bitti" paneli bir kare bile görünmez.
           // Ara verilirken (`pausingRef`) de kalınmış sayılmaz: odak itmek bekleyen `/me` geçişini düşürürdü.
           const stayed = !pausingRef.current && addressFocus() === next.unitKey && focusRef.current === next.unitKey;
           if (stayed) {
@@ -1412,7 +1413,7 @@ export function WorkoutScreen({
     [commit, guard],
   );
 
-  /** Listede geri alınan ya da geçilen satır bir an vurgulu (`DRAG.highlightMs`). */
+  /** Listede geri alınan, atlanan ya da taşınan satır bir an vurgulu (`DRAG.highlightMs`). */
   const highlightUnit = useCallback((key: string) => {
     setListHighlight(key);
     window.clearTimeout(highlightTimer.current);
@@ -1439,7 +1440,8 @@ export function WorkoutScreen({
   /**
    * Listede satıra dokunmak (ya da alt çubukta "Başla/Devam et"), eklenen hareketin "Şimdi yap"ı, bitişte "Geçileni
    * yap": hareket odakta açılır, sıra yazılmaz (Faz 2: sıra kendiliğinden değişmez). Atlanan hareket önce geri alınır;
-   * biten hareket setleriyle açılır.
+   * biten hareket setleriyle açılır. Plan dışı kayıt (planda satırı yok, `validFocus`) açılmaz ve geri alınmaz: kartın
+   * gösterecek satırı yok; odak itilseydi ekran listeyi çizer, geçersiz odak effect'i adresi hemen geri düşürürdü.
    */
   const onOpenUnit = useCallback(
     (key: string) => {
@@ -1448,7 +1450,10 @@ export function WorkoutScreen({
       const plan = planOf(current);
       const unit = cursorOf(plan, current.doc).units.find((item) => item.key === key);
       if (!unit) return;
-      if (unit.members.every((member) => member.skipped)) commitFlow(current, restoreAt(plan, current.doc, key, stampOf(current)), {}, key);
+      const skipped = unit.members.every((member) => member.skipped);
+      const doc = skipped ? restoreAt(plan, current.doc, key, stampOf(current)) : current.doc;
+      if (validFocus(plan, doc, key) === null) return;
+      if (skipped) commitFlow(current, doc, {}, key);
       openFocus(key);
       setFinishOpen(false);
       announce(unitTitle(plan, current.doc, unit));
@@ -1743,7 +1748,7 @@ export function WorkoutScreen({
   );
 
   /**
-   * "+ Set ekle" (§2.4; grupta tur) ya da bitmiş antrenmanda "Devam et"ten sonra bir harekete fazladan set:
+   * "+ Set ekle" (§2.4; grupta tur) ya da biten hareketin panelindeki "Set ekle": harekete fazladan set,
    * yalnız telefonda istenir (kendi başına gönderilmez); yapılan set `extra` işaretiyle yazılır. Planın setleri
    * bittiyse imleç fazladan sete geçer, bitirme sorusu kapanır.
    */
@@ -2062,16 +2067,7 @@ export function WorkoutScreen({
                     ownProgram={local.plan.source === 'own'}
                   />
                 </motion.div>
-              ) : (
-                <motion.div key="done" initial={{ opacity: 0 }} animate={{ opacity: 1, transition: tween(DURATION.base) }}>
-                  <DonePanel
-                    items={list.items.filter((item) => item.state === 'done' && addable(item.key))}
-                    disabled={saving !== null || addBusy !== null}
-                    onAddSet={onAddSet}
-                    onAddExercise={() => setAddOpen(true)}
-                  />
-                </motion.div>
-              )}
+              ) : null}
             </AnimatePresence>
           )}
         </main>

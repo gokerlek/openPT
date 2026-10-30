@@ -99,8 +99,8 @@ export type RowPrevious = {
   done: number;
   planned: number;
   /**
-   * Bilerek geçildi: atlandı ("Bu hareketi atla"; eski seanslarda sona alınıp yapılmadı). Erken bitişte yalnız
-   * yapılmadan kalan (nedeni bitişte sorulan) hareket geçilmiş sayılmaz.
+   * Bilerek geçildi: atlandı ("Bu hareketi atla"; listede geri alınıp yapılsa da işaret kalır; eski seanslarda sona
+   * alınıp yapılmadı). Erken bitişte yalnız yapılmadan kalan (nedeni bitişte sorulan) hareket geçilmiş sayılmaz.
    */
   skipped: boolean;
   reason?: SkipReason;

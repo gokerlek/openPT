@@ -11,7 +11,7 @@
 - **Çift dokunuş koruması:** alt panel her durum değişiminden sonra 400 ms dokunuş almaz; "Set bitti"nin yerinde dinlenmede düğme yok; ✓ panel değişmeden önce satırda görünür (§2.4, §2.5, §3).
 - **Hareket ekranı 375 px telefona sığar** (~624 px): "Bugün" satırı kalktı, hedef bir kez, "Önceki" sütunu, gerekçe ve ayar notu tek satır çip, panelde 32 px rakamlar (§2.4).
 - **Dinlenme:** zorluk hareket başına bir kez (Kolay · İyi · Zor), "Başaramadım" yok; 208 px sayaç; −10 sn bip, bitişte yinelenen alarm, kilit uyarısı ilk dinlenmede (§2.5).
-- **Geçme tek dokunuş:** "Hareketi geç ›" panelde; hareket sona alınır, 5 sn toast [Bugün yapma] [Geri al]; neden yalnız bitişte (§2.6).
+- **Geçme tek dokunuş:** "Hareketi geç ›" panelde; hareket sona alınır, 5 sn toast [Bugün yapma] [Geri al]; neden yalnız bitişte (§2.6). (Faz 2'de ⋯ "Bu hareketi atla", §2.6.)
 - **Bitiş:** "Programını güncelleyelim mi?" tek soru, hazır seçimle; erken bitişte "Sıradaki antrenman: Gün B · Değiştir"; "Antrenmanı sil" bitiş sheet'inden kalktı (§2.7).
 - **Silme:** onay düğmeleri telefonda üst üste, Vazgeç en altta; metin "kalır" der ve neyin silinmediğini söyler (§2.10, §4.5).
 - **Karusel 4 kart;** ilk kart PT'nin istediği dört sayıyı birlikte gösterir; birincil düğme "Sonraki ›" (§2.8).
@@ -610,7 +610,7 @@ Bu yüzden:
 **Başlangıç** ağ beklemez. Plan ve geçmiş `GET /api/me/workout?day=d_…` ile gelir (sunucu `planSession` + deneyim hesaplar; bugünkü hareketlerin son seans dosyaları önbellekten). Plan gelmezse (çevrimdışı) son okunan plan `localStorage`'dan, o da yoksa programın hedefleri ve boş ağırlıkla başlanır.
 
 ### 4.4 Devam etme
-- `/me` ya da `/me/antrenman` açılınca: yerelde etkin belge varsa kaldığı yerden devam edilir. Ekran şu anki hareketin odağıyla açılır: yarım bırakılan hareket (son kaydedilen çalışma setininki), yoksa sırada (`order`'la) planı bitmemiş ilk hareket; hepsi bittiyse liste. Liste altındadır: "‹ Liste" ya da geri tuşu ona döner; listeden geri tuşu "Ara verilsin mi?" diye sorar [Devam et] [Ara ver]. Odakta sıradaki set o hareketin `setSlots` sırasındaki ilk yapılmamış setidir. Dinlenme `restEndsAt` dolmadıysa sürer; dolduysa aşım gösterilir (§2.5).
+- `/me` ya da `/me/antrenman` açılınca: yerelde etkin belge varsa kaldığı yerden devam edilir. Ekran şu anki hareketin odağıyla açılır (adreste liste ya da odak yoksa; `?bitir=1`'de liste ve bitiş sheet'i): yarım bırakılan hareket (son kaydedilen çalışma setininki), yoksa sırada (`order`'la) planı bitmemiş ilk hareket; hepsi bittiyse liste. Liste altındadır: "‹ Liste" ya da geri tuşu ona döner; listeden geri tuşu "Ara verilsin mi?" diye sorar [Devam et] [Ara ver]. Odakta sıradaki set o hareketin `setSlots` sırasındaki ilk yapılmamış setidir. Dinlenme `restEndsAt` dolmadıysa sürer; dolduysa aşım gösterilir (§2.5).
 - Yerelde yok, sunucuda `active` var (başka cihaz, silinmiş depo) → "Kaldığın yerden devam et" sunucudan yükler. İkisi de varsa birleştirilir.
 - Sunucu 410 dönerse ya da 409 `finished` sorusu cevaplanınca yerel kopya silinir.
 - Yeni başlatırken başka etkin seans varsa v1 seçimi: "Kaldığın yerden devam et" / "Bunu bırak, yenisini başlat". Bırakılan seans `finished` + `unfinished` olur, silinmez.
@@ -788,7 +788,7 @@ Satır başına, `oneOff` olmayan çalışma setleriyle:
 | Tekrar/süre hedefi aşağı | bütün setler < min, üst üste 2 seans | doğrudan, düz setlerde | ✓ "Hedef 6–10" | değişmez |
 | Hedef değişimi piramit / back-off / AMRAP satırında | aynı algılama | **PT'ye öneri** | ✓ | gitmez |
 | **Set sayısı** | yapılan çalışma seti ≠ `plannedSetCount` (fazla: "+ Set ekle"; az: geçilen), aynı yönde üst üste 2 seans | PT'ye öneri | ✓ | gitmez |
-| **Hareket değişimi** | "Değiştir" ile başka hareket | PT'ye öneri ("Bundan sonra X") | ✗ | gitmez |
+| **Hareket değişimi** | "Muadil seç" ile başka hareket | PT'ye öneri ("Bundan sonra X") | ✗ | gitmez |
 | **Hareket geçildi** | aynı satır üst üste 2 seans geçildi (aynı neden) | PT'ye öneri ("Çıkar ya da değiştir") | ✓ | gitmez |
 | **Hareket eklendi** | seansa eklenen hareket | PT'ye öneri | ✗ | gitmez |
 | **Set artışı (algoritma)** | §5.6 | PT'ye öneri | ✓ | gitmez |

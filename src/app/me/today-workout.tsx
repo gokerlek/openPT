@@ -38,7 +38,8 @@ import { localWorkoutText, readPendingWater, savePendingWater, subscribeLocalWor
  *   antrenmanın suyu (çift sayılmaz).
  */
 
-// Sorgu ve program seçimi `workout-overview.tsx`'te (şerit de oradan okur); eski içe aktarmalar için buradan da.
+// Sorgu ve program seçimi `workout-overview.tsx`'te (şerit de oradan okur); buradan yalnız `WorkoutProgramProvider`
+// verilir (`(sekmeler)/page.tsx` onu Bugün'ün parçalarıyla birlikte buradan alır).
 export { WorkoutProgramProvider } from './workout-overview';
 
 /** Telefondaki yarım antrenman (aynı ve öteki sekmelerdeki değişiklikleri izler). */
