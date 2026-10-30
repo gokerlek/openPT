@@ -670,6 +670,19 @@ typecheck, lint, test · Commit: `feat(workout): the screen reads the focused un
 hareket akışta hâlâ ilk; set odaktaki harekete yazılıyor; hareket bitince sırada ilk bitmemiş açılıyor; bitmiş
 harekete dokununca set tablosu görünüyor.
 
+**Uygulamada (d7f4e2e) — plandan sapmalar:**
+- **Bitiş kuralı:** odakta birim bitti ve planın bütün setleri yapıldıysa, kalan yalnız başka birimde bekleyen
+  "+ Set ekle" seti olsa da bitiş sheet'i açılır (fazladan sete atlanmaz; istenirse hareket listeden açılır). 6b bunu
+  `nextUnitAfter` ile tek kurala bağladı.
+- **`moveUnitTo` öne çekildi:** akış sheet'inin sürüklemesi `reorderAt` yerine `moveUnitTo` (7. görevin işi); biten
+  ve atlanan birim yerinde kalır. 6b akış sheet'ini kaldırdığından sıra değiştirme 7. göreve kadar yok.
+- **Odaktaki hareketi geçmek odağı taşır:** "Hareketi geç ›" odaktaki birimdeyse odak sıradaki birime geçer (8.
+  görevin "Bu hareketi atla" kuralı öne çekildi), kalmadıysa odak düşer; toast'taki "Geri al" odağı geri getirir.
+- **`flowFor`:** akış sheet'inde "şimdi" odaktaki birimdi (sheet odakla tutarlı kalsın diye); 6b'de sheet'le
+  birlikte kalktı.
+- 6a incelemesinin bulguları (geri/ileri tuşunda sayaç ve geçiş, kendiliğinden geçişte fazladan set, zamanlayıcının
+  odağı adresten okuması, `openFocus`'un geçerlilik kuralı) 6b'de kapandı (aşağıda).
+
 ---
 
 ### Task 6b: Liste ana ekran ve açılış
@@ -710,6 +723,36 @@ listeye dönüyor, sıra aynı; listede üçüncü harekete dokununca o açılı
 (DevTools'ta ağ kapalı): satıra dokunma, "‹ Liste" ve geri tuşu ağ isteği yapmadan ve sayfayı yeniden yüklemeden
 çalışıyor.
 
+**Uygulamada (6b) — değişenler ve 6a incelemesinin bulguları:**
+- **Liste:** `workout-list.tsx` (`WorkoutList`, alt çubuk `WorkoutListBar`). Listenin başlık satırı "Hareketler" (7.
+  görevde sağına "Sırayı değiştir"). Kip adresten: odak yoksa ya da geçersizse liste (`validFocus`, `listView`'ın
+  kuralı; `focusIn` kalktı). `<main>` kipe göre anahtarlanır: listede aşağı kaydırılıp açılan kart başından görünür.
+- **`goToList()`:** odağın altında bu sayfanın ittiği liste girdisi varsa `history.back()`, yoksa `replaceState`. Ayırt
+  eden ref (`focusPushed`) yalnız açılış kuralında değil, listeden her odak itmesinde true olur: sayfa odak adresiyle
+  yenilenip "‹ Liste" odağı `replaceState` ile düşürdükten sonra satıra dokunulursa da altında liste vardır (değişmez:
+  itme yalnız listeden, odaktan odağa `replaceState`). Her `openFocus(null)` (geçersiz odak, odaktaki son hareketi
+  geçmek) bu yoldan; `openFocus` artık yalnız birim alır. Zaten listeye dönülüyorsa ikinci `back()` yok.
+- **Açılış kuralı:** ayrı effect, `doc.id` başına bir kez (`opened` state; 7. görevde yeni antrenmanın kimliği yeni
+  olduğundan ayrıca sıfırlamak gerekmez, `focusPushed`'ın değişmezi de bozulmaz). Karar verilene kadar ekran iskeletle
+  bekler: 'ready' çizimi effect'ten önce boyanır, yoksa liste bir kare görünüp odağa atlardı. `setTimeout` gerekmedi:
+  effect 'ready'nin yeniden çiziminde çalışır, Next'in yaması (AppRouter'ın `useEffect`'i) o zaman kurulu.
+  `?bitir=1`: işaret itilir, odak itilmez (sheet kapanınca liste). Telefonda kalmış süreli set sayacı açılan
+  hareketin değilse düşer.
+- **Sıradaki birim (`nextUnitAfter`, `workout-flow.ts`, testli):** odaksız listenin "şu an"ı, biten ya da geçilen
+  birim hariç; o da hariçse sırada planı bitmemiş ilk öteki birim. Fazladan seti saymaz. Kendiliğinden geçişte
+  (`after.nextKey` yerine) ve odakta geçmede; 8. görevin "Sıradaki" satırı için hazır. Kalmadıysa bitiş sheet'i.
+- **Geri/ileri tuşu** odağı değiştirince (eşitleme effect'i) gösterilen birim değiştiyse süreli set sayacı ve
+  istasyon geçişi düşer; canlı bölge "Liste" ya da hareketin adını söyler, klavye odağı taşınır. "‹ Liste" de sayacı
+  düşürür (sayaç odak ekranınındır). Eşitleme effect'i geçersiz odak effect'inin üstünde kalmalı (yorumda).
+- **Kendiliğinden geçişin zamanlayıcısı** odağı adresten (`location.search`) ve kopyadan birlikte denetler; başka
+  yere geçildiyse "Sıradaki" söylenmez, klavye odağı taşınmaz. `startTransition` yorumu düzeldi.
+- **7. göreve kalan:** ☰ ile birlikte sıra değiştirme de kalktı (sürükleme `FlowSheet`'teydi): "Sırayı değiştir"
+  kipi gelene kadar sıra değiştirilemez. `FlowSheet` kodu duruyor, kullanılmıyor (10. görev). Odakta "Ara ver" yok
+  (yerinde "‹ Liste"; listede "‹ Ara ver"), ⋯ menüsüyle gelir.
+- **8. göreve kalan:** tam dinlenme paneli açıkken "‹ Liste" adresi listeye çevirir ama panel listeyi örter
+  (küçültme 8. görevde); kendiliğinden geçişten önce listeye dönülürse dinlenme yine tam açılır. Biten birimin giriş
+  paneli bugünkü "Hareketler bitti".
+
 ---
 
 ### Task 7: Üst çubuk, ⋯ menüsü ve "Sırayı değiştir"
@@ -732,7 +775,8 @@ listeye dönüyor, sıra aynı; listede üçüncü harekete dokununca o açılı
    kalır: bugünkü `DragFlowRow` mantığı (dnd-kit, tutamaç `DotsSixVertical`, Alt+↑/↓) bu kipe taşınır;
    bırakmada `moveUnitTo(…, active.id, over.id)`, Alt+↑/↓'da `moveUnit`; biten/atlanan satır sürüklenmez ve hedef
    olmaz. Ekranda kalan `reorderAt` çağrısı (bugün `workout-screen.tsx` ~1613, akış sheet'inin sürüklemesi)
-   `moveUnitTo`'ya geçer; `reorderAt` biten ve atlanan birimi de taşıyabiliyor. "Bitti" ile kip kapanır. Kipte satıra dokunmak odak açmaz.
+   `moveUnitTo`'ya geçer; `reorderAt` biten ve atlanan birimi de taşıyabiliyor. (6a bu geçişi yaptı, 6b akış
+   sheet'iyle birlikte kaldırdı: ekranda sıra değiştiren çağrı yok, kip `moveUnitTo`/`moveUnit`'i yeniden bağlar.) "Bitti" ile kip kapanır. Kipte satıra dokunmak odak açmaz.
 
 typecheck, lint, test · Commit: `feat(workout): header menu and reorder mode`
 

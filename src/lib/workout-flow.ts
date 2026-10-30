@@ -244,10 +244,8 @@ export function listView(day: WorkoutDay, doc: Pick<SessionDoc, 'entries' | 'ord
   }
   const inProgress = latest ? cursor.units.find((unit) => unit.members.some((member) => member.entryId === latest?.entryId)) : undefined;
   const active = inProgress && !isSkipped(inProgress) && !isFinished(inProgress) ? inProgress.key : null;
-  const focused = focus == null ? undefined : units.get(focus);
-  const validFocus = focused && !isSkipped(focused) ? focused.key : null;
   const firstOpen = cursor.units.find((unit) => !isSkipped(unit) && !isFinished(unit));
-  const current = validFocus ?? active ?? firstOpen?.key ?? null;
+  const current = focusAmong(cursor.units, focus) ?? active ?? firstOpen?.key ?? null;
   const rank = new Map(cursor.units.map((unit, index) => [unit.key, index]));
   const items = [...flow.active, ...flow.skipped]
     .sort((a, b) => (rank.get(a.key) ?? 0) - (rank.get(b.key) ?? 0))
@@ -257,6 +255,32 @@ export function listView(day: WorkoutDay, doc: Pick<SessionDoc, 'entries' | 'ord
       return { ...item, state, ...lastWeightOf(day, doc, units.get(item.key)) };
     });
   return { items, current, doneSets: flow.doneSets, plannedSets: flow.plannedSets, allDone: cursor.allDone };
+}
+
+/** Odak geçerli mi: birim günde ve atlanmamış; değilse null (`listView`'ın ve ekranın tek kuralı). */
+function focusAmong(units: readonly CursorUnit[], focus: string | null | undefined): string | null {
+  const unit = focus == null ? undefined : units.find((item) => item.key === focus);
+  return unit && !isSkipped(unit) ? unit.key : null;
+}
+
+/**
+ * Adresteki odak gösterilir mi (`listView`'ın kuralı): birim günde ve atlanmamış. Değilse null: antrenman ekranı
+ * listeyi çizer ve odağı adresten düşürür (başka cihazda silindi, adres elle değişti, birim atlandı).
+ */
+export function validFocus(day: WorkoutDay, doc: Pick<SessionDoc, 'entries' | 'order'>, focus: string | null | undefined): string | null {
+  return focus == null ? null : focusAmong(cursorOf(day, doc).units, focus);
+}
+
+/**
+ * Açılacak sıradaki birim (odakta kendiliğinden geçiş, odaktaki hareketi geçme; 8. görevin "Sıradaki" satırı):
+ * odaksız listenin "şu an"ı (`listView`: yarım bırakılan birim, yoksa sırada planı bitmemiş ilk birim) `except`
+ * dışında; "şu an" `except` ise sırada planı bitmemiş, atlanmamış ilk öteki birim. Bekleyen "+ Set ekle" seti
+ * birimi sıraya sokmaz (yalnız fazladan seti kalan birime geri dönülmez). Yoksa null.
+ */
+export function nextUnitAfter(day: WorkoutDay, doc: Pick<SessionDoc, 'entries' | 'order'>, except: string | null): string | null {
+  const view = listView(day, doc);
+  if (view.current !== null && view.current !== except) return view.current;
+  return view.items.find((item) => (item.state === 'current' || item.state === 'pending') && item.key !== except)?.key ?? null;
 }
 
 export type ListWindow<T> = {

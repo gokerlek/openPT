@@ -24,12 +24,14 @@ import {
   localWorkoutDay,
   moveUnit,
   moveUnitTo,
+  nextUnitAfter,
   optionText,
   restoreAt,
   skipAt,
   skipMessage,
   swapRow,
   undoSkip,
+  validFocus,
   withExtraRounds,
   withFinishReason,
 } from './workout-flow.ts';
@@ -752,6 +754,54 @@ describe('liste + odak: liste', () => {
     const done = listView(day, doc);
     assert.deepEqual([done.current, done.allDone], [null, true]);
     assert.deepEqual(done.items.map((item) => item.state), ['done', 'done', 'done']);
+  });
+});
+
+describe('liste + odak: geçerli odak ve sıradaki birim', () => {
+  test('geçerli odak: günde ve atlanmamış birim; biten birim de geçerli', () => {
+    const day = threeDay();
+    let doc = start(day);
+    for (let minute = 1; minute <= 3; minute += 1) doc = logNext(day, doc, minute); // Bench bitti
+    doc = dropAt(day, doc, 'b_bbbbbb', stamp(4));
+    assert.equal(validFocus(day, doc, 'b_aaaaaa'), 'b_aaaaaa');
+    assert.equal(validFocus(day, doc, 'b_dddddd'), 'b_dddddd');
+    assert.equal(validFocus(day, doc, 'b_bbbbbb'), null);
+    assert.equal(validFocus(day, doc, 'b_zzzzzz'), null);
+    assert.equal(validFocus(day, doc, null), null);
+  });
+
+  test('biten birimden sonra sırada ilk bitmemiş; sona kalan birim başa döner', () => {
+    const day = threeDay();
+    let doc = logFocused(day, start(day), 'b_dddddd', 1);
+    doc = logFocused(day, doc, 'b_dddddd', 2); // Goblet (3.) bitti; Bench ve Plank bekliyor
+    assert.equal(nextUnitAfter(day, doc, 'b_dddddd'), 'b_aaaaaa');
+    for (let minute = 3; minute <= 5; minute += 1) doc = logFocused(day, doc, 'b_aaaaaa', minute); // Bench bitti
+    assert.equal(nextUnitAfter(day, doc, 'b_aaaaaa'), 'b_bbbbbb');
+  });
+
+  test('bekleyen "+ Set ekle" seti sıraya girmez; yalnız o kaldıysa null', () => {
+    const base = threeDay();
+    let doc = start(base);
+    for (let minute = 1; minute <= 3; minute += 1) doc = logNext(base, doc, minute); // Bench bitti
+    const day = withExtraRounds(base, addExtraRound(base, doc, 'b_aaaaaa'));
+    doc = logFocused(day, doc, 'b_bbbbbb', 4);
+    doc = logFocused(day, doc, 'b_bbbbbb', 5); // Plank bitti; imleç Bench'in fazladan setine dönerdi
+    assert.equal(nextSet(day, doc)?.extra, true);
+    assert.equal(nextUnitAfter(day, doc, 'b_bbbbbb'), 'b_dddddd');
+    doc = logFocused(day, doc, 'b_dddddd', 6);
+    doc = logFocused(day, doc, 'b_dddddd', 7);
+    assert.equal(nextUnitAfter(day, doc, 'b_dddddd'), null);
+  });
+
+  test('geçilen (yarım) birim hariç: yarım bırakılan başka birim varsa o, yoksa sırada ilk öteki', () => {
+    const day = threeDay();
+    let doc = logFocused(day, start(day), 'b_dddddd', 1); // Goblet 1/2 (yarım)
+    doc = logFocused(day, doc, 'b_aaaaaa', 2); // Bench 1/3: son set Bench'te
+    // Bench'i geçen: Bench "şu an" (son set onda) ama hariç; sırada ilk öteki Plank.
+    assert.equal(nextUnitAfter(day, doc, 'b_aaaaaa'), 'b_bbbbbb');
+    // Plank'i geçen: yarım bırakılan Bench.
+    assert.equal(nextUnitAfter(day, doc, 'b_bbbbbb'), 'b_aaaaaa');
+    assert.equal(nextUnitAfter(day, doc, null), 'b_aaaaaa');
   });
 });
 
