@@ -425,8 +425,14 @@ export function WorkoutScreen({
   const [armed, setArmed] = useState(false);
   // "Ara ver" sürüyor (`onPause`; ekran birazdan Bugün'e geçer): `'here'` bulunulan girdi Bugün'le değişiyor (dialog'dan ya
   // da korkuluksuz), `'back'` önce işaretsiz girdiye dönülüyor (⋯'den). İkisinde de "Ara verilsin mi?"nin düğmeleri kilitli;
-  // `'back'`te adres bir an işaretsiz olsa da dialog açılmaz (soru zaten cevaplandı).
+  // `'back'`te adres bir an işaretsiz olsa da dialog açılmaz (soru zaten cevaplandı). Sürerken ekran `inert`.
   const [pausing, setPausing] = useState<'here' | 'back' | null>(null);
+  // `pausing`'in eşzamanlı kopyası ve ekranın bağlı olduğu: ekranın `inert`'i dışında çalışanlar okur (genel Toaster'daki
+  // "Geri al"/"Şimdi yap", kendiliğinden geçişin zamanlayıcısı, arka plandaki tazeleme). Ara verilirken ya da ekran
+  // kapandıktan sonra (toast Bugün'de de görünür) adrese dokunmazlar: yamalı `pushState`'in `ACTION_RESTORE`'u bekleyen `/me`
+  // geçişini düşürürdü, Bugün'deyken de `workoutHref` Bugün'ün adresine odak iterdi.
+  const pausingRef = useRef<'here' | 'back' | null>(null);
+  const mountedRef = useRef(false);
 
   /**
    * Liste işaretini bu sayfanın işaretsiz girdisinin üstüne iter ve korkuluğu kurar (`armed`). `history.state`'e kendi
@@ -580,7 +586,8 @@ export function WorkoutScreen({
       fetchJson<WorkoutResponse>(`/api/me/workout?day=${encodeURIComponent(current.plan.dayId)}&program=${encodeURIComponent(planProgram(current.plan))}`)
         .then((data) => {
           const latest = localRef.current;
-          if (cancelled || !latest || latest.doc.id !== current.doc.id || !untouched(latest) || !planChanged(latest, data)) return;
+          // Ara verilirken yeniden kurulmaz: açılış kuralı işareti ve odağı yeniden iter, bekleyen `/me` geçişi düşerdi.
+          if (cancelled || pausingRef.current || !latest || latest.doc.id !== current.doc.id || !untouched(latest) || !planChanged(latest, data)) return;
           begin(data);
         })
         .catch(() => undefined);
@@ -991,7 +998,8 @@ export function WorkoutScreen({
           // Kaydedilen set geçişle (`startTransition`) bırakılır: Next adresi zaman uyumsuz eylem sarmalayıcısından
           // yazar (`setState` mikro görevde, geçişin dışında, normal öncelikle); geçiş daha düşük öncelikli olduğundan
           // adres önce (ya da birlikte) çizilir, arada biten birimin "Hareketler bitti" paneli bir kare bile görünmez.
-          const stayed = addressFocus() === next.unitKey && focusRef.current === next.unitKey;
+          // Ara verilirken (`pausingRef`) de kalınmış sayılmaz: odak itmek bekleyen `/me` geçişini düşürürdü.
+          const stayed = !pausingRef.current && addressFocus() === next.unitKey && focusRef.current === next.unitKey;
           if (stayed) {
             openFocus(followingKey);
             startTransition(() => setSaving(null));
@@ -1463,39 +1471,63 @@ export function WorkoutScreen({
    * gidilir (`pauseSteps`: odakta 2, listede 1), Bugün sonra onun yerine konur. Bulunulan girdi değişseydi işaretsiz girdi
    * altta kalırdı (listeden `B, [/me], F`): Bugün'de geri tuşu oraya iner, ekran yeniden bağlanır, açılış kuralı işareti ve
    * odağı yeniden iter, danışan antrenmana geri çekilirdi. `history.go` zaman uyumsuz: `replace` gelen `popstate`'te
-   * çağrılır. Tek seferlik dinleyici Next'inkinden sonra eklendi, sonra çalışır: Next işaretsiz girdiyi geri yükler
-   * (`ACTION_RESTORE`), `replace` onu değiştirir (eylem kuyruğu sırayla). Dönüş geri tuşunun listeden/odaktan işaretsiz
-   * girdiye dönüşüyle aynı yol (odak eşitleme effect'i sayacı düşürür, dinlenmeyi küçültür; sunucuya bir şey gitmez);
-   * `pausing` 'back' olduğundan işaretsiz adreste "Ara verilsin mi?" açılmaz. Ekran kapanırsa dinleyici kaldırılır.
+   * çağrılır. Tek seferlik dinleyici Next'inkinden sonra eklendi, sonra çalışır: o `popstate`'te Next'in kendi geri yüklemesi
+   * (`ACTION_RESTORE`) bizim `replace`'imizi ezmez. `/me` çizilmeden gelen başka bir geri yükleme ya da geçiş onu düşürür;
+   * bu yüzden ara verilirken ekran `inert`, toast'ların düğmeleri, zamanlayıcılar ve tazeleme adrese dokunmaz
+   * (`pausingRef`); tarayıcının geri/ileri tuşu ise ara vermeyi bitirir (aşağıda).
+   *
+   * Gösterilen hareket iki yolda da önce bırakılır (`leaveShown`, yalnız telefonda; sunucuya bir şey gitmez): süren set
+   * sayacı düşer, tam dinlenme küçülür, geri tuşuyla listeye/işaretsiz girdiye dönüşteki gibi. Yoksa ⋯'nin geri giden yolu
+   * bunu (işaretsiz girdi çizilince odak eşitleme effect'i) yapar, korkuluksuz doğrudan `replace` yapmazdı. `pausing` 'back'
+   * olduğundan işaretsiz adreste "Ara verilsin mi?" açılmaz.
+   *
+   * `replace` verildikten sonra ekran hâlâ bağlıyken gelen bir `popstate` (geri/ileri tuşu) onu geçersiz kılmıştır: ara
+   * verme biter (`pausing` düşer; yoksa ⋯ "Ara ver" sessizce bir şey yapmaz, listeden geri sormaz, dialog kilitli kalırdı).
+   * Bugün'e dönülürse ekran kapanır ve dinleyici kaldırılır; düşmesi zararsız. `popstate` işleyicisinde eklenen dinleyici o
+   * olayda çağrılmaz (DOM: dinleyiciler dağıtımın başında kopyalanır, "inner invoke"): ⋯ yolunda `replace`'i veren
+   * olay sıfırlamayı tetiklemez.
    *
    * Korkuluk yoksa (sayfa liste ya da odak adresiyle yüklendi) altındaki girdi bilinmez: bulunulan girdi değişir (kabul).
    * `replace` ileri geçmişi silmez: tarayıcının ileri tuşu antrenmanın girdilerine dönebilir (kabul). Ara verilirken ikinci
    * dokunuş bir şey yapmaz (⋯'den ikinci kez geri gidilmez); dialog'un düğmeleri kilitli (`busy`).
    */
   const pauseListener = useRef<(() => void) | null>(null);
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
       if (pauseListener.current) window.removeEventListener('popstate', pauseListener.current);
-    },
-    [],
-  );
+    };
+  }, []);
   const onPause = useCallback(() => {
-    if (pausing) return;
+    if (pausingRef.current) return;
     const steps = pauseSteps(window.location.search, { armed, focusPushed: focusPushed.current });
-    if (steps === 0) {
-      setPausing('here');
+    leaveShown(focusRef.current, null);
+    const once = (run: () => void) => {
+      const listener = () => {
+        pauseListener.current = null;
+        run();
+      };
+      pauseListener.current = listener;
+      window.addEventListener('popstate', listener, { once: true });
+    };
+    const toToday = () => {
       router.replace('/me');
+      once(() => {
+        pausingRef.current = null;
+        startTransition(() => setPausing(null));
+      });
+    };
+    const mode = steps === 0 ? 'here' : 'back';
+    pausingRef.current = mode;
+    setPausing(mode);
+    if (steps === 0) {
+      toToday();
       return;
     }
-    setPausing('back');
-    const back = () => {
-      pauseListener.current = null;
-      router.replace('/me');
-    };
-    pauseListener.current = back;
-    window.addEventListener('popstate', back, { once: true });
+    once(toToday);
     window.history.go(-steps);
-  }, [pausing, armed, router]);
+  }, [armed, router, leaveShown]);
 
   /** "Ara verilsin mi?"de "Devam et" (ya da dialog'u kapatmak): liste işareti geri konur, ikinci geri tuşu yine sorar. */
   const onStay = useCallback(() => {
@@ -1599,8 +1631,9 @@ export function WorkoutScreen({
           label: 'Geri al',
           onClick: () => {
             const latest = localRef.current;
-            // Bitiş (ya da iptal, değiştirme) gönderilirken geri alınmaz: belge yolda, meşgul bitiş sorusu kapanmamalı.
-            if (!latest || latest.doc.id !== sessionId || finishingRef.current) return;
+            // Bitiş (ya da iptal, değiştirme) gönderilirken geri alınmaz: belge yolda, meşgul bitiş sorusu kapanmamalı. Ara
+            // verilirken ya da ekran kapandıktan sonra da (toast Bugün'de kalır) hiçbir şey yapmaz (`pausingRef`, `mountedRef`).
+            if (!mountedRef.current || pausingRef.current || !latest || latest.doc.id !== sessionId || finishingRef.current) return;
             commitFlow(latest, undoSkip(planOf(latest), latest.doc, result.undo, stampOf(latest)), {}, key);
             // Son hareket atlanınca açılan bitiş sorusu kapanır (hareket yine yapılacak); açılmadıysa zamanlayıcısı açmaz.
             setFinishOpen(false);
@@ -1691,7 +1724,8 @@ export function WorkoutScreen({
           description: 'Yapılacakların sonunda',
           duration: WORKOUT.skipToastMs,
           classNames: TOAST_BUTTONS,
-          action: { label: 'Şimdi yap', onClick: () => onOpenUnit(entryId) },
+          // Ara verilirken ya da ekran kapandıktan sonra (toast Bugün'de kalır) hiçbir şey yapmaz (`pausingRef`, `mountedRef`).
+          action: { label: 'Şimdi yap', onClick: () => (mountedRef.current && !pausingRef.current ? onOpenUnit(entryId) : undefined) },
         });
       } catch (error) {
         toast.error(error instanceof ApiError && error.status === 0 ? 'Bağlantı yok; hareket eklenemedi.' : error instanceof ApiError ? error.message : 'Hareket eklenemedi.');
@@ -1952,8 +1986,10 @@ export function WorkoutScreen({
             ? { tone: 'offline' as const, text: `Şu an yoğun · ${unsent} set telefonda, birazdan gönderilecek` }
             : null;
 
+  // Ara verilirken ekrana dokunulmaz (`inert`): satır, alt çubuk ya da ⋯'deki öğeler adresi değiştirip bekleyen `/me`
+  // geçişini düşürmesin. "Ara verilsin mi?" portalda, etkilenmez.
   return (
-    <div className="mx-auto flex h-dvh w-full max-w-md flex-col overflow-hidden bg-background">
+    <div inert={pausing !== null} aria-busy={pausing !== null || undefined} className="mx-auto flex h-dvh w-full max-w-md flex-col overflow-hidden bg-background">
       <WorkoutHeader
         program={plan.source === 'own' && plan.programName ? plan.programName : null}
         day={doc.program?.dayName ?? plan.dayName}

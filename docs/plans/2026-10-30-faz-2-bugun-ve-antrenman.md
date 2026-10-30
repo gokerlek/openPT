@@ -912,11 +912,23 @@ atlayabilir; atlıyorsa bu not edilir (yenileme sonrası kabul edilen sınır).
   Bugün'de geri B'ye iner ve aynı tuzak. Şimdi korkuluk kuruluyken önce işaretsiz girdiye geri gidilir
   (`history.go(-n)`; `pauseSteps`, `workout-nav.ts`, testli: odakta 2, listede 1; korkuluk yoksa, odağı bu sayfa itmediyse ya
   da zaten işaretsiz girdideyse 0), `replace` gelen `popstate`'te çağrılır (tek seferlik dinleyici Next'inkinden sonra
-  eklenir: Next girdiyi geri yükler, `replace` onu değiştirir; ekran kapanırsa dinleyici kalkar). Dönüş geri tuşunun
-  listeden/odaktan işaretsiz girdiye dönüşüyle aynı yol: odak eşitleme effect'i sayacı düşürür, dinlenmeyi küçültür
-  (yalnız telefonda; sunucuya bir şey gitmez). Ara verilirken (`pausing`) ikinci dokunuş bir şey yapmaz, dialog açık kalır,
+  eklenir: o `popstate`'te Next'in kendi geri yüklemesi `replace`'i ezmez; ekran kapanırsa dinleyici kalkar). İki yolda da
+  gösterilen hareket önce bırakılır (`leaveShown`, yalnız telefonda; sunucuya bir şey gitmez): süren set sayacı düşer, tam
+  dinlenme küçülür, geri tuşunun listeye/işaretsiz girdiye dönüşündeki gibi (ilk düzeltmede bunu yalnız geri giden yol,
+  işaretsiz girdi çizilince yapıyordu). Ara verilirken (`pausing`) ikinci dokunuş bir şey yapmaz, dialog açık kalır,
   düğmeleri devre dışı ("Ara ver"de dönen gösterge) ve kapanmayı reddeder. `replace` ileri geçmişi silmez (tarayıcının
   ileri tuşu antrenmanın girdilerine dönebilir; kabul).
+- **Bekleyen `/me` geçişi düşerse** (ikinci inceleme): `/me` önbellekte değilse sunucu turu sürer (salonda saniyeler); o
+  arada işaretsiz girdi çizili ve `/me` çizilmeden gelen her geri yükleme ya da geçiş onu düşürür (yamalı `pushState`'in
+  `ACTION_RESTORE`'u, geri/ileri tuşu). Düşerse `pausing` kalır: ⋯ "Ara ver" sessizce bir şey yapmaz, listeden geri
+  sormaz, dialog kilitli kalır (yenilemeye kadar). Üç önlem: ara verilirken ekranın kökü `inert` (+ `aria-busy`; dialog
+  portalda); ekranın dışında çalışanlar adrese dokunmaz (`pausingRef`: toast'ların "Geri al"ı ve "Şimdi yap"ı, kendiliğinden
+  geçişin zamanlayıcısı, arka plandaki tazelemenin yeniden kurması); `replace`'ten sonra ekran hâlâ bağlıyken gelen
+  `popstate` ara vermeyi bitirir (tek seferlik dinleyici, aynı ref; Bugün'e dönülürse ekran kapanır, dinleyici kalkar).
+  `popstate` işleyicisinde eklenen dinleyici o olayda çağrılmaz (DOM'un "inner invoke"ı dinleyicileri dağıtımın başında
+  kopyalar): ⋯ yolunda `replace`'i veren olay sıfırlamayı tetiklemez. Toast'lar ekran kapandıktan sonra da Bugün'de
+  görünür: düğmeleri artık bir şey yapmaz (`mountedRef`); yoksa `workoutHref` Bugün'ün adresine (`/me?liste=1&hareket=…`)
+  odak iterdi.
 - **İşaretsiz girdide satıra dokunmak:** `openFocus` listeden iterken adreste işaret yoksa önce işareti iter (korkuluk da
   kurulur), sonra odağı: odağın altında hep işaretli liste. Seçildi, çünkü dialog modal olsa da altındaki toast'ların
   düğmeleri ("Geri al", "Şimdi yap") odak açabilir; ayrıca sayfa `?hareket=` ile yüklenip "‹ Liste" odağı `replaceState` ile
@@ -924,7 +936,9 @@ atlayabilir; atlıyorsa bu not edilir (yenileme sonrası kabul edilen sınır).
 - **Antrenmanı değiştir:** `restartWith` korkuluğu sıfırlar (tek sıfırlama); yeni antrenmanın açılış kuralı yeniden kurar. Sheet
   meşgulken ✕ gizli (`showCloseButton={!busy}`; Esc, sürükleme ve Vazgeç zaten reddediliyordu). **Kabul edilen
   sınır:** eski antrenmanın işaretsiz ve `?liste=1` girdileri geçmişte altta kalır; geri tuşuyla oraya inilirse ekran
-  telefondaki (yeni) antrenmanı gösterir: eski liste girdisi liste, eski işaretsiz girdi yine "Ara verilsin mi?" der.
+  telefondaki (yeni) antrenmanı gösterir: eski liste girdisi liste; eski işaretsiz girdi yalnız aynı bağlanmada (ekran
+  kapanmadan) "Ara verilsin mi?" der. "Ara ver"den sonra Bugün'de geri eski `L`'ye inilirse ekran korkuluksuz yeniden
+  bağlanır (adres işaretli: açılış kuralı itmez); bir geri daha eski `B`'de listeyi sormadan gösterir.
 - **Chrome'un geçmiş müdahalesi** (açılış effect'inin yorumunda): kullanıcı etkileşimi olmadan itilen girdiler tarayıcının geri
   tuşunda atlanabilir. Yalnız yenilemede değil, her sert yüklemede (işaretsiz adresin yenilenmesi, yer imi, yeni sekme, ana
   ekran kısayolu, bildirim) açılış kuralı sayfa dokunuş almadan iter; geri tuşu liste ve işaretsiz girdiyi atlayıp çıkabilir.
@@ -948,7 +962,8 @@ atlayabilir; atlıyorsa bu not edilir (yenileme sonrası kabul edilen sınır).
     `X`'e iner ve antrenman yeniden açılabilir (`X` işaretsizse açılış kuralıyla); kabul edilen sınır (yenileme maddesi).
   - İşaretsiz girdide satıra dokunmak (dialog'u atlayan toast ya da korkuluksuz liste): `B, L′, [F′]`; "‹ Liste" `L′`'ye.
   - Antrenmanı değiştir (odaktan): `B, L, [B₂]` (F'nin yerine yeni gün) → açılış: `B, L, B₂, L₂, [F₂]`; geri: `L₂`, sonra
-    `B₂`'de soru. ⋯ "Ara ver": `B, L, [/me], …`; Bugün'de geri eski `L`'ye iner (yukarıdaki kabul edilen sınır).
+    `B₂`'de soru. ⋯ "Ara ver": `B, L, [/me], …`; Bugün'de geri eski `L`'ye iner, ekran korkuluksuz bağlanır; bir geri daha
+    eski `B`'de liste sorulmadan görünür (yukarıdaki kabul edilen sınır).
 - **İnceleme bulguları (küçük):** "Bu hareketi atla"nın toast'ındaki "Geri al" bitiş (ya da iptal, değiştirme) gönderilirken
   hiçbir şey yapmaz (`finishingRef`; yoksa meşgul bitiş sorusunu kapatır, belgeyi yolda değiştirirdi).
 
