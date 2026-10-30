@@ -207,6 +207,25 @@ function restingRowOf(unit: CursorUnit, doc: SessionDoc): string | null {
   return best?.rowId ?? unit.members[0]?.rowId ?? null;
 }
 
+/**
+ * "Antrenmanı değiştir"in bitişi olmadı, antrenman sürüyor: değiştirmenin hazırlığı (`ensureEntries` ve yapılmayanlara
+ * "diğer" nedeni) geri alınır; kalsaydı sonraki bitişte yapılmayanlar antrenöre "diğer" nedeniyle bildirilirdi. Belge
+ * istek sürerken değişmediyse değiştirmeden önceki hâli; değiştiyse (o arada set yazıldı) yalnız hazırlığın yazdığı
+ * neden önceki hâline döner, sonradan yazılanlar kalır.
+ */
+function undoSwitchPrep(latest: SessionDoc, before: SessionDoc, prepared: SessionDoc, stamp: { at: string; by: string }): SessionDoc {
+  if (latest === prepared) return before;
+  const skipIn = (doc: SessionDoc, id: string) => doc.entries.find((entry) => entry.id === id)?.skip;
+  const entries = latest.entries.map((entry) => {
+    const written = skipIn(prepared, entry.id);
+    const was = skipIn(before, entry.id);
+    if (!written || written === was || entry.skip?.reason !== written.reason) return entry;
+    const { skip: _skip, ...rest } = entry;
+    return { ...rest, ...(was ? { skip: was } : {}), updatedAt: stamp.at, by: stamp.by };
+  });
+  return { ...latest, entries };
+}
+
 /** Adresteki odak (`window.location`): geri tuşu onu hemen değiştirir, `useSearchParams` ve `focusRef` sonra yetişir. */
 function addressFocus(): string | null {
   return focusOf(new URLSearchParams(window.location.search));
@@ -1115,8 +1134,9 @@ export function WorkoutScreen({
    * "Antrenmanı değiştir"in sonu (eski antrenman silindi ya da bitti, yerel kopyası düştü): seçilen gün açılır.
    * `router.replace` yalnız arama parametresini değiştirir ve `WorkoutScreen` yeniden bağlanmaz (layout-router'ın
    * önbellek anahtarı arama parametresini atar: `createRouterCacheKey(segment, true)`): eski antrenmanın durumu elle
-   * sıfırlanır. Bitişin meşguliyeti ve güncelleme sorusu kalkar, durdurulan gönderim kuyruğu yeniden çalışır (yoksa yeni
-   * antrenmanın setleri hiç gönderilmez, "Bitir" meşgul kalırdı), ekran yeni plan gelene kadar iskelette bekler. Açılış
+   * sıfırlanır. Bitişin meşguliyeti ve güncelleme sorusu kalkar, durdurulan gönderim kuyruğu sıfırlanır ve yeniden çalışır
+   * (yoksa yeni antrenmanın setleri hiç gönderilmez, "Bitir" meşgul kalırdı; eski kuyruğun durması, beklemesi ve sorunu
+   * yeni antrenmana taşınmaz), ekran yeni plan gelene kadar iskelette bekler. Açılış
    * kuralının bayrağı (`opened`) ve `focusPushed` de sıfırlanır: yeni antrenman Bugün'den açılmış gibi önce liste
    * işaretini, sonra ilk hareketin odağını iter (bayrak `doc.id` başına olduğundan yeni kimlikle zaten yeniden karar
    * verilirdi; sıfırlamak bunu kimliğe bırakmaz). Gün ve program sayfanın props'larıyla aynıysa (sunucu başka günün yarım
@@ -1135,6 +1155,7 @@ export function WorkoutScreen({
       focusPushed.current = false;
       focusRef.current = null;
       leftUnit.current = null;
+      outbox.reset();
       outbox.resume();
       const href = `/me/antrenman?program=${encodeURIComponent(target.program)}&day=${encodeURIComponent(target.day)}`;
       if (target.program === programParam && target.day === dayParam) {
@@ -1152,12 +1173,12 @@ export function WorkoutScreen({
    * önce seansa işlenir (`oneOff` / `lighter`). Başarılıysa özet karuseli açılır (§2.8, dock yok); program
    * güncellemesi bir an sonra bildirimle söylenir. Bugün'ün sayıları ("Bu hafta x/y", su, yarım kart) hemen
    * bitişin yanıtıyla güncellenir (`afterFinish`): Bugün'e dönünce eski sayı bir an bile görünmez, taze veri
-   * arkadan gelir.
+   * arkadan gelir. Bitirilemediyse (antrenman bu telefonda sürüyor) false.
    */
   const submitFinish = useCallback(
-    async (rotation: RotationChoice | null, health: FinishHealth | undefined, feedback: FinishFeedback | undefined) => {
+    async (rotation: RotationChoice | null, health: FinishHealth | undefined, feedback: FinishFeedback | undefined): Promise<boolean> => {
       let current = localRef.current;
-      if (!current) return;
+      if (!current) return false;
       if (feedback) {
         const flagged = withFeedbackFlags(current.doc, feedback.items, stampOf(current));
         if (flagged !== current.doc) {
@@ -1200,10 +1221,11 @@ export function WorkoutScreen({
             450,
           );
         }
+        return true;
       } catch (error) {
         if (error instanceof ApiError && error.status === 410) {
           leave('Bu antrenman silinmiş.', 'info');
-          return;
+          return true;
         }
         switchTarget.current = null;
         outbox.resume();
@@ -1216,6 +1238,7 @@ export function WorkoutScreen({
               ? error.message
               : 'Antrenman bitirilemedi. Biraz sonra tekrar dene.',
         );
+        return false;
       }
     },
     [clientId, outbox, leave, release, restartWith, router, commit, queryClient],
@@ -1273,15 +1296,18 @@ export function WorkoutScreen({
 
   /**
    * Sıra ya da hareket değişti: kendi başına gönderilmez (sonraki set yazımına ya da bitişe biner).
-   * Şu anki set değiştiyse taslak ve süreli setin sayacı düşer; dinlenme sürer ("Sıradaki" yenilenir).
+   * Gösterilen set değiştiyse taslak ve süreli setin sayacı düşer; dinlenme sürer ("Sıradaki" yenilenir).
    * `focusAfter`: işin ardından açılacak odak (`openFocus` ile çağıran yazar); verilmezse odak aynı kalır.
+   * Listede (önce ve sonra odak yok) set gösterilmez: sıra değiştirmek imlecin sıradaki setini oynatsa da yazılan taslak
+   * kalır (taslak yalnız kendi setinde geçerli, `nextSet`; hiçbir birimin kendi sıradaki seti sırayla değişmez).
    */
   const commitFlow = useCallback(
     (current: LocalWorkout, doc: SessionDoc, extra: Partial<LocalWorkout> = {}, focusAfter: string | null = focusRef.current) => {
       const before = nextSet(planOf(current), current.doc, null, focusRef.current);
       const next = { ...current, ...extra };
       const after = nextSet(dayFor(next, doc), doc, null, focusAfter);
-      const moved = before?.rowId !== after?.rowId || before?.setIndex !== after?.setIndex;
+      const shownSomething = focusRef.current !== null || focusAfter !== null;
+      const moved = shownSomething && (before?.rowId !== after?.rowId || before?.setIndex !== after?.setIndex);
       commit(withChange(moved ? { ...next, draft: null, timer: null } : next, doc, { send: false }));
       if (moved) setTransition(null);
       guard();
@@ -1339,7 +1365,8 @@ export function WorkoutScreen({
 
   /**
    * "Sırayı değiştir" kipinde ▲/▼ ya da Alt + ↑/↓: birim bir adım (`moveUnit`; biten ve atlanan yerinde kalır, aradan
-   * atlanır). Kendi başına gönderilmez (`commitFlow`, sonraki set yazımına biner). Canlı bölge "Plank bir yukarı" der.
+   * atlanır). Kendi başına gönderilmez (`commitFlow`, sonraki set yazımına biner). Canlı bölge yeni yerini söyler
+   * ("Plank 3. sırada", sürüklemedeki gibi).
    */
   const onMoveUnit = useCallback(
     (key: string, direction: -1 | 1) => {
@@ -1351,7 +1378,8 @@ export function WorkoutScreen({
       if (!unit || doc === current.doc) return;
       commitFlow(current, doc);
       highlightUnit(key);
-      announce(`${unitTitle(plan, current.doc, unit)} bir ${direction < 0 ? 'yukarı' : 'aşağı'}`);
+      const position = listView(plan, doc).items.findIndex((item) => item.key === key) + 1;
+      announce(`${unitTitle(plan, current.doc, unit)} ${position}. sırada`);
     },
     [saving, commitFlow, highlightUnit, announce],
   );
@@ -1605,6 +1633,7 @@ export function WorkoutScreen({
   /**
    * "Antrenmanı değiştir" (⋯ menüsü): set yoksa antrenman silinir (sunucuya yazıldıysa), varsa yapılanlar "başka
    * antrenmana geçti" nedeniyle bitirilir (`submitFinish`); ikisinde de ardından seçilen gün `restartWith` ile açılır.
+   * Bitirilemezse antrenman sürer ve değiştirmenin hazırlığı geri alınır (`undoSwitchPrep`).
    */
   const onSwitchWorkout = useCallback(
     async (program: string, day: string) => {
@@ -1636,7 +1665,10 @@ export function WorkoutScreen({
       const ready = ensureEntries(planOf(current), current.doc, stampOf(current));
       const changed = withFinishReason(planOf(current), ready, 'other', stampOf(current));
       commit(withChange(current, changed.doc, { send: false }));
-      await submitFinish(null, undefined, undefined);
+      if (await submitFinish(null, undefined, undefined)) return;
+      const latest = localRef.current;
+      if (!latest || latest.doc.id !== current.doc.id) return;
+      commit(withChange(latest, undoSwitchPrep(latest.doc, current.doc, changed.doc, stampOf(latest)), { send: false }));
     },
     [finishing, outbox, release, restartWith, commit, submitFinish],
   );
@@ -1753,6 +1785,7 @@ export function WorkoutScreen({
         sets={{ done: list.doneSets, planned: list.plannedSets }}
         water={water}
         status={status}
+        busy={finishing}
         onList={listMode ? null : onList}
         onFinish={() => setFinishOpen(true)}
         onSwitch={() => setSwitchOpen(true)}

@@ -217,7 +217,8 @@ function refocus(key: string, direction: -1 | 1, from: 'button' | 'handle') {
  * **Sırayı değiştir** (başlığın sağında; en az iki taşınabilen hareket varken): bitmemiş, atlanmamış her satırda ▲/▼
  * (`moveUnit`) ve sürükleme tutamacı (`moveUnitTo`; kısayol). Biten ve atlanan satır yerinde kalır, hedef olmaz.
  * Kipte satıra dokunmak odak açmaz; "Geri al" ve "Hareket ekle" gizlenir. "Bitti" kipi kapatır. Taşıma kendi başına
- * gönderilmez (ekran `commitFlow` ile yazar, sonraki set yazımına biner); canlı bölge "Plank bir yukarı" der.
+ * gönderilmez (ekran `commitFlow` ile yazar, sonraki set yazımına biner); canlı bölge yeni yerini söyler
+ * ("Plank 3. sırada").
  */
 export function WorkoutList({
   view,

@@ -24,6 +24,7 @@ export function WorkoutHeader({
   sets,
   water,
   status,
+  busy,
   onList,
   onFinish,
   onSwitch,
@@ -40,6 +41,8 @@ export function WorkoutHeader({
   sets: { done: number; planned: number };
   water: number;
   status: WorkoutStatus | null;
+  /** Antrenman bitiriliyor (ya da değiştiriliyor): "Antrenmanı değiştir" devre dışı. */
+  busy: boolean;
   /** Odakta "‹ Liste"; listede null. */
   onList: (() => void) | null;
   onFinish: () => void;
@@ -49,8 +52,9 @@ export function WorkoutHeader({
 }) {
   return (
     <header className="shrink-0 border-b pt-[env(safe-area-inset-top)]">
-      {/* Orta sütun daralabilir: uzun program adı kısalır, gün, süre, "Bitir" ve ⋯ ekranda kalır. */}
-      <div className="grid h-13 grid-cols-[1fr_minmax(0,auto)_1fr] items-center px-1">
+      {/* Yan sütunlar eşit ve sabit: başlık ekranın ortasında kalır ("‹ Liste" görünse de görünmese de). Orta sütun daralır:
+          uzun program adı kısalır, gün, süre, "Bitir" ve ⋯ ekranda kalır. */}
+      <div className="grid h-13 grid-cols-[6.5rem_minmax(0,1fr)_6.5rem] items-center px-1">
         {onList ? (
           <Button variant="ghost" className="h-11 justify-self-start px-2" onClick={onList}>
             <CaretLeft data-icon="inline-start" weight="bold" />
@@ -59,10 +63,10 @@ export function WorkoutHeader({
         ) : (
           <span aria-hidden />
         )}
-        <p className="flex min-w-0 font-heading font-semibold whitespace-nowrap tabular-nums">
+        <p className="flex max-w-full min-w-0 justify-self-center font-heading font-semibold whitespace-nowrap tabular-nums">
           {program ? <span className="truncate">{program}</span> : null}
           <span className="shrink-0">
-            {program ? ' · ' : ''}
+            {program ? '\u00a0· ' : ''}
             {day} · {elapsed}
           </span>
         </p>
@@ -75,7 +79,7 @@ export function WorkoutHeader({
               <DotsThree weight="bold" className="size-5" />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="min-w-56">
-              <DropdownMenuItem className="min-h-11" onClick={onSwitch}>
+              <DropdownMenuItem className="min-h-11" disabled={busy} onClick={onSwitch}>
                 <ArrowsLeftRight />
                 Antrenmanı değiştir
               </DropdownMenuItem>
@@ -105,7 +109,7 @@ export function WorkoutHeader({
           {status.tone === 'offline' ? <CloudSlash className="size-4 shrink-0" /> : <WarningCircle className="size-4 shrink-0" />}
           <span className="min-w-0 flex-1">{status.text}</span>
           {status.retry ? (
-            <Button variant="ghost" className="-mr-2 h-9 px-2" onClick={onRetry}>
+            <Button variant="ghost" className="-mr-2 h-11 px-2" onClick={onRetry}>
               Tekrar dene
             </Button>
           ) : null}

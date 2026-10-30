@@ -138,6 +138,17 @@ function createRunner(get: () => Options, report: (problem: OutboxProblem) => vo
       stopped = false;
       schedule();
     },
+    /**
+     * Başka antrenmana geçildi ("Antrenmanı değiştir"): eski kuyruğun durması (`halted`), beklemesi ve sorunu yeni
+     * antrenmana taşınmaz. Kuyruğu başlatmaz (`resume`).
+     */
+    reset() {
+      clearTimeout(timer);
+      halted = false;
+      attempt = 0;
+      notBefore = 0;
+      report(null);
+    },
     dispose() {
       clearTimeout(timer);
     },
