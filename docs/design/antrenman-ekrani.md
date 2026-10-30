@@ -82,13 +82,17 @@ Danışan yalnız telefondan kullanır (SPEC §6). Gezinme alttaki dock'ta; hesa
 Bugün kartı ──[Antrenmana başla]──► (sağlık modülü açık ve onaylıysa) Hazır oluşluk sheet'i · "Bugün atla"
    └──[Başka gün seç]──► gün sheet'i ──► seçilen günle başlar (PT'ye bildirim)
                  │
-                 ▼
-Hareket ekranı ──[Set bitti]──► ✓ satırda ──► Dinlenme (sayaç, Su içtim, ±15, atla;
-   ▲   │                                       hareketin son setinden sonra "nasıldı?")
-   │   └── son set ──► sıradaki hareket HEMEN (dinlenme onun üstünde sürer)
-   │
-   ├── [Hareketi geç ›] ──► sona alınır · toast [Bugün yapma] [Geri al]
-   └── ☰ Akış: şimdi yap · geç · Geçilenler
+                 ▼  şu anki hareketin odağıyla açılır (liste altında)
+Hareket ekranı (odak) ──[Set bitti]──► ✓ satırda ──► Dinlenme (sayaç, Su içtim, ±15, atla;
+   ▲   │                                              hareketin son setinden sonra "nasıldı?")
+   │   ├── son set ──► sıradaki hareket HEMEN (dinlenme onun üstünde sürer)
+   │   ├── ⋯ Bu hareketi atla ──► atlananlara · toast [Geri al] · sıradaki hareket
+   │   ├── ⋯ Muadil seç · Antrenmanı değiştir · Ara ver (Bugün'e; antrenman telefonda kalır)
+   │   └── ‹ Liste / geri tuşu ──► Liste (ana ekran)
+   │                                 ├── Sırayı değiştir (▲/▼, sürükle) · Hareket ekle · atlananda [Geri al]
+   │                                 ├── geri tuşu ──► "Ara verilsin mi?" [Devam et] [Ara ver]
+   │                                 └── satıra dokun ──► o hareketin odağı (sıra değişmez) ──┐
+   └─────────────┬────────────────────────────────────────────────────────────────────────────┘
                  │
       hepsi bitti ▼                         erken "Bitir" ▼
 "Antrenman tamamlandı, bitirelim mi?"     "Antrenmanı bitir?" · "Sıradaki antrenman: Gün B · Değiştir"
@@ -102,12 +106,12 @@ Hareket ekranı ──[Set bitti]──► ✓ satırda ──► Dinlenme (saya
 | Adres | Ekran | Dock |
 |---|---|---|
 | `/me` | Bugün | var |
-| `/me/antrenman` | Etkin antrenman (tek sayfa; hareket, dinlenme, sheet'ler) | yok |
+| `/me/antrenman` | Etkin antrenman (tek sayfa; liste + odak `?hareket=`, dinlenme, sheet'ler) | yok |
 | `/me/antrenman/ozet/[id]` | Özet karuseli (geçmişten de açılır) | yok |
 | `/me/gecmis`, `/me/gecmis/[id]` | Geçmiş listesi, detay | var |
 | `/me/ilerleme` | İlerleme | var |
 
-Başlatmak **tek dokunuştur**: v1'in hazırlık ekranı (C3) ve zorunlu yoklaması (C2) kalkar. Sıralama ve geçme hareket ekranına ve akış sheet'ine taşınır. Başlatmak ağ beklemez; dosya ilk set kaydıyla oluşur (§4.3).
+Başlatmak **tek dokunuştur**: v1'in hazırlık ekranı (C3) ve zorunlu yoklaması (C2) kalkar. Sıralama listeye ("Sırayı değiştir"), atlama hareket ekranının ⋯ menüsüne taşınır. Başlatmak ağ beklemez; dosya ilk set kaydıyla oluşur (§4.3).
 
 ---
 
@@ -168,10 +172,10 @@ Seçilen gün seansa `program.plannedDayId` ≠ `dayId` olarak yazılır → bil
 
 ```
 ┌─────────────────────────────────────────┐
-│ ‹ Ara ver       Gün A · 24:18    Bitir  │ 52 px; süre `startedAt`'ten
-│ ▰▰▰▰▰▰▱▱▱▱▱  Hareket 2/5 · 7/17 set  ☰ │ 44 px; ☰ akış sheet'i
+│ ‹ Liste         Gün A · 24:18  Bitir  ⋯ │ 52 px; süre `startedAt`'ten; listede solda boş
+│ ▰▰▰▰▰▰▱▱▱▱▱  Hareket 2/5 · 7/17 set     │ 44 px
 ├─────────────────────────────────────────┤
-│ Bench Press                   Değiştir  │ başlık ≤ 2 satır (~64 px)
+│ Bench Press                             │ başlık ≤ 2 satır (~64 px)
 │ (↑ +2,5 kg · hedefe ulaştın) (Sehpa 3.) │ tek satır çipler; dokununca açılır
 ├─────────────────────────────────────────┤
 │ Isınma 20×10 · 40×5              ✓ ✓    │ 40 px; bitince çipe katlanır
@@ -181,7 +185,7 @@ Seçilen gün seansa `program.plannedDayId` ≠ `dayId` olarak yazılır → bil
 │▌3     60 × 9      62,5      —           │ vurgu şeridi şu anki sette
 │ + Set ekle                              │ 44 px
 ├─────────────────────────────────────────┤ alt panel, yapışkan
-│ Set 3/3 · Hedef 8–10    Hareketi geç ›  │ 44 px
+│ Set 3/3 · Hedef 8–10                    │ 44 px
 │ [ − ]         62,5 kg         [ + ]     │ 56 px; rakam ≥ 32 px
 │ [ − ]         9 tekrar        [ + ]     │ 56 px
 │ [            Set bitti  ✓           ]   │ 56 px, tek dokunuş
@@ -200,7 +204,7 @@ Seçilen gün seansa `program.plannedDayId` ≠ `dayId` olarak yazılır → bil
 - **Stepper:** ağırlık adımı cihazın bir sonraki/önceki ayarı (`loadSpecFor` → ızgara; `gridOf`'un dışa açılması gerekir). Basılı tutunca tekrarlar; kutuya dokununca `inputMode="decimal"`.
 - **Yumuşak uyarılar** (engellemez): "Hedefin çok altında — doğru mu?"; `isOverload` → "Hedefin çok üzerindesin" [Onayla] [Düzelt]. Onaylanan set `overload: true` işaretlenir, PT'ye bildirim gider; hareket başına bir kez sorulur, sonra satırda gösterilir.
 - **Kaydedilmiş sete dokunmak:** "Seti düzelt" sheet'i. En üstte, stepper'lardan ve Kaydet'ten uzakta, metin olarak **"Seti sil"** (yıkıcı renk, onaylı; §2.10'daki metin). Altında kg, tekrar, zorluk; en altta [Kaydet].
-- **Başlık ve düğmeler** 44 px. "Değiştir" başlığın sağında; **"Hareketi geç ›"** panelin üst satırında, "Set 3/3"ün yanında: başparmak erişiminde ve "Değiştir"den uzakta (§2.6). ⋮ menüsü yok (düzenleyiciyle aynı ilke).
+- **Başlık ve düğmeler** 44 px. Üst çubuğun solunda **"‹ Liste"** (geri tuşuyla aynı yer: listeye döner, §2.6); sağda **Bitir** ve **⋯** menüsü. ⋯ odakta önce hareketin öğelerini verir: **Muadil seç** ve **Bu hareketi atla** (§2.6; yapılamıyorsa öğe devre dışı, nedeni altında: "Set kaydedildi, muadil seçilemez", "Bu hareket bitti"); her zaman **Antrenmanı değiştir** ve **Ara ver** (Bugün'e; antrenman telefonda kalır). Başlığın yanında düğme yok; kısıt notundaki "Değiştir" kalır.
 
 **Set türleri**
 
@@ -252,31 +256,34 @@ Seçilen gün seansa `program.plannedDayId` ≠ `dayId` olarak yazılır → bil
 - **Kilit uyarısı yerinde:** her antrenmanın ilk dinlenmesinde, Wake Lock yoksa ya da iOS'taysa panelde tek satır: "Ekranı kilitleme; kilitlenirse dinlenme bitişi çalmayabilir." Ayarlar'daki not kalır; antrenman ortasında Ayarlar okunmaz.
 - **Su içtim** tek düğmedir (v1'deki ikinci kopya yok): sayı atlar, "+1 · Geri al" hapı 3 sn durur; uzun basış geri alır. Üst çubukta yalnız sayı görünür (düğme değil). Geri al bir −1 dokunuşudur ve kalıcıdır (§4.2).
 
-### 2.6 Antrenman akışı (☰) ve geçme
+### 2.6 Antrenman listesi ve atlama
 ```
-│ ━━━━                                    │
-│ Antrenman akışı               7/17 set  │
-│ Alet doluysa geç: hareket sona alınır,  │
-│ sıra kaldığın yerden sürer.             │
-│ ✓ 1  Goblet Squat         3/3           │
-│ ▶ 2  Bench Press          2/3   şimdi   │
-│ ○ 3  Leg Press            0/3    [Geç]  │ satıra dokun = "Şimdi yap"
-│ ○ 4a Face Pull  ┐ Süperset 0/3   [Geç]  │
-│ ○ 4b Curl       ┘                       │
-│ ↻ 5  Calf Raise · sona alındı 0/3 [Geç] │
-│ ── Geçilenler ───────────────────────── │
-│ ↷ 6  Plank                    [Geri al] │
+┌─────────────────────────────────────────┐
+│                 Gün A · 24:18  Bitir  ⋯ │ listede solda boş
+│ ▰▰▰▰▰▰▱▱▱▱▱  Hareket 2/5 · 7/17 set     │
+├─────────────────────────────────────────┤
+│ Hareketler              Sırayı değiştir │ 44 px
+│ ✓ 1  Goblet Squat       3/3 set · 40 kg │
+│ ▶ 2  Bench Press        2/3 set · 60 kg │ "şu an"; satıra dokun = o hareketin odağı
+│ ○ 3  Leg Press   0/3 set · Geçen: 80 kg │
+│ ○    Süperset                   0/6 set │
+│   4a Face Pull                          │
+│   4b Curl                               │
+│ ⤼ 5  Calf Raise               [Geri al] │ atlanan sona iner
+│             + Hareket ekle              │ 48 px
+├─────────────────────────────────────────┤
+│ [     ▶  Devam et: Bench Press      ]   │ 56 px; hepsi bittiyse "Antrenmanı bitir"
 └─────────────────────────────────────────┘
 ```
-- **Hareketi geç ›** (panelin üst satırında ya da akıştaki [Geç]) **tek dokunuştur**: hareket listenin sonuna alınır, sıradaki hareket hemen gelir (§3). Sheet yok, neden sorulmaz. "Alet dolu", en sık durum, tek dokunuşta biter.
-- Ardından 5 sn toast: **"Calf Raise sona alındı · [Bugün yapma] [Geri al]"**. Set kaydedilmişse: "2/3 set yapıldı; kalanı sona alındı".
-- Sona alınmış ya da son kalan hareket yeniden geçilirse (ya da toast'ta "Bugün yapma") **Geçilenler**'e gider: "Calf Raise geçildi · [Geri al]".
+- **Liste ana ekrandır** (liste + odak): yapılış sırasında her hareket (grupta grubun tamamı) bir satır: durum (✓ bitti, ▶ şu an, ○ sırada, ⤼ atlandı), numara, ad, "2/3 set" ve son ağırlık (bugünkü; yoksa "Geçen: …"). Altta tek birincil düğme: "Başla: <ad>", "Devam et: <ad>" ya da hepsi bittiyse "Antrenmanı bitir".
+- **Satıra dokunmak** o hareketin odağını açar (hareket ekranı, §2.4); **sıra değişmez** ("Şimdi yap" yok). Biten hareket setleriyle açılır (düzeltmek ya da set eklemek için); atlanan önce geri alınır. "‹ Liste" ve geri tuşu listeye döner; listeden geri tuşu "Ara verilsin mi?" diye sorar (§4.4).
+- **Bu hareketi atla** (odakta ⋯) **tek dokunuştur**: hareket atlananlara gider (listenin sonunda ⤼), sıradaki hareket hemen açılır (§3); başka yapılacak kalmadıysa liste. Sheet yok, neden sorulmaz. "Alet dolu", en sık durum, tek dokunuşta biter. Biten harekette öğe devre dışıdır.
+- Ardından 5 sn toast: **"Calf Raise atlandı · [Geri al]"**; set kaydedilmişse altında "2/3 set yapıldı". Geri al hareketi ve odağı geri getirir. Listede atlanan satırda da [Geri al] (hareket sonda kalır).
 - **Neden** antrenman ortasında sorulmaz; yalnız bitişte ve hareket hâlâ yapılmamışsa, isteğe bağlı (§2.7). "Ağrı / rahatsızlık" nedeni yalnız `canRecordHealth(client, 'check_in')` doğruysa çıkar ve `health.json`'a yazılır (§4.2).
 - Geçilen hareket **eksik** sayılır (`incomplete`, tıkanma serisinde nötr), tıkanma sayılmaz.
-- **Şimdi yap:** satıra dokununca o harekete atlanır; sıra kaldığı yerden sürer (v1).
-- **Değiştir** (başlıkta): `alternatives.ts` muadilleri, cihaza göre gruplu; muadil kendi geçmişiyle önerilir (SPEC §7.2). Seansa `swappedFrom: rowId` yazılır, bitişte "Bundan sonra da bunu yapayım" PT önerisi olabilir (§6).
-- **Hareket ekle** (akışın altında, kütüphane sheet'i) yalnız bu seansa ekler; bitişte PT önerisine dönüşebilir.
-- Grupta sürükle-bırak yok; sıra "Şimdi yap" ve "Geç" ile değişir (v1'in hazırlık ekranındaki sürükleme gerekmez).
+- **Sırayı değiştir** (listenin başlığında; en az iki taşınabilen hareket varken): bitmemiş, atlanmamış her satırda ▲/▼ (44 px) ve sürükleme tutamacı (klavyede Alt + ↑/↓). Grup bütün olarak taşınır; biten ve atlanan satır yerinde kalır, hedef olmaz. Kipte satıra dokunmak odak açmaz; "Bitti" kipi kapatır.
+- **Muadil seç** (odakta ⋯; kısıt notunda "Değiştir"): `alternatives.ts` muadilleri, cihaza göre gruplu; muadil kendi geçmişiyle önerilir (SPEC §7.2). Seansa `swappedFrom: rowId` yazılır, bitişte "Bundan sonra da bunu yapayım" PT önerisi olabilir (§6).
+- **Hareket ekle** (listenin altında, kütüphane sheet'i) yalnız bu seansa ekler, yapılacakların sonuna; toast'taki "Şimdi yap" o hareketin odağını açar. Bitişte PT önerisine dönüşebilir.
 
 ### 2.7 Bitirme soruları
 
@@ -434,7 +441,7 @@ export const WORKOUT = {
   groupSlidePx: 12,     // grup üyeleri arası
   countUpMs: 700,       // özet sayılarının sayarak gelmesi
   waterUndoMs: 3000,    // "+1 · Geri al" hapı
-  skipToastMs: 5000,    // "sona alındı · Bugün yapma · Geri al"
+  skipToastMs: 5000,    // "<hareket> atlandı · Geri al", "<hareket> eklendi · Şimdi yap"
   tapGuardMs: 400,      // durum değişiminden sonra alt panelin dokunuş kilidi
   restWarnSeconds: 10,  // renk + tek bip
   alarmRepeatMs: 15_000,
@@ -455,8 +462,8 @@ export const WORKOUT = {
 | Dinlenme bitti | halka bir kez 1→1,06→1, renk | slow | yalnız renk | 3 bip (Web Audio), dokunulana kadar 15 sn'de bir, en çok 3 kez; Android `vibrate([80,60,80])`; "Dinlenme bitti. Hazırsın." |
 | **Hareket bitti → sıradaki** | eski kart x 0→−24 + saydamlık (fast, `EASE.exit`); yeni kart x 24→0 (base, `EASE.enter`); `AnimatePresence mode="popLayout"` | fast + base, `WORKOUT.slidePx` | çapraz geçiş, instant | `vibrate(20)` |
 | Grupta sonraki üye | aynı, 12 px | fast + base | çapraz geçiş | — |
-| Hareket geçildi (sona alındı) | kart sola çıkar, sıradaki gelir; toast alttan | fast + base; `WORKOUT.skipToastMs` | çapraz geçiş | — |
-| Akışta sıra değişimi | satır `layout` + vurgu | slow + `DRAG.highlightMs` | anında + vurgu | — |
+| Hareket atlandı | kart sola çıkar, sıradaki gelir; toast alttan | fast + base; `WORKOUT.skipToastMs` | çapraz geçiş | — |
+| Listede sıra değişimi | satır yeni yerinde, bir an vurgulu | `DRAG.highlightMs` | aynı | — |
 | Sheet aç / kapa | var olan Sheet | base / fast | saydamlık | — |
 | Karusel | Embla sürükleme; "Sonraki ›" ile geçiş | slow, `EASE.enter` | `duration: 0` | — |
 | Özet sayıları | 0 → değer | `WORKOUT.countUpMs` | son değer hemen | — |
@@ -503,7 +510,7 @@ client-<id>/
   "rotation": { "value": "advance", "updatedAt": "…", "by": "w_ab12cd" },  // advance | keep
   "adjust": "lighter",                   // isteğe bağlı, nötr; nedeni health.json'da
   "writer": "w_ab12cd",                  // son yazan cihaz; değişiklik karşılaştırmasına girmez
-  "order": { "value": ["e_…", "e_…"], "updatedAt": "…", "by": "w_…" },     // "sona al" sırası
+  "order": { "value": ["e_…", "e_…"], "updatedAt": "…", "by": "w_…" },     // "Sırayı değiştir"; atlanan sona iner
   "entries": [
     { "id": "e_q2m8xk", "rowId": "r_…", "blockId": "b_…", "exerciseId": "bench-press",
       "title": "Bench Press",            // adın o günkü hâli: kütüphaneden silinse de geçmiş okunur
@@ -603,7 +610,7 @@ Bu yüzden:
 **Başlangıç** ağ beklemez. Plan ve geçmiş `GET /api/me/workout?day=d_…` ile gelir (sunucu `planSession` + deneyim hesaplar; bugünkü hareketlerin son seans dosyaları önbellekten). Plan gelmezse (çevrimdışı) son okunan plan `localStorage`'dan, o da yoksa programın hedefleri ve boş ağırlıkla başlanır.
 
 ### 4.4 Devam etme
-- `/me` ya da `/me/antrenman` açılınca: yerelde etkin belge varsa imleçten devam edilir. İmleç, `setSlots` sırasında (`order`'la) ilk yapılmamış ve geçilmemiş settir. Dinlenme `restEndsAt` dolmadıysa sürer; dolduysa aşım gösterilir (§2.5).
+- `/me` ya da `/me/antrenman` açılınca: yerelde etkin belge varsa kaldığı yerden devam edilir. Ekran şu anki hareketin odağıyla açılır: yarım bırakılan hareket (son kaydedilen çalışma setininki), yoksa sırada (`order`'la) planı bitmemiş ilk hareket; hepsi bittiyse liste. Liste altındadır: "‹ Liste" ya da geri tuşu ona döner; listeden geri tuşu "Ara verilsin mi?" diye sorar [Devam et] [Ara ver]. Odakta sıradaki set o hareketin `setSlots` sırasındaki ilk yapılmamış setidir. Dinlenme `restEndsAt` dolmadıysa sürer; dolduysa aşım gösterilir (§2.5).
 - Yerelde yok, sunucuda `active` var (başka cihaz, silinmiş depo) → "Kaldığın yerden devam et" sunucudan yükler. İkisi de varsa birleştirilir.
 - Sunucu 410 dönerse ya da 409 `finished` sorusu cevaplanınca yerel kopya silinir.
 - Yeni başlatırken başka etkin seans varsa v1 seçimi: "Kaldığın yerden devam et" / "Bunu bırak, yenisini başlat". Bırakılan seans `finished` + `unfinished` olur, silinmez.
@@ -759,7 +766,7 @@ Hepsi doğruysa bitişteki sheet'te "Antrenörüne öner: Bench Press 3 → 4 se
   - `github/client.ts`: `sessionWriter()` (retry/throttle ayarı); `github/errors.ts`: `retryAfter`, `rateLimited`, `remaining`; `github/files.ts`: `writeJson` başlıkları döner, yeni `commitFiles` (Git Data API, tek commit).
 - **Yeni saf modüller** (Node test aracıyla; yol takma adıyla çalışma zamanı içe aktarması yok):
   - `exposure.ts`, `recommend.ts`;
-  - `workout-cursor.ts` (imleç, geç/sona al, şimdi yap, önceden dolu değerler);
+  - `workout-cursor.ts` (imleç, atlama ve geri alma, önceden dolu değerler);
   - `session-merge.ts` (alan başına, sıradan bağımsız; özellik testi);
   - `session-finish.ts` (bitişte dört dosyanın yeni hâli, idempotent);
   - `workout-summary.ts` (tonaj, kaslar, rekorlar, geçen seferle fark);
@@ -845,8 +852,8 @@ Program danışanınsa bütün değişiklikler (set sayısı, hareket değişimi
 
 **Erişilebilirlik**
 - Dokunma hedefleri: antrenmanda birincil 56 px, satır 48 px, başka yerde ≥ 44 px; aralarında ≥ 8 px. 375 px'te yatay taşma yok.
-- Stepper adları: "Ağırlık, 62,5 kilogram", "Tekrar, 10". Set tablosu gerçek `<table>`. Durum ikonları metinle birlikte (✓ "yapıldı", ↷ "geçildi"); renk tek başına bilgi taşımaz.
-- **Tek `aria-live` bölgesi** (düzenleyici ilkesi): set kaydı, "10 saniye kaldı", "Dinlenme bitti. Hazırsın.", "Bench Press tamamlandı. Sıradaki: Squat.", "Calf Raise sona alındı."
+- Stepper adları: "Ağırlık, 62,5 kilogram", "Tekrar, 10". Set tablosu gerçek `<table>`. Durum ikonları metinle birlikte (✓ "bitti", ⤼ "atlandı"); renk tek başına bilgi taşımaz.
+- **Tek `aria-live` bölgesi** (düzenleyici ilkesi): set kaydı, "10 saniye kaldı", "Dinlenme bitti. Hazırsın.", "Bench Press tamamlandı. Sıradaki: Squat.", "Calf Raise atlandı."
 - Odak yönetimi:
   - hareket değişince yeni kartın başlığı;
   - sheet kapanınca açan düğme;
