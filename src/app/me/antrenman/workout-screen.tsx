@@ -896,11 +896,12 @@ export function WorkoutScreen({
 
   // Adresteki odak geçersiz (başka cihazda silindi, adres elle değişti, birim atlandı): listeye dönülür (`goToList`:
   // altında bu sayfanın liste girdisi varsa geri, yoksa `replaceState`). Odak bu arada yine değiştiyse (`openFocus` ya
-  // da `goToList` kopyayı yazdı, adres henüz çizilmedi) dokunulmaz. Odak eşitleme effect'inin altında kalmalı (yukarıda).
+  // da `goToList` kopyayı yazdı, adres henüz çizilmedi) dokunulmaz. Ara verilirken de dokunulmaz (`onPause`: adres
+  // `/me`'ye gidiyor); ara verme biterse effect yeniden çalışır. Odak eşitleme effect'inin altında kalmalı (yukarıda).
   useEffect(() => {
-    if (!view || !focus || view.focus !== null || focusRef.current !== focus) return;
+    if (pausing || !view || !focus || view.focus !== null || focusRef.current !== focus) return;
     goToList();
-  }, [view, focus, goToList]);
+  }, [pausing, view, focus, goToList]);
 
   // Odaktan listeye dönüldü ("‹ Liste", geri tuşu, geçersiz odak, odaktaki hareketi atlayıp kalan olmaması): liste
   // çizilince az önce bırakılan hareketin satırına kaydırılır ve klavye odağı oraya taşınır (yoksa "şu an" satırı, o da
@@ -1021,7 +1022,7 @@ export function WorkoutScreen({
         guard(DURATION.slow + 50 + WORKOUT.tapGuardMs);
         later(DURATION.slow + 50, () => {
           setSaving(null);
-          setFinishOpen(true);
+          if (!pausingRef.current) setFinishOpen(true);
         });
       }
     },
@@ -1434,7 +1435,7 @@ export function WorkoutScreen({
       const sessionId = current.doc.id;
       later(DURATION.slow + 50, () => {
         const latest = localRef.current;
-        if (latest && latest.doc.id === sessionId && cursorOf(planOf(latest), latest.doc).allDone) setFinishOpen(true);
+        if (latest && !pausingRef.current && latest.doc.id === sessionId && cursorOf(planOf(latest), latest.doc).allDone) setFinishOpen(true);
       });
     },
     [later],
@@ -1473,8 +1474,9 @@ export function WorkoutScreen({
    * odağı yeniden iter, danışan antrenmana geri çekilirdi. `history.go` zaman uyumsuz: `replace` gelen `popstate`'te
    * çağrılır. Tek seferlik dinleyici Next'inkinden sonra eklendi, sonra çalışır: o `popstate`'te Next'in kendi geri yüklemesi
    * (`ACTION_RESTORE`) bizim `replace`'imizi ezmez. `/me` çizilmeden gelen başka bir geri yükleme ya da geçiş onu düşürür;
-   * bu yüzden ara verilirken ekran `inert`, toast'ların düğmeleri, zamanlayıcılar ve tazeleme adrese dokunmaz
-   * (`pausingRef`); tarayıcının geri/ileri tuşu ise ara vermeyi bitirir (aşağıda).
+   * bu yüzden ara verilirken ekran `inert`, toast'ların düğmeleri, zamanlayıcılar (kendiliğinden geçiş, bitiş sorusu),
+   * tazeleme ve geçersiz odak adrese dokunmaz (`pausingRef`, `pausing`); tarayıcının geri/ileri tuşu ise ara vermeyi
+   * bitirir (aşağıda).
    *
    * Gösterilen hareket iki yolda da önce bırakılır (`leaveShown`, yalnız telefonda; sunucuya bir şey gitmez): süren set
    * sayacı düşer, tam dinlenme küçülür, geri tuşuyla listeye/işaretsiz girdiye dönüşteki gibi. Yoksa ⋯'nin geri giden yolu
@@ -1483,7 +1485,9 @@ export function WorkoutScreen({
    *
    * `replace` verildikten sonra ekran hâlâ bağlıyken gelen bir `popstate` (geri/ileri tuşu) onu geçersiz kılmıştır: ara
    * verme biter (`pausing` düşer; yoksa ⋯ "Ara ver" sessizce bir şey yapmaz, listeden geri sormaz, dialog kilitli kalırdı).
-   * Bugün'e dönülürse ekran kapanır ve dinleyici kaldırılır; düşmesi zararsız. `popstate` işleyicisinde eklenen dinleyici o
+   * Bugün'e dönülürse ekran kapanır ve dinleyici kaldırılır; Next'in geri yüklemesi o `popstate`'te henüz çizilmediyse
+   * dinleyici yol değiştiği için bir şey yapmaz (yoksa işaretsiz girdinin dialog'u bir kare açılabilirdi). `popstate`
+   * işleyicisinde eklenen dinleyici o
    * olayda çağrılmaz (DOM: dinleyiciler dağıtımın başında kopyalanır, "inner invoke"): ⋯ yolunda `replace`'i veren
    * olay sıfırlamayı tetiklemez.
    *
@@ -1511,9 +1515,11 @@ export function WorkoutScreen({
       pauseListener.current = listener;
       window.addEventListener('popstate', listener, { once: true });
     };
+    const path = window.location.pathname;
     const toToday = () => {
       router.replace('/me');
       once(() => {
+        if (window.location.pathname !== path) return;
         pausingRef.current = null;
         startTransition(() => setPausing(null));
       });
@@ -1778,7 +1784,11 @@ export function WorkoutScreen({
       guard();
       announce('Fazladan set kaldırıldı');
       // Odakta yalnız odaktaki birim bitmiş olabilir: bitirme sorusu hiçbir yerde set kalmadıysa.
-      if (before && !after && !nextSet(planOf(next), current.doc)) later(DURATION.slow + 50, () => setFinishOpen(true));
+      if (before && !after && !nextSet(planOf(next), current.doc)) {
+        later(DURATION.slow + 50, () => {
+          if (!pausingRef.current) setFinishOpen(true);
+        });
+      }
     },
     [saving, commit, guard, announce, later],
   );
