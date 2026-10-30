@@ -842,6 +842,31 @@ typecheck, lint, test · Commit: `feat(workout): focus menu, reopen finished exe
 **Controller doğrulaması:** bitmiş harekete listeden dokununca setleri görünüyor, set düzeltilebiliyor; dinlenme
 sırasında "‹ Liste" listeyi açıyor ve şeritte geri sayım sürüyor; "Bu hareketi atla" listede ⤼.
 
+**Uygulamada (8, cafc314) ve incelemesinin bulguları** (`fix(workout): safer next line, switch waits, focus after rest`):
+- **"Sıradaki" satırı** ana düğmenin altında tam genişlikte şerit değil: üstünde çizgi (`mt-1 border-t pt-1`), düğme yazısı
+  kadar geniş ve ortada. Süreli set sayarken ve set kaydedilirken satır çizilmez (yeri boş kalır, panel kaymaz): "Bitir ■"i
+  ıskalayan dokunuş süren seti bırakmasın (`leaveShown` sayacı düşürür).
+- **"Antrenmanı değiştir"** sheet'i istek bitene kadar açık ve meşgul (`busy`: seçimler ve düğmeler devre dışı, "Antrenman
+  değiştiriliyor…", birincil düğmede dönen gösterge; Esc, sürükleme ve Vazgeç reddedilir). Sheet modal: alttaki ekranda o
+  arada set yazılamaz (başarıda kaybolurdu). `<main>`'i `inert` yapmak yerine bu seçildi: bekleme dokunulan yerde görünür,
+  hatada sheet açık kalır; FinishSheet'in düzeni. Başarıda `restartWith` kapatır.
+- **Listeye dönüş niyeti** (`returningToList`) yalnız gösterilen bir hareket bırakılınca yazılır (`leaveShown` bunu
+  döndürür; `onDropUnit` kendisi yazar, belge önce yazıldığından). İleri tuşuyla atlanmış hareketin adresine gelinince
+  (geçersiz odak, liste zaten görünür) yazılmaz; yazılsaydı liste effect'i çalışmaz, niyet kalır ve sonra klavye odağını
+  çalardı.
+- **Dinlenmeden çıkınca klavye odağı** tek yardımcıda (`focusAfterRest`; "Atla", "Sonraki sete geç", küçültme): listede
+  listenin başlığı, odakta "Set bitti" (sayarken "Bitir"), yoksa (biten hareket) hareketin başlığı.
+- **"Bu hareketi atla"nın "Geri al"ı** açılmış bitiş sorusunu kapatır; sheet'in zamanlayıcısı açmadan önce telefondaki son
+  hâle yeniden bakar (geri alındıysa açmaz).
+- **Gönderim kuyruğunun kuşağı:** `reset()` kuşağı artırır ve `inFlight`'ı bırakır; eski antrenmanın yoldaki PUT'u
+  dönünce (410/409 dahil) yanıtı yok sayılır, yeni antrenmana uygulanmaz.
+- **`undoSwitchPrep`** `workout-flow.ts`'te (`withFinishReason`'ın yanında), `normalizeSession` ile; `skip` değerle
+  karşılaştırılır. Testli: değişmeyen belge, istek sürerken yazılan set, önceki "sona alındı" işareti, `ensureEntries`'in
+  açtığı kayıtlar (kalır, nedensiz).
+- Kısıt notundaki "Değiştir" ikonu `Swap` ("Muadil seç" ile aynı); set kaydedilirken ⋯'deki "Muadil seç" ve "Bu hareketi
+  atla" devre dışı ("Set kaydediliyor…"). `onDropUnit`'in öncelik yorumu düzeldi: Next'in adres `setState`'i mikro görevde,
+  geçişin dışında; tıklamada büyük olasılıkla Sync, zamanlayıcıda Default, ikisi de geçişten öncelikli.
+
 ---
 
 ### Task 9: Geri tuşu

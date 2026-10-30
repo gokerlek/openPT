@@ -5,7 +5,7 @@ import { sessionDocSchema, type SessionDoc } from './schemas/session.ts';
 import { at, DAY_A, DAY_B, programFile, sessionDoc, sessionEntry, singleBlock, W1, workingSet } from './testing/session-fixtures.ts';
 import { BENCH, CRUNCH, DB_PRESS, dayWithBlocks, DEVICES, PLANK, PUSH_UP, workoutDay } from './testing/workout-fixtures.ts';
 import { mergeAll } from './session-merge.ts';
-import { addExtraRound, afterLog, cursorOf, easyShortcut, logSet, logWarmup, newSessionDoc, nextSet, setViews } from './workout-session.ts';
+import { addExtraRound, afterLog, cursorOf, easyShortcut, ensureEntries, logSet, logWarmup, newSessionDoc, nextSet, setViews } from './workout-session.ts';
 import { nextMemberLetter } from './workout-groups.ts';
 import {
   addExercise,
@@ -31,6 +31,7 @@ import {
   skipMessage,
   swapRow,
   undoSkip,
+  undoSwitchPrep,
   validFocus,
   withExtraRounds,
   withFinishReason,
@@ -390,6 +391,64 @@ describe('bitişte neden', () => {
       { rowId: 'r_dddddd', reason: 'pain' },
     ]);
     valid(pain.doc);
+  });
+});
+
+describe('"Antrenmanı değiştir" olmadı: hazırlık geri alınır', () => {
+  /** Ekranın hazırlığı (`onSwitchWorkout`): bütün satırların kaydı açılır, yapılmayanlara "diğer" yazılır. */
+  const prepare = (day: WorkoutDay, doc: SessionDoc, minute: number) =>
+    withFinishReason(day, ensureEntries(day, doc, stamp(minute), sequence(100)), 'other', stamp(minute)).doc;
+  const skips = (doc: SessionDoc) => Object.fromEntries(doc.entries.map((entry) => [entry.rowId, entry.skip]));
+
+  test('istek sürerken belge değişmediyse değiştirmeden önceki belge (aynı nesne)', () => {
+    const day = threeDay();
+    const before = logNext(day, start(day), 1);
+    const prepared = prepare(day, before, 2);
+    assert.deepEqual(skips(prepared), { r_aaaaaa: { reason: 'other', moved: false }, r_bbbbbb: { reason: 'other', moved: false }, r_dddddd: { reason: 'other', moved: false } });
+    assert.equal(undoSwitchPrep(prepared, before, prepared, stamp(3)), before);
+  });
+
+  test('o arada set yazıldıysa set kalır, hazırlığın nedeni kalkar', () => {
+    const day = threeDay();
+    const before = logNext(day, start(day), 1);
+    const prepared = prepare(day, before, 2);
+    const latest = logFocused(day, prepared, 'b_bbbbbb', 3);
+    const back = undoSwitchPrep(latest, before, prepared, stamp(4));
+    assert.deepEqual(skips(back), { r_aaaaaa: undefined, r_bbbbbb: undefined, r_dddddd: undefined });
+    assert.deepEqual(back.entries.map((entry) => [entry.rowId, entry.sets.length]).sort(), [['r_aaaaaa', 1], ['r_bbbbbb', 1], ['r_dddddd', 0]]);
+    assert.equal(back.entries.find((entry) => entry.rowId === 'r_bbbbbb')?.updatedAt, at(4), 'yeni saat hazırlığınkini ezer');
+    valid(back);
+  });
+
+  test('önceki "sona alındı" işareti geri gelir; o arada başka nedenle yazılan kayda dokunulmaz', () => {
+    const day = threeDay();
+    const dropped = dropWithUndo(day, logNext(day, start(day), 1), 'b_bbbbbb', stamp(2), sequence());
+    assert.ok(dropped);
+    const before = restoreAt(day, dropped.doc, 'b_bbbbbb', stamp(3));
+    assert.deepEqual(skips(before).r_bbbbbb, { moved: true });
+    const prepared = prepare(day, before, 4);
+    assert.deepEqual(skips(prepared).r_bbbbbb, { reason: 'other', moved: true });
+    const logged = logFocused(day, prepared, 'b_aaaaaa', 5);
+    const latest = { ...logged, entries: logged.entries.map((entry) => (entry.rowId === 'r_dddddd' ? { ...entry, skip: { reason: 'tired' as const, moved: false } } : entry)) };
+    const back = undoSwitchPrep(latest, before, prepared, stamp(6));
+    assert.deepEqual(skips(back), { r_aaaaaa: undefined, r_bbbbbb: { moved: true }, r_dddddd: { reason: 'tired', moved: false } });
+    assert.deepEqual(listView(day, back).items.map((item) => [item.key, item.state]), listView(day, logFocused(day, before, 'b_aaaaaa', 5)).items.map((item) => [item.key, item.state]));
+    valid(back);
+  });
+
+  test('`ensureEntries`\'in açtığı kayıtlar kalır: setsiz ve nedensiz, liste değiştirmeden önceki gibi', () => {
+    const day = threeDay();
+    const before = logNext(day, start(day), 1);
+    assert.equal(before.entries.length, 1);
+    const prepared = prepare(day, before, 2);
+    assert.equal(prepared.entries.length, 3);
+    const latest = logFocused(day, prepared, 'b_aaaaaa', 3);
+    const back = undoSwitchPrep(latest, before, prepared, stamp(4));
+    const opened = back.entries.filter((entry) => entry.rowId !== 'r_aaaaaa');
+    assert.deepEqual(opened.map((entry) => [entry.rowId, entry.status, entry.skip, entry.sets.length]).sort(), [['r_bbbbbb', 'pending', undefined, 0], ['r_dddddd', 'pending', undefined, 0]]);
+    assert.deepEqual(listView(day, back).items.map((item) => [item.key, item.state]), listView(day, logFocused(day, before, 'b_aaaaaa', 3)).items.map((item) => [item.key, item.state]));
+    assert.deepEqual(mergeAll([back]), back, 'kanonik biçimde (normalizeSession)');
+    valid(back);
   });
 });
 

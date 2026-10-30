@@ -587,6 +587,32 @@ export function withFinishReason(
   return { doc: normalizeSession({ ...ready, entries }), skippedRows };
 }
 
+const sameSkip = (a: SessionEntry['skip'], b: SessionEntry['skip']) => a?.reason === b?.reason && a?.moved === b?.moved;
+
+/**
+ * "Antrenmanı değiştir"in bitişi olmadı, antrenman sürüyor: değiştirmenin hazırlığı (`ensureEntries` ve yapılmayanlara
+ * "diğer" nedeni, `withFinishReason`) geri alınır; kalsaydı sonraki bitişte yapılmayanlar antrenöre "diğer" nedeniyle
+ * bildirilirdi. `before` değiştirmeden önceki belge, `prepared` hazırlanmış (bitişe gönderilen) belge, `latest` istek
+ * bittiğinde telefondaki belge.
+ *
+ * Belge istek sürerken değişmediyse (`latest === prepared`) önceki hâli döner. Değiştiyse (o arada set yazıldı) yalnız
+ * hazırlığın yazdığı neden önceki hâline döner (önceki `skip`, örneğin "sona alındı" işareti, geri gelir; yoksa kalkar),
+ * sonradan yazılanlar kalır: o arada başka neden yazılmış kayda dokunulmaz. `ensureEntries`'in açtığı kayıtlar kalır
+ * (setsiz, nedensiz; o arada sete de dönmüş olabilirler).
+ */
+export function undoSwitchPrep(latest: SessionDoc, before: SessionDoc, prepared: SessionDoc, stamp: Stamp): SessionDoc {
+  if (latest === prepared) return before;
+  const skipIn = (doc: SessionDoc, id: string) => doc.entries.find((entry) => entry.id === id)?.skip;
+  const entries = latest.entries.map((entry) => {
+    const written = skipIn(prepared, entry.id);
+    const was = skipIn(before, entry.id);
+    if (!written || sameSkip(written, was) || entry.skip?.reason !== written.reason) return entry;
+    const { skip: _skip, ...rest } = entry;
+    return { ...rest, ...(was ? { skip: was } : {}), updatedAt: stamp.at, by: stamp.by };
+  });
+  return normalizeSession({ ...latest, entries });
+}
+
 /* --- bitişte rotasyon (§2.7) --- */
 
 export type FinishRotation = {

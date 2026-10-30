@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion, useIsPresent, useReducedMotion } from 'motion/react';
-import { ArrowBendUpRight, ArrowDown, ArrowsLeftRight, ArrowUp, Bandaids, NotePencil, Play, Sparkle, Wrench } from '@phosphor-icons/react';
+import { ArrowBendUpRight, ArrowDown, ArrowUp, Bandaids, NotePencil, Play, Sparkle, Swap, Wrench } from '@phosphor-icons/react';
 import { Check, Equals, Plus, X } from '@/components/line-icons';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -300,7 +300,8 @@ export function ExerciseCard({
                   <p className="text-[0.8125rem] text-muted-foreground">{care.text}</p>
                   {row.care?.kind === 'avoid' && onSwap ? (
                     <Button className="h-11 w-fit" onClick={onSwap}>
-                      <ArrowsLeftRight data-icon="inline-start" />
+                      {/* ⋯ menüsündeki "Muadil seç" ile aynı ikon: aynı iş. */}
+                      <Swap data-icon="inline-start" />
                       Değiştir
                     </Button>
                   ) : null}

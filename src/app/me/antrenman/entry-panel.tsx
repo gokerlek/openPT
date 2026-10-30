@@ -28,16 +28,23 @@ export type FollowingView = { name: string; onOpen: () => void };
 
 /**
  * Giriş panelinin altında tek satır (8. görev, "Sıradaki her an görünür"): "Sıradaki: Goblet Squat ›" dokununca o hareketi
- * açar; sonra hareket kalmadıysa "Son hareket".
+ * açar; sonra hareket kalmadıysa "Son hareket". Ana düğmenin hemen altında tam genişlikte bir şerit değil: çizgiyle
+ * ayrılır ve düğme yazısı kadar geniş (ortada), "Set bitti"yi ıskalayan başparmak onu açmasın. `hidden`: süreli set
+ * sayarken ve set kaydedilirken satır yok (yanlış dokunuş süren seti bırakırdı); yeri boş kalır, panel kaymaz.
  */
-function NextUp({ following }: { following: FollowingView | null }) {
-  if (!following) return <p className="flex h-11 items-center justify-center text-sm text-muted-foreground">Son hareket</p>;
+function NextUp({ following, hidden }: { following: FollowingView | null; hidden: boolean }) {
   return (
-    <Button variant="ghost" className="h-11 w-full gap-1 px-3 text-sm font-normal text-muted-foreground" onClick={following.onOpen}>
-      <span className="shrink-0">Sıradaki:</span>
-      <span className="min-w-0 truncate font-medium text-foreground">{following.name}</span>
-      <CaretRight data-icon="inline-end" weight="bold" />
-    </Button>
+    <div className="mt-1 flex min-h-11 items-center justify-center border-t pt-1">
+      {hidden ? null : following ? (
+        <Button variant="ghost" className="h-11 w-auto max-w-full min-w-0 gap-1 px-3 text-sm font-normal text-muted-foreground" onClick={following.onOpen}>
+          <span className="shrink-0">Sıradaki:</span>
+          <span className="min-w-0 truncate font-medium text-foreground">{following.name}</span>
+          <CaretRight data-icon="inline-end" weight="bold" />
+        </Button>
+      ) : (
+        <p className="text-sm text-muted-foreground">Son hareket</p>
+      )}
+    </div>
   );
 }
 
@@ -302,7 +309,7 @@ export function EntryPanel({
       ) : (
         doneButton
       )}
-      <NextUp following={following} />
+      <NextUp following={following} hidden={running || frozen} />
     </div>
   );
 }

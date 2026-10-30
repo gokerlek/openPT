@@ -34,6 +34,7 @@ import {
   restoreAt,
   swapRow,
   undoSkip,
+  undoSwitchPrep,
   unitTitle,
   validFocus,
   withExtraRounds,
@@ -204,25 +205,6 @@ function restingRowOf(unit: CursorUnit, doc: SessionDoc): string | null {
     }
   }
   return best?.rowId ?? unit.members[0]?.rowId ?? null;
-}
-
-/**
- * "Antrenmanı değiştir"in bitişi olmadı, antrenman sürüyor: değiştirmenin hazırlığı (`ensureEntries` ve yapılmayanlara
- * "diğer" nedeni) geri alınır; kalsaydı sonraki bitişte yapılmayanlar antrenöre "diğer" nedeniyle bildirilirdi. Belge
- * istek sürerken değişmediyse değiştirmeden önceki hâli; değiştiyse (o arada set yazıldı) yalnız hazırlığın yazdığı
- * neden önceki hâline döner, sonradan yazılanlar kalır.
- */
-function undoSwitchPrep(latest: SessionDoc, before: SessionDoc, prepared: SessionDoc, stamp: { at: string; by: string }): SessionDoc {
-  if (latest === prepared) return before;
-  const skipIn = (doc: SessionDoc, id: string) => doc.entries.find((entry) => entry.id === id)?.skip;
-  const entries = latest.entries.map((entry) => {
-    const written = skipIn(prepared, entry.id);
-    const was = skipIn(before, entry.id);
-    if (!written || written === was || entry.skip?.reason !== written.reason) return entry;
-    const { skip: _skip, ...rest } = entry;
-    return { ...rest, ...(was ? { skip: was } : {}), updatedAt: stamp.at, by: stamp.by };
-  });
-  return { ...latest, entries };
 }
 
 /** Adresteki odak (`window.location`): geri tuşu onu hemen değiştirir, `useSearchParams` ve `focusRef` sonra yetişir. */
@@ -418,9 +400,12 @@ export function WorkoutScreen({
   const focusPushed = useRef(false);
   // Listeye dönülürken bırakılan hareket: liste çizilince o satıra kaydırılır ve klavye odağı oraya taşınır (aşağıda).
   const leftUnit = useRef<string | null>(null);
-  // Listeye dönüş niyeti: klavye odağı yalnız gerçekten listeye dönülünce taşınır ("‹ Liste", geri tuşu, geçersiz odak,
-  // hareketi atlayıp kalan olmaması: `goToList` ve odak eşitleme effect'i yazar, `openFocus` siler). Liste kendiliğinden
-  // çizildiyse (açılış, odak bir an geçersiz) klavye odağına dokunulmaz.
+  // Listeye dönüş niyeti: klavye odağı yalnız gösterilen bir hareketten listeye dönülünce taşınır ("‹ Liste", geri tuşu,
+  // odaktaki hareketi atlayıp kalan olmaması). Yalnız gösterilen hareket bırakıldığında yazılır (`goToList`'te
+  // `leaveShown`'ın sonucu, odak eşitleme effect'i, `onDropUnit`), liste effect'i ya da `openFocus` siler. Liste
+  // kendiliğinden çizildiyse ya da hiç bırakılmadıysa (açılış, odak bir an geçersiz, ileri tuşuyla atlanmış bir hareketin
+  // adresi) yazılmaz: liste zaten görünürken yazılan niyet effect'in bağımlılıklarını değiştirmez, kalır ve sonra (sıra
+  // değişince) klavye odağını çalardı.
   const returningToList = useRef(false);
 
   /**
@@ -428,12 +413,13 @@ export function WorkoutScreen({
    * devrenin istasyon geçişi düşer (o hareketindi). Geçerlilik `listView`'ın kuralı (`validFocus`): geçersiz odak
    * liste sayılır. Taslak zaten yalnız kendi setinde geçerli (`nextSet`). Listeye dönülüyorsa bırakılan hareket not
    * edilir (`leftUnit`) ve tam dinlenme küçülür (`mode: 'mini'`): dinlenme ekranı kilitlemez, listede alt çubuğun
-   * üstündeki şeritte sürer ("‹ Liste", geri tuşu, geçersiz odak; odak zaten geçersizse de).
+   * üstündeki şeritte sürer ("‹ Liste", geri tuşu, geçersiz odak; odak zaten geçersizse de). Gösterilen bir hareketten
+   * listeye dönüldüyse true (`goToList`'in niyeti).
    */
   const leaveShown = useCallback(
-    (from: string | null, to: string | null) => {
+    (from: string | null, to: string | null): boolean => {
       const current = localRef.current;
-      if (!current || from === to) return;
+      if (!current || from === to) return false;
       const plan = planOf(current);
       const shownFrom = validFocus(plan, current.doc, from);
       const shownTo = validFocus(plan, current.doc, to);
@@ -445,6 +431,7 @@ export function WorkoutScreen({
         setTransition(null);
       }
       if (next !== current) commit(next);
+      return shownFrom !== null && shownTo === null;
     },
     [commit],
   );
@@ -478,10 +465,10 @@ export function WorkoutScreen({
    */
   const goToList = useCallback(() => {
     const from = focusRef.current;
-    leaveShown(from, null);
+    const left = leaveShown(from, null);
     focusRef.current = null;
     if (from === null) return;
-    returningToList.current = true;
+    if (left) returningToList.current = true;
     if (addressFocus() === null) return;
     if (focusPushed.current) window.history.back();
     else window.history.replaceState(null, '', workoutHref(window.location.pathname, window.location.search, { focus: null }));
@@ -782,12 +769,32 @@ export function WorkoutScreen({
     [commit, guard, focusLater],
   );
 
-  // Dinlenme bitti ("Atla", "Sonraki sete geç"): klavye odağı "Set bitti"ye; listede (şeritteki "Atla") listenin başlığına.
+  /**
+   * Dinlenmeden çıkınca (bitti ya da küçüldü) klavye odağı: listede listenin başlığı; odakta "Set bitti" (süreli sette
+   * sayarken "Bitir"), o yoksa (biten hareket: "Bu hareket bitti" paneli) hareketin başlığı. Hedef çalışma anında seçilir:
+   * o arada kip değişmiş olabilir; odak bir an geçersizse liste çizilidir.
+   */
+  const focusAfterRest = useCallback(
+    (ms: number) =>
+      later(ms, () => {
+        const ids = focusRef.current === null ? [LIST_TITLE_ID] : ['set-done', 'exercise-title', LIST_TITLE_ID];
+        for (const id of ids) {
+          const element = document.getElementById(id);
+          if (element) {
+            element.focus({ preventScroll: true });
+            return;
+          }
+        }
+      }),
+    [later],
+  );
+
+  // Dinlenme bitti ("Atla", "Sonraki sete geç"; listede şeritteki "Atla").
   const endRest = useCallback(() => {
     updateRest(() => null);
     guard();
-    focusLater(focusRef.current === null ? LIST_TITLE_ID : 'set-done', DURATION.fast);
-  }, [updateRest, guard, focusLater]);
+    focusAfterRest(DURATION.fast);
+  }, [updateRest, guard, focusAfterRest]);
 
   /* --- görünüm --- */
 
@@ -1160,7 +1167,8 @@ export function WorkoutScreen({
    * "Antrenmanı değiştir"in sonu (eski antrenman silindi ya da bitti, yerel kopyası düştü): seçilen gün açılır.
    * `router.replace` yalnız arama parametresini değiştirir ve `WorkoutScreen` yeniden bağlanmaz (layout-router'ın
    * önbellek anahtarı arama parametresini atar: `createRouterCacheKey(segment, true)`): eski antrenmanın durumu elle
-   * sıfırlanır. Bitişin meşguliyeti ve güncelleme sorusu kalkar, durdurulan gönderim kuyruğu sıfırlanır ve yeniden çalışır
+   * sıfırlanır. Bitişin meşguliyeti, değiştirme sheet'i (istek bitene kadar açık kalmıştı) ve güncelleme sorusu kalkar,
+   * durdurulan gönderim kuyruğu sıfırlanır (eski antrenmanın yoldaki PUT'unun yanıtı artık yok sayılır) ve yeniden çalışır
    * (yoksa yeni antrenmanın setleri hiç gönderilmez, "Bitir" meşgul kalırdı; eski kuyruğun durması, beklemesi ve sorunu
    * yeni antrenmana taşınmaz), ekran yeni plan gelene kadar iskelette bekler. Açılış
    * kuralının bayrağı (`opened`) ve `focusPushed` de sıfırlanır: yeni antrenman Bugün'den açılmış gibi önce liste
@@ -1174,6 +1182,7 @@ export function WorkoutScreen({
       setFinishing(false);
       setUpdate(null);
       setFinishOpen(false);
+      setSwitchOpen(false);
       setSaving(null);
       setTransition(null);
       setLoad({ phase: 'loading' });
@@ -1350,12 +1359,19 @@ export function WorkoutScreen({
     highlightTimer.current = window.setTimeout(() => setFlowHighlight(null), DRAG.highlightMs);
   }, []);
 
-  /** Tüm hareketler yapıldıysa (geçilenler hariç) bitirme sorusu. */
+  /**
+   * Tüm hareketler yapıldıysa (geçilenler hariç) bitirme sorusu. Sheet bir an sonra açılır; o arada toast'taki "Geri al"
+   * hareketi geri getirdiyse (ya da başka antrenmana geçildiyse) açılmaz: zamanlayıcı telefondaki son hâle yeniden bakar.
+   */
   const finishIfDone = useCallback(
     (doc: SessionDoc) => {
       const current = localRef.current;
       if (!current || !cursorOf(planOf(current), doc).allDone) return;
-      later(DURATION.slow + 50, () => setFinishOpen(true));
+      const sessionId = current.doc.id;
+      later(DURATION.slow + 50, () => {
+        const latest = localRef.current;
+        if (latest && latest.doc.id === sessionId && cursorOf(planOf(latest), latest.doc).allDone) setFinishOpen(true);
+      });
     },
     [later],
   );
@@ -1436,9 +1452,12 @@ export function WorkoutScreen({
    *
    * Liste bir kare bile görünmez: belge ve odak tek geçişte (`startTransition`) yazılır. Atlanan birim adreste odakta
    * durur; belge adresten önce çizilseydi odak bir kare geçersiz kalır, ekran listeyi çizer, sonra yeni odağa atlardı.
-   * Next adresi geçişin dışında, normal öncelikle yazar (`onDone`'daki not): geçiş daha düşük öncelikli olduğundan önce
-   * adres çizilir (yeni odak eski belgede de geçerli: bitmemiş, atlanmamış birim), sonra belge. "Geri al"da tersi: belge
-   * önce (eşzamanlı), adres sonra; geri gelen birim adres yetiştiğinde geçerlidir.
+   * Next adresi geçişin dışında yazar: yamalı `pushState`/`replaceState`'in eylemi zaman uyumsuz, `setState`'i mikro
+   * görevde (`app-router-instance.js`), `startTransition`'ın kapsamı o zaman bitmiştir. Önceliği o anki olaydan gelir:
+   * ⋯ menüsündeki tıklamada büyük olasılıkla eşzamanlı (Sync: mikro görev tıklama olayı sürerken çalışır), bir
+   * zamanlayıcıdan çağrılsaydı varsayılan (Default; `onDone`'daki kendiliğinden geçiş). İkisi de geçişten öncelikli:
+   * önce adres çizilir (yeni odak eski belgede de geçerli: bitmemiş, atlanmamış birim), sonra belge. "Geri al"da tersi:
+   * belge önce (tıklamanın içinde, eşzamanlı), adres sonra (mikro görevde); geri gelen birim adres yetiştiğinde geçerlidir.
    */
   const onDropUnit = useCallback(
     (key: string) => {
@@ -1457,8 +1476,12 @@ export function WorkoutScreen({
         if (target) openFocus(target);
         else goToList();
       });
-      // Listede klavye odağı atlanan satıra (sonda, ⤼ ve "Geri al"); belge önce yazıldığından `leaveShown` onu bulamaz.
-      if (!target) leftUnit.current = key;
+      // Listede klavye odağı atlanan satıra (sonda, ⤼ ve "Geri al"); belge önce yazıldığından `leaveShown` onu bulamaz
+      // (gösterilen hareketten dönüldüğünü de bilemez: niyet burada yazılır).
+      if (!target) {
+        leftUnit.current = key;
+        returningToList.current = true;
+      }
       highlightUnit(key);
       announce(`${title} atlandı`);
       if (target) focusLater('exercise-title', DURATION.base);
@@ -1473,6 +1496,8 @@ export function WorkoutScreen({
             const latest = localRef.current;
             if (!latest || latest.doc.id !== sessionId) return;
             commitFlow(latest, undoSkip(planOf(latest), latest.doc, result.undo, stampOf(latest)), {}, key);
+            // Son hareket atlanınca açılan bitiş sorusu kapanır (hareket yine yapılacak); açılmadıysa zamanlayıcısı açmaz.
+            setFinishOpen(false);
             openFocus(key);
             highlightUnit(key);
             announce(`${title} geri alındı`);
@@ -1649,6 +1674,11 @@ export function WorkoutScreen({
    * "Antrenmanı değiştir" (⋯ menüsü): set yoksa antrenman silinir (sunucuya yazıldıysa), varsa yapılanlar "başka
    * antrenmana geçti" nedeniyle bitirilir (`submitFinish`); ikisinde de ardından seçilen gün `restartWith` ile açılır.
    * Bitirilemezse antrenman sürer ve değiştirmenin hazırlığı geri alınır (`undoSwitchPrep`).
+   *
+   * İstek sürerken sheet açık ve meşgul kalır (`finishing`; FinishSheet gibi): sheet modal olduğundan alttaki ekran
+   * dokunulmaz, bitişin gönderdiği belgeden sonra set yazılamaz (yazılsaydı başarıda kaybolurdu). `<main>`'i `inert`
+   * yapmak yerine bu: danışan beklediğini dokunduğu yerde görür, hatada sheet açık kalır (yeniden dene ya da vazgeç),
+   * ekrana ayrı bir kilit eklenmez. Başarıda `restartWith` sheet'i kapatır.
    */
   const onSwitchWorkout = useCallback(
     async (program: string, day: string) => {
@@ -1658,7 +1688,6 @@ export function WorkoutScreen({
         toast('Zaten bu antrenmandasın.');
         return;
       }
-      setSwitchOpen(false);
       if (!current.doc.entries.some((entry) => entry.sets.length > 0)) {
         setFinishing(true);
         outbox.stop();
@@ -1759,14 +1788,22 @@ export function WorkoutScreen({
   const followingItem = followingKey ? list.items.find((item) => item.key === followingKey) : undefined;
   const following = followingItem ? { name: itemName(followingItem), onOpen: () => onOpenUnit(followingItem.key) } : null;
   // Odakta ⋯: "Muadil seç" kartın satırında (odaktaki birimin şu anki üyesi; set kaydedildiyse ya da eklenen harekette
-  // nedeniyle devre dışı), "Bu hareketi atla" bitmemiş birimde (`dropWithUndo`'nun kuralı).
+  // nedeniyle devre dışı), "Bu hareketi atla" bitmemiş birimde (`dropWithUndo`'nun kuralı). Set kaydedilirken ikisi de
+  // devre dışı (işleyiciler o arada bir şey yapmaz; kart birazdan sıradaki sete ya da harekete geçer).
+  const savingNote = { note: 'Set kaydediliyor…' };
   const focusActions: FocusActions | null =
     shownFocus !== null && row
       ? {
-          swap: canSwap(local.plan, doc, row.rowId)
-            ? { onSelect: () => openSwap(row.rowId) }
-            : { note: local.plan.rows[row.rowId] ? 'Set kaydedildi, muadil seçilemez' : 'Bu hareketin muadili yok' },
-          skip: list.items.find((item) => item.key === shownFocus)?.state === 'done' ? { note: 'Bu hareket bitti' } : { onSelect: () => onDropUnit(shownFocus) },
+          swap: saving
+            ? savingNote
+            : canSwap(local.plan, doc, row.rowId)
+              ? { onSelect: () => openSwap(row.rowId) }
+              : { note: local.plan.rows[row.rowId] ? 'Set kaydedildi, muadil seçilemez' : 'Bu hareketin muadili yok' },
+          skip: saving
+            ? savingNote
+            : list.items.find((item) => item.key === shownFocus)?.state === 'done'
+              ? { note: 'Bu hareket bitti' }
+              : { onSelect: () => onDropUnit(shownFocus) },
         }
       : null;
 
@@ -1963,7 +2000,7 @@ export function WorkoutScreen({
                 onMinimize={() => {
                   updateRest((timer) => ({ ...acknowledgeRest(timer), mode: 'mini' }));
                   guard();
-                  focusLater('set-done', DURATION.fast);
+                  focusAfterRest(DURATION.fast);
                 }}
                 onAdjust={(seconds) => updateRest((timer) => adjustRest(acknowledgeRest(timer), seconds, Date.now()))}
                 onWater={onWater}
@@ -1995,6 +2032,7 @@ export function WorkoutScreen({
       />
       <WorkoutSwitchSheet
         open={switchOpen}
+        busy={finishing}
         onOpenChange={setSwitchOpen}
         onSwitch={(program, day) => void onSwitchWorkout(program, day)}
       />
