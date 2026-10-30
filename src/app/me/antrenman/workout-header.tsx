@@ -1,20 +1,44 @@
 'use client';
 
-import { ArrowsLeftRight, CaretLeft, CloudSlash, Drop, Pause, WarningCircle } from '@phosphor-icons/react';
+import { ArrowBendDownRight, ArrowsLeftRight, CaretLeft, CloudSlash, Drop, Pause, Swap, WarningCircle } from '@phosphor-icons/react';
 import { DotsThree } from '@/components/line-icons';
 import { Button } from '@/components/ui/button';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
 
 /** Gönderimin durumu (üst çubuğun alt satırı): çevrimdışı ya da yoğun (soluk), hata ya da oturum kapandı (uyarı). */
 export type WorkoutStatus = { tone: 'warn' | 'offline'; text: string; retry?: boolean };
 
+/** ⋯ menüsünde hareketin öğesi: açıksa işi; devre dışıysa nedeni (öğenin altında: "Set kaydedildi, muadil seçilemez"). */
+export type MenuAction = { onSelect: () => void } | { note: string };
+
+/** Odakta ⋯ menüsünün hareket öğeleri (8. görev): odaktaki hareket için **Muadil seç** ve **Bu hareketi atla**. */
+export type FocusActions = { swap: MenuAction; skip: MenuAction };
+
+/** Hareketin öğesi: devre dışıyken soluklaşmaz, nedeni okunur kalsın (adın altında, öğenin erişilebilir adının parçası). */
+function ActionItem({ action, icon, label }: { action: MenuAction; icon: React.ReactNode; label: string }) {
+  const note = 'note' in action ? action.note : null;
+  return (
+    <DropdownMenuItem
+      className="min-h-11 data-disabled:text-muted-foreground data-disabled:opacity-100"
+      disabled={note !== null}
+      onClick={'onSelect' in action ? action.onSelect : undefined}>
+      {icon}
+      <span className="flex min-w-0 flex-col py-1">
+        {label}
+        {note ? <span className="text-xs">{note}</span> : null}
+      </span>
+    </DropdownMenuItem>
+  );
+}
+
 /**
  * Antrenman ekranının üst çubuğu (Faz 2, tasarım `antrenman-ekrani.md` §2.4). İlk satır: solda odakta "‹ Liste" (geri
  * tuşuyla aynı yer), listede boş (başlık ortada kalır); ortada `[program ·] gün · mm:ss` (program adı daralır, gün ve
- * süre kalır); sağda **Bitir** ve ⋯ menüsü (**Antrenmanı değiştir**, **Ara ver**). İkinci satır: set ilerleme çubuğu,
- * "Hareket 2/5 · 7/17 set" ve su. Gönderim sorunu varsa üçüncü satır. Dinlenme paneli çubuğu örtmez: her an dokunulur.
+ * süre kalır); sağda **Bitir** ve ⋯ menüsü (odakta önce hareketin öğeleri **Muadil seç**, **Bu hareketi atla**; her
+ * zaman **Antrenmanı değiştir**, **Ara ver**). İkinci satır: set ilerleme çubuğu, "Hareket 2/5 · 7/17 set" ve su.
+ * Gönderim sorunu varsa üçüncü satır. Dinlenme paneli çubuğu örtmez: her an dokunulur.
  */
 export function WorkoutHeader({
   program,
@@ -25,6 +49,7 @@ export function WorkoutHeader({
   water,
   status,
   busy,
+  focusActions,
   onList,
   onFinish,
   onSwitch,
@@ -43,6 +68,8 @@ export function WorkoutHeader({
   status: WorkoutStatus | null;
   /** Antrenman bitiriliyor (ya da değiştiriliyor): "Antrenmanı değiştir" devre dışı. */
   busy: boolean;
+  /** Odakta hareketin öğeleri; listede null. */
+  focusActions: FocusActions | null;
   /** Odakta "‹ Liste"; listede null. */
   onList: (() => void) | null;
   onFinish: () => void;
@@ -63,11 +90,17 @@ export function WorkoutHeader({
         ) : (
           <span aria-hidden />
         )}
+        {/* Dar ekranda önce program adı, sonra gün adı kısalır; süre hep görünür. Ayraçlar bölünmez boşlukla: esnek öğenin
+            başındaki boşluk düşerdi. */}
         <p className="flex max-w-full min-w-0 justify-self-center font-heading font-semibold whitespace-nowrap tabular-nums">
-          {program ? <span className="truncate">{program}</span> : null}
-          <span className="shrink-0">
+          {program ? <span className="min-w-0 shrink-[1000] truncate">{program}</span> : null}
+          <span className="min-w-0 truncate">
             {program ? '\u00a0· ' : ''}
-            {day} · {elapsed}
+            {day}
+          </span>
+          <span className="shrink-0">
+            {'\u00a0· '}
+            {elapsed}
           </span>
         </p>
         <div className="flex items-center justify-self-end">
@@ -79,6 +112,13 @@ export function WorkoutHeader({
               <DotsThree weight="bold" className="size-5" />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="min-w-56">
+              {focusActions ? (
+                <>
+                  <ActionItem action={focusActions.swap} icon={<Swap />} label="Muadil seç" />
+                  <ActionItem action={focusActions.skip} icon={<ArrowBendDownRight />} label="Bu hareketi atla" />
+                  <DropdownMenuSeparator />
+                </>
+              ) : null}
               <DropdownMenuItem className="min-h-11" disabled={busy} onClick={onSwitch}>
                 <ArrowsLeftRight />
                 Antrenmanı değiştir

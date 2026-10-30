@@ -372,7 +372,10 @@ export function RestPanel({
   );
 }
 
-/** Küçültülmüş dinlenme: 48 px şerit, tablo ve giriş paneli geri gelir; "Set bitti" dinlenmeyi bitirir. */
+/**
+ * Küçültülmüş dinlenme: 48 px şerit, tablo ve giriş paneli geri gelir; "Set bitti" dinlenmeyi bitirir. Listede alt
+ * çubuğun üstünde ("‹ Liste" ve geri tuşu tam paneli küçültür; listeden harekete dokunmak dinlenmeyi bitirmez).
+ */
 export function RestStrip({ view, onExpand, onSkip }: { view: RestView; onExpand: () => void; onSkip: () => void }) {
   const ended = view.state === 'ended';
   return (

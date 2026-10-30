@@ -22,17 +22,16 @@ import { rowKeyOf, type CursorUnit } from '@/lib/workout-cursor';
 import {
   addExercise,
   canSwap,
-  dropAt,
+  dropWithUndo,
   effectiveDay,
   finishRotation,
   firstSkippedKey,
+  itemName,
   listView,
   moveUnit,
   moveUnitTo,
   nextUnitAfter,
   restoreAt,
-  skipAt,
-  skipMessage,
   swapRow,
   undoSkip,
   unitTitle,
@@ -93,7 +92,7 @@ import { RestPanel, RestStrip, type EffortPromptView, type RestView } from './re
 import { StartCheck } from './start-check';
 import { useWorkoutOutbox } from './use-workout-outbox';
 import { beep, isIOS, unlockAudio, useWakeLock, vibrate } from './workout-feedback';
-import { WorkoutHeader, type WorkoutStatus } from './workout-header';
+import { WorkoutHeader, type FocusActions, type WorkoutStatus } from './workout-header';
 import { LIST_TITLE_ID, listRowId, WorkoutList, WorkoutListBar } from './workout-list';
 import { WorkoutSwitchSheet } from './workout-switch-sheet';
 import { DeleteSetDialog, EditSetSheet, FinishedElsewhereDialog, FinishSheet, type EditTarget, type EditValues } from './workout-sheets';
@@ -263,12 +262,14 @@ function addressFocus(): string | null {
  * odak varsa (`?hareket=<birim>`, `workout-nav.ts`) o hareketin kartı ve giriş paneli: sıradaki set yalnız o birimde
  * aranır, sıra kendiliğinden değişmez, biten birim set tablosuyla açılır, "‹ Liste" ve geri tuşu listeye döner. Ekran
  * şu anki hareketin odağıyla açılır (açılış kuralı: liste işaretli girdinin üstünde odak girdisi). Üst çubuk
- * `WorkoutHeader` (⋯ menüsünde "Antrenmanı değiştir" ve "Ara ver").
+ * `WorkoutHeader` (⋯ menüsünde "Antrenmanı değiştir" ve "Ara ver"; odakta önce "Muadil seç" ve "Bu hareketi atla").
+ * Odakta giriş panelinin altında "Sıradaki: <ad>" (kendiliğinden geçişin açacağı hareket, `nextUnitAfter`); biten
+ * hareket açılınca panel "Bu hareket bitti" der (Sıradaki ya da Antrenmanı bitir, Set ekle). Dinlenme ekranı
+ * kilitlemez: listeye dönülünce tam panel küçülür, listede alt çubuğun üstündeki şeritte sürer.
  *
- * Geçme (§2.6): panelde
- * tek dokunuşluk "Hareketi geç ›" (sona alır; 5 sn toast [Bugün yapma] [Geri al]), başlıkta "Değiştir"
- * (muadil, kendi geçmişiyle). Ekran günün etkin planıyla çalışır (`planOf`: muadiller ve eklenenler).
- * Geçme, sıra ve muadil de kendi başına gönderilmez; neden yalnız bitişte sorulur.
+ * Atlama ve muadil (§2.6): odakta ⋯ menüsünde tek dokunuşluk "Bu hareketi atla" (atlananlara; 5 sn toast [Geri al])
+ * ve "Muadil seç" (kendi geçmişiyle; kısıt notunda da "Değiştir"). Ekran günün etkin planıyla çalışır (`planOf`:
+ * muadiller ve eklenenler). Atlama, sıra ve muadil de kendi başına gönderilmez; neden yalnız bitişte sorulur.
  *
  * "+ Set ekle" (§2.4): kartın tablosunun altında (grupta "Tur ekle") ve bitmiş antrenmanda "Devam et"ten
  * sonra (`DonePanel`: harekete set ya da yeni hareket). İstek telefonda durur (`extraRounds`), fazladan set
@@ -417,12 +418,17 @@ export function WorkoutScreen({
   const focusPushed = useRef(false);
   // Listeye dönülürken bırakılan hareket: liste çizilince o satıra kaydırılır ve klavye odağı oraya taşınır (aşağıda).
   const leftUnit = useRef<string | null>(null);
+  // Listeye dönüş niyeti: klavye odağı yalnız gerçekten listeye dönülünce taşınır ("‹ Liste", geri tuşu, geçersiz odak,
+  // hareketi atlayıp kalan olmaması: `goToList` ve odak eşitleme effect'i yazar, `openFocus` siler). Liste kendiliğinden
+  // çizildiyse (açılış, odak bir an geçersiz) klavye odağına dokunulmaz.
+  const returningToList = useRef(false);
 
   /**
    * Gösterilen hareket değişti (başka hareket ya da liste; dokunuşla ya da geri/ileri tuşuyla): süren set sayacı ve
    * devrenin istasyon geçişi düşer (o hareketindi). Geçerlilik `listView`'ın kuralı (`validFocus`): geçersiz odak
    * liste sayılır. Taslak zaten yalnız kendi setinde geçerli (`nextSet`). Listeye dönülüyorsa bırakılan hareket not
-   * edilir (`leftUnit`).
+   * edilir (`leftUnit`) ve tam dinlenme küçülür (`mode: 'mini'`): dinlenme ekranı kilitlemez, listede alt çubuğun
+   * üstündeki şeritte sürer ("‹ Liste", geri tuşu, geçersiz odak; odak zaten geçersizse de).
    */
   const leaveShown = useCallback(
     (from: string | null, to: string | null) => {
@@ -431,10 +437,14 @@ export function WorkoutScreen({
       const plan = planOf(current);
       const shownFrom = validFocus(plan, current.doc, from);
       const shownTo = validFocus(plan, current.doc, to);
-      if (shownFrom === shownTo) return;
-      if (shownTo === null) leftUnit.current = shownFrom;
-      if (current.timer) commit({ ...current, timer: null });
-      setTransition(null);
+      let next = current;
+      if (shownTo === null && current.rest?.mode === 'full') next = { ...next, rest: { ...acknowledgeRest(current.rest), mode: 'mini' } };
+      if (shownFrom !== shownTo) {
+        if (shownTo === null) leftUnit.current = shownFrom;
+        if (next.timer) next = { ...next, timer: null };
+        setTransition(null);
+      }
+      if (next !== current) commit(next);
     },
     [commit],
   );
@@ -448,6 +458,7 @@ export function WorkoutScreen({
     (key: string) => {
       leaveShown(focusRef.current, key);
       focusRef.current = key;
+      returningToList.current = false;
       const href = workoutHref(window.location.pathname, window.location.search, { focus: key });
       if (addressFocus() !== null) {
         window.history.replaceState(null, '', href);
@@ -460,7 +471,7 @@ export function WorkoutScreen({
   );
 
   /**
-   * Odaktan listeye ("‹ Liste", geçersiz odak, odaktaki son hareketi geçmek): odak girdisinin altında bu sayfanın
+   * Odaktan listeye ("‹ Liste", geçersiz odak, odaktaki hareketi atlayıp kalan olmaması): odak girdisinin altında bu sayfanın
    * ittiği liste girdisi varsa `history.back()` (geri tuşuyla aynı yer; iki liste girdisi yan yana birikmez), yoksa
    * (sayfa odak adresiyle yüklendi) odak `replaceState` ile düşer. Kopya hemen yazılır; `back()` adresi `popstate`'te
    * değiştirir. Zaten listeye dönülüyorsa (kopya boş) ikinci kez geri gidilmez.
@@ -469,7 +480,9 @@ export function WorkoutScreen({
     const from = focusRef.current;
     leaveShown(from, null);
     focusRef.current = null;
-    if (from === null || addressFocus() === null) return;
+    if (from === null) return;
+    returningToList.current = true;
+    if (addressFocus() === null) return;
     if (focusPushed.current) window.history.back();
     else window.history.replaceState(null, '', workoutHref(window.location.pathname, window.location.search, { focus: null }));
   }, [leaveShown]);
@@ -491,6 +504,7 @@ export function WorkoutScreen({
     const shown = validFocus(plan, current.doc, focus);
     if (shown === validFocus(plan, current.doc, previous)) return;
     const unit = shown ? cursorOf(plan, current.doc).units.find((item) => item.key === shown) : undefined;
+    returningToList.current = !unit;
     if (unit) {
       announce(unitTitle(plan, current.doc, unit));
       focusLater('exercise-title', DURATION.base);
@@ -751,21 +765,28 @@ export function WorkoutScreen({
     [commit],
   );
 
+  /**
+   * Dinlenme açılır: odakta tam panel; listede (kendiliğinden geçişten önce "‹ Liste"ye basıldı) küçük, listeyi örtmez,
+   * alt çubuğun üstündeki şeritte sayar.
+   */
   const openRest = useCallback(
     (setId: string, seconds: number) => {
       const current = localRef.current;
       if (!current) return;
-      commit({ ...current, rest: startRest(setId, seconds, Date.now()), restCount: current.restCount + 1 });
+      const inList = validFocus(planOf(current), current.doc, focusRef.current) === null;
+      const rest = startRest(setId, seconds, Date.now());
+      commit({ ...current, rest: inList ? { ...rest, mode: 'mini' } : rest, restCount: current.restCount + 1 });
       guard();
-      focusLater('rest-title', DURATION.base);
+      if (!inList) focusLater('rest-title', DURATION.base);
     },
     [commit, guard, focusLater],
   );
 
+  // Dinlenme bitti ("Atla", "Sonraki sete geç"): klavye odağı "Set bitti"ye; listede (şeritteki "Atla") listenin başlığına.
   const endRest = useCallback(() => {
     updateRest(() => null);
     guard();
-    focusLater('set-done', DURATION.fast);
+    focusLater(focusRef.current === null ? LIST_TITLE_ID : 'set-done', DURATION.fast);
   }, [updateRest, guard, focusLater]);
 
   /* --- görünüm --- */
@@ -794,6 +815,9 @@ export function WorkoutScreen({
       list,
       cursor,
       next,
+      // Kendiliğinden geçişin açacağı birim (odaktaki hariç; listede "Devam et"inki): "Sıradaki" satırı, biten hareketin
+      // birincil düğmesi ve dinlenmenin "Sıradaki"si. Başka birimde bekleyen fazladan set sayılmaz.
+      following: nextUnitAfter(plan, doc, shownFocus),
       unitKey,
       row,
       sets: row ? setViews(plan, doc, row.rowId) : [],
@@ -811,24 +835,26 @@ export function WorkoutScreen({
     goToList();
   }, [view, focus, goToList]);
 
-  // Odaktan listeye dönüldü ("‹ Liste", geri tuşu, geçersiz odak, odaktaki son hareketi geçmek): liste çizilince az önce
-  // bırakılan hareketin satırına kaydırılır ve klavye odağı oraya taşınır (yoksa "şu an" satırı, o da yoksa başlık).
-  // Sabit bir zamanlayıcı değil: `history.back()` adresi `popstate`'te, Next de bir geçişte günceller; liste ne zaman
-  // çizilirse o zaman. Açılışta (iskeletten listeye) taşınmaz.
+  // Odaktan listeye dönüldü ("‹ Liste", geri tuşu, geçersiz odak, odaktaki hareketi atlayıp kalan olmaması): liste
+  // çizilince az önce bırakılan hareketin satırına kaydırılır ve klavye odağı oraya taşınır (yoksa "şu an" satırı, o da
+  // yoksa başlık). Sabit bir zamanlayıcı değil: `history.back()` adresi `popstate`'te, Next de bir geçişte günceller;
+  // liste ne zaman çizilirse o zaman. Niyetle (`returningToList`): açılışta (iskeletten listeye) ve odak bir an geçersiz
+  // kalıp liste kendiliğinden çizildiğinde taşınmaz. Tam dinlenme paneli listeyi örtüyorsa (`inert`) küçülene kadar
+  // bekler (geri tuşunda küçültme odak eşitleme effect'inde, liste çizildikten sonra yazılır).
   const shownMode = load.phase === 'ready' && !awaitingOpening && view ? (view.focus === null ? 'list' : 'focus') : null;
   const listCurrent = view?.list.current ?? null;
-  const lastMode = useRef<'list' | 'focus' | null>(null);
+  // Tam dinlenme paneli açık: altındaki kart, giriş paneli ya da liste erişilemez (ekran okuyucu, klavye).
+  const covered = Boolean(local?.rest && local.rest.mode === 'full' && restView);
   useEffect(() => {
-    const previous = lastMode.current;
-    lastMode.current = shownMode;
-    if (shownMode !== 'list' || previous !== 'focus') return;
+    if (shownMode !== 'list' || !returningToList.current || covered) return;
+    returningToList.current = false;
     const left = leftUnit.current;
     leftUnit.current = null;
     const row = (key: string | null) => (key ? document.getElementById(listRowId(key)) : null);
     const target = row(left) ?? row(listCurrent) ?? document.getElementById(LIST_TITLE_ID);
     target?.scrollIntoView({ block: 'center' });
     target?.focus({ preventScroll: true });
-  }, [shownMode, listCurrent]);
+  }, [shownMode, listCurrent, covered]);
 
   /* --- işler --- */
 
@@ -1155,6 +1181,7 @@ export function WorkoutScreen({
       focusPushed.current = false;
       focusRef.current = null;
       leftUnit.current = null;
+      returningToList.current = false;
       outbox.reset();
       outbox.resume();
       const href = `/me/antrenman?program=${encodeURIComponent(target.program)}&day=${encodeURIComponent(target.day)}`;
@@ -1402,68 +1429,56 @@ export function WorkoutScreen({
   );
 
   /**
-   * "Hareketi geç ›": tek dokunuş, neden sorulmaz. 5 sn toast: sona alındıysa [Bugün yapma] [Geri al], Geçilenler'e
-   * gittiyse [Geri al].
+   * "Bu hareketi atla" (odakta ⋯): tek dokunuş, neden sorulmaz (bitişte sorulur). Birim atlananlara (`dropWithUndo`; biten
+   * birimde yok, öğe devre dışı), odak sıradaki birime (`nextUnitAfter`: sıra değişmez, başka birimde bekleyen fazladan
+   * set sayılmaz); kalmadıysa listeye (klavye odağı atlanan satıra) ve hepsi yapıldıysa bitiş sorusu. 5 sn toast'ta
+   * "Geri al" (`undoSkip`) hareketi ve odağı geri getirir.
+   *
+   * Liste bir kare bile görünmez: belge ve odak tek geçişte (`startTransition`) yazılır. Atlanan birim adreste odakta
+   * durur; belge adresten önce çizilseydi odak bir kare geçersiz kalır, ekran listeyi çizer, sonra yeni odağa atlardı.
+   * Next adresi geçişin dışında, normal öncelikle yazar (`onDone`'daki not): geçiş daha düşük öncelikli olduğundan önce
+   * adres çizilir (yeni odak eski belgede de geçerli: bitmemiş, atlanmamış birim), sonra belge. "Geri al"da tersi: belge
+   * önce (eşzamanlı), adres sonra; geri gelen birim adres yetiştiğinde geçerlidir.
    */
-  const onSkip = useCallback(
+  const onDropUnit = useCallback(
     (key: string) => {
       const current = localRef.current;
       if (!current || saving) return;
       const plan = planOf(current);
       const unit = cursorOf(plan, current.doc).units.find((item) => item.key === key);
-      const result = unit ? skipAt(plan, current.doc, key, stampOf(current)) : null;
+      const result = unit ? dropWithUndo(plan, current.doc, key, stampOf(current)) : null;
       if (!unit || !result) return;
       const title = unitTitle(plan, current.doc, unit);
       const done = unit.members.reduce((sum, member) => sum + Math.min(member.done, member.planned), 0);
       const planned = unit.members.reduce((sum, member) => sum + member.planned, 0);
-      // Odaktaki hareket geçildiyse odak sıradaki birime (`nextUnitAfter`: sıra değişmez, başka birimde bekleyen
-      // fazladan set sayılmaz); kalmadıysa listeye.
-      const focusAfter = (latest: LocalWorkout, doc: SessionDoc) =>
-        focusRef.current === key ? nextUnitAfter(dayFor(latest, doc), doc, key) : focusRef.current;
-      const show = (unitKey: string | null) => (unitKey ? openFocus(unitKey) : goToList());
-      const wasFocused = focusRef.current === key;
-      const target = focusAfter(current, result.doc);
-      const { moved } = commitFlow(current, result.doc, {}, target);
-      if (target !== focusRef.current) show(target);
+      const target = nextUnitAfter(dayFor(current, result.doc), result.doc, key);
+      startTransition(() => {
+        commitFlow(current, result.doc, {}, target);
+        if (target) openFocus(target);
+        else goToList();
+      });
+      // Listede klavye odağı atlanan satıra (sonda, ⤼ ve "Geri al"); belge önce yazıldığından `leaveShown` onu bulamaz.
+      if (!target) leftUnit.current = key;
       highlightUnit(key);
-      const message = skipMessage(result.outcome, title, done, planned);
-      announce(message.title);
-      // Listeye dönüldüyse klavye odağını liste effect'i taşır.
-      if (moved && target) focusLater('exercise-title', DURATION.base);
+      announce(`${title} atlandı`);
+      if (target) focusLater('exercise-title', DURATION.base);
       const sessionId = current.doc.id;
-      const alive = () => localRef.current?.doc.id === sessionId;
-      const undo = () => {
-        const latest = localRef.current;
-        if (!latest || !alive()) return;
-        commitFlow(latest, undoSkip(planOf(latest), latest.doc, result.undo, stampOf(latest)), {}, wasFocused ? key : focusRef.current);
-        if (wasFocused) openFocus(key);
-        highlightUnit(key);
-        announce(`${title} geri alındı`);
-        focusLater('exercise-title', DURATION.base);
-      };
-      toast(message.title, {
-        ...(message.description ? { description: message.description } : {}),
+      toast(`${title} atlandı`, {
+        ...(done > 0 ? { description: `${done}/${planned} set yapıldı` } : {}),
         duration: WORKOUT.skipToastMs,
         classNames: TOAST_BUTTONS,
-        action: { label: 'Geri al', onClick: undo },
-        ...(result.outcome === 'moved'
-          ? {
-              cancel: {
-                label: 'Bugün yapma',
-                onClick: () => {
-                  const latest = localRef.current;
-                  if (!latest || !alive()) return;
-                  const dropped = dropAt(planOf(latest), latest.doc, key, stampOf(latest));
-                  const after = focusAfter(latest, dropped);
-                  commitFlow(latest, dropped, {}, after);
-                  if (after !== focusRef.current) show(after);
-                  highlightUnit(key);
-                  announce(`${title} geçildi`);
-                  finishIfDone(dropped);
-                },
-              },
-            }
-          : {}),
+        action: {
+          label: 'Geri al',
+          onClick: () => {
+            const latest = localRef.current;
+            if (!latest || latest.doc.id !== sessionId) return;
+            commitFlow(latest, undoSkip(planOf(latest), latest.doc, result.undo, stampOf(latest)), {}, key);
+            openFocus(key);
+            highlightUnit(key);
+            announce(`${title} geri alındı`);
+            focusLater('exercise-title', DURATION.base);
+          },
+        },
       });
       finishIfDone(result.doc);
     },
@@ -1721,12 +1736,10 @@ export function WorkoutScreen({
     );
   }
 
-  const { plan, doc, focus: shownFocus, list, cursor, next, unitKey, row, sets, group, warmups, setupNote } = view;
+  const { plan, doc, focus: shownFocus, list, cursor, next, following: followingKey, unitKey, row, sets, group, warmups, setupNote } = view;
   // Odak yoksa (ya da geçersizse) ana ekran liste; varsa o hareketin kartı ve giriş paneli.
   const listMode = shownFocus === null;
   const rest = local.rest;
-  // Tam dinlenme paneli açıkken altındaki kart ve giriş paneli erişilemez (ekran okuyucu, klavye).
-  const covered = Boolean(rest && rest.mode === 'full' && restView);
   const shown = saving?.next ?? next;
   const shownRow = shown ? (plan.rows[shown.rowId] ?? null) : null;
   const summary = workoutSummary(plan, doc, new Date(now));
@@ -1742,6 +1755,20 @@ export function WorkoutScreen({
   const water = waterOf(doc);
   // Süreli setin sayacı yalnız sıradaki setinse çalışıyor sayılır (set silindiyse, düzeltildiyse değil).
   const timerRunning = Boolean(local.timer && next && local.timer.rowId === next.rowId && local.timer.setIndex === next.setIndex);
+  // Odakta "Sıradaki: <ad>" (giriş panelinin altında; biten harekette birincil düğme): kendiliğinden geçişin açacağı birim.
+  const followingItem = followingKey ? list.items.find((item) => item.key === followingKey) : undefined;
+  const following = followingItem ? { name: itemName(followingItem), onOpen: () => onOpenUnit(followingItem.key) } : null;
+  // Odakta ⋯: "Muadil seç" kartın satırında (odaktaki birimin şu anki üyesi; set kaydedildiyse ya da eklenen harekette
+  // nedeniyle devre dışı), "Bu hareketi atla" bitmemiş birimde (`dropWithUndo`'nun kuralı).
+  const focusActions: FocusActions | null =
+    shownFocus !== null && row
+      ? {
+          swap: canSwap(local.plan, doc, row.rowId)
+            ? { onSelect: () => openSwap(row.rowId) }
+            : { note: local.plan.rows[row.rowId] ? 'Set kaydedildi, muadil seçilemez' : 'Bu hareketin muadili yok' },
+          skip: list.items.find((item) => item.key === shownFocus)?.state === 'done' ? { note: 'Bu hareket bitti' } : { onSelect: () => onDropUnit(shownFocus) },
+        }
+      : null;
 
   const restFound = rest ? findSet(doc, rest.setId) : null;
   const restRowId = restFound ? rowKeyOf(restFound.entry) : undefined;
@@ -1758,6 +1785,9 @@ export function WorkoutScreen({
   const restPosition = rest && restRowId ? setViews(plan, doc, restRowId).find((item) => item.logged?.id === rest.setId)?.position : undefined;
   const restEffort = rest ? promptOf(effortQuestions(plan, doc, rest.setId)) : null;
   const restEasy = rest && !restEffort ? easyShortcut(plan, doc, rest.setId, shownFocus) : null;
+  // Dinlenmenin "Sıradaki"si: odakta odaktaki hareketin sıradaki seti (hareket sürüyor); o bittiyse ve listede sıradaki
+  // birimin seti (Sıradaki satırı ve "Devam et" ile aynı kaynak; başka birimde bekleyen fazladan set değil).
+  const restNext = (listMode ? null : next) ?? (followingKey ? nextSet(plan, doc, null, followingKey) : null);
 
   // Bitiş sorusu: son hareketin dinlenmesi yok; onun zorluğu ve (AMRAP'sa) tekrarı sheet'te.
   const lastSetId = lastWorkingSetId(doc);
@@ -1786,6 +1816,7 @@ export function WorkoutScreen({
         water={water}
         status={status}
         busy={finishing}
+        focusActions={focusActions}
         onList={listMode ? null : onList}
         onFinish={() => setFinishOpen(true)}
         onSwitch={() => setSwitchOpen(true)}
@@ -1834,7 +1865,8 @@ export function WorkoutScreen({
                     onToggleWarmup={(index, done) => onToggleWarmup(row.rowId, index, done)}
                     onSetupNote={(text) => onSetupNote(row.rowId, text)}
                     onSwap={!saving && canSwap(local.plan, doc, row.rowId) ? () => openSwap(row.rowId) : null}
-                    onAddSet={!saving && addable(unitKey) ? () => onAddSet(unitKey) : null}
+                    // Biten harekette "Set ekle" giriş panelinde (ikincil düğme); kartta ikinci kez yok.
+                    onAddSet={!saving && next && addable(unitKey) ? () => onAddSet(unitKey) : null}
                     onDropExtra={() => onDropExtra(unitKey)}
                     ownProgram={local.plan.source === 'own'}
                   />
@@ -1891,9 +1923,10 @@ export function WorkoutScreen({
                 onStartTimer={onStartTimer}
                 onStopTimer={onStopTimer}
                 onCancelTimer={onCancelTimer}
-                onSkip={() => (next ? onSkip(next.unitKey) : undefined)}
                 onDropExtra={() => (next ? onDropExtra(next.unitKey) : undefined)}
                 onFinish={() => setFinishOpen(true)}
+                following={following}
+                addSet={!saving && unitKey && addable(unitKey) ? { label: group ? 'Tur ekle' : 'Set ekle', onAdd: () => onAddSet(unitKey) } : null}
               />
             </section>
           )}
@@ -1925,7 +1958,7 @@ export function WorkoutScreen({
                 onEasy={onEasy}
                 water={water}
                 undoWater={undoWater}
-                next={next ? nextText(next, plan.rows[next.rowId] ?? { title: '', trackingType: 'weight_reps' }, next.rowId !== restRowId) : null}
+                next={restNext ? nextText(restNext, plan.rows[restNext.rowId] ?? { title: '', trackingType: 'weight_reps' }, restNext.rowId !== restRowId) : null}
                 onSkip={endRest}
                 onMinimize={() => {
                   updateRest((timer) => ({ ...acknowledgeRest(timer), mode: 'mini' }));

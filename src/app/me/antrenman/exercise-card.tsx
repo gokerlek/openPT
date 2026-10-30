@@ -76,26 +76,15 @@ const MEMBER_STATUS_TEXT: Record<GroupMemberStatus, string> = {
   skipped: 'geçildi',
 };
 
-/** "Değiştir" (§2.6): başlığın sağında; set kaydedilmiş harekette yok ("Hareketi geç ›" var). */
-function SwapButton({ title, onSwap, className }: { title: string; onSwap: () => void; className?: string }) {
-  return (
-    <Button variant="ghost" aria-label={`${title}: değiştir`} className={cn('h-11 shrink-0 gap-1.5 px-2.5 text-primary hover:text-primary', className)} onClick={onSwap}>
-      <ArrowsLeftRight data-icon="inline-start" />
-      Değiştir
-    </Button>
-  );
-}
-
 /** Grubun başı (tasarım §2.4 "Gruplar"): "Süperset · Tur 2/3" ve üyeler; şu anki üye vurgulu. */
-function GroupHeader({ group, swap }: { group: GroupView; swap: React.ReactNode }) {
+function GroupHeader({ group }: { group: GroupView }) {
   return (
     <div className="flex flex-col gap-1 px-2 pt-2.5 pb-1">
-      <div className={cn('flex items-center gap-2 px-1 text-[0.8125rem] text-muted-foreground tabular-nums', swap ? '-my-2.5 min-h-11' : 'h-6')}>
+      <div className="flex h-6 items-center gap-2 px-1 text-[0.8125rem] text-muted-foreground tabular-nums">
         <Badge className="bg-primary/15 text-primary">{group.label}</Badge>
         <span className="flex-1">
           Tur {group.round + 1}/{group.rounds}
         </span>
-        {swap}
       </div>
       <ul className="flex flex-col">
         {group.members.map((member) => (
@@ -197,8 +186,8 @@ function SetupNoteForm({ note, onSave }: { note: string | undefined; onSave: (te
  * Grupta (süperset, devre, kompleks) başlığın yerinde tur ve üyeler; altta şu anki üyenin çipleri ve
  * tablosu. Üye değişince bu kısım 12 px kayarak gelir (`WORKOUT.groupSlidePx`).
  *
- * "Değiştir" (§2.6) başlığın sağında (grupta tur satırında, şu anki üye için): yalnız hareketin çalışma
- * seti kaydedilmemişken.
+ * Muadil (§2.6) üst çubuğun ⋯ menüsünde ("Muadil seç", 8. görev); kartta yalnız kısıt notunun açılan metninde
+ * "Değiştir" (kaçınılacak harekette), hareketin çalışma seti kaydedilmemişken.
  *
  * "+ Set ekle" (§2.4) tablonun altında: planın son setini tekrarlayan fazladan bir set (grupta "+ Tur ekle":
  * her üyeye bir set). Fazladan satırın "Önceki" hücresinde "fazladan" yazar; bekleyen fazladan set satırdaki
@@ -235,7 +224,7 @@ export function ExerciseCard({
   onEditSet: (setId: string) => void;
   onToggleWarmup: (index: number, done: boolean) => void;
   onSetupNote: (text: string) => void;
-  /** "Değiştir" açıksa muadil sheet'ini açar; kapalıysa null. */
+  /** Kısıt notundaki "Değiştir": muadil açıksa sheet'ini açar; kapalıysa null. */
   onSwap: (() => void) | null;
   /** "+ Set ekle" (grupta tur); kapalıysa (kaydedilirken, sınırda) null. */
   onAddSet: (() => void) | null;
@@ -280,7 +269,7 @@ export function ExerciseCard({
 
   return (
     <Card className="gap-0 py-0">
-      {group ? <GroupHeader group={group} swap={onSwap ? <SwapButton title={row.title} onSwap={onSwap} className="-mr-1.5" /> : null} /> : null}
+      {group ? <GroupHeader group={group} /> : null}
       <div className="relative">
         <AnimatePresence mode="popLayout" initial={false}>
           <motion.div
@@ -289,15 +278,12 @@ export function ExerciseCard({
             animate={{ opacity: 1, x: 0, transition: tween(DURATION.base) }}
             exit={{ opacity: 0, x: -WORKOUT.groupSlidePx, transition: tween(DURATION.fast, EASE.exit) }}>
             <div className={cn('flex flex-col gap-1.5 px-3 pb-2', group ? 'pt-1' : 'pt-3')}>
-              <div className={cn(!group && onSwap && '-my-1 flex min-h-11 items-center gap-2')}>
-                <h2
-                  id={present ? 'exercise-title' : undefined}
-                  tabIndex={-1}
-                  className={cn(group ? 'sr-only' : 'line-clamp-2 min-w-0 flex-1 font-heading text-[1.1875rem] leading-tight font-semibold outline-none')}>
-                  {title}
-                </h2>
-                {!group && onSwap ? <SwapButton title={row.title} onSwap={onSwap} className="-mr-2" /> : null}
-              </div>
+              <h2
+                id={present ? 'exercise-title' : undefined}
+                tabIndex={-1}
+                className={cn(group ? 'sr-only' : 'line-clamp-2 min-w-0 font-heading text-[1.1875rem] leading-tight font-semibold outline-none')}>
+                {title}
+              </h2>
               {care ? (
                 <Chip
                   open={open === 'care'}

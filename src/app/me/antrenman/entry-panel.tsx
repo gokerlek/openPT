@@ -1,8 +1,8 @@
 'use client';
 
 import { motion } from 'motion/react';
-import { ArrowRight, CaretRight, FlagCheckered, Play, Stop, WarningCircle } from '@phosphor-icons/react';
-import { Check } from '@/components/line-icons';
+import { ArrowRight, CaretRight, CheckCircle, FlagCheckered, Play, Stop, WarningCircle } from '@phosphor-icons/react';
+import { Check, Plus } from '@/components/line-icons';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Stepper } from '@/components/ui/stepper';
@@ -22,6 +22,24 @@ export type TransitionView = { endsAt: number; total: number };
 
 /** Sayılan süreli set: saniyede bir değişen hâli. */
 export type TimerView = Pick<SetTimerTick, 'seconds' | 'toMin' | 'fraction' | 'phase'>;
+
+/** Odaktaki hareketten sonra açılacak hareket (kendiliğinden geçişin açacağı, `nextUnitAfter`): adı ve açan iş. */
+export type FollowingView = { name: string; onOpen: () => void };
+
+/**
+ * Giriş panelinin altında tek satır (8. görev, "Sıradaki her an görünür"): "Sıradaki: Goblet Squat ›" dokununca o hareketi
+ * açar; sonra hareket kalmadıysa "Son hareket".
+ */
+function NextUp({ following }: { following: FollowingView | null }) {
+  if (!following) return <p className="flex h-11 items-center justify-center text-sm text-muted-foreground">Son hareket</p>;
+  return (
+    <Button variant="ghost" className="h-11 w-full gap-1 px-3 text-sm font-normal text-muted-foreground" onClick={following.onOpen}>
+      <span className="shrink-0">Sıradaki:</span>
+      <span className="min-w-0 truncate font-medium text-foreground">{following.name}</span>
+      <CaretRight data-icon="inline-end" weight="bold" />
+    </Button>
+  );
+}
 
 function TransitionBar({ transition, now }: { transition: TransitionView; now: number }) {
   const remaining = Math.max(0, transition.endsAt - now);
@@ -57,21 +75,23 @@ function TimerBox({ view, target }: { view: TimerView; target: NextSet['target']
 }
 
 /**
- * Alt giriş paneli (tasarım §2.4), yapışkan: başparmak bölgesinde. Üst satırda "Set 2/3 · Hedef 8–10"
+ * Alt giriş paneli (tasarım §2.4), yapışkan: başparmak bölgesinde; yalnız odakta. Üst satırda "Set 2/3 · Hedef 8–10"
  * (AMRAP'ta rozet ve "En az 8, yapabildiğin kadar"), altında 56 px'lik stepper'lar (ağırlık cihazın
- * ızgarasıyla bir sonraki/önceki ayar; tekrar ya da saniye), en altta tek dokunuşluk "Set bitti"
- * (grupta turun sıradaki üyesi varsa "Set bitti → B"). Kaydedilince düğme panel değişene kadar
- * "Kaydedildi" der ve değerler donar. Dokunuş kilidi paneli saran kapta (`WorkoutScreen`).
+ * ızgarasıyla bir sonraki/önceki ayar; tekrar ya da saniye), sonra tek dokunuşluk "Set bitti"
+ * (grupta turun sıradaki üyesi varsa "Set bitti → B"), en altta "Sıradaki: <ad>" satırı. Kaydedilince düğme panel
+ * değişene kadar "Kaydedildi" der ve değerler donar. Dokunuş kilidi paneli saran kapta (`WorkoutScreen`).
+ *
+ * - Odaktaki harekette set kalmadı (biten hareket açıldı): "Bu hareket bitti", birincil **Sıradaki: <ad>** (yoksa
+ *   **Antrenmanı bitir**), ikincil **Set ekle** (grupta **Tur ekle**; fazladan set). "Sıradaki" satırı burada yok:
+ *   birincil düğme odur.
  *
  * - Süreli set: "Başlat ▶" sayacı kurar (saniye kronometreyle sayılır, alt sınırda tek bip), "Bitir ■"
  *   geçen süreyi yazar; elle stepper ve "Set bitti" de var.
  * - Aşırı yük (hareket başına bir kez): ağırlık planın çok üstündeyse uyarı ve "Onayla · Set bitti";
  *   "Düzelt" önerilen ağırlığa döner. Engellemez.
  * - Devrede istasyon geçişi panelin üst kenarında ince çubuk olarak sayar.
- * - "Hareketi geç ›" üst satırın sağında (§2.6): başparmak erişiminde, başlıktaki "Değiştir"den uzakta;
- *   tek dokunuş, hareket sona alınır.
- * - "+ Set ekle" ile istenen fazladan sette üst satırda "Fazladan" rozeti; "Hareketi geç"in yerinde "Kaldır"
- *   (planın setleri yapıldı, geçilecek bir şey yok; fazladan set bırakılır).
+ * - Hareketi atlamak ve muadil seçmek üst çubuğun ⋯ menüsünde (8. görev; "Hareketi geç ›" kalktı).
+ * - "+ Set ekle" ile istenen fazladan sette üst satırda "Fazladan" rozeti ve sağda "Kaldır" (fazladan set bırakılır).
  */
 export function EntryPanel({
   row,
@@ -88,9 +108,10 @@ export function EntryPanel({
   onStartTimer,
   onStopTimer,
   onCancelTimer,
-  onSkip,
   onDropExtra,
   onFinish,
+  following,
+  addSet,
 }: {
   row: WorkoutRow | null;
   /** Gösterilen set: sıradaki ya da (kaydedilirken) az önce kaydedilen. */
@@ -110,20 +131,38 @@ export function EntryPanel({
   onStartTimer: () => void;
   onStopTimer: () => void;
   onCancelTimer: () => void;
-  /** "Hareketi geç ›": şu anki hareket (grupta bütün grup) sona alınır. */
-  onSkip: () => void;
   /** Fazladan sette "Kaldır": istenen fazladan set (grupta tur) bırakılır. */
   onDropExtra: () => void;
   onFinish: () => void;
+  /** Sıradaki hareket (kendiliğinden geçişin açacağı); sonra hareket kalmadıysa null. */
+  following: FollowingView | null;
+  /** Biten harekette "Set ekle" (grupta "Tur ekle"); sınırdaysa ya da kaydedilirken null. */
+  addSet: { label: string; onAdd: () => void } | null;
 }) {
   if (!next || !row) {
     return (
       <div className="flex flex-col gap-2 pt-2">
-        <p className="flex min-h-11 items-center text-sm font-medium">Hareketler bitti</p>
-        <Button size="lg" className="h-14 w-full text-base" onClick={onFinish}>
-          <FlagCheckered data-icon="inline-start" />
-          Antrenmanı bitir
-        </Button>
+        <p className="flex min-h-11 items-center gap-2 text-sm font-medium">
+          <CheckCircle weight="fill" className="size-5 shrink-0 text-primary" aria-hidden />
+          Bu hareket bitti
+        </p>
+        {following ? (
+          <Button size="lg" className="h-14 w-full text-base" onClick={following.onOpen}>
+            <span className="min-w-0 truncate">Sıradaki: {following.name}</span>
+            <ArrowRight data-icon="inline-end" weight="bold" />
+          </Button>
+        ) : (
+          <Button size="lg" className="h-14 w-full text-base" onClick={onFinish}>
+            <FlagCheckered data-icon="inline-start" />
+            Antrenmanı bitir
+          </Button>
+        )}
+        {addSet ? (
+          <Button variant="secondary" size="lg" className="h-12 w-full text-base" onClick={addSet.onAdd}>
+            <Plus data-icon="inline-start" weight="bold" />
+            {addSet.label}
+          </Button>
+        ) : null}
       </div>
     );
   }
@@ -195,11 +234,6 @@ export function EntryPanel({
           <Button variant="ghost" className="-mr-2 h-11 shrink-0 px-3 text-muted-foreground" aria-label="Fazladan seti kaldır" onClick={onDropExtra}>
             Kaldır
           </Button>
-        ) : !frozen ? (
-          <Button variant="ghost" className="-mr-2 h-11 shrink-0 gap-0.5 px-2.5 text-primary hover:text-primary" onClick={onSkip}>
-            Hareketi geç
-            <CaretRight data-icon="inline-end" weight="bold" />
-          </Button>
         ) : null}
       </div>
       {weighted ? (
@@ -268,6 +302,7 @@ export function EntryPanel({
       ) : (
         doneButton
       )}
+      <NextUp following={following} />
     </div>
   );
 }

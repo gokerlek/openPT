@@ -803,6 +803,28 @@ describe('liste + odak: geçerli odak ve sıradaki birim', () => {
     assert.equal(nextUnitAfter(day, doc, 'b_bbbbbb'), 'b_aaaaaa');
     assert.equal(nextUnitAfter(day, doc, null), 'b_aaaaaa');
   });
+
+  test('"Bu hareketi atla"nın ardından: belge ve `except` atlamanın kendisinden; atlanan birim hiç seçilmez', () => {
+    const day = threeDay();
+    let doc = logFocused(day, start(day), 'b_aaaaaa', 1); // Bench 1/3 (yarım)
+    doc = logFocused(day, doc, 'b_bbbbbb', 2); // Plank 1/2: son set Plank'te
+    // Odaktaki Plank atlandı: son set onda ama "şu an" atlanana dönmez; yarım bırakılan Bench (`dropAt` aynı belge).
+    const plank = dropWithUndo(day, doc, 'b_bbbbbb', stamp(3), sequence());
+    assert.ok(plank);
+    assert.equal(nextUnitAfter(day, plank.doc, 'b_bbbbbb'), 'b_aaaaaa');
+    assert.equal(nextUnitAfter(day, dropAt(day, doc, 'b_bbbbbb', stamp(3), sequence()), 'b_bbbbbb'), 'b_aaaaaa');
+    // Ardından Bench de atlandı: önceki atlanan da seçilmez, sırada ilk bitmemiş Goblet.
+    const bench = dropWithUndo(day, plank.doc, 'b_aaaaaa', stamp(4));
+    assert.ok(bench);
+    assert.equal(nextUnitAfter(day, bench.doc, 'b_aaaaaa'), 'b_dddddd');
+    // Son bitmemiş birim atlandı: açılacak birim yok (ekran listeye döner).
+    const goblet = dropWithUndo(day, bench.doc, 'b_dddddd', stamp(5));
+    assert.ok(goblet);
+    assert.equal(nextUnitAfter(day, goblet.doc, 'b_dddddd'), null);
+    // "Geri al" atlanan birimi geri getirir: yeniden seçilebilir.
+    const back = undoSkip(day, goblet.doc, goblet.undo, stamp(6));
+    assert.equal(nextUnitAfter(day, back, null), 'b_dddddd');
+  });
 });
 
 describe('liste + odak: sıra ve atlama', () => {
