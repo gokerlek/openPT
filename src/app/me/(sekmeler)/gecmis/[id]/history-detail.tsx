@@ -21,7 +21,7 @@ import { DELETE_BODY, DELETE_DETAIL, deleteCopy, deletePatch, sessionDetail, typ
 import { randomId } from '@/lib/template-plan';
 import { CHANGE_LABELS, type ChangeLine } from '@/lib/workout-summary';
 import { DeleteDialog } from '../../../delete-dialog';
-import { WORKOUT_KEY } from '../../../today-workout';
+import { WORKOUT_KEY } from '../../../workout-overview';
 import { writerId } from '../../../workout-storage';
 
 /**

@@ -9,7 +9,7 @@ import { Field, FieldContent, FieldDescription, FieldLabel, FieldTitle } from '@
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Drawer, DrawerContent, DrawerDescription, DrawerFooter, DrawerHeader, DrawerTitle } from '@/components/ui/drawer';
 import { Skeleton } from '@/components/ui/skeleton';
-import { formatDayShort } from '@/lib/format';
+import { formatDayShort, todayIn } from '@/lib/format';
 import {
   dayShortName,
   relativeDayText,
@@ -101,7 +101,9 @@ export function WeekStrip({ clientId, showNext = true, activeDay = null }: { cli
   // Gerçek şeridin yüksekliği: sütun 81 px (py-1.5 + text-xs 16 + gap 6 + halka 28 + gap 6 + ad 13), gap-1 ile
   // "Sırada" satırı (text-sm 20) ve h-11 düğme: 153 px; satırsız 129 px.
   if (isPending && fetchStatus === 'paused') return null;
-  if (isPending) return <Skeleton className={cn('w-full rounded-lg', showNext ? 'h-[9.5625rem]' : 'h-[8.0625rem]')} />;
+  // Bugün başlamış yarım antrenmanın günü bugünse "Sırada" satırı gizlenir (aşağıda): iskelet de kısa.
+  const lineHidden = !showNext || activeDay?.date === todayIn(Intl.DateTimeFormat().resolvedOptions().timeZone);
+  if (isPending) return <Skeleton className={cn('w-full rounded-lg', lineHidden ? 'h-[8.0625rem]' : 'h-[9.5625rem]')} />;
   if (!data?.schedule) return null;
   const schedule = data.schedule;
   const days = planOf(data, schedule, activeDay);

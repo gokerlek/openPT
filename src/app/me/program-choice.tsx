@@ -16,7 +16,7 @@ import { formatDayShort } from '@/lib/format';
 import { PT_PROGRAM_NAME } from '@/lib/own-programs';
 import { fetchJson } from '@/lib/query/errors';
 import { useUnseenPtEdit } from './(sekmeler)/programlar/program-actions';
-import { WORKOUT_KEY } from './today-workout';
+import { WORKOUT_KEY } from './workout-overview';
 import { clearWorkoutCache } from './workout-storage';
 
 /**

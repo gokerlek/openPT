@@ -267,9 +267,6 @@ describe('hafta planı', () => {
     assert.equal(weekRotation({ days, nextDayId: 'd_a', today, active: { dayId: 'd_c', date: '2026-10-27' } }).active, null, 'dünden kalan yarım antrenman');
     assert.equal(weekRotation({ days, nextDayId: 'd_a', today, active: { dayId: 'd_x', date: today } }).active, null, 'başka evrenin ya da programın günü');
     assert.equal(weekRotation({ days, nextDayId: 'd_a', today, active: null }).active, null);
-    // Bitişte dönüş: "advance" (ya da seçilmemiş) tahmine girer; "keep" seçiliyse dönüş ilerlemeyecek, `next`.
-    assert.equal(weekRotation({ days, nextDayId: 'd_a', today, active: { dayId: 'd_c', date: today, rotation: 'advance' } }).active, 2);
-    assert.deepEqual(weekRotation({ days, nextDayId: 'd_a', today, active: { dayId: 'd_c', date: today, rotation: 'keep' } }), { names: ['Gün A', 'Gün B', 'Gün C'], next: 0, active: null });
     assert.deepEqual(weekRotation({ days: [], nextDayId: null, today, active: { dayId: 'd_a', date: today } }), { names: [], next: 0, active: null });
   });
 

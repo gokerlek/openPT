@@ -39,7 +39,7 @@ import { localWorkoutText, readPendingWater, savePendingWater, subscribeLocalWor
  */
 
 // Sorgu ve program seçimi `workout-overview.tsx`'te (şerit de oradan okur); eski içe aktarmalar için buradan da.
-export { useWorkoutOverview, useWorkoutProgram, WORKOUT_KEY, WORKOUT_OVERVIEW_KEY, WorkoutProgramProvider } from './workout-overview';
+export { WORKOUT_KEY, WORKOUT_OVERVIEW_KEY, WorkoutProgramProvider } from './workout-overview';
 
 /** Telefondaki yarım antrenman (aynı ve öteki sekmelerdeki değişiklikleri izler). */
 function useLocalWorkout(clientId: string) {
@@ -185,7 +185,7 @@ export function TodayWorkout({ clientId, children }: { clientId: string; childre
   // Dönüş yalnız bitişte ilerler: şerit bugün başlamış yarım antrenmanın gününden sürer (`weekRotation`; "keep"
   // seçildiyse sıradaki günden).
   const { doc } = progress;
-  const activeDay = doc.program ? { dayId: doc.program.dayId, date: doc.date, rotation: doc.rotation?.value ?? null } : null;
+  const activeDay = doc.program ? { dayId: doc.program.dayId, date: doc.date } : null;
   return (
     <ResumeCard
       progress={progress}
@@ -200,7 +200,7 @@ const JSON_HEADERS = { 'Content-Type': 'application/json' };
 
 /** Bugünkü su: "Su · bugün 3 bardak [+1]" (44 px); +1'den sonra 3 sn "Geri al". */
 export function WaterCard({ clientId }: { clientId: string }) {
-  const { data, isPending } = useWorkoutOverview(clientId);
+  const { data, isPending, fetchStatus } = useWorkoutOverview(clientId);
   const local = useLocalWorkout(clientId);
   const queryClient = useQueryClient();
   const [pending, setPending] = useState<WaterTap[]>([]);
@@ -308,7 +308,8 @@ export function WaterCard({ clientId }: { clientId: string }) {
       <WaterGlass count={total} />
       <p className="min-w-0 flex-1 text-sm">
         <span className="mb-1 block text-muted-foreground">Su · bugün</span>
-        {isPending && !data ? (
+        {/* Çevrimdışıyken sorgu bekler (`paused`): telefondaki toplam gösterilir, iskelet sonsuza dek yanıp sönmez. */}
+        {isPending && fetchStatus !== 'paused' ? (
           <span aria-hidden className="inline-block h-4 w-4 animate-pulse rounded-md bg-muted align-middle" />
         ) : (
           <motion.b key={total} initial={{ scale: 1.15 }} animate={{ scale: 1 }} transition={tween(DURATION.fast)} className="inline-block text-3xl font-semibold tabular-nums">
