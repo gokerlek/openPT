@@ -42,7 +42,7 @@ import {
   type FinishReason,
 } from '@/lib/workout-flow';
 import { groupView, nextMemberLetter } from '@/lib/workout-groups';
-import { FOCUS_PARAM, focusOf, LIST_PARAM, workoutHref } from '@/lib/workout-nav';
+import { FOCUS_PARAM, focusOf, LIST_PARAM, pauseSteps, workoutHref } from '@/lib/workout-nav';
 import { createLocalWorkout, setsMissingOn, unsentSets, withChange, type LocalWorkout } from '@/lib/workout-outbox';
 import { acknowledgeRest, adjustRest, alarmPending, LATE_MS, startRest, tickRest, type RestEvent, type RestTimer } from '@/lib/workout-rest';
 import { afterFinish, extraKey, rekeyExtra, type WorkoutDay } from '@/lib/workout-plan';
@@ -292,6 +292,8 @@ export function WorkoutScreen({
   const [undoWater, setUndoWater] = useState(false);
   const [finishOpen, setFinishOpen] = useState(false);
   const [finishing, setFinishing] = useState(false);
+  // `finishing`'in güncel kopyası (effect'te yazılır): toast'ın "Geri al"ı atlama anında kurulur, state'i eski kalırdı.
+  const finishingRef = useRef(false);
   const [update, setUpdate] = useState<PendingUpdate | null>(null);
   const [editing, setEditing] = useState<EditTarget | null>(null);
   const [deleting, setDeleting] = useState<(EditTarget & { text: string }) | null>(null);
@@ -373,6 +375,10 @@ export function WorkoutScreen({
     [],
   );
 
+  useEffect(() => {
+    finishingRef.current = finishing;
+  }, [finishing]);
+
   /** Alt panelin dokunuş kilidi: durum değişiminden sonra dokunuş yutulur, alttaki öğeye geçmez. */
   const guard = useCallback((ms: number = WORKOUT.tapGuardMs) => {
     guardUntil.current = Math.max(guardUntil.current, performance.now() + ms);
@@ -409,23 +415,31 @@ export function WorkoutScreen({
   // değişince) klavye odağını çalardı.
   const returningToList = useRef(false);
   // "Ara verilsin mi?" korkuluğu kurulu (9. görev): bu sayfa liste işaretini (`?liste=1`) kendi işaretsiz girdisinin üstüne
-  // itti; değeri antrenmanın kimliği (antrenman başına; "Antrenmanı değiştir" sıfırlar). Açılış kuralının effect'i
-  // (taze açılış) ya da işaretsiz girdide odak açan `openFocus` yazar (`pushMark`). Kurulu ve adres işaretsizken (geri
-  // tuşu listeden işaretsiz girdiye döndü) ekran sorar. Sayfa liste ya da odak adresiyle yüklendiyse (yenileme) kurulmaz:
-  // altındaki girdi bu belgenin değil; geri tuşu onu yeniden yükler (işaretsizse açılış kuralı orada yeniden çalışır) ya
-  // da sayfadan çıkar (kabul edilen sınır). İlk yükleme de işaretsiz olduğundan "adreste işaret yok" tek başına yetmez:
-  // bayrak şart.
-  const [armed, setArmed] = useState<string | null>(null);
+  // itti. Açılış kuralının effect'i (taze açılış) ya da işaretsiz girdide odak açan `openFocus` yazar (`pushMark`). Kurulu
+  // ve adres işaretsizken (geri tuşu listeden işaretsiz girdiye döndü) ekran sorar. Antrenmanın kimliğine bağlı değil:
+  // arka plandaki tazeleme (`revalidate`) boş antrenmanı yeni kimlikli belgeyle yeniden kurabilir, girdiler yine bu
+  // sayfanın; yalnız "Antrenmanı değiştir" sıfırlar (`restartWith`). Sayfa liste ya da odak adresiyle yüklendiyse
+  // (yenileme) kurulmaz: altındaki girdi bu belgenin değil; geri tuşu onu yeniden yükler (işaretsizse açılış kuralı orada
+  // yeniden çalışır) ya da sayfadan çıkar (kabul edilen sınır). İlk yükleme de işaretsiz olduğundan "adreste işaret yok"
+  // tek başına yetmez: bayrak şart.
+  const [armed, setArmed] = useState(false);
+  // "Ara ver" sürüyor (`onPause`; ekran birazdan Bugün'e geçer): `'here'` bulunulan girdi Bugün'le değişiyor (dialog'dan ya
+  // da korkuluksuz), `'back'` önce işaretsiz girdiye dönülüyor (⋯'den). İkisinde de "Ara verilsin mi?"nin düğmeleri kilitli;
+  // `'back'`te adres bir an işaretsiz olsa da dialog açılmaz (soru zaten cevaplandı).
+  const [pausing, setPausing] = useState<'here' | 'back' | null>(null);
 
   /**
    * Liste işaretini bu sayfanın işaretsiz girdisinin üstüne iter ve korkuluğu kurar (`armed`). `history.state`'e kendi
    * nesnesi yazılmaz (`null`; Next'in yaması kendi alanlarını ekler). "Devam et" de bunu çağırır (`focusPushed`'a dokunmaz:
    * itilen bir liste girdisi, odak değil).
+   *
+   * Korkuluk bir geçişte (`startTransition`) kurulur: çağıran bir tıklamadır (satır, "Devam et") ve Next adresi mikro
+   * görevde, tıklamanın önceliğiyle yazar (`onDropUnit`'in yorumu). Eşzamanlı `setArmed` adresten önce çizilirdi: işaretsiz
+   * adresle "Ara verilsin mi?" bir kare açılırdı. Geçiş adresin arkasından gelir.
    */
   const pushMark = useCallback(() => {
     window.history.pushState(null, '', workoutHref(window.location.pathname, window.location.search, { list: true }));
-    const id = localRef.current?.doc.id;
-    if (id) setArmed(id);
+    startTransition(() => setArmed(true));
   }, []);
 
   /**
@@ -619,16 +633,19 @@ export function WorkoutScreen({
    * listeden geri "Ara verilsin mi?"); ardından hepsi bitmediyse "şu an"ın odağı da itilir (yeni antrenmanda ilk hareket;
    * yarımda yarım bırakılan ya da sıradaki, `listView`). Hepsi bittiyse ya da bitiş sorusuyla açıldıysa (`?bitir=1`;
    * `workoutHref` onu düşürür, sheet `adopt`'ta açılır) yalnız liste: sheet kapanınca liste görünür. Adres liste ya da
-   * odak taşıyorsa (yenileme, geri/ileri) adrese dokunulmaz ve korkuluk kurulmaz, yalnız süreli set sayacının kuralı
-   * adresin gösterdiği harekete uygulanır; karar yine bu antrenman için verilmiş sayılır. "Antrenmanı değiştir" bayrağı
-   * (`opened`) ve korkuluğu sıfırlar (`restartWith`): yeni antrenman da Bugün'den açılmış gibi odakla açılır.
+   * odak taşıyorsa (yenileme, geri/ileri; ya da arka plandaki tazeleme boş antrenmanı yeni kimlikli belgeyle yeniden kurdu)
+   * adrese ve korkuluğa dokunulmaz (kurulu değilse kurulmaz, kuruluysa kalır), yalnız süreli set sayacının kuralı adresin
+   * gösterdiği harekete uygulanır; karar yine bu antrenman için verilmiş sayılır. "Antrenmanı değiştir" bayrağı (`opened`)
+   * ve korkuluğu sıfırlar (`restartWith`): yeni antrenman da Bugün'den açılmış gibi odakla açılır.
    *
-   * Chrome'un geçmiş müdahalesi: kullanıcı etkileşimi olmadan itilen girdiler geri tuşunda atlanabilir. Bugün'den
-   * dokunuşla gelince (yumuşak geçiş) sayfada etkileşim vardır. Sert yüklemede (yalnız yenileme değil: işaretsiz adresin
-   * yenilenmesi, yer imi, yeni sekme, ana ekran kısayolu, bildirim, adres çubuğu) bu effect sayfa henüz dokunuş almadan iter;
-   * o zaman geri tuşu liste ve işaretsiz girdiyi atlayıp sayfadan çıkabilir (odaktan listeye bile dönmeyebilir; sonradan
-   * dokunuş Chrome'da işareti kaldırabilir). Kabul edilen sınır, yöneticinin mobil öykünmesinde denenir; itmeyi
-   * ilk dokunuşa ertelemek açılışı (odakla açılma) bozardı.
+   * Chrome'un geçmiş müdahalesi: kullanıcı etkileşimi olmadan itilen girdiler tarayıcının geri tuşunda atlanabilir. Sert
+   * yüklemede (yalnız yenileme değil: işaretsiz adresin yenilenmesi, yer imi, yeni sekme, ana ekran kısayolu, bildirim, adres
+   * çubuğu) bu effect sayfa henüz dokunuş almadan iter; o zaman geri tuşu liste ve işaretsiz girdiyi atlayıp sayfadan
+   * çıkabilir (odaktan listeye bile dönmeyebilir; sonradan dokunuş Chrome'da işareti kaldırabilir). Bugün'den dokunuşla
+   * gelmek (yumuşak geçiş) de yetmeyebilir: dokunuşun etkileşimini Next'in `/me/antrenman` için yaptığı `pushState`
+   * harcayabilir, bu effect'in itmeleri o zaman yine atlanabilir. Doğrulanmadı: gerçek geri tuşu/hareketiyle denenmeli
+   * (Puppeteer `goBack`, CDP ve `history.back()` müdahaleyi atlar). Kabul edilen sınır; itmeyi ilk dokunuşa ertelemek
+   * açılışı (odakla açılma) bozardı.
    *
    * Neden ilk mount effect'inde değil: Next'in `pushState`/`replaceState` yaması (`app-router.js`) ata bileşenin
    * (AppRouter) `useEffect`'inde kurulur; sert yüklemede çocuğun mount effect'i ondan önce çalışır ve yamasız
@@ -666,7 +683,7 @@ export function WorkoutScreen({
     window.history.pushState(null, '', workoutHref(window.location.pathname, window.location.search, { list: true }));
     // Korkuluk işaretle aynı çizime düşer (ikisi de normal öncelikli; `setOpened` gibi): "Ara verilsin mi?" bir kare bile
     // işaretsiz adresle açık görünmez.
-    setArmed(openingDoc);
+    setArmed(true);
     if (!target) return;
     focusRef.current = target;
     focusPushed.current = true;
@@ -1223,9 +1240,9 @@ export function WorkoutScreen({
       setTransition(null);
       setLoad({ phase: 'loading' });
       setOpened(null);
-      // Korkuluk antrenman başına: adres birazdan işaretsiz (seçilen gün) olur, eski korkuluk orada sormamalı. Yeni
+      // Korkuluğun tek sıfırlandığı yer: adres birazdan işaretsiz (seçilen gün) olur, eski korkuluk orada sormamalı. Yeni
       // antrenmanın açılış kuralı yeniden kurar.
-      setArmed(null);
+      setArmed(false);
       focusPushed.current = false;
       focusRef.current = null;
       leftUnit.current = null;
@@ -1438,14 +1455,47 @@ export function WorkoutScreen({
 
   /**
    * "Ara ver" (⋯ menüsü ve listeden geri tuşunun "Ara verilsin mi?"si): Bugün'e, antrenman telefonda kalır (Bugün'de "Devam
-   * et"). İkisi de aynı: `router.replace` (`leave()` gibi). Ara vermek antrenmandan çıkmaktır, ileri bir adım değil:
-   * `push` antrenmanın girdilerinin üstüne Bugün'ü eklerdi ve Bugün'de geri tuşu antrenmana dönerdi; işaretsiz girdiden
-   * çıkılınca dönüş o girdiye olur, açılış kuralı yeniden işaret ve odak iter, danışan antrenmana geri çekilirdi.
-   * `replace` bulunduğu girdinin yerine Bugün'ü koyar: dialog'dan çıkınca Bugün'de geri tuşu antrenmanın altındakine
-   * (genellikle geldiği Bugün) gider; ⋯'den çıkınca da antrenmanın bir girdisi eksik kalır. (`replace` ileri geçmişi
-   * silmez: tarayıcının ileri tuşu antrenmanın liste girdisine dönebilir; kabul.)
+   * et"). Ara vermek antrenmandan çıkmaktır, ileri bir adım değil: iki yol da Bugün'ü işaretsiz girdinin yerine koyar
+   * (`router.replace('/me')`, `leave()` gibi), Bugün'de geri tuşu antrenmanın altındakine (genellikle geldiği Bugün) gider.
+   * `push` girdilerin üstüne Bugün'ü eklerdi, Bugün'de geri tuşu antrenmana dönerdi.
+   *
+   * Dialog'dan: işaretsiz girdinin kendisindeyiz, yalnız `replace`. ⋯'den (liste ya da odak): önce işaretsiz girdiye geri
+   * gidilir (`pauseSteps`: odakta 2, listede 1), Bugün sonra onun yerine konur. Bulunulan girdi değişseydi işaretsiz girdi
+   * altta kalırdı (listeden `B, [/me], F`): Bugün'de geri tuşu oraya iner, ekran yeniden bağlanır, açılış kuralı işareti ve
+   * odağı yeniden iter, danışan antrenmana geri çekilirdi. `history.go` zaman uyumsuz: `replace` gelen `popstate`'te
+   * çağrılır. Tek seferlik dinleyici Next'inkinden sonra eklendi, sonra çalışır: Next işaretsiz girdiyi geri yükler
+   * (`ACTION_RESTORE`), `replace` onu değiştirir (eylem kuyruğu sırayla). Dönüş geri tuşunun listeden/odaktan işaretsiz
+   * girdiye dönüşüyle aynı yol (odak eşitleme effect'i sayacı düşürür, dinlenmeyi küçültür; sunucuya bir şey gitmez);
+   * `pausing` 'back' olduğundan işaretsiz adreste "Ara verilsin mi?" açılmaz. Ekran kapanırsa dinleyici kaldırılır.
+   *
+   * Korkuluk yoksa (sayfa liste ya da odak adresiyle yüklendi) altındaki girdi bilinmez: bulunulan girdi değişir (kabul).
+   * `replace` ileri geçmişi silmez: tarayıcının ileri tuşu antrenmanın girdilerine dönebilir (kabul). Ara verilirken ikinci
+   * dokunuş bir şey yapmaz (⋯'den ikinci kez geri gidilmez); dialog'un düğmeleri kilitli (`busy`).
    */
-  const onPause = useCallback(() => router.replace('/me'), [router]);
+  const pauseListener = useRef<(() => void) | null>(null);
+  useEffect(
+    () => () => {
+      if (pauseListener.current) window.removeEventListener('popstate', pauseListener.current);
+    },
+    [],
+  );
+  const onPause = useCallback(() => {
+    if (pausing) return;
+    const steps = pauseSteps(window.location.search, { armed, focusPushed: focusPushed.current });
+    if (steps === 0) {
+      setPausing('here');
+      router.replace('/me');
+      return;
+    }
+    setPausing('back');
+    const back = () => {
+      pauseListener.current = null;
+      router.replace('/me');
+    };
+    pauseListener.current = back;
+    window.addEventListener('popstate', back, { once: true });
+    window.history.go(-steps);
+  }, [pausing, armed, router]);
 
   /** "Ara verilsin mi?"de "Devam et" (ya da dialog'u kapatmak): liste işareti geri konur, ikinci geri tuşu yine sorar. */
   const onStay = useCallback(() => {
@@ -1549,7 +1599,8 @@ export function WorkoutScreen({
           label: 'Geri al',
           onClick: () => {
             const latest = localRef.current;
-            if (!latest || latest.doc.id !== sessionId) return;
+            // Bitiş (ya da iptal, değiştirme) gönderilirken geri alınmaz: belge yolda, meşgul bitiş sorusu kapanmamalı.
+            if (!latest || latest.doc.id !== sessionId || finishingRef.current) return;
             commitFlow(latest, undoSkip(planOf(latest), latest.doc, result.undo, stampOf(latest)), {}, key);
             // Son hareket atlanınca açılan bitiş sorusu kapanır (hareket yine yapılacak); açılmadıysa zamanlayıcısı açmaz.
             setFinishOpen(false);
@@ -1823,10 +1874,10 @@ export function WorkoutScreen({
   const { plan, doc, focus: shownFocus, list, cursor, next, following: followingKey, unitKey, row, sets, group, warmups, setupNote } = view;
   // Odak yoksa (ya da geçersizse) ana ekran liste; varsa o hareketin kartı ve giriş paneli.
   const listMode = shownFocus === null;
-  // Listeden geri tuşu (9. görev): korkuluk bu antrenman için kurulu ve adres işaretsiz girdide → "Ara verilsin mi?".
-  // İşaretsiz bir odak adresinde sormaz; antrenman bitiriliyor ya da değiştiriliyorsa da (sonu zaten başka yere gider,
-  // olmazsa sorar).
-  const pauseAsked = armed === doc.id && !params.has(LIST_PARAM) && !params.has(FOCUS_PARAM) && !finishing;
+  // Listeden geri tuşu (9. görev): korkuluk kurulu ve adres işaretsiz girdide → "Ara verilsin mi?". İşaretsiz bir odak
+  // adresinde sormaz; antrenman bitiriliyor ya da değiştiriliyorsa da (sonu zaten başka yere gider, olmazsa sorar) ve ⋯'deki
+  // "Ara ver" işaretsiz girdiye dönerken de (`pausing` 'back').
+  const pauseAsked = armed && pausing !== 'back' && !params.has(LIST_PARAM) && !params.has(FOCUS_PARAM) && !finishing;
   const rest = local.rest;
   const shown = saving?.next ?? next;
   const shownRow = shown ? (plan.rows[shown.rowId] ?? null) : null;
@@ -2107,7 +2158,7 @@ export function WorkoutScreen({
         onDismiss={() => onProgramAnswer(null)}
       />
       <FinishedElsewhereDialog count={elsewhere?.count ?? null} busy={elsewhereBusy} onAdd={onAddElsewhere} onSkip={() => leave('Bu antrenman başka bir cihazda bitirildi.', 'info')} />
-      <PauseDialog open={pauseAsked} onContinue={onStay} onPause={onPause} />
+      <PauseDialog open={pauseAsked} busy={pausing !== null} onContinue={onStay} onPause={onPause} />
       {/* Yoklama (§2.2): yalnız sağlık onayı varken ve antrenman yeni başlıyorken açılır. */}
       <StartCheck clientId={clientId} local={local} onApply={commit} onLeave={leave} />
       <p aria-live="polite" className="sr-only">

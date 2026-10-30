@@ -450,22 +450,24 @@ export function FinishedElsewhereDialog({
  * Listeden geri tuşu (Faz 2, 9. görev): "Ara verilsin mi?". **Devam et** listede kalır (ekran liste işaretini yeniden
  * iter), **Ara ver** Bugün'e döner (antrenman telefonda kalır). Telefonda düğmeler üst üste: "Devam et" birincil, en altta
  * (başparmağın düştüğü yer güvenli olan) ve odak onda. Açıklığı adresten gelir (işaretsiz girdi): kapatmak (Esc) "Devam
- * et"tir, yoksa adres değişmeden dialog yeniden açık sayılırdı.
+ * et"tir, yoksa adres değişmeden dialog yeniden açık sayılırdı. `busy`: ara veriliyor (Bugün açılıyor); dialog açık kalır,
+ * düğmeler devre dışı ve kapanmayı reddeder (FinishSheet'in düzeni).
  */
-export function PauseDialog({ open, onContinue, onPause }: { open: boolean; onContinue: () => void; onPause: () => void }) {
+export function PauseDialog({ open, busy, onContinue, onPause }: { open: boolean; busy: boolean; onContinue: () => void; onPause: () => void }) {
   const stay = useRef<HTMLButtonElement>(null);
   return (
-    <AlertDialog open={open} onOpenChange={(next) => (next ? undefined : onContinue())}>
+    <AlertDialog open={open} onOpenChange={(next) => (next || busy ? undefined : onContinue())}>
       <AlertDialogContent initialFocus={stay}>
         <AlertDialogHeader>
           <AlertDialogTitle>Ara verilsin mi?</AlertDialogTitle>
           <AlertDialogDescription>Antrenmanın telefonunda kalır; Bugün&apos;den devam edersin.</AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <Button ref={stay} className="h-11" onClick={onContinue}>
+          <Button ref={stay} className="h-11" disabled={busy} onClick={onContinue}>
             Devam et
           </Button>
-          <Button variant="outline" className="h-11" onClick={onPause}>
+          <Button variant="outline" className="h-11" disabled={busy} onClick={onPause}>
+            {busy ? <Spinner data-icon="inline-start" /> : null}
             Ara ver
           </Button>
         </AlertDialogFooter>

@@ -12,9 +12,9 @@ import type { WorkoutResponse } from '@/lib/workout-routes';
 
 /**
  * "Antrenmanı değiştir" (⋯ menüsü). `busy`: değiştirme sürüyor (setli antrenmanın bitişi ya da setsiz antrenmanın silinmesi):
- * sheet istek bitene kadar açık kalır, kapanmayı reddeder (Esc, sürükleme, Vazgeç) ve seçimler devre dışı; modal olduğundan
- * alttaki ekran da dokunulmaz (bitişte gönderilen belgeden sonra yazılan set kaybolurdu). Başarıda ekran sheet'i kapatır,
- * hatada sheet açık kalır (yeniden dene ya da vazgeç).
+ * sheet istek bitene kadar açık kalır, kapanmayı reddeder (Esc, sürükleme, Vazgeç; ✕ gizlenir) ve seçimler devre dışı;
+ * modal olduğundan alttaki ekran da dokunulmaz (bitişte gönderilen belgeden sonra yazılan set kaybolurdu). Başarıda ekran
+ * sheet'i kapatır, hatada sheet açık kalır (yeniden dene ya da vazgeç).
  */
 export function WorkoutSwitchSheet({ open, busy, onOpenChange, onSwitch }: {
   open: boolean;
@@ -23,7 +23,7 @@ export function WorkoutSwitchSheet({ open, busy, onOpenChange, onSwitch }: {
   onSwitch: (program: string, day: string) => void;
 }) {
   return <Drawer open={open} onOpenChange={next => (busy ? undefined : onOpenChange(next))}>
-    <DrawerContent className="mx-auto max-w-lg" data-base-ui-swipe-ignore={busy || undefined}>
+    <DrawerContent className="mx-auto max-w-lg" showCloseButton={!busy} data-base-ui-swipe-ignore={busy || undefined}>
       <DrawerHeader>
         <DrawerTitle>Antrenmanı değiştir</DrawerTitle>
         <DrawerDescription>Yaptığın setler mevcut antrenmanın kaydı olarak korunur. Seçtiğin program/gün ayrı bir antrenman olarak başlar; kayıtlar birbirine karışmaz.</DrawerDescription>

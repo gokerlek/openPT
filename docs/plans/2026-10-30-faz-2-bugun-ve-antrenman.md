@@ -894,27 +894,43 @@ sayfa yenilendikten sonra odak → geri denenir: Chrome kullanıcı etkileşimi 
 atlayabilir; atlıyorsa bu not edilir (yenileme sonrası kabul edilen sınır).
 
 **Uygulamada (9):**
-- **Korkuluk** `armed` state'te, değeri antrenmanın kimliği (antrenman başına). Açılış kuralının effect'i liste işaretini
-  ittiğinde yazar (`setOpened` ile aynı çizime düşer: dialog bir kare bile açık görünmez). Dialog (`PauseDialog`,
-  `workout-sheets.tsx`) `armed === doc.id && !liste && !hareket && !finishing` iken açık: işaretsiz bir odak adresinde ve
-  bitiş/değiştirme sürerken sormaz. **Devam et** işareti `pushState` ile geri koyar (`pushMark`; `focusPushed`'a dokunmaz),
-  ileri geçmiş (eski odak) düşer. Dialog'u kapatmak (Esc) "Devam et"tir: açıklığı adresten geldiği için başka türlü
-  kapanamazdı. Telefonda "Devam et" birincil, altta ve odakta.
-- **Ara ver** (dialog ve ⋯ menüsü) ikisi de `router.replace('/me')` (`leave()` gibi; 7. görevin `router.push`'u değişti):
-  ara vermek antrenmandan çıkmak. `push` antrenman girdilerinin üstüne Bugün'ü eklerdi; işaretsiz girdiden çıkılınca Bugün'de
-  geri tuşu o girdiye döner, açılış kuralı yeniden iter, danışan antrenmana geri çekilirdi. `replace` ileri geçmişi silmez
-  (tarayıcının ileri tuşu antrenmanın liste girdisine dönebilir; kabul).
+- **Korkuluk** `armed` state'te, boolean (planın dediği gibi). İlk uygulamada değeri antrenmanın kimliğiydi; inceleme:
+  arka plandaki tazeleme (`revalidate`) boş antrenmanı yeni kimlikli belgeyle yeniden kurabilir, açılış kuralı o zaman
+  işaretli adreste çalışır (kurmaz) ve listeden geri sormadan çıkardı. Tek sıfırlama `restartWith`'te. Açılış kuralının
+  effect'i liste işaretini ittiğinde yazar (`setOpened` ile aynı çizime düşer: dialog bir kare bile açık görünmez);
+  tıklamadan gelen `pushMark` geçişte (`startTransition`) yazar: Next adresi mikro görevde tıklamanın önceliğiyle yazar,
+  eşzamanlı `setArmed` ondan önce çizilir, dialog işaretsiz adresle bir kare açılırdı. Dialog (`PauseDialog`,
+  `workout-sheets.tsx`) `armed && pausing !== 'back' && !liste && !hareket && !finishing` iken açık: işaretsiz bir odak
+  adresinde, bitiş/değiştirme sürerken ve ⋯'deki "Ara ver" işaretsiz girdiye dönerken sormaz. **Devam et** işareti
+  `pushState` ile geri koyar (`pushMark`; `focusPushed`'a dokunmaz), ileri geçmiş (eski odak) düşer. Dialog'u kapatmak (Esc)
+  "Devam et"tir: açıklığı adresten geldiği için başka türlü kapanamazdı. Telefonda "Devam et" birincil, altta ve odakta.
+- **Ara ver** (dialog ve ⋯ menüsü) ikisi de Bugün'ü işaretsiz girdinin yerine koyar (`router.replace('/me')`, `leave()`
+  gibi; 7. görevin `router.push`'u değişti): ara vermek antrenmandan çıkmak, Bugün'de geri tuşu antrenmanın altındakine
+  gider. `push` antrenman girdilerinin üstüne Bugün'ü eklerdi; işaretsiz girdiden çıkılınca Bugün'de geri tuşu o girdiye
+  döner, açılış kuralı yeniden iter, danışan antrenmana geri çekilirdi. Dialog'dan işaretsiz girdinin kendisindeyiz: yalnız
+  `replace`. ⋯'den (liste ya da odak) ilk uygulama da yalnız `replace` yapıyordu; inceleme: listeden `B, [/me], F` kalır,
+  Bugün'de geri B'ye iner ve aynı tuzak. Şimdi korkuluk kuruluyken önce işaretsiz girdiye geri gidilir
+  (`history.go(-n)`; `pauseSteps`, `workout-nav.ts`, testli: odakta 2, listede 1; korkuluk yoksa, odağı bu sayfa itmediyse ya
+  da zaten işaretsiz girdideyse 0), `replace` gelen `popstate`'te çağrılır (tek seferlik dinleyici Next'inkinden sonra
+  eklenir: Next girdiyi geri yükler, `replace` onu değiştirir; ekran kapanırsa dinleyici kalkar). Dönüş geri tuşunun
+  listeden/odaktan işaretsiz girdiye dönüşüyle aynı yol: odak eşitleme effect'i sayacı düşürür, dinlenmeyi küçültür
+  (yalnız telefonda; sunucuya bir şey gitmez). Ara verilirken (`pausing`) ikinci dokunuş bir şey yapmaz, dialog açık kalır,
+  düğmeleri devre dışı ("Ara ver"de dönen gösterge) ve kapanmayı reddeder. `replace` ileri geçmişi silmez (tarayıcının
+  ileri tuşu antrenmanın girdilerine dönebilir; kabul).
 - **İşaretsiz girdide satıra dokunmak:** `openFocus` listeden iterken adreste işaret yoksa önce işareti iter (korkuluk da
   kurulur), sonra odağı: odağın altında hep işaretli liste. Seçildi, çünkü dialog modal olsa da altındaki toast'ların
   düğmeleri ("Geri al", "Şimdi yap") odak açabilir; ayrıca sayfa `?hareket=` ile yüklenip "‹ Liste" odağı `replaceState` ile
   düşürünce liste işaretsiz girdide açık kalır. Dialog'u kapatmanın "Devam et" olması ayrıca (yukarıda).
-- **Antrenmanı değiştir:** `restartWith` korkuluğu sıfırlar; yeni antrenmanın açılış kuralı yeniden kurar. **Kabul edilen
+- **Antrenmanı değiştir:** `restartWith` korkuluğu sıfırlar (tek sıfırlama); yeni antrenmanın açılış kuralı yeniden kurar. Sheet
+  meşgulken ✕ gizli (`showCloseButton={!busy}`; Esc, sürükleme ve Vazgeç zaten reddediliyordu). **Kabul edilen
   sınır:** eski antrenmanın işaretsiz ve `?liste=1` girdileri geçmişte altta kalır; geri tuşuyla oraya inilirse ekran
   telefondaki (yeni) antrenmanı gösterir: eski liste girdisi liste, eski işaretsiz girdi yine "Ara verilsin mi?" der.
-- **Chrome'un geçmiş müdahalesi** (açılış effect'inin yorumunda): kullanıcı etkileşimi olmadan itilen girdiler geri tuşunda
-  atlanabilir. Yalnız yenilemede değil, her sert yüklemede (işaretsiz adresin yenilenmesi, yer imi, yeni sekme, ana ekran
-  kısayolu, bildirim) açılış kuralı sayfa dokunuş almadan iter; geri tuşu liste ve işaretsiz girdiyi atlayıp çıkabilir.
-  Bugün'den dokunuşla gelince (yumuşak geçiş) etkileşim vardır. Mobil öykünmede denenir.
+- **Chrome'un geçmiş müdahalesi** (açılış effect'inin yorumunda): kullanıcı etkileşimi olmadan itilen girdiler tarayıcının geri
+  tuşunda atlanabilir. Yalnız yenilemede değil, her sert yüklemede (işaretsiz adresin yenilenmesi, yer imi, yeni sekme, ana
+  ekran kısayolu, bildirim) açılış kuralı sayfa dokunuş almadan iter; geri tuşu liste ve işaretsiz girdiyi atlayıp çıkabilir.
+  Bugün'den dokunuşla gelmek (yumuşak geçiş) de yetmeyebilir: dokunuşun etkileşimini Next'in `/me/antrenman` için yaptığı
+  `pushState` harcayabilir, açılış kuralının itmeleri o zaman yine atlanabilir. Doğrulanmadı: gerçek geri tuşu/hareketiyle
+  denenmeli (Puppeteer `goBack`, CDP ve `history.back()` müdahaleyi atlar).
 - **Yenileme:** sayfa liste ya da odak adresiyle yenilenince korkuluk kurulmaz. Altındaki girdi eski belgenin: geri tuşu onu
   tam yükler; işaretsiz girdiyse açılış kuralı orada yeniden çalışır (odakla açılır, korkuluk kurulur), yani "doğrudan
   çıkmak" yerine antrenman yeniden açılabilir. Sonraki geri tuşları yine sorar.
@@ -923,9 +939,18 @@ atlayabilir; atlıyorsa bu not edilir (yenileme sonrası kabul edilen sınır).
   - Odaktan geri: `B, [L], F` (liste).
   - Listeden geri: `[B], L, F` → "Ara verilsin mi?". **Devam et:** `B, [L′]` (ileri geçmiş düşer; ikinci geri yine sorar).
     **Ara ver:** `[/me], L, F` (B'nin yerine Bugün).
+  - ⋯ "Ara ver" listeden, korkuluk kurulu: `B, [L], F` → bir geri `[B], L, F` (dialog açılmaz) → `[/me], L, F`. Bugün'de geri
+    B'nin altındakine (genellikle Bugün).
+  - ⋯ "Ara ver" odaktan, korkuluk kurulu: `B, L, [F]` → iki geri `[B], L, F` → `[/me], L, F` (aynı son).
+  - ⋯ "Ara ver" korkuluksuz (sayfa `L` ya da `F` adresiyle yüklendi; `X`: altındaki, bu belgenin olmayan girdi): geri
+    gidilmez, bulunulan girdi değişir. Listeden `X, [/me]` (yüklendikten sonra odak açılıp listeye dönüldüyse `X, [/me], F`);
+    odaktan `X, [/me]` (`F` yüklenen girdiyse) ya da `X, L, [/me]` (`F` listeden itildiyse). Bugün'de geri `L`'ye ya da
+    `X`'e iner ve antrenman yeniden açılabilir (`X` işaretsizse açılış kuralıyla); kabul edilen sınır (yenileme maddesi).
   - İşaretsiz girdide satıra dokunmak (dialog'u atlayan toast ya da korkuluksuz liste): `B, L′, [F′]`; "‹ Liste" `L′`'ye.
   - Antrenmanı değiştir (odaktan): `B, L, [B₂]` (F'nin yerine yeni gün) → açılış: `B, L, B₂, L₂, [F₂]`; geri: `L₂`, sonra
-    `B₂`'de soru.
+    `B₂`'de soru. ⋯ "Ara ver": `B, L, [/me], …`; Bugün'de geri eski `L`'ye iner (yukarıdaki kabul edilen sınır).
+- **İnceleme bulguları (küçük):** "Bu hareketi atla"nın toast'ındaki "Geri al" bitiş (ya da iptal, değiştirme) gönderilirken
+  hiçbir şey yapmaz (`finishingRef`; yoksa meşgul bitiş sorusunu kapatır, belgeyi yolda değiştirirdi).
 
 ---
 

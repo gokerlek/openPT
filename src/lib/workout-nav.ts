@@ -42,3 +42,17 @@ export function focusOf(params: Pick<URLSearchParams, 'get'>): string | null {
   const value = params.get(FOCUS_PARAM);
   return value && isUnitKey(value) ? value : null;
 }
+
+/**
+ * "Ara ver"den önce kaç girdi geri gidilir (9. görev): Bugün işaretsiz girdinin yerine konur ki Bugün'de geri tuşu
+ * antrenmanın altındakine gitsin. Korkuluk kuruluyken (`armed`) liste işaretini bu sayfa işaretsiz girdinin hemen üstüne,
+ * odağı da (`focusPushed`) liste girdisinin hemen üstüne itti: odakta 2, yalnız işaretliyken 1. Zaten işaretsiz girdideyse
+ * ("Ara verilsin mi?") 0: o girdi değişir. Korkuluk yoksa (sayfa liste ya da odak adresiyle yüklendi) ya da odağı bu sayfa
+ * itmediyse de 0: altı bilinmez, bulunulan girdi değişir.
+ */
+export function pauseSteps(search: string, state: { armed: boolean; focusPushed: boolean }): 0 | 1 | 2 {
+  if (!state.armed) return 0;
+  const params = new URLSearchParams(search);
+  if (params.has(FOCUS_PARAM)) return state.focusPushed ? 2 : 0;
+  return params.has(LIST_PARAM) ? 1 : 0;
+}
