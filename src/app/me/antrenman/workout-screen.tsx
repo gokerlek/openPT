@@ -418,6 +418,11 @@ export function WorkoutScreen({
   // yeniden çalışır) ya da sayfadan çıkar (kabul edilen sınır). İlk yükleme de işaretsiz olduğundan "adreste işaret yok"
   // tek başına yetmez: bayrak şart.
   const [armed, setArmed] = useState(false);
+  // İşaret itildi; korkuluk adres işaretli çizildikten sonra kurulur (aşağıdaki effect, `pushMark` ve açılış kuralı
+  // yazar). Next yamalı `pushState`'in adresini bir geçişte yazar (`startTransition`, `app-router.js`); korkuluk hemen
+  // kurulsaydı işaretsiz adresle önce çizilebilir, "Ara verilsin mi?" bir kare açılıp kapanırdı (Bugün'den açılışta
+  // kapanış animasyonu görüldü). Öncelik sırasına güvenmek yerine sonucu bekler.
+  const armPending = useRef(false);
   // "Ara ver" sürüyor (`onPause`; ekran birazdan Bugün'e geçer): `'here'` bulunulan girdi Bugün'le değişiyor (dialog'dan ya
   // da korkuluksuz), `'back'` önce işaretsiz girdiye dönülüyor (⋯'den). İkisinde de "Ara verilsin mi?"nin düğmeleri kilitli;
   // `'back'`te adres bir an işaretsiz olsa da dialog açılmaz (soru zaten cevaplandı). Sürerken ekran `inert`.
@@ -434,13 +439,12 @@ export function WorkoutScreen({
    * nesnesi yazılmaz (`null`; Next'in yaması kendi alanlarını ekler). "Devam et" de bunu çağırır (`focusPushed`'a dokunmaz:
    * itilen bir liste girdisi, odak değil).
    *
-   * Korkuluk bir geçişte (`startTransition`) kurulur: çağıran bir tıklamadır (satır, "Devam et") ve Next adresi mikro
-   * görevde, tıklamanın önceliğiyle yazar (`onDropUnit`'in yorumu). Eşzamanlı `setArmed` adresten önce çizilirdi: işaretsiz
-   * adresle "Ara verilsin mi?" bir kare açılırdı. Geçiş adresin arkasından gelir.
+   * Korkuluk adres işaretli çizilince kurulur (`armPending`): hemen kurulsaydı işaretsiz adresle "Ara verilsin mi?" bir
+   * kare açılabilirdi.
    */
   const pushMark = useCallback(() => {
     window.history.pushState(null, '', workoutHref(window.location.pathname, window.location.search, { list: true }));
-    startTransition(() => setArmed(true));
+    armPending.current = true;
   }, []);
 
   /**
@@ -683,14 +687,20 @@ export function WorkoutScreen({
     if (current.timer && !(next && current.timer.rowId === next.rowId && current.timer.setIndex === next.setIndex)) commit({ ...current, timer: null });
     if (!fresh) return;
     window.history.pushState(null, '', workoutHref(window.location.pathname, window.location.search, { list: true }));
-    // Korkuluk işaretle aynı çizime düşer (ikisi de normal öncelikli; `setOpened` gibi): "Ara verilsin mi?" bir kare bile
-    // işaretsiz adresle açık görünmez.
-    setArmed(true);
+    // Korkuluk adres işaretli çizilince kurulur (`armPending`): "Ara verilsin mi?" bir kare bile işaretsiz adresle açılmaz.
+    armPending.current = true;
     if (!target) return;
     focusRef.current = target;
     focusPushed.current = true;
     window.history.pushState(null, '', workoutHref(window.location.pathname, window.location.search, { focus: target }));
   }, [openingDoc, opened, finishOnOpen, commit]);
+
+  // Bekleyen korkuluk (`armPending`): adres işaretli çizildi, artık kurulabilir.
+  useEffect(() => {
+    if (!armPending.current || !(params.has(LIST_PARAM) || params.has(FOCUS_PARAM))) return;
+    armPending.current = false;
+    setArmed(true);
+  }, [params]);
 
   // Ses bağlamı ilk dokunuşta açılır: sayfa dinlenmenin ortasında yenilendiyse de bitiş çalsın.
   useEffect(() => {
@@ -1248,6 +1258,7 @@ export function WorkoutScreen({
       // Korkuluğun tek sıfırlandığı yer: adres birazdan işaretsiz (seçilen gün) olur, eski korkuluk orada sormamalı. Yeni
       // antrenmanın açılış kuralı yeniden kurar.
       setArmed(false);
+      armPending.current = false;
       focusPushed.current = false;
       focusRef.current = null;
       leftUnit.current = null;

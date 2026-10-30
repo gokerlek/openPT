@@ -896,10 +896,11 @@ atlayabilir; atlıyorsa bu not edilir (yenileme sonrası kabul edilen sınır).
 **Uygulamada (9):**
 - **Korkuluk** `armed` state'te, boolean (planın dediği gibi). İlk uygulamada değeri antrenmanın kimliğiydi; inceleme:
   arka plandaki tazeleme (`revalidate`) boş antrenmanı yeni kimlikli belgeyle yeniden kurabilir, açılış kuralı o zaman
-  işaretli adreste çalışır (kurmaz) ve listeden geri sormadan çıkardı. Tek sıfırlama `restartWith`'te. Açılış kuralının
-  effect'i liste işaretini ittiğinde yazar (`setOpened` ile aynı çizime düşer: dialog bir kare bile açık görünmez);
-  tıklamadan gelen `pushMark` geçişte (`startTransition`) yazar: Next adresi mikro görevde tıklamanın önceliğiyle yazar,
-  eşzamanlı `setArmed` ondan önce çizilir, dialog işaretsiz adresle bir kare açılırdı. Dialog (`PauseDialog`,
+  işaretli adreste çalışır (kurmaz) ve listeden geri sormadan çıkardı. Tek sıfırlama `restartWith`'te. Açılış kuralı ve
+  `pushMark` korkuluğu hemen kurmaz, bekletir (`armPending`); adres işaretli çizilince bir effect kurar. Önce ikisi de
+  öncelik sırasına güveniyordu (açılış kuralında doğrudan `setArmed`, `pushMark`'ta `startTransition`), ama Next yamalı
+  `pushState`'in adresini bir geçişte yazar (`app-router.js`): tarayıcı turunda Bugün'den "Devam et" ile açılışta
+  dialog'un kapanış animasyonu görüldü (işaretsiz adresle bir kare açılmıştı). Dialog (`PauseDialog`,
   `workout-sheets.tsx`) `armed && pausing !== 'back' && !liste && !hareket && !finishing` iken açık: işaretsiz bir odak
   adresinde, bitiş/değiştirme sürerken ve ⋯'deki "Ara ver" işaretsiz girdiye dönerken sormaz. **Devam et** işareti
   `pushState` ile geri koyar (`pushMark`; `focusPushed`'a dokunmaz), ileri geçmiş (eski odak) düşer. Dialog'u kapatmak (Esc)
