@@ -300,7 +300,10 @@ export async function ProgramCard({
                       weight="bold"
                       className="size-3.5 shrink-0 motion-safe:transition-transform motion-safe:duration-160 group-open/rest:rotate-90"
                     />
-                    Tümünü gör (<span className="tabular-nums">{preview.restRows}</span> hareket daha)
+                    {/* Tek kutu: flex'te metin parçaları ayrı öğe olur, `gap` parantezin içine boşluk koyardı. */}
+                    <span>
+                      Tümünü gör (<span className="tabular-nums">{preview.restRows}</span> hareket daha)
+                    </span>
                   </summary>
                   <div className="pt-2">
                     <ClientDayPlan blocks={preview.rest} exercises={byId} labels={labels} cared={cares.rows} />
