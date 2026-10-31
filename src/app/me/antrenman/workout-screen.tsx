@@ -89,7 +89,7 @@ import { EntryPanel, type TimerView, type TransitionView } from './entry-panel';
 import { ExerciseCard } from './exercise-card';
 import { ProgramUpdateSheet, type ProgramAnswer } from './program-update-sheet';
 import { RestPanel, RestStrip, type EffortPromptView, type RestView } from './rest-panel';
-import { StartCheck } from './start-check';
+import { StartCheck, type StartCheckHandle } from './start-check';
 import { SwapSheet, type SwapTarget } from './swap-sheet';
 import { useWorkoutOutbox } from './use-workout-outbox';
 import { beep, isIOS, unlockAudio, useWakeLock, vibrate } from './workout-feedback';
@@ -115,6 +115,9 @@ type PendingUpdate = { items: FeedbackItem[]; rotation: RotationChoice | null; h
 
 /** Az önce kaydedilen set: panel değişene kadar gösterilir. */
 type Saving = { next: NextSet };
+
+/** Ekranın sheet ve dialog'ları (açık katman; "Ara verilsin mi?" hariç). */
+type Layer = 'elsewhere' | 'check' | 'delete' | 'edit' | 'swap' | 'add' | 'update' | 'finish' | 'switch';
 
 function useNow(intervalMs: number): number {
   const [now, setNow] = useState(() => Date.now());
@@ -209,6 +212,12 @@ function restingRowOf(unit: CursorUnit, doc: SessionDoc): string | null {
 /** Adresteki odak (`window.location`): geri tuşu onu hemen değiştirir, `useSearchParams` ve `focusRef` sonra yetişir. */
 function addressFocus(): string | null {
   return focusOf(new URLSearchParams(window.location.search));
+}
+
+/** Adreste liste işareti ya da odak var (`window.location`; `useSearchParams` geçişte gecikir). */
+function addressMarked(): boolean {
+  const address = new URLSearchParams(window.location.search);
+  return address.has(LIST_PARAM) || address.has(FOCUS_PARAM);
 }
 
 /**
@@ -308,6 +317,9 @@ export function WorkoutScreen({
   const [addBusy, setAddBusy] = useState<string | null>(null);
   const [listHighlight, setListHighlight] = useState<string | null>(null);
   const highlightTimer = useRef<number | undefined>(undefined);
+  // Yoklama sheet'i açık mı (`StartCheck` bildirir) ve onu kapatmak: açık katmanın altında geri tuşu (aşağıda).
+  const [checkOpen, setCheckOpen] = useState(false);
+  const checkRef = useRef<StartCheckHandle>(null);
 
   const guardUntil = useRef(0);
   const timers = useRef<number[]>([]);
@@ -342,28 +354,6 @@ export function WorkoutScreen({
     clearWorkoutCache(clientId);
     void queryClient.invalidateQueries({ queryKey: WORKOUT_KEY });
   }, [clientId, queryClient]);
-
-  const leave = useCallback(
-    (message: string, kind: 'success' | 'info' = 'success') => {
-      release();
-      router.replace('/me');
-      if (kind === 'success') toast.success(message);
-      else toast(message);
-    },
-    [release, router],
-  );
-
-  const { outbox, problem, online } = useWorkoutOutbox({
-    localRef,
-    commit,
-    onGone: () => leave('Bu antrenman silinmiş.', 'info'),
-    onFinishedElsewhere: (server) => {
-      const current = localRef.current;
-      const count = current ? setsMissingOn(current.doc, server) : 0;
-      if (count === 0) leave('Bu antrenman başka bir cihazda bitirildi.', 'info');
-      else setElsewhere({ server, count });
-    },
-  });
 
   /* --- yardımcılar --- */
 
@@ -433,14 +423,15 @@ export function WorkoutScreen({
   // kurulsaydı işaretsiz adresle önce çizilebilir, "Ara verilsin mi?" bir kare açılıp kapanırdı (Bugün'den açılışta
   // kapanış animasyonu görüldü). Öncelik sırasına güvenmek yerine sonucu bekler.
   const armPending = useRef(false);
-  // "Ara ver" sürüyor (`onPause`; ekran birazdan Bugün'e geçer): `'here'` bulunulan girdi Bugün'le değişiyor (dialog'dan ya
-  // da korkuluksuz), `'back'` önce işaretsiz girdiye dönülüyor (⋯'den). İkisinde de "Ara verilsin mi?"nin düğmeleri kilitli;
-  // `'back'`te adres bir an işaretsiz olsa da dialog açılmaz (soru zaten cevaplandı). Sürerken ekran `inert`.
+  // Antrenmandan çıkış sürüyor (`exitTo`: "Ara ver", `leave()`, bitişten sonra özet; ekran birazdan başka sayfaya geçer; adı
+  // ilk kullanıcısından): `'here'` bulunulan girdi hedefle değişiyor (dialog'dan ya da korkuluksuz), `'back'` önce işaretsiz
+  // girdiye dönülüyor (liste ya da odaktan). İkisinde de "Ara verilsin mi?"nin düğmeleri kilitli; `'back'`te adres bir an
+  // işaretsiz olsa da dialog açılmaz (çıkış zaten seçildi). Sürerken ekran `inert`.
   const [pausing, setPausing] = useState<'here' | 'back' | null>(null);
   // `pausing`'in eşzamanlı kopyası ve ekranın bağlı olduğu: ekranın `inert`'i dışında çalışanlar okur (genel Toaster'daki
-  // "Geri al"/"Şimdi yap", kendiliğinden geçişin zamanlayıcısı, arka plandaki tazeleme). Ara verilirken ya da ekran
-  // kapandıktan sonra (toast Bugün'de de görünür) adrese dokunmazlar: yamalı `pushState`'in `ACTION_RESTORE`'u bekleyen `/me`
-  // geçişini düşürürdü, Bugün'deyken de `workoutHref` Bugün'ün adresine odak iterdi.
+  // "Geri al"/"Şimdi yap", kendiliğinden geçişin zamanlayıcısı, arka plandaki tazeleme). Çıkılırken ya da ekran kapandıktan
+  // sonra (toast Bugün'de de görünür) adrese dokunmazlar: yamalı `pushState`'in `ACTION_RESTORE`'u bekleyen geçişi (Bugün ya da
+  // özet) düşürürdü, Bugün'deyken de `workoutHref` Bugün'ün adresine odak iterdi.
   const pausingRef = useRef<'here' | 'back' | null>(null);
   const mountedRef = useRef(false);
 
@@ -484,6 +475,131 @@ export function WorkoutScreen({
     },
     [commit],
   );
+
+  /* --- çıkış: Bugün'e ya da özete, antrenmanın girdileri geride kalmadan --- */
+
+  // Sürmekte olan çıkışın hedefi; `canStay`: kalınabilir çıkış ("Ara ver"). Zorunlu çıkışta antrenman telefondan düştü.
+  const exitTarget = useRef<{ href: string; canStay: boolean } | null>(null);
+  const exitListener = useRef<(() => void) | null>(null);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      if (exitListener.current) window.removeEventListener('popstate', exitListener.current);
+    };
+  }, []);
+
+  /**
+   * Antrenmandan çıkış: "Ara ver" ve `leave()` Bugün'e, başarılı bitiş özete. Hedef işaretsiz girdinin (B) yerine konur:
+   * `router.replace` yalnız bulunulan girdiyi değiştirir; listeden ya da odaktan doğrudan çağrılsaydı B ve liste girdisi
+   * hedefin altında kalırdı (`B, L, [hedef]`), hedefte geri tuşu oraya inerdi. Antrenman telefonda kaldıysa ("Ara ver") ekran
+   * onu yeniden açar ve danışan antrenmana geri çekilir; düştüyse (bitiş, iptal, silinme) ekran boş bağlanır ve sıradaki
+   * günden yeni, boş bir antrenman başlatırdı (Bugün'de 0 setle "Yarım kalan antrenman"). `push` hiç olmaz: hedefte geri
+   * tuşu antrenmana dönerdi.
+   *
+   * Korkuluk kuruluyken önce işaretsiz girdiye geri gidilir (`pauseSteps`: odakta 2, listede 1; dialog'dan, korkuluksuz ya da
+   * odağı bu sayfa itmediyse 0: bulunulan girdi değişir). `history.go` zaman uyumsuz: `replace` gelen `popstate`'te çağrılır.
+   * Tek seferlik dinleyici Next'inkinden sonra eklendi, sonra çalışır: o `popstate`'te Next'in kendi geri yüklemesi
+   * (`ACTION_RESTORE`) bizim `replace`'imizi ezmez. Hedef çizilmeden gelen başka bir geri yükleme ya da geçiş onu düşürür; bu
+   * yüzden çıkılırken ekran `inert`, toast'ların düğmeleri, zamanlayıcılar (kendiliğinden geçiş, bitiş sorusu), tazeleme,
+   * geçersiz odak ve açık katmanın geri tuşu adrese dokunmaz (`pausingRef`, `pausing`).
+   *
+   * Gösterilen hareket önce bırakılır (`leaveShown`, yalnız telefonda; sunucuya bir şey gitmez): süren set sayacı düşer, tam
+   * dinlenme küçülür, geri tuşuyla listeye/işaretsiz girdiye dönüşteki gibi. `pausing` 'back' olduğundan işaretsiz adreste
+   * "Ara verilsin mi?" açılmaz.
+   *
+   * `replace` verildikten sonra ekran hâlâ bağlıyken gelen bir `popstate` (geri/ileri tuşu) onu düşürmüştür. Kalınabilir
+   * çıkış biter (`pausing` düşer; yoksa ⋯ "Ara ver" sessizce bir şey yapmaz, listeden geri sormaz, dialog kilitli kalırdı);
+   * zorunlu çıkış bulunulan girdiden yeniden başlar (ekranda kalacak antrenman yok). Başka sayfaya dönülürse ekran kapanır ve
+   * dinleyici kaldırılır; Next'in geri yüklemesi o `popstate`'te henüz çizilmediyse dinleyici yol değiştiği için bir şey
+   * yapmaz (yoksa işaretsiz girdinin dialog'u bir kare açılabilirdi). `popstate` işleyicisinde eklenen dinleyici o olayda
+   * çağrılmaz (DOM: dinleyiciler dağıtımın başında kopyalanır, "inner invoke"): `replace`'i veren olay sıfırlamayı tetiklemez.
+   *
+   * Bağlantı yokken kalınabilir çıkış yapılmaz: hedef sunucu ister, Next ağ hatasında tam yüklemeye düşer ve tarayıcının
+   * çevrimdışı sayfası açılırdı (service worker yok). Ekran sürer, işaretsiz girdideysek (dialog'dan) işaret geri konur, toast
+   * söyler. Zorunlu çıkış bağlantısız da yapılır: çoğu sunucunun yanıtından hemen sonra gelir (silinmiş, başka cihazda
+   * bitirilmiş, bitiş, iptalin DELETE'i, "Setler eklendi"); bağlantısız olabilenlerde (hiç gönderilmemiş antrenmanın iptali,
+   * "Ekleme", "Bugün yük yok") tarayıcının çevrimdışı sayfası açılır. Kaybolan bir şey yok (antrenman zaten düştü, yoklama
+   * telefonda kuyrukta); bağlantı gelince yenileme Bugün'ü açar.
+   *
+   * Korkuluk yoksa (sayfa liste ya da odak adresiyle yüklendi) altındaki girdi bilinmez: bulunulan girdi değişir (kabul).
+   * `replace` ileri geçmişi silmez: tarayıcının ileri tuşu antrenmanın girdilerine dönebilir (kabul; antrenman düştüyse
+   * açılıştaki bayat girdi denetimi Bugün'e döner). Çıkılırken ikinci çağrı yeniden geri gitmez; zorunluysa çıkışı zorunlu
+   * yapar (ara verirken antrenman silindi).
+   */
+  const exitTo = useCallback(
+    (href: string, { canStay }: { canStay: boolean }) => {
+      const pending = exitTarget.current;
+      if (pending) {
+        if (!canStay) exitTarget.current = { ...pending, canStay: false };
+        return;
+      }
+      if (canStay && !navigator.onLine) {
+        if (!addressMarked()) pushMark();
+        toast('Bağlantı yok; Bugün bağlantı gelince açılır.', { description: 'Antrenmanın telefonunda kayıtlı.' });
+        return;
+      }
+      exitTarget.current = { href, canStay };
+      leaveShown(focusRef.current, null);
+      const path = window.location.pathname;
+      const once = (run: () => void) => {
+        const listener = () => {
+          exitListener.current = null;
+          run();
+        };
+        exitListener.current = listener;
+        window.addEventListener('popstate', listener, { once: true });
+      };
+      const replace = () => {
+        router.replace(href);
+        once(() => {
+          if (window.location.pathname !== path) return;
+          if (!exitTarget.current?.canStay) return start();
+          exitTarget.current = null;
+          pausingRef.current = null;
+          startTransition(() => setPausing(null));
+        });
+      };
+      const start = () => {
+        const steps = pauseSteps(window.location.search, { armed, focusPushed: focusPushed.current });
+        const mode = steps === 0 ? 'here' : 'back';
+        pausingRef.current = mode;
+        setPausing(mode);
+        if (steps === 0) return replace();
+        once(replace);
+        window.history.go(-steps);
+      };
+      start();
+    },
+    [armed, router, leaveShown, pushMark],
+  );
+
+  /**
+   * Antrenman telefondan düşüyor (sunucuda silinmiş ya da başka cihazda bitirilmiş, bitişin 410'u, iptal, "Setler eklendi",
+   * "Ekleme", "Bugün yük yok"): yerel kopya bırakılır, Bugün açılır (zorunlu çıkış: bağlantısız da yapılır, geri/ileri tuşu
+   * düşürürse yeniden denenir).
+   */
+  const leave = useCallback(
+    (message: string, kind: 'success' | 'info' = 'success') => {
+      release();
+      exitTo('/me', { canStay: false });
+      if (kind === 'success') toast.success(message);
+      else toast(message);
+    },
+    [release, exitTo],
+  );
+
+  const { outbox, problem, online } = useWorkoutOutbox({
+    localRef,
+    commit,
+    onGone: () => leave('Bu antrenman silinmiş.', 'info'),
+    onFinishedElsewhere: (server) => {
+      const current = localRef.current;
+      const count = current ? setsMissingOn(current.doc, server) : 0;
+      if (count === 0) leave('Bu antrenman başka bir cihazda bitirildi.', 'info');
+      else setElsewhere({ server, count });
+    },
+  });
 
   /**
    * Hareketin odağını açar. Listedeyken (adreste odak yok) `pushState`, odaktayken `replaceState`: geri tuşu odaktan hep
@@ -601,7 +717,7 @@ export function WorkoutScreen({
       fetchJson<WorkoutResponse>(`/api/me/workout?day=${encodeURIComponent(current.plan.dayId)}&program=${encodeURIComponent(planProgram(current.plan))}`)
         .then((data) => {
           const latest = localRef.current;
-          // Ara verilirken yeniden kurulmaz: açılış kuralı işareti ve odağı yeniden iter, bekleyen `/me` geçişi düşerdi.
+          // Çıkılırken yeniden kurulmaz: açılış kuralı işareti ve odağı yeniden iter, bekleyen geçiş düşerdi.
           if (cancelled || pausingRef.current || !latest || latest.doc.id !== current.doc.id || !untouched(clientId, latest) || !planChanged(latest, data)) return;
           begin(data);
         })
@@ -617,6 +733,18 @@ export function WorkoutScreen({
       revalidate();
       return cleanup;
     }
+    // Bayat girdi: adres işaretli (`?liste=1`, `?hareket=`) ama ne telefonda antrenman var ne sunucuda yarım antrenman. Girdi
+    // biten ya da bırakılan bir antrenmanın (geri/ileri tuşu: `exitTo` ileri geçmişi silmez; eski sürümün çıkışları işaretsiz
+    // ve liste girdisini de geride bırakırdı). Yeni antrenman başlatılmaz (sıradaki günden boş antrenman, Bugün'de 0 setle
+    // "Yarım kalan antrenman" olurdu), Bugün açılır. Yenilemede ve ara verdikten sonra ileri tuşunda antrenman telefonda,
+    // başka cihazın yarım antrenmanı sunucuda (`active`), "Antrenmanı değiştir"in adresi işaretsiz: üçü de buraya düşmez.
+    // Bağlantı yoksa (saklanan yanıt) Bugün açılamaz (Next tam yüklemeye düşer, tarayıcının çevrimdışı sayfası): ekran söyler.
+    const stale = addressMarked();
+    const open = (data: WorkoutResponse, online: boolean) => {
+      if (!stale || data.active) begin(data);
+      else if (online) exitTo('/me', { canStay: false });
+      else setLoad({ phase: 'error', message: 'Bağlantı yok; bu antrenman telefonunda kayıtlı değil.' });
+    };
     const cached = readWorkoutCache(clientId);
     // Saklanan yanıt bu açılışın günü mü: istenen gün ya da (gün istenmediyse) rotasyonda sıradaki gün;
     // "Başka gün seç"le çekilmiş bir gün sonraki olağan başlangıçta kullanılmaz.
@@ -628,7 +756,7 @@ export function WorkoutScreen({
       (dayParam ? data.day?.dayId === dayParam : data.active !== null || !data.day || data.day.dayId === (data.program?.nextDayId ?? data.day.dayId));
     const usable = cached && matches(cached.data) ? cached : null;
     if (usable && Date.now() - usable.at < CACHE_FRESH_MS) {
-      begin(usable.data);
+      open(usable.data, navigator.onLine);
       revalidate();
       return cleanup;
     }
@@ -636,16 +764,16 @@ export function WorkoutScreen({
       .then((data) => {
         if (cancelled) return;
         saveWorkoutCache(clientId, data);
-        begin(data);
+        open(data, true);
       })
       .catch((error: unknown) => {
         if (cancelled) return;
         // Çevrimdışı: son okunan planla başlanır.
-        if (usable) begin(usable.data);
+        if (usable) open(usable.data, false);
         else setLoad({ phase: 'error', message: error instanceof ApiError ? error.message : 'Antrenman açılamadı.' });
       });
     return cleanup;
-    // `finishOnOpen` ve `outbox` açılışta bir kez okunur.
+    // `finishOnOpen`, `outbox` ve `exitTo` açılışta bir kez okunur.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientId, dayParam, programParam, attempt]);
 
@@ -917,8 +1045,8 @@ export function WorkoutScreen({
 
   // Adresteki odak geçersiz (başka cihazda silindi, adres elle değişti, birim atlandı, plan dışı kayıt): listeye
   // dönülür (`goToList`: altında bu sayfanın liste girdisi varsa geri, yoksa `replaceState`). Odak bu arada yine
-  // değiştiyse (`openFocus` ya da `goToList` kopyayı yazdı, adres henüz çizilmedi) dokunulmaz. Ara verilirken de
-  // dokunulmaz (`onPause`: adres `/me`'ye gidiyor); ara verme biterse effect yeniden çalışır. Odak eşitleme effect'inin
+  // değiştiyse (`openFocus` ya da `goToList` kopyayı yazdı, adres henüz çizilmedi) dokunulmaz. Çıkılırken de dokunulmaz
+  // (`exitTo`: adres Bugün'e ya da özete gidiyor); çıkış düşerse effect yeniden çalışır. Odak eşitleme effect'inin
   // altında kalmalı (yukarıda).
   useEffect(() => {
     if (pausing || !view || !focus || view.focus !== null || focusRef.current !== focus) return;
@@ -1024,7 +1152,7 @@ export function WorkoutScreen({
           // Kaydedilen set geçişle (`startTransition`) bırakılır: Next adresi zaman uyumsuz eylem sarmalayıcısından
           // yazar (`setState` mikro görevde, geçişin dışında, normal öncelikle); geçiş daha düşük öncelikli olduğundan
           // adres önce (ya da birlikte) çizilir, arada biten birimin "Bu hareket bitti" paneli bir kare bile görünmez.
-          // Ara verilirken (`pausingRef`) de kalınmış sayılmaz: odak itmek bekleyen `/me` geçişini düşürürdü.
+          // Çıkılırken (`pausingRef`) de kalınmış sayılmaz: odak itmek bekleyen geçişi (Bugün ya da özet) düşürürdü.
           const stayed = !pausingRef.current && addressFocus() === next.unitKey && focusRef.current === next.unitKey;
           if (stayed) {
             openFocus(followingKey);
@@ -1332,7 +1460,9 @@ export function WorkoutScreen({
           restartWith(target);
           toast.success('Yaptığın setler kaydedildi; seçtiğin antrenman açılıyor.');
         } else {
-          router.replace(`/me/antrenman/ozet/${current.doc.id}`);
+          // Özet işaretsiz girdinin yerine (`exitTo`): özette geri tuşu antrenmanın altındakine (genellikle Bugün) gider;
+          // liste girdisine inseydi ekran boş bağlanır, sıradaki günden yeni antrenman başlatırdı.
+          exitTo(`/me/antrenman/ozet/${current.doc.id}`, { canStay: false });
         }
         // Kendi programda mesaj programın adıyla; yazılamayan madde varsa [Programı aç] (§2.9).
         const ownPlan = current.plan.source === 'own' && current.plan.programId ? { id: current.plan.programId, name: current.plan.programName ?? 'Programın' } : null;
@@ -1368,7 +1498,7 @@ export function WorkoutScreen({
         return false;
       }
     },
-    [clientId, outbox, leave, release, restartWith, router, commit, queryClient],
+    [clientId, outbox, leave, release, restartWith, exitTo, router, commit, queryClient],
   );
 
   /**
@@ -1498,76 +1628,12 @@ export function WorkoutScreen({
 
   /**
    * "Ara ver" (⋯ menüsü ve listeden geri tuşunun "Ara verilsin mi?"si): Bugün'e, antrenman telefonda kalır (Bugün'de "Devam
-   * et"). Ara vermek antrenmandan çıkmaktır, ileri bir adım değil: iki yol da Bugün'ü işaretsiz girdinin yerine koyar
-   * (`router.replace('/me')`, `leave()` gibi), Bugün'de geri tuşu antrenmanın altındakine (genellikle geldiği Bugün) gider.
-   * `push` girdilerin üstüne Bugün'ü eklerdi, Bugün'de geri tuşu antrenmana dönerdi.
-   *
-   * Dialog'dan: işaretsiz girdinin kendisindeyiz, yalnız `replace`. ⋯'den (liste ya da odak): önce işaretsiz girdiye geri
-   * gidilir (`pauseSteps`: odakta 2, listede 1), Bugün sonra onun yerine konur. Bulunulan girdi değişseydi işaretsiz girdi
-   * altta kalırdı (listeden `B, [/me], F`): Bugün'de geri tuşu oraya iner, ekran yeniden bağlanır, açılış kuralı işareti ve
-   * odağı yeniden iter, danışan antrenmana geri çekilirdi. `history.go` zaman uyumsuz: `replace` gelen `popstate`'te
-   * çağrılır. Tek seferlik dinleyici Next'inkinden sonra eklendi, sonra çalışır: o `popstate`'te Next'in kendi geri yüklemesi
-   * (`ACTION_RESTORE`) bizim `replace`'imizi ezmez. `/me` çizilmeden gelen başka bir geri yükleme ya da geçiş onu düşürür;
-   * bu yüzden ara verilirken ekran `inert`, toast'ların düğmeleri, zamanlayıcılar (kendiliğinden geçiş, bitiş sorusu),
-   * tazeleme ve geçersiz odak adrese dokunmaz (`pausingRef`, `pausing`); tarayıcının geri/ileri tuşu ise ara vermeyi
-   * bitirir (aşağıda).
-   *
-   * Gösterilen hareket iki yolda da önce bırakılır (`leaveShown`, yalnız telefonda; sunucuya bir şey gitmez): süren set
-   * sayacı düşer, tam dinlenme küçülür, geri tuşuyla listeye/işaretsiz girdiye dönüşteki gibi. Yoksa ⋯'nin geri giden yolu
-   * bunu (işaretsiz girdi çizilince odak eşitleme effect'i) yapar, korkuluksuz doğrudan `replace` yapmazdı. `pausing` 'back'
-   * olduğundan işaretsiz adreste "Ara verilsin mi?" açılmaz.
-   *
-   * `replace` verildikten sonra ekran hâlâ bağlıyken gelen bir `popstate` (geri/ileri tuşu) onu geçersiz kılmıştır: ara
-   * verme biter (`pausing` düşer; yoksa ⋯ "Ara ver" sessizce bir şey yapmaz, listeden geri sormaz, dialog kilitli kalırdı).
-   * Bugün'e dönülürse ekran kapanır ve dinleyici kaldırılır; Next'in geri yüklemesi o `popstate`'te henüz çizilmediyse
-   * dinleyici yol değiştiği için bir şey yapmaz (yoksa işaretsiz girdinin dialog'u bir kare açılabilirdi). `popstate`
-   * işleyicisinde eklenen dinleyici o
-   * olayda çağrılmaz (DOM: dinleyiciler dağıtımın başında kopyalanır, "inner invoke"): ⋯ yolunda `replace`'i veren
-   * olay sıfırlamayı tetiklemez.
-   *
-   * Korkuluk yoksa (sayfa liste ya da odak adresiyle yüklendi) altındaki girdi bilinmez: bulunulan girdi değişir (kabul).
-   * `replace` ileri geçmişi silmez: tarayıcının ileri tuşu antrenmanın girdilerine dönebilir (kabul). Ara verilirken ikinci
-   * dokunuş bir şey yapmaz (⋯'den ikinci kez geri gidilmez); dialog'un düğmeleri kilitli (`busy`).
+   * et"). Ara vermek antrenmandan çıkmaktır, ileri bir adım değil: `exitTo` Bugün'ü işaretsiz girdinin yerine koyar, Bugün'de
+   * geri tuşu antrenmanın altındakine (genellikle geldiği Bugün) gider. Kalınabilir çıkış: bağlantı yoksa yapılmaz (ekran
+   * sürer, toast söyler), geri/ileri tuşu düşürürse ekran sürer. Ara verilirken ikinci dokunuş bir şey yapmaz; dialog'un
+   * düğmeleri kilitli (`busy`).
    */
-  const pauseListener = useRef<(() => void) | null>(null);
-  useEffect(() => {
-    mountedRef.current = true;
-    return () => {
-      mountedRef.current = false;
-      if (pauseListener.current) window.removeEventListener('popstate', pauseListener.current);
-    };
-  }, []);
-  const onPause = useCallback(() => {
-    if (pausingRef.current) return;
-    const steps = pauseSteps(window.location.search, { armed, focusPushed: focusPushed.current });
-    leaveShown(focusRef.current, null);
-    const once = (run: () => void) => {
-      const listener = () => {
-        pauseListener.current = null;
-        run();
-      };
-      pauseListener.current = listener;
-      window.addEventListener('popstate', listener, { once: true });
-    };
-    const path = window.location.pathname;
-    const toToday = () => {
-      router.replace('/me');
-      once(() => {
-        if (window.location.pathname !== path) return;
-        pausingRef.current = null;
-        startTransition(() => setPausing(null));
-      });
-    };
-    const mode = steps === 0 ? 'here' : 'back';
-    pausingRef.current = mode;
-    setPausing(mode);
-    if (steps === 0) {
-      toToday();
-      return;
-    }
-    once(toToday);
-    window.history.go(-steps);
-  }, [armed, router, leaveShown]);
+  const onPause = useCallback(() => exitTo('/me', { canStay: true }), [exitTo]);
 
   /** "Ara verilsin mi?"de "Devam et" (ya da dialog'u kapatmak): liste işareti geri konur, ikinci geri tuşu yine sorar. */
   const onStay = useCallback(() => {
@@ -1918,6 +1984,75 @@ export function WorkoutScreen({
     }
   }, [elsewhere, leave]);
 
+  /* --- açık katmanın altında geri tuşu --- */
+
+  /*
+   * Geri tuşu açık bir sheet ya da dialog'un altında geçmişi oynatabilir (iPhone Safari'nin kenar kaydırması, masaüstünün geri
+   * düğmesi; Android'de Base UI'nin `CloseWatcher`'ı geri hareketini katmana verir, geçmiş oynamaz). Listeden işaretsiz girdiye
+   * dönülünce "Ara verilsin mi?" katmanın üstünde açılırdı; ikisi de Esc'i `document`'tan dinlediği için tek Esc ikisini
+   * birden kapatırdı (yoklamanın sorusunda "Bugün atla" yazılır, "Bugün yük yok"ta Bugün'e çıkılırdı). Şimdi Android'deki gibi:
+   * katman açıkken soru sorulmaz (`pauseAsked`), işaret geri konur (`pushMark`), üstteki katman kapanır; listede kalınır.
+   * Kapatmak katmanın kendi kapanışıdır (yoklamanın sorusunda "atlandı" değil, kaydırıp kapatmak gibi; "Programını
+   * güncelleyelim mi?"de kararsız kapanış, bitiş cevapsız gider). "Başka cihazda bitirildi" yalnız düğmeleriyle, bitiş ya da
+   * değiştirme sürerken sheet'i meşgul: kapanmaz, yalnız işaret geri konur.
+   *
+   * Yalnız işaretli adresten işaretsize geçişte (geri tuşu): "Ara verilsin mi?" açıkken sonradan açılan katman (yoklama, "Başka
+   * cihazda bitirildi", bitiş sorusunun zamanlayıcısı) soruyu yalnız erteler, kapanınca soru yine görünür. Katman, işaret
+   * çizildikten sonra kapanır (`armPending` gibi): önce kapansaydı adres bir kare işaretsizken soru açılırdı. O arada katman
+   * kendiliğinden kapandıysa ya da üstüne başkası açıldıysa dokunulmaz. Odaktan listeye geri tuşu adresi işaretli bırakır:
+   * katman açık kalır (soru yok).
+   */
+  const topLayer: Layer | null = elsewhere
+    ? 'elsewhere'
+    : checkOpen
+      ? 'check'
+      : deleting
+        ? 'delete'
+        : editing
+          ? 'edit'
+          : swapTarget
+            ? 'swap'
+            : addOpen
+              ? 'add'
+              : update
+                ? 'update'
+                : finishOpen
+                  ? 'finish'
+                  : switchOpen
+                    ? 'switch'
+                    : null;
+  const layerClosable =
+    topLayer !== null && topLayer !== 'elsewhere' && !(finishing && (topLayer === 'update' || topLayer === 'finish' || topLayer === 'switch'));
+  const marked = params.has(LIST_PARAM) || params.has(FOCUS_PARAM);
+  const wasMarked = useRef(false);
+  const layerToClose = useRef<Layer | null>(null);
+  const closeLayer = useCallback(
+    (layer: Layer) => {
+      if (layer === 'check') checkRef.current?.close();
+      else if (layer === 'delete') setDeleting(null);
+      else if (layer === 'edit') setEditing(null);
+      else if (layer === 'swap') setSwapTarget(null);
+      else if (layer === 'add') setAddOpen(false);
+      else if (layer === 'update') onProgramAnswer(null);
+      else if (layer === 'finish') setFinishOpen(false);
+      else if (layer === 'switch') setSwitchOpen(false);
+    },
+    [onProgramAnswer],
+  );
+  useEffect(() => {
+    const before = wasMarked.current;
+    wasMarked.current = marked;
+    if (!before || marked || !armed || pausing || topLayer === null || addressMarked()) return;
+    pushMark();
+    layerToClose.current = layerClosable ? topLayer : null;
+  }, [marked, armed, pausing, topLayer, layerClosable, pushMark]);
+  useEffect(() => {
+    const layer = layerToClose.current;
+    if (!layer || !marked) return;
+    layerToClose.current = null;
+    if (layer === topLayer) closeLayer(layer);
+  }, [marked, topLayer, closeLayer]);
+
   /* --- çizim --- */
 
   if (load.phase === 'loading' || awaitingOpening) return <WorkoutSkeleton />;
@@ -1957,9 +2092,9 @@ export function WorkoutScreen({
   // Odak yoksa (ya da geçersizse) ana ekran liste; varsa o hareketin kartı ve giriş paneli.
   const listMode = shownFocus === null;
   // Listeden geri tuşu (9. görev): korkuluk kurulu ve adres işaretsiz girdide → "Ara verilsin mi?". İşaretsiz bir odak
-  // adresinde sormaz; antrenman bitiriliyor ya da değiştiriliyorsa da (sonu zaten başka yere gider, olmazsa sorar) ve ⋯'deki
-  // "Ara ver" işaretsiz girdiye dönerken de (`pausing` 'back').
-  const pauseAsked = armed && pausing !== 'back' && !params.has(LIST_PARAM) && !params.has(FOCUS_PARAM) && !finishing;
+  // adresinde sormaz; antrenman bitiriliyor ya da değiştiriliyorsa da (sonu zaten başka yere gider, olmazsa sorar), bir çıkış
+  // işaretsiz girdiye dönerken de (`pausing` 'back') ve başka bir katman açıkken de (geri tuşu onu kapatır, yukarıda).
+  const pauseAsked = armed && pausing !== 'back' && !marked && !finishing && topLayer === null;
   const rest = local.rest;
   const shown = saving?.next ?? next;
   const shownRow = shown ? (plan.rows[shown.rowId] ?? null) : null;
@@ -2034,8 +2169,8 @@ export function WorkoutScreen({
             ? { tone: 'offline' as const, text: `Şu an yoğun · ${unsent} set telefonda, birazdan gönderilecek` }
             : null;
 
-  // Ara verilirken ekrana dokunulmaz (`inert`): satır, alt çubuk ya da ⋯'deki öğeler adresi değiştirip bekleyen `/me`
-  // geçişini düşürmesin. Bitiş (ya da iptal, değiştirme) yoldayken de: bitiş sorusu ya da "Programını güncelleyelim mi?"
+  // Çıkılırken ekrana dokunulmaz (`inert`): satır, alt çubuk ya da ⋯'deki öğeler adresi değiştirip bekleyen geçişi (Bugün
+  // ya da özet) düşürmesin. Bitiş (ya da iptal, değiştirme) yoldayken de: bitiş sorusu ya da "Programını güncelleyelim mi?"
   // kapatılırsa ekran yeniden dokunulur olurdu, o arada yazılan set gönderilen belgede yok, başarıda kaybolurdu. Sheet'ler
   // ve "Ara verilsin mi?" portalda, etkilenmez.
   const busy = pausing !== null || finishing;
@@ -2238,7 +2373,7 @@ export function WorkoutScreen({
       <FinishedElsewhereDialog count={elsewhere?.count ?? null} busy={elsewhereBusy} onAdd={onAddElsewhere} onSkip={() => leave('Bu antrenman başka bir cihazda bitirildi.', 'info')} />
       <PauseDialog open={pauseAsked} busy={pausing !== null} onContinue={onStay} onPause={onPause} />
       {/* Yoklama (§2.2): yalnız sağlık onayı varken ve antrenman yeni başlıyorken açılır. */}
-      <StartCheck clientId={clientId} local={local} onApply={commit} onLeave={leave} />
+      <StartCheck ref={checkRef} clientId={clientId} local={local} onApply={commit} onLeave={leave} onOpenChange={setCheckOpen} />
       <p aria-live="polite" className="sr-only">
         {announcement}
       </p>

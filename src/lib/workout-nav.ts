@@ -44,8 +44,9 @@ export function focusOf(params: Pick<URLSearchParams, 'get'>): string | null {
 }
 
 /**
- * "Ara ver"den önce kaç girdi geri gidilir (9. görev): Bugün işaretsiz girdinin yerine konur ki Bugün'de geri tuşu
- * antrenmanın altındakine gitsin. Korkuluk kuruluyken (`armed`) liste işaretini bu sayfa işaretsiz girdinin hemen üstüne,
+ * Antrenmandan çıkmadan ("Ara ver", antrenman bitti ya da düştü, özet) önce kaç girdi geri gidilir (9. görev): hedef
+ * (Bugün ya da özet) işaretsiz girdinin yerine konur ki hedefte geri tuşu antrenmanın altındakine gitsin, liste ya da odak
+ * girdisine inmesin. Korkuluk kuruluyken (`armed`) liste işaretini bu sayfa işaretsiz girdinin hemen üstüne,
  * odağı da (`focusPushed`) liste girdisinin hemen üstüne itti: odakta 2, yalnız işaretliyken 1. Zaten işaretsiz girdideyse
  * ("Ara verilsin mi?") 0: o girdi değişir. Korkuluk yoksa (sayfa liste ya da odak adresiyle yüklendi) ya da odağı bu sayfa
  * itmediyse de 0: altı bilinmez, bulunulan girdi değişir.

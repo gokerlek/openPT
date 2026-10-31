@@ -905,10 +905,11 @@ atlayabilir; atlıyorsa bu not edilir (yenileme sonrası kabul edilen sınır).
   adresinde, bitiş/değiştirme sürerken ve ⋯'deki "Ara ver" işaretsiz girdiye dönerken sormaz. **Devam et** işareti
   `pushState` ile geri koyar (`pushMark`; `focusPushed`'a dokunmaz), ileri geçmiş (eski odak) düşer. Dialog'u kapatmak (Esc)
   "Devam et"tir: açıklığı adresten geldiği için başka türlü kapanamazdı. Telefonda "Devam et" birincil, altta ve odakta.
-- **Ara ver** (dialog ve ⋯ menüsü) ikisi de Bugün'ü işaretsiz girdinin yerine koyar (`router.replace('/me')`, `leave()`
-  gibi; 7. görevin `router.push`'u değişti): ara vermek antrenmandan çıkmak, Bugün'de geri tuşu antrenmanın altındakine
-  gider. `push` antrenman girdilerinin üstüne Bugün'ü eklerdi; işaretsiz girdiden çıkılınca Bugün'de geri tuşu o girdiye
-  döner, açılış kuralı yeniden iter, danışan antrenmana geri çekilirdi. Dialog'dan işaretsiz girdinin kendisindeyiz: yalnız
+- **Ara ver** (dialog ve ⋯ menüsü) ikisi de Bugün'ü işaretsiz girdinin yerine koyar (`router.replace('/me')`; 7. görevin
+  `router.push`'u değişti; `leave()` ve özet bunu son incelemeye kadar yapmıyordu, aşağıda "Çıkışların ortak yolu"): ara
+  vermek antrenmandan çıkmak, Bugün'de geri tuşu antrenmanın altındakine gider. `push` antrenman girdilerinin üstüne
+  Bugün'ü eklerdi; işaretsiz girdiden çıkılınca Bugün'de geri tuşu o girdiye döner, açılış kuralı yeniden iter, danışan
+  antrenmana geri çekilirdi. Dialog'dan işaretsiz girdinin kendisindeyiz: yalnız
   `replace`. ⋯'den (liste ya da odak) ilk uygulama da yalnız `replace` yapıyordu; inceleme: listeden `B, [/me], F` kalır,
   Bugün'de geri B'ye iner ve aynı tuzak. Şimdi korkuluk kuruluyken önce işaretsiz girdiye geri gidilir
   (`history.go(-n)`; `pauseSteps`, `workout-nav.ts`, testli: odakta 2, listede 1; korkuluk yoksa, odağı bu sayfa itmediyse ya
@@ -957,6 +958,16 @@ atlayabilir; atlıyorsa bu not edilir (yenileme sonrası kabul edilen sınır).
   - ⋯ "Ara ver" listeden, korkuluk kurulu: `B, [L], F` → bir geri `[B], L, F` (dialog açılmaz) → `[/me], L, F`. Bugün'de geri
     B'nin altındakine (genellikle Bugün).
   - ⋯ "Ara ver" odaktan, korkuluk kurulu: `B, L, [F]` → iki geri `[B], L, F` → `[/me], L, F` (aynı son).
+  - `leave()` (iptal, silinmiş, başka cihazda bitirilmiş, "Setler eklendi", "Ekleme", "Bugün yük yok"): "Ara ver" gibi,
+    listeden ya da odaktan `[/me], L, F`. Önce `B, L, [/me]` ya da `B, [/me], F` kalıyordu: Bugün'de geri antrenmanın
+    girdisine iner, ekran boş bağlanır, yeni antrenman başlardı.
+  - Bitiş → özet (`S`), odaktan: `B, L, [F]` → iki geri `[B], L, F` → `[S], L, F`. Özette geri B'nin altındakine
+    (genellikle Bugün). Önce `B, L, [S]`: geri `?liste=1`'e iniyor, sıradaki günden boş antrenman başlıyordu.
+  - İleri tuşu düşmüş antrenmanın girdisine (özetten ya da Bugün'den `L`, bayat girdi): ekran telefonda ve sunucuda
+    antrenman bulamaz, Bugün'e çıkar: `S, [/me], F`. Bağlantı yoksa "Antrenman açılamadı" der, çıkmaz.
+  - Açık sheet/dialog'la listeden geri (iPhone Safari kenar kaydırması, masaüstü geri düğmesi): `[B], L, F` → `B, [L′]`
+    (işaret geri konur), katman kapanır, soru yok. Meşgul katman açık kalır.
+  - Bağlantısız "Ara ver": dialog'dan `B, [L′]` ("Devam et" gibi) ve toast; ⋯'den adres yerinde, toast.
   - ⋯ "Ara ver" korkuluksuz (sayfa `L` ya da `F` adresiyle yüklendi; `X`: altındaki, bu belgenin olmayan girdi): geri
     gidilmez, bulunulan girdi değişir. Listeden `X, [/me]` (yüklendikten sonra odak açılıp listeye dönüldüyse `X, [/me], F`);
     odaktan `X, [/me]` (`F` yüklenen girdiyse) ya da `X, L, [/me]` (`F` listeden itildiyse). Bugün'de geri `L`'ye ya da
@@ -967,6 +978,39 @@ atlayabilir; atlıyorsa bu not edilir (yenileme sonrası kabul edilen sınır).
     eski `B`'de liste sorulmadan görünür (yukarıdaki kabul edilen sınır).
 - **İnceleme bulguları (küçük):** "Bu hareketi atla"nın toast'ındaki "Geri al" bitiş (ya da iptal, değiştirme) gönderilirken
   hiçbir şey yapmaz (`finishingRef`; yoksa meşgul bitiş sorusunu kapatır, belgeyi yolda değiştirirdi).
+- **Çıkışların ortak yolu** (son inceleme, I1): `leave()` (silinmiş, başka cihazda bitirilmiş, bitişin 410'u, iptal, "Setler
+  eklendi", "Ekleme", "Bugün yük yok") ve başarılı bitişin özete geçişi `router.replace` ile yalnız bulunulan girdiyi
+  değiştiriyordu; B ve L hedefin altında kalıyordu. Senaryo: bitir → özet → geri `?liste=1`'e iner, ekran telefonda antrenman
+  bulamaz, sıradaki günden yeni boş antrenman başlatır, Bugün "Yarım kalan antrenman · Gün B"yi 0 setle gösterir. Şimdi üçü
+  de "Ara ver"in düzeneğinden geçer (`exitTo(href, { canStay })`, `workout-screen.tsx`): korkuluk kuruluyken `pauseSteps`
+  kadar geri, `replace` sonraki `popstate`'te, çıkarken ekran `inert` ve adrese dokunan her şey bekler (`pausingRef`).
+  Kalınabilir çıkış ("Ara ver") geri/ileri tuşu düşürürse biter; zorunlu çıkış (antrenman telefondan düştü, ekranda kalacak
+  bir şey yok) bulunulan girdiden yeniden başlar. Çıkış sürerken gelen ikinci çağrı yeniden geri gitmez; zorunluysa çıkışı
+  zorunlu yapar (ara verirken antrenman silindi).
+- **Bayat girdi** (I1): `replace` ileri geçmişi silmez; ileri tuşu (ya da eski sürümün bıraktığı geçmiş) düşmüş bir
+  antrenmanın `L`/`F` girdisine inebilir. Ekran işaretli adreste açılır, telefonda antrenman ve sunucuda `active` yoksa yeni
+  antrenman başlatmaz, Bugün'e çıkar (zorunlu çıkış). Bağlantı yoksa (saklanan yanıtla) çıkmaz (tarayıcının çevrimdışı
+  sayfasına düşerdi): "Antrenman açılamadı · Bağlantı yok; bu antrenman telefonunda kayıtlı değil." Etkilenmeyenler:
+  yenileme ve ara verdikten sonra ileri tuşu (antrenman telefonda), başka cihazın yarım antrenmanı (`active`), "Antrenmanı
+  değiştir" (yeni adres işaretsiz; aynı props'ta da `replaceState` açılıştan önce).
+- **Açık katmanın altında geri tuşu** (I2): iPhone Safari'nin kenar kaydırması ve masaüstünün geri düğmesi açık bir
+  sheet/dialog'un altında geçmişi oynatır (Android'de Base UI'nin `CloseWatcher`'ı hareketi katmana verir). "Ara verilsin
+  mi?" katmanın üstünde açılıyordu; ikisi de Esc'i `document`'tan dinlediği için tek Esc yoklamanın sorusunda `skip()`'i
+  ("atlandı" yazılır), "Bugün yük yok"ta `stop()` → `leave()`'i de çalıştırıyordu. Şimdi Android'deki gibi: katman açıkken
+  soru sorulmaz (`pauseAsked … && topLayer === null`); işaretli adresten işaretsize geçişte (yalnız geri tuşu) işaret geri
+  konur ve işaret çizildikten sonra üstteki katman kendi kapanışıyla kapanır (önce kapansaydı soru bir kare açılırdı).
+  Yoklama açıklığını `onOpenChange` ile bildirir, `ref.close()` Android'in yolu: soruda "kapatıldı" (atlandı değil, bir
+  sonraki açılışta yeniden sorulur), öteki adımlarda adımın çıkışı. "Programını güncelleyelim mi?" kararsız kapanır (bitiş
+  cevapsız gider, kaydırıp kapatmak gibi). "Başka cihazda bitirildi" ve meşgul sheet'ler (bitiş/değiştirme sürerken) açık
+  kalır, yalnız işaret geri konur. Soru açıkken sonradan açılan katman (yoklama, "Başka cihazda bitirildi", bitiş sorusunun
+  zamanlayıcısı) soruyu yalnız erteler. Odaktan geri adresi işaretli bırakır: katman listenin üstünde açık kalır (kabul).
+- **Bağlantısız "Ara ver"** (I3): `router.replace('/me')` sunucu ister; ağ hatasında Next tam yüklemeye düşer, tarayıcının
+  çevrimdışı sayfası açılır (service worker yok, `experimental.useOffline` yok). `navigator.onLine` false iken "Ara ver"
+  çıkmaz: işaretsiz girdideyse (dialog'dan) işaret geri konur, toast "Bağlantı yok; Bugün bağlantı gelince açılır. ·
+  Antrenmanın telefonunda kayıtlı." Zorunlu çıkışlar bağlantısız da yapılır: çoğu sunucu yanıtından hemen sonra gelir;
+  bağlantısız olabilenlerde (hiç gönderilmemiş antrenmanın iptali, "Ekleme", "Bugün yük yok") çevrimdışı sayfası açılır,
+  kaybolan bir şey yok (yoklama telefonda kuyrukta). `navigator.onLine` true olup bağlantı yoksa (kapalı portal, ölü Wi-Fi)
+  "Ara ver" yine çevrimdışı sayfasına düşer (kabul).
 
 ---
 
@@ -1308,3 +1352,33 @@ ve §2.1, `README.md` (danışan özellikleri değiştiyse)
   değiştir → atla → geri al → biten hareketi düzelt → dinlenmede liste → geri tuşu → ara ver → Bugün'de "Devam
   et" listesi → devam → yarım bırakılan hareketin odağı; çevrimdışı tekrar); ekran görüntüleri kullanıcıya. Turdan sonra localStorage'da yalnız
   `pulsecoach.session.c_zmrbywaz` ve `pulsecoach.workout.c_zmrbywaz`, değerleri günlüğe yazıldıktan sonra silinir.
+
+**Son inceleme** (bütün Faz 2 aralığı, 2026-11-01):
+- Düzeltildi:
+  - I1: çıkışlar antrenmanın girdilerini geride bırakıyordu (bitir → özet → geri yeni boş antrenman açıyordu). `leave()`,
+    "Ara ver" ve özet tek yoldan (`exitTo`); işaretli adreste antrenmansız açılış Bugün'e döner (9. görev).
+  - I2: "Ara verilsin mi?" açık sheet/dialog'un üstünde açılıyor, tek Esc ikisini kapatıyordu. Katman açıkken geri tuşu
+    soru sormaz, işareti geri koyup üstteki katmanı kapatır; yoklama "kapatıldı" sayılır (9. görev).
+  - I3: bağlantısız "Ara ver" tarayıcının çevrimdışı sayfasına düşüyordu; artık antrenmanda kalır ve söyler (9. görev).
+  - I4: arka plandaki tazeleme, yoklamanın hafiflettiği ya da değiştirdiği antrenmanı eski planla yeniden kuruyordu.
+    `untouchedWorkout` (`workout-outbox.ts`, testli) `adjust`'ı ve bildirimleri de sayar; ekran ayrıca yoklama
+    cevaplandıysa (`checkAsked`) dokunulmuş sayar.
+  - Bitiş yoldayken set kaybı (eskiden kalma): "Programını güncelleyelim mi?" kapatılınca ekran dokunulur oluyordu, o arada
+    yazılan set başarıda kayboluyordu. Bitiş, iptal ya da değiştirme sürerken ekranın kökü `inert` ve `aria-busy`; `onDone`
+    da `finishingRef`'e bakar.
+  - Karşılaştırıp silme: `clearLocalWorkout(clientId, sessionId)` yalnız saklanan antrenman o kimlikteyse siler
+    (`localWorkoutId`, testli). Başka sekme ya da eski bir ekran yeni antrenmanı silemez; program silmede yarım antrenmanın
+    silinmesi de kimlik verir.
+  - Küçükler: kullanılmayan `FlowItem.added` kalktı; "Zaten bu antrenmandasın" `planProgram`'la; `?bitir=1`'in bitiş sorusu
+    ekran başına bir kez (tazeleme yeniden kurunca yeniden açılmaz); `antrenman-ekrani.md` rev. 2 listesinde atlama Faz 2
+    davranışıyla başlar, kenar durumlar tablosunun "Ağ yok" satırı koda uyar (bitiş kuyruğa alınmaz), §4.4'e çıkış ve açık
+    katmanla geri tuşu eklendi.
+- Kabul edildi:
+  - `replace` ileri geçmişi silmez: ileri tuşu düşmüş antrenmanın girdisine iner, ekran Bugün'e döner (ara verilen
+    antrenmanda antrenman yeniden açılır, korkuluksuz).
+  - Korkuluksuz sayfada (liste ya da odak adresiyle yüklendi) çıkış bulunulan girdiyi değiştirir.
+  - `navigator.onLine` yanılabilir; zorunlu çıkışlar bağlantısız da yapılır (çevrimdışı sayfası, kayıp yok).
+  - Odaktan geri tuşu açık katmanı kapatmaz; ⋯ menüsü (`DropdownMenu`, açıklığı kendi içinde) katman sayılmaz.
+  - `use-workout-history.ts` çıkarımı yapılmadı.
+- Gerçek tarayıcıda denenecek: iPhone Safari'nin kenar kaydırması ve masaüstünün geri düğmesiyle açık yoklama/bitiş
+  sheet'i; bitir → özet → geri ve ileri; uçak kipinde "Ara ver" (dialog'dan ve ⋯'den).

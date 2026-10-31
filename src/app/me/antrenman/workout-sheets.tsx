@@ -448,10 +448,11 @@ export function FinishedElsewhereDialog({
 
 /**
  * Listeden geri tuşu (Faz 2, 9. görev): "Ara verilsin mi?". **Devam et** listede kalır (ekran liste işaretini yeniden
- * iter), **Ara ver** Bugün'e döner (antrenman telefonda kalır). Telefonda düğmeler üst üste: "Devam et" birincil, en altta
- * (başparmağın düştüğü yer güvenli olan) ve odak onda. Açıklığı adresten gelir (işaretsiz girdi): kapatmak (Esc) "Devam
- * et"tir, yoksa adres değişmeden dialog yeniden açık sayılırdı. `busy`: ara veriliyor (Bugün açılıyor); dialog açık kalır,
- * düğmeler devre dışı ve kapanmayı reddeder (FinishSheet'in düzeni).
+ * iter), **Ara ver** Bugün'e döner (antrenman telefonda kalır; bağlantı yoksa ekran söyler ve listede kalır). Telefonda
+ * düğmeler üst üste: "Devam et" birincil, en altta (başparmağın düştüğü yer güvenli olan) ve odak onda. Açıklığı adresten
+ * gelir (işaretsiz girdi; başka bir sheet ya da dialog açıkken açılmaz): kapatmak (Esc) "Devam et"tir, yoksa adres
+ * değişmeden dialog yeniden açık sayılırdı. `busy`: çıkılıyor (Bugün açılıyor); dialog açık kalır, düğmeler devre dışı ve
+ * kapanmayı reddeder (FinishSheet'in düzeni).
  */
 export function PauseDialog({ open, busy, onContinue, onPause }: { open: boolean; busy: boolean; onContinue: () => void; onPause: () => void }) {
   const stay = useRef<HTMLButtonElement>(null);

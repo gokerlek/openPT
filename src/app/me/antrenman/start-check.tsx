@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useImperativeHandle, useRef, useState, type Ref } from 'react';
 import { toast } from 'sonner';
 import { WarningCircle } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
@@ -34,6 +34,9 @@ const ELEVEN = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10] as const;
 
 type Step = 'ask' | 'lighten' | 'stop';
 
+/** Ekranın yoklamayı kapatması (geri tuşu açık sheet'in altında geçmişi oynattı): Android'in geri hareketi gibi. */
+export type StartCheckHandle = { close: () => void };
+
 function painText(value: number): string {
   return value === 0 ? `0 · ${PAIN_SCALE_ENDS.low}` : value === 10 ? `10 · ${PAIN_SCALE_ENDS.high}` : `${formatNumber(value)}/10`;
 }
@@ -64,12 +67,17 @@ function stopText(answers: StartAnswers): string {
  *   `lighter` bildirimi; kendi başına gönderilmez, ilk set yazımına biner (dosya ilk sette oluşur).
  * - Cevaplar `POST /api/me/check-in` ile `health.json`'a (sunucu onayı yeniden denetler); gönderilemezse
  *   telefonda bekler, bağlantı gelince gider.
+ * - Açıklık ekrana bildirilir (`onOpenChange`): sheet açıkken listeden geri tuşu "Ara verilsin mi?" sormaz, ekran işareti
+ *   geri koyup sheet'i kapatır (`ref.close()`, Android'in geri hareketiyle aynı yol: soruda kapatmak, öteki adımlarda
+ *   adımın çıkışı).
  */
 export function StartCheck({
   clientId,
   local,
   onApply,
   onLeave,
+  onOpenChange: reportOpen,
+  ref,
 }: {
   clientId: string;
   local: LocalWorkout;
@@ -77,6 +85,9 @@ export function StartCheck({
   onApply: (next: LocalWorkout) => void;
   /** "Bugün yük yok": antrenman başlamadan Bugün'e dönülür. */
   onLeave: (message: string, kind?: 'success' | 'info') => void;
+  /** Sheet açıldı ya da kapandı (parça kapanınca da false). */
+  onOpenChange?: (open: boolean) => void;
+  ref?: Ref<StartCheckHandle>;
 }) {
   const [context, setContext] = useState<CheckInResponse | null>(null);
   const [open, setOpen] = useState(false);
@@ -91,6 +102,12 @@ export function StartCheck({
   useEffect(() => {
     latest.current = local;
   });
+
+  // Ekran açıklığı izler; parça kapanırsa (ekran iskelete döndü, "Antrenmanı değiştir") açık kalmış sayılmasın.
+  useEffect(() => {
+    reportOpen?.(open);
+    return () => reportOpen?.(false);
+  }, [open, reportOpen]);
 
   // Antrenman başına bir kez: yeni başlıyorsa ve sorulmadıysa girdi (önce telefondaki, sonra taze).
   useEffect(() => {
@@ -174,6 +191,10 @@ export function StartCheck({
     else if (step === 'lighten' && outcome) apply(outcome, false);
     else skip();
   };
+
+  // Geri tuşu (iPhone Safari'nin kenar kaydırması, masaüstünün geri düğmesi) Android'in geri hareketi gibi: soruda
+  // kapatmak "atla" sayılmaz, yoklama bir sonraki açılışta yeniden sorulur.
+  useImperativeHandle(ref, () => ({ close: () => onOpenChange(false, { reason: 'close-watcher' }) }));
 
   if (!context) return null;
   const { parts } = context;
