@@ -284,7 +284,7 @@ describe('"Hareket ekle"', () => {
     const live = effectiveDay(day, doc, { [extraKey('e_added1', 'push-up')]: extra });
     assert.equal(live.rows.e_added1?.title, 'Şınav');
     const view = listView(live, doc);
-    assert.deepEqual(view.items.map((item) => [item.members[0]?.number, item.key, item.added]).at(-1), ['4', 'e_added1', true]);
+    assert.deepEqual(view.items.map((item) => [item.members[0]?.number, item.key]).at(-1), ['4', 'e_added1']);
     assert.equal(view.plannedSets, 10);
     valid(doc);
   });

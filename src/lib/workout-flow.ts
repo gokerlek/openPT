@@ -112,7 +112,6 @@ export type FlowItem = {
   /** Yapılan ve planlanan çalışma setleri ("2/3"). */
   done: number;
   planned: number;
-  added: boolean;
 };
 
 function isSkipped(unit: CursorUnit): boolean {
@@ -160,7 +159,6 @@ function itemOf(day: WorkoutDay, doc: Pick<SessionDoc, 'entries'>, unit: CursorU
     members,
     done: unit.members.reduce((sum, member) => sum + Math.min(member.done, member.planned), 0),
     planned: unit.members.reduce((sum, member) => sum + member.planned, 0),
-    added: unit.members.some((member) => doc.entries.some((entry) => entry.id === member.entryId && entry.added)),
   };
 }
 

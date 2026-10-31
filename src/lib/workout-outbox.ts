@@ -107,6 +107,23 @@ export function withChange(local: LocalWorkout, doc: SessionDoc, options: { send
   return { ...local, doc, rev, dueRev: options.send ? rev : local.dueRev };
 }
 
+/**
+ * Telefondaki antrenmanda henüz hiçbir şey yok: hiç gönderilmedi, kayıt ve su yok, yoklama planı değiştirmedi (`adjust`,
+ * bildirim). Plan değişirse sessizce yeniden kurulabilir. Yoklamanın cevaplanıp cevaplanmadığı telefonda ayrı durur
+ * (`check-in-storage.ts`); çağıran ayrıca bakar: cevaplandıysa yeniden kurulan antrenman yoklamayı yeniden sorardı.
+ */
+export function untouchedWorkout(local: Pick<LocalWorkout, 'acked' | 'lastSentAt' | 'doc'>): boolean {
+  const { doc } = local;
+  return (
+    local.acked === null &&
+    local.lastSentAt === null &&
+    doc.entries.length === 0 &&
+    doc.waterTaps.length === 0 &&
+    doc.adjust === undefined &&
+    doc.notices.length === 0
+  );
+}
+
 /** Gönderilmesi gereken bir değişiklik var mı. */
 export function sendPending(local: LocalWorkout): boolean {
   return local.dueRev > local.ackedRev;
@@ -211,6 +228,21 @@ function isDraft(value: unknown): value is SetDraft {
 function roundsOf(value: unknown): Record<string, number> {
   if (!isRecord(value)) return {};
   return Object.fromEntries(Object.entries(value).filter((entry): entry is [string, number] => typeof entry[1] === 'number' && Number.isInteger(entry[1]) && entry[1] > 0));
+}
+
+/**
+ * Yerel kaydın antrenman kimliği, şemaya bakmadan (karşılaştırıp silmek için, `clearLocalWorkout`); kayıt yoksa ya da
+ * okunamıyorsa null.
+ */
+export function localWorkoutId(text: string | null): string | null {
+  if (!text) return null;
+  try {
+    const raw = JSON.parse(text) as unknown;
+    const id = isRecord(raw) && isRecord(raw.doc) ? raw.doc.id : null;
+    return typeof id === 'string' ? id : null;
+  } catch {
+    return null;
+  }
 }
 
 /**

@@ -256,8 +256,8 @@ export function DeleteOwnProgram({
     setBusy(true);
     try {
       await fetchJson(`/api/me/sessions/${sessionId}`, { method: 'DELETE' });
-      // Telefondaki kopya ve saklanan plan da düşer (antrenman ekranı açılmasın).
-      clearLocalWorkout(clientId);
+      // Telefondaki kopya (bu antrenmansa) ve saklanan plan da düşer (antrenman ekranı açılmasın).
+      clearLocalWorkout(clientId, sessionId);
       clearWorkoutCache(clientId);
       setNote('Yarım antrenman silindi. Programı şimdi silebilirsin.');
       setState({ kind: 'confirm' });

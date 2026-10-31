@@ -42,7 +42,7 @@ import {
 } from '@/lib/workout-flow';
 import { groupView, nextMemberLetter } from '@/lib/workout-groups';
 import { FOCUS_PARAM, focusOf, LIST_PARAM, pauseSteps, workoutHref } from '@/lib/workout-nav';
-import { createLocalWorkout, setsMissingOn, unsentSets, withChange, type LocalWorkout } from '@/lib/workout-outbox';
+import { createLocalWorkout, setsMissingOn, unsentSets, untouchedWorkout, withChange, type LocalWorkout } from '@/lib/workout-outbox';
 import { acknowledgeRest, adjustRest, alarmPending, LATE_MS, startRest, tickRest, type RestEvent, type RestTimer } from '@/lib/workout-rest';
 import { afterFinish, extraKey, rekeyExtra, type WorkoutDay } from '@/lib/workout-plan';
 import type { AddedRowResponse, LibraryItem, SwapOption, WorkoutResponse } from '@/lib/workout-routes';
@@ -81,6 +81,7 @@ import {
   type NextSet,
 } from '@/lib/workout-session';
 import { startSetTimer, stopSetTimer, tickSetTimer } from '@/lib/workout-timer';
+import { checkAsked } from '../check-in-storage';
 import { WORKOUT_KEY, WORKOUT_OVERVIEW_KEY } from '../workout-overview';
 import { clearLocalWorkout, clearWorkoutCache, readLocalWorkout, readWorkoutCache, saveLocalWorkout, saveWorkoutCache, writerId } from '../workout-storage';
 import { AddExerciseSheet } from './add-exercise-sheet';
@@ -138,9 +139,13 @@ function responseProgram(data: WorkoutResponse): string {
   return data.program?.source === 'own' && data.program.id ? data.program.id : 'pt';
 }
 
-/** Telefondaki antrenmanda henüz hiçbir şey yok: plan değişirse sessizce yeniden kurulabilir. */
-function untouched(local: LocalWorkout): boolean {
-  return local.acked === null && local.lastSentAt === null && local.doc.entries.length === 0 && local.doc.waterTaps.length === 0;
+/**
+ * Telefondaki antrenmanda henüz hiçbir şey yok (`untouchedWorkout`: kayıt, su, gönderim, yoklamanın hafifletmesi) ve yoklama
+ * cevaplanmadı ya da geçilmedi: plan değişirse sessizce yeniden kurulabilir. Yoklama planı bildirimsiz de değiştirebilir
+ * (ağrı kuralı yalnız planı); yeniden kurulan antrenman o ayarı kaybeder, yeni kimliğiyle yoklamayı yeniden sorardı.
+ */
+function untouched(clientId: string, local: LocalWorkout): boolean {
+  return untouchedWorkout(local) && !checkAsked(clientId, local.doc.id);
 }
 
 /**
@@ -325,10 +330,15 @@ export function WorkoutScreen({
     [clientId],
   );
 
-  /** Telefondaki antrenman sunucuda bitti ya da silindi: yerel kopya ve saklanan plan düşer, Bugün tazelenir. */
+  /**
+   * Telefondaki antrenman sunucuda bitti ya da silindi: yerel kopya ve saklanan plan düşer, Bugün tazelenir. Depodan yalnız
+   * bu antrenman silinir (`clearLocalWorkout` kimliği karşılaştırır): depo sekmeler arasında ortak, başka sekmenin o arada
+   * başlattığı antrenman kalır.
+   */
   const release = useCallback(() => {
+    const id = localRef.current?.doc.id;
     localRef.current = null;
-    clearLocalWorkout(clientId);
+    if (id) clearLocalWorkout(clientId, id);
     clearWorkoutCache(clientId);
     void queryClient.invalidateQueries({ queryKey: WORKOUT_KEY });
   }, [clientId, queryClient]);
@@ -547,13 +557,19 @@ export function WorkoutScreen({
 
   /* --- açılış: telefondaki antrenman → taze plan → sunucu → son okunan plan --- */
 
+  // `?bitir=1`'in bitiş sorusu ekran başına bir kez açılır: arka plandaki tazeleme antrenmanı yeniden kurunca (`adopt` yine
+  // çalışır) danışanın kapattığı sheet yeniden açılmaz.
+  const finishShown = useRef(false);
   useEffect(() => {
     let cancelled = false;
     let announced = false;
     const adopt = (next: LocalWorkout) => {
       commit(next);
       setLoad({ phase: 'ready' });
-      if (finishOnOpen) setFinishOpen(true);
+      if (finishOnOpen && !finishShown.current) {
+        finishShown.current = true;
+        setFinishOpen(true);
+      }
       outbox.schedule();
     };
     const begin = (data: WorkoutResponse) => {
@@ -581,12 +597,12 @@ export function WorkoutScreen({
      */
     const revalidate = () => {
       const current = localRef.current;
-      if (!current || !untouched(current)) return;
+      if (!current || !untouched(clientId, current)) return;
       fetchJson<WorkoutResponse>(`/api/me/workout?day=${encodeURIComponent(current.plan.dayId)}&program=${encodeURIComponent(planProgram(current.plan))}`)
         .then((data) => {
           const latest = localRef.current;
           // Ara verilirken yeniden kurulmaz: açılış kuralı işareti ve odağı yeniden iter, bekleyen `/me` geçişi düşerdi.
-          if (cancelled || pausingRef.current || !latest || latest.doc.id !== current.doc.id || !untouched(latest) || !planChanged(latest, data)) return;
+          if (cancelled || pausingRef.current || !latest || latest.doc.id !== current.doc.id || !untouched(clientId, latest) || !planChanged(latest, data)) return;
           begin(data);
         })
         .catch(() => undefined);
@@ -932,11 +948,14 @@ export function WorkoutScreen({
 
   /* --- işler --- */
 
-  /** "Set bitti" (süreli sette "Bitir ■": geçen saniye). */
+  /**
+   * "Set bitti" (süreli sette "Bitir ■": geçen saniye). Bitiş (ya da iptal, değiştirme) yoldayken set yazılmaz: belge
+   * gönderildi, başarıda yerel kopya düşer ve set kaybolurdu (ekran o arada zaten `inert`; bu, ekranın dışından çağrılara).
+   */
   const onDone = useCallback(
     (seconds?: number) => {
       const current = localRef.current;
-      if (!current || saving) return;
+      if (!current || saving || finishingRef.current) return;
       // Set yazmak günün etkin planını değiştirmez (muadil ve eklenenler aynı): önce ve sonra aynı plan.
       const plan = planOf(current);
       const focused = focusRef.current;
@@ -1844,15 +1863,16 @@ export function WorkoutScreen({
    * Bitirilemezse antrenman sürer ve değiştirmenin hazırlığı geri alınır (`undoSwitchPrep`).
    *
    * İstek sürerken sheet açık ve meşgul kalır (`finishing`; FinishSheet gibi): sheet modal olduğundan alttaki ekran
-   * dokunulmaz, bitişin gönderdiği belgeden sonra set yazılamaz (yazılsaydı başarıda kaybolurdu). `<main>`'i `inert`
-   * yapmak yerine bu: danışan beklediğini dokunduğu yerde görür, hatada sheet açık kalır (yeniden dene ya da vazgeç),
-   * ekrana ayrı bir kilit eklenmez. Başarıda `restartWith` sheet'i kapatır.
+   * dokunulmaz, bitişin gönderdiği belgeden sonra set yazılamaz (yazılsaydı başarıda kaybolurdu). Danışan beklediğini
+   * dokunduğu yerde görür, hatada sheet açık kalır (yeniden dene ya da vazgeç). Ekranın kökü de bitiş sürerken `inert`
+   * (çizimde): bitiş sorusu ve "Programını güncelleyelim mi?" istek sürerken kapatılabilir. Başarıda `restartWith` sheet'i
+   * kapatır.
    */
   const onSwitchWorkout = useCallback(
     async (program: string, day: string) => {
       const current = localRef.current;
       if (!current || finishing) return;
-      if (program === (current.plan.programId ?? 'pt') && day === current.plan.dayId) {
+      if (program === planProgram(current.plan) && day === current.plan.dayId) {
         toast('Zaten bu antrenmandasın.');
         return;
       }
@@ -2015,9 +2035,12 @@ export function WorkoutScreen({
             : null;
 
   // Ara verilirken ekrana dokunulmaz (`inert`): satır, alt çubuk ya da ⋯'deki öğeler adresi değiştirip bekleyen `/me`
-  // geçişini düşürmesin. "Ara verilsin mi?" portalda, etkilenmez.
+  // geçişini düşürmesin. Bitiş (ya da iptal, değiştirme) yoldayken de: bitiş sorusu ya da "Programını güncelleyelim mi?"
+  // kapatılırsa ekran yeniden dokunulur olurdu, o arada yazılan set gönderilen belgede yok, başarıda kaybolurdu. Sheet'ler
+  // ve "Ara verilsin mi?" portalda, etkilenmez.
+  const busy = pausing !== null || finishing;
   return (
-    <div inert={pausing !== null} aria-busy={pausing !== null || undefined} className="mx-auto flex h-dvh w-full max-w-md flex-col overflow-hidden bg-background">
+    <div inert={busy} aria-busy={busy || undefined} className="mx-auto flex h-dvh w-full max-w-md flex-col overflow-hidden bg-background">
       <WorkoutHeader
         program={plan.source === 'own' && plan.programName ? plan.programName : null}
         day={doc.program?.dayName ?? plan.dayName}

@@ -1,6 +1,7 @@
 import type { WaterTap } from '@/lib/schemas/session';
 import { randomId } from '@/lib/template-plan';
 import {
+  localWorkoutId,
   localWorkoutKey,
   parseLocalWorkout,
   workoutCacheKey,
@@ -72,9 +73,14 @@ export function saveLocalWorkout(clientId: string, local: LocalWorkout): boolean
   return ok;
 }
 
-/** Bitiş ya da silinme sunucuda onaylanınca. */
-export function clearLocalWorkout(clientId: string): void {
-  remove(localWorkoutKey(clientId));
+/**
+ * Bitiş ya da silinme sunucuda onaylanınca: yalnız saklanan antrenman bu antrenmansa (`sessionId`) silinir. Depo
+ * sekmeler arasında ortak; başka sekme ya da eski bir ekran o arada başlayan yeni antrenmanı silmesin.
+ */
+export function clearLocalWorkout(clientId: string, sessionId: string): void {
+  const key = localWorkoutKey(clientId);
+  if (localWorkoutId(read(key)) !== sessionId) return;
+  remove(key);
   window.dispatchEvent(new Event(CHANGE_EVENT));
 }
 
