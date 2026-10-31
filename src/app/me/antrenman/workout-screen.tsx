@@ -355,6 +355,19 @@ export function WorkoutScreen({
     void queryClient.invalidateQueries({ queryKey: WORKOUT_KEY });
   }, [clientId, queryClient]);
 
+  /**
+   * Yoklamanın ayarladığı plan ve belge (`StartCheck`'in `onApply`'ı). Yoklama portalda; ekranın `inert`'i onu kapsamaz,
+   * çıkış sürerken de dokunulur. Antrenman bırakıldıysa (`release()`: silinmiş, başka cihazda bitirilmiş, iptal, bitiş; her
+   * zorunlu çıkıştan önce) yazılmaz: bırakılan antrenman `localStorage`'a geri yazılır, Bugün'de yeniden "Yarım kalan
+   * antrenman" olurdu. Antrenman telefonda kaldıkça ("Ara ver" sürerken de) cevaplar ona yazılır.
+   */
+  const applyCheck = useCallback(
+    (next: LocalWorkout) => {
+      if (localRef.current?.doc.id === next.doc.id) commit(next);
+    },
+    [commit],
+  );
+
   /* --- yardımcılar --- */
 
   const later = useCallback((ms: number, run: () => void) => {
@@ -529,6 +542,8 @@ export function WorkoutScreen({
    */
   const exitTo = useCallback(
     (href: string, { canStay }: { canStay: boolean }) => {
+      // Ekran kapandıysa (yoldaki isteğin yanıtı sonra geldi) danışan başka sayfada: o sayfa değiştirilmez.
+      if (!mountedRef.current) return;
       const pending = exitTarget.current;
       if (pending) {
         if (!canStay) exitTarget.current = { ...pending, canStay: false };
@@ -1244,11 +1259,14 @@ export function WorkoutScreen({
     [commit, announce],
   );
 
-  /** "<Hareket> nasıldı?": cevap o hareketin (AMRAP olmayan) bütün çalışma setlerine. */
+  /**
+   * "<Hareket> nasıldı?": cevap o hareketin (AMRAP olmayan) bütün çalışma setlerine. Bitiş yoldayken yazılmaz: bitiş
+   * sorusu portalda, ekranın `inert`'i onu kapsamaz; cevap gönderilen belgede yok, başarıda kaybolurdu.
+   */
   const onEffort = useCallback(
     (entryId: string, effort: EffortChoice) => {
       const current = localRef.current;
-      if (!current) return;
+      if (!current || finishingRef.current) return;
       const doc = setEntryEffort(current.doc, entryId, effort, stampOf(current));
       commit(withChange(current.rest ? { ...current, rest: acknowledgeRest(current.rest) } : current, doc, { send: false }));
       const title = doc.entries.find((entry) => entry.id === entryId)?.title;
@@ -1269,12 +1287,12 @@ export function WorkoutScreen({
     announce(kg !== undefined ? `Sonraki set ${formatKg(kg)}` : 'Kaydedildi');
   }, [commit, announce]);
 
-  /** AMRAP'ta set bittikten sonra "Kaç tekrar yaptın?". */
+  /** AMRAP'ta set bittikten sonra "Kaç tekrar yaptın?". Bitiş yoldayken yazılmaz (`onEffort` gibi). */
   const onAmrapReps = useCallback(
     (setId: string, reps: number) => {
       const current = localRef.current;
       const found = current ? findSet(current.doc, setId) : null;
-      if (!current || !found) return;
+      if (!current || !found || finishingRef.current) return;
       const doc = editSet(current.doc, setId, { kg: found.set.kg, value: reps }, stampOf(current));
       commit(withChange(current.rest ? { ...current, rest: acknowledgeRest(current.rest) } : current, doc, { send: false }));
     },
@@ -1454,7 +1472,11 @@ export function WorkoutScreen({
         void queryClient.invalidateQueries({ queryKey: ['coach', clientId, 'highlights'] });
         queryClient.setQueriesData<WorkoutResponse>({ queryKey: WORKOUT_OVERVIEW_KEY }, (old) => (old ? afterFinish(old, saved) : old));
         release();
-        if (switchTarget.current) {
+        if (!mountedRef.current) {
+          // İstek sürerken ekran kapandı (danışan başka sayfaya geçti): bulunduğu sayfa değiştirilmez, seçilen antrenman da
+          // açılmaz. Antrenman bitti ve yerel kopya düştü; özet Geçmiş'teki ayrıntıdan açılır.
+          switchTarget.current = null;
+        } else if (switchTarget.current) {
           const target = switchTarget.current;
           switchTarget.current = null;
           restartWith(target);
@@ -2158,16 +2180,21 @@ export function WorkoutScreen({
   const lastSet = lastSetId ? findSet(doc, lastSetId)?.set : undefined;
   const finishEffort = lastSetId ? promptOf(effortQuestions(plan, doc, lastSetId)) : null;
 
+  // Bitiş (ya da iptal) yolda ve sheet'i kapatıldı ("Programını güncelleyelim mi?" kaydırıldı, bitiş sorusunda "Kalanlara
+  // dön"): ekran `inert`, bağlantı ağırsa donmuş görünürdü; üst çubuk söyler. Sheet açıkken (değiştirme sheet'i istek boyunca
+  // açık) sheet kendisi söyler. Setsiz antrenmanda yalnız iptal var (bitiş sorusunda "Antrenmanı iptal et").
   const status: WorkoutStatus | null =
-    problem === 'session'
-      ? { tone: 'warn' as const, text: 'Oturumun kapandı; kayıtların bu telefonda. Antrenörüne yaz.' }
-      : problem === 'error'
-        ? { tone: 'warn' as const, text: 'Kayıt gönderilemedi', retry: true }
-        : !online || problem === 'offline'
-          ? { tone: 'offline' as const, text: `Çevrimdışı${unsent > 0 ? ` · ${unsent} set telefonda` : ''}` }
-          : problem === 'limited' && unsent > 0
-            ? { tone: 'offline' as const, text: `Şu an yoğun · ${unsent} set telefonda, birazdan gönderilecek` }
-            : null;
+    finishing && topLayer === null
+      ? { tone: 'busy' as const, text: summary.sets === 0 ? 'Antrenman iptal ediliyor…' : 'Antrenman bitiriliyor…' }
+      : problem === 'session'
+        ? { tone: 'warn' as const, text: 'Oturumun kapandı; kayıtların bu telefonda. Antrenörüne yaz.' }
+        : problem === 'error'
+          ? { tone: 'warn' as const, text: 'Kayıt gönderilemedi', retry: true }
+          : !online || problem === 'offline'
+            ? { tone: 'offline' as const, text: `Çevrimdışı${unsent > 0 ? ` · ${unsent} set telefonda` : ''}` }
+            : problem === 'limited' && unsent > 0
+              ? { tone: 'offline' as const, text: `Şu an yoğun · ${unsent} set telefonda, birazdan gönderilecek` }
+              : null;
 
   // Çıkılırken ekrana dokunulmaz (`inert`): satır, alt çubuk ya da ⋯'deki öğeler adresi değiştirip bekleyen geçişi (Bugün
   // ya da özet) düşürmesin. Bitiş (ya da iptal, değiştirme) yoldayken de: bitiş sorusu ya da "Programını güncelleyelim mi?"
@@ -2373,7 +2400,7 @@ export function WorkoutScreen({
       <FinishedElsewhereDialog count={elsewhere?.count ?? null} busy={elsewhereBusy} onAdd={onAddElsewhere} onSkip={() => leave('Bu antrenman başka bir cihazda bitirildi.', 'info')} />
       <PauseDialog open={pauseAsked} busy={pausing !== null} onContinue={onStay} onPause={onPause} />
       {/* Yoklama (§2.2): yalnız sağlık onayı varken ve antrenman yeni başlıyorken açılır. */}
-      <StartCheck ref={checkRef} clientId={clientId} local={local} onApply={commit} onLeave={leave} onOpenChange={setCheckOpen} />
+      <StartCheck ref={checkRef} clientId={clientId} local={local} onApply={applyCheck} onLeave={leave} onOpenChange={setCheckOpen} />
       <p aria-live="polite" className="sr-only">
         {announcement}
       </p>

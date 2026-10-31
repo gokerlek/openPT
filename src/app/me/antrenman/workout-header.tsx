@@ -1,14 +1,17 @@
 'use client';
 
 import { ArrowBendDownRight, ArrowsLeftRight, CaretLeft, CloudSlash, Drop, Pause, Swap, WarningCircle } from '@phosphor-icons/react';
-import { DotsThree } from '@/components/line-icons';
+import { DotsThree, Spinner } from '@/components/line-icons';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
 
-/** Gönderimin durumu (üst çubuğun alt satırı): çevrimdışı ya da yoğun (soluk), hata ya da oturum kapandı (uyarı). */
-export type WorkoutStatus = { tone: 'warn' | 'offline'; text: string; retry?: boolean };
+/**
+ * Üst çubuğun alt satırı: gönderim çevrimdışı ya da yoğun (soluk), hata ya da oturum kapandı (uyarı); bitiş ya da iptal
+ * yolda (soluk, dönen gösterge).
+ */
+export type WorkoutStatus = { tone: 'warn' | 'offline' | 'busy'; text: string; retry?: boolean };
 
 /** ⋯ menüsünde hareketin öğesi: açıksa işi; devre dışıysa nedeni (öğenin altında: "Set kaydedildi, muadil seçilemez"). */
 export type MenuAction = { onSelect: () => void } | { note: string };
@@ -146,7 +149,13 @@ export function WorkoutHeader({
       </div>
       {status ? (
         <div role="status" className={cn('flex min-h-9 items-center gap-2 border-t px-4 text-[0.8125rem]', status.tone === 'warn' ? 'text-destructive' : 'text-muted-foreground')}>
-          {status.tone === 'offline' ? <CloudSlash className="size-4 shrink-0" /> : <WarningCircle className="size-4 shrink-0" />}
+          {status.tone === 'busy' ? (
+            <Spinner className="size-4 shrink-0 animate-spin" aria-hidden />
+          ) : status.tone === 'offline' ? (
+            <CloudSlash className="size-4 shrink-0" />
+          ) : (
+            <WarningCircle className="size-4 shrink-0" />
+          )}
           <span className="min-w-0 flex-1">{status.text}</span>
           {status.retry ? (
             <Button variant="ghost" className="-mr-2 h-11 px-2" onClick={onRetry}>

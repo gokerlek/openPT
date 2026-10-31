@@ -1373,6 +1373,10 @@ ve §2.1, `README.md` (danışan özellikleri değiştiyse)
     ekran başına bir kez (tazeleme yeniden kurunca yeniden açılmaz); `antrenman-ekrani.md` rev. 2 listesinde atlama Faz 2
     davranışıyla başlar, kenar durumlar tablosunun "Ağ yok" satırı koda uyar (bitiş kuyruğa alınmaz), §4.4'e çıkış ve açık
     katmanla geri tuşu eklendi.
+  - Yeniden inceleme (N1–N4): bitiş ya da iptal yolda ve sheet kapalıyken üst çubuk "Antrenman bitiriliyor…" der (ekran
+    `inert`, donmuş görünmesin); bitiş sorusunun zorluk ve AMRAP düğmeleri bitiş yoldayken yazmaz (portalda, `inert`
+    kapsamaz); yoklama bırakılan antrenmanı geri yazmaz (`applyCheck`); istek sürerken ekran kapandıysa başarı özete ya da
+    seçilen antrenmana geçmez, `exitTo` da kapalı ekrandan çıkmaz (özet Geçmiş'ten açılır).
 - Kabul edildi:
   - `replace` ileri geçmişi silmez: ileri tuşu düşmüş antrenmanın girdisine iner, ekran Bugün'e döner (ara verilen
     antrenmanda antrenman yeniden açılır, korkuluksuz).
