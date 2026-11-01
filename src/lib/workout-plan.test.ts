@@ -48,7 +48,7 @@ const three = (kg: number, reps: number) => [{ kg, reps }, { kg, reps }, { kg, r
 const TODAY = '2026-09-26';
 
 describe('günün planı', () => {
-  test('geçmiş yoksa sıradaki gün; ilk kez barın ağırlığı; aralığın altı', () => {
+  test('geçmiş yoksa varsayılan gün; ilk kez barın ağırlığı; aralığın altı', () => {
     const day = workoutDay();
     assert.equal(day.dayId, DAY_A);
     assert.equal(day.plannedDayId, DAY_A);

@@ -106,9 +106,13 @@ Plan kararları (yöneticinin; incelemeden sonra kesinleşti):
    kaldırıldı (…)" yazar ve `schedule.at`'i şimdiye alır. `resetClientSchedule`, `resetSchedule`, PT'nin
    `/api/clients/[id]/program/schedule` ucu ve `ResetDaysButton` temizlik görevinde silinir. Sonuç: danışan eskiden
    PT'nin günlerini kendi katmanıyla değiştirdiyse Bugün artık PT'nin günlerini izler.
-4. **Kaçan gün penceresi.** `scheduleSince` danışan katmanının anını `effectiveSchedule`'dan değil doğrudan ham
-   alandan (`program.clientSchedule?.at`) okur: yayından sonra kayıttaki eski katman pencereyi geri çekip geçmiş
-   günleri "kaçtı" yapamaz. Katman düşünce `schedule.at` = şimdi (Karar 3), pencere yine geri gitmez.
+4. **Kaçan gün penceresi.** Kayıtta ham `clientSchedule` durdukça `scheduleSince` (`training-days.ts`) pencereyi
+   **bugünden** (`now`) başlatır, katmanın `at`'inden değil: danışan yayına kadar kendi günlerini izliyordu; katmanın
+   anından başlasa aradaki bütün PT günleri "kaçtı" olurdu. Katman düşünce (PT'nin ilk kaydı ya da evre geçişi)
+   `schedule.at` = o an (Karar 3), pencere oradan sürer; iki hâl aynı yere varır. **Bedel:** katmanlı kayıtta Genel
+   bakış'ın "Kaçan gün" sinyali (ve Bugün şeridinin "kaçtı"sı) PT'nin ilk kaydına kadar susar. *(Uygulamada
+   değişti, 9891e72; planın ilk hâli katmanın anını ham `program.clientSchedule?.at`'ten okuyordu, aşağıdaki 4. görevin
+   kod örneği o hâli gösterir.)*
 5. **Dönüş (rotasyon) kalkar.** Bitiş dönüşü ilerletmez, seansa `rotation` yazılmaz, bitişteki "Sıradaki antrenman:
    … · Değiştir" seçimi kalkar. `rotation` (program) ve `ROTATION_CHOICES` (seans) şemada okunur kalır; eski telefonun
    gönderdiği `rotation` yok sayılır. `nextDayId`'nin yerine her yerde tek kural: **`upcomingAssigned(program,
@@ -1445,3 +1449,58 @@ bu plan (son inceleme notu)
   doğrulanmıştır.
 
 typecheck, lint, test · Commit: `docs: Faz 3 weekday-assigned programs`
+
+---
+
+## Uygulamada · görev başına sapmalar
+
+Görevlerin commit'leri ve plandan ayrıldıkları yerler (incelemelerin düzeltmeleri dahil). Sapma yazılmayan görev planın
+dediği gibi yapıldı.
+
+- **1** (cb4ef5b, 5b18ad4): `takenWeekdays` sahipliği `dayOnWeekday` gibi bütün evrede belirler (bozuk kayıtta iki
+  programa atanmış gün ilkinin); `hasAssignmentField` `undefined` değerli anahtarı alan saymaz.
+- **2** (5a67869): plandaki gibi.
+- **3** (557ef1c, 63ffc54): `sameWeekdays` `day-assignments.ts`'e taşındı (tek karşılaştırıcı); haftalık hedefin
+  dondurulması `programWeekTarget`'a burada geçti (6c'nin bir kısmı öne çekildi). İncelemede: düzenleyicinin evre
+  değiştiren kaydı, atamaların getirdiği gün satırlarına rağmen yine "Evre geçişi" kaydı (63ffc54).
+- **4** (670e454, 9891e72): kaçan gün penceresi Karar 4'ün güncel hâli (katman durdukça bugünden); `weekOf` hedefi
+  `programWeekTarget`'tan. "Değiştir" / "Başka antrenman seç" adları 11. görevden önce geldi (b538f7b).
+- **5** (41749e5): plandaki gibi.
+- **6a** (bea5bde), **6b** (482df95), **6c** (fd73f1b): plandaki gibi (6c'nin `writeProgramFile` kısmı 3'te yapılmıştı).
+- **7** (3e79360): bitiş ucunun ve `schemas/session.ts`'in yorumları da güncellendi (eski telefonun `rotation`'ı okunmaz).
+- **8** (b751d18): plandaki gibi.
+- **9** (0326b7d): plandaki gibi. İnceleme (f33b7ac): "Başka programda: …" satırı gruba `aria-describedby` ile bağlı,
+  kapalı çipte görünmeyen `title` kalktı; gün açıp kapamak formu kirli bırakmaz (`weekdaysInput`); günlere atanmış boş
+  program taşınan programla değiştirilmez (`blankReplaceable`); gün atanmış program evreye taşınınca duyuru "günleri
+  kaldırıldı" der; uzun çip adı 375 px'te kırpılır.
+- **10** (990d71e): evre geçişi penceresinin (`phase-transition.tsx`) "sıradaki antrenmanı bu evrenin ilk günü olur"
+  cümlesi de değişti; `new/page.tsx` gerekmedi. İnceleme: kas yükü kartının ipucu kişisiz ("…gün atanmalı ya da
+  'haftada kaç gün' seçilmeli").
+- **11** (37ec808): plandaki gibi; düğme adı b538f7b'de gelmişti. 15. görevle: atamasız programda şeridin ekran
+  okuyucu satırı "dinlenme" demez; bugünün programı açılamıyorsa "Değiştir" sheet'i açılabilen ilk programla başlar.
+- **12** (96c4aba): plandaki gibi.
+- **13** (19f064a): plandaki gibi.
+- **14** (da65919): AI asistanının dikkat notu şu anki evrenin atamalarını okur (program düzeyindeki `weekdays` yalnız
+  atamasız eski gövdede); kaydedilen gerekçe "N antrenman" der. İnceleme (f33b7ac): "+ Program"ın erişilebilir adı
+  "Program ekle"; AI taslak sayfası "Programları, günlerini, hareketleri ve setleri kontrol et."
+- **15** (9003b35): planın listesindekilere ek olarak `ScheduleResponse` (`workout-routes.ts`) ve ölü `scheduleText`
+  (`own-program-text.ts`) silindi. `applyProgramEdit` eski dosyanın `rotation`'ını olduğu gibi taşır, evre geçişinde
+  son gün `startPhase`'teki gibi düşer. `EffectiveSchedule`'dan `client` kalktı, `source` yalnız `'pt' | null`; `pt`
+  (tüketeni yok) duruyor. İncelemelerin kalanları da burada: `withPlannedDay` seans başka evrede başladıysa planlananı
+  düşürür (PT'nin antrenman sırasındaki evre geçişi yanlış "başka program" üretmez; testli); antrenman değiştirme
+  sheet'i ("Seçtiğin antrenman", "Antrenman"), Bildirimler kartının boş metni (gün değiştirme kalktı), deneme kapısının
+  403'ü ("Deneme verisi yalnız…"), eski "başka gün" / "sıradaki gün" / "düzelt" yorumları.
+- **16**: belgeler (`SPEC.md` §3, §4'ün JSON örnekleri ve bildirim cümleleri, §6, §7, §7.4, §12, §13'e `seed-program`; `antrenman-ekrani.md` kararlar
+  10 ve 12, §0, §1, §2.1, §2.3, §2.7, §2.11, §4 ve §7'deki dönüş cümleleri; eski tasarımın Faz 3'ü; bu plan) ve kalıntı
+  denetimi için `src/`'de bir uç yorumu ve eski adlı test başlıkları. `docs/design/kendi-program.md` ve `README.md` bu
+  turda güncellenmedi (kendi programdaki "Günlerini değiştir" anlatımı orada duruyor).
+
+**Kalıntı denetimi** (`src/`, 2026-11-01):
+`grep -rn "sırayla döner\|sıradaki gün\|A → B → C\|Başka gün seç\|Günlerini değiştir\|başka gün" src` → danışana ya
+da PT'ye görünen metinde eşleşme yok (AI koçun "sıradaki gününden sürdür" önerisi "sıradaki antrenmanından" oldu; eski
+adlı test başlıkları da yenilendi). Kalan eşleşmeler yorumdur: eski telefonun gün ucu (`api/me/schedule/route.ts`,
+`workout-routes.ts` ve testi), eski kayıtların alanları (`schemas/program.ts`'te `rotation`, `schemas/session.ts`'te
+`plannedDayId`/`plannedDayName`), yeni kuralın tanımı "haftada sıradaki güne atanmış program" (`upcomingAssigned`,
+`defaultDayId`; `workout-plan.ts`, `workout-routes.ts`, `api/me/workout/route.ts`, `attention.ts`, `program-form.tsx`,
+`constraint-filter.test.ts`) ve kodun "gün"ü (program) için iç yorumlar (`editor-undo.ts`, `program-form.tsx` 462) ile
+ilgisiz testler (ölçüm günü, şablon).

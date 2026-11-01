@@ -72,7 +72,7 @@ function logNext(day: ReturnType<typeof workoutDay>, doc: SessionDoc, minute: nu
 }
 
 describe('antrenman belgesi: başlangıç ve sıradaki set', () => {
-  test('yeni belge şemaya uyar; gün ve sıradaki gün programdan', () => {
+  test('yeni belge şemaya uyar; günü ve planlananı programdan', () => {
     const doc = start();
     assert.equal(v.safeParse(sessionDocSchema, doc).success, true);
     assert.match(doc.id, /^s_[a-z0-9]{8}$/);

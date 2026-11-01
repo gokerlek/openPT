@@ -159,7 +159,7 @@ describe('antrenmanın detayı', () => {
     assert.equal(sessionDetail(open, TZ).meta, '18:00–18:14 · 2 set · 1.140 kg');
   });
 
-  test('kendi programın antrenmanı: başlıkta programın adı; başka gün rozeti yok', () => {
+  test('kendi programın antrenmanı: başlıkta programın adı; başka program rozeti yok', () => {
     const own = finished('s_bbbbbbbb', 0, { program: { revision: 1, dayId: OWN_DAY_B, dayName: 'Gün B', plannedDayId: OWN_DAY_A, programId: OWN_ID, programName: 'Evde' } });
     const detail = sessionDetail(own, TZ);
     assert.equal(detail.title, 'Evde · Gün B · 26 Eylül 2026');

@@ -109,31 +109,46 @@ Her faz kendi uygulama planıyla ayrı yapılır; sıradaki faz öncekinin iskel
 
 ## Faz 3 · Program modeli ve kurulumu
 
+> Uygulama planı: `docs/plans/2026-11-01-faz-3-gune-atanmis-program.md` (Karar 14). Aşağıdaki maddelerin yanındaki
+> notlar o planla neyin yapıldığını, neyin değiştiğini ya da geçersiz kaldığını söyler.
+
 **Haftalık plan**
 - Program adlandırılmış antrenmanlardan oluşur; her antrenman bir ya da birkaç hafta gününe atanır (Tüm vücut hem
-  Pazartesi hem Cuma olabilir). Haftalık sayı atanmış gün sayısıdır; ayrı "Haftada kaç gün" alanı kalkar.
+  Pazartesi hem Cuma olabilir). Haftalık sayı atanmış gün sayısıdır; ayrı "Haftada kaç gün" alanı kalkar. *(Faz 3
+  planı, 2026-11-01: yapıldı; atama evre başına, varsayılan adlar "Program A…". "Haftada kaç gün" yumuşadı: atamasız
+  evrede kalır.)*
 - Bugün, o günün antrenmanını gösterir. Antrenmansız günde "Bugün dinlenme · Sonraki: Çarşamba, Alt vücut" ve
-  "Başka antrenman yap" (kaçanı telafi dahil). Kaçan gün kaçmış sayılır.
+  "Başka antrenman yap" (kaçanı telafi dahil). Kaçan gün kaçmış sayılır. *(Faz 3 planı, 2026-11-01: ilk ve son cümle
+  yapıldı; "Bugün dinlenme · Sonraki: …" geçersiz — kullanıcı kararı 3: atanmamış günde "Bugün atanmış program yok" ve
+  programların listesi, öneri yok. Her gün "Değiştir"le başka program yapılabilir — kullanıcı kararı 2.)*
 - Danışan bir antrenmanı başka güne taşıyabilir; PT "Danışan değiştirdi" olarak görür (bugünkü `clientSchedule`
-  katmanının yerini alır).
-- Rotasyon alanları (`rotation.lastDayId`) yalnız geçmiş için okunur.
+  katmanının yerini alır). *(Faz 3 planı, 2026-11-01: geçersiz — kullanıcı kararı 1: danışan günleri değiştirmez, kendi
+  programında atamayı o yapar; `clientSchedule` okunur ama yok sayılır, PT'nin ilk kaydı siler.)*
+- Rotasyon alanları (`rotation.lastDayId`) yalnız geçmiş için okunur. *(Faz 3 planı: yapıldı; dönüş ilerlemez ve
+  gösterilmez.)*
 
-**Veri taşıma** (saf fonksiyon + test; eski biçim okunmaya devam eder; önce kopyada denenir)
-- Antrenmanlar seçili hafta günlerine sırayla atanır (A → ilk gün, B → ikinci …).
-- Hafta günü antrenmandan fazlaysa sıra başa döner; antrenman fazlaysa atanmayan için PT'ye uyarı.
-- Hiç gün seçilmemişse sıklığa göre varsayılan dağılım (3 → Pzt, Çar, Cum).
-- Evreli programlarda her evre aynı kuralla.
+**Veri taşıma** (saf fonksiyon + test; eski biçim okunmaya devam eder; önce kopyada denenir) *(Faz 3 planı,
+2026-11-01: okurken, yazmadan — `upgradeProgram`; dosya yalnız PT kaydı ya da evre geçişiyle yeni biçime geçer.)*
+- Antrenmanlar seçili hafta günlerine sırayla atanır (A → ilk gün, B → ikinci …). *(yapıldı)*
+- Hafta günü antrenmandan fazlaysa sıra başa döner; antrenman fazlaysa atanmayan için PT'ye uyarı. *(yapıldı; başa
+  sarar, uyarı düzenleyicide "Gün atanmamış: Program D")*
+- Hiç gün seçilmemişse sıklığa göre varsayılan dağılım (3 → Pzt, Çar, Cum). *(yapılmadı: atama yok, danışan her gün
+  programı kendisi seçer)*
+- Evreli programlarda her evre aynı kuralla. *(yapıldı)*
 
-**Oluşturma (PT): 3 adım**
+**Oluşturma (PT): 3 adım** *(Faz 3 planı, 2026-11-01: bu fazda yok; atama seçili programın kartındaki gün
+çipleriyle)*
 1. Günler: hafta günlerini seç, her birine antrenman ata; ad önerileri (Üst vücut, Alt vücut, İtme, Çekme, Bacak,
    Tüm vücut).
 2. Doldur: her antrenman bir sekme; "Şablondan doldur" ya da "Hareket ekle".
 3. Gözden geçir: haftalık özet, kas yükü haritası, "Danışana ata".
 
 **Düzenleme: tek sayfa**
-- Üstte hafta şeridi (Pzt Üst · Çar Alt · Cum Tüm), altta antrenman sekmeleri.
+- Üstte hafta şeridi (Pzt Üst · Çar Alt · Cum Tüm), altta antrenman sekmeleri. *(Faz 3 planı: şerit yerine salt okunur
+  "Haftanın programı" özeti ("Sal · Alt vücut, Per · Üst vücut"); program çiplerinde günleri.)*
 - Kaydet sayfanın altında, dock'un üstünde sabit çubukta (bugün bir günün "Hareketler" kartının içinde).
-- Evreler, süre ve ilerleme kuralları kapalı "Gelişmiş" bölümünde; evre davranışı aynı kalır.
+- Evreler, süre ve ilerleme kuralları kapalı "Gelişmiş" bölümünde; evre davranışı aynı kalır. *(Faz 3 planı: bu
+  fazda yok.)*
 
 **Hareket kartları** (`src/components/block-editor`)
 - Görünür düğmeler: Yukarı, Aşağı, Grupla, Sil. Sürükleme ve kaydırma kısayol olarak kalır.

@@ -14,7 +14,7 @@ function finished(id: string, minute: number, overrides: Partial<SessionDoc> = {
 }
 
 describe('index satırı: PT bildirimlerinin ayrıntısı', () => {
-  test('başka gün: sıradaki günün adı; yarım: yapılan/planlanan set; aşırı yük: hareket başına en ağır set', () => {
+  test('başka program: planlanan programın adı; yarım: yapılan/planlanan set; aşırı yük: hareket başına en ağır set', () => {
     const doc = finished('s_aaaaaaaa', 0, {
       program: { revision: 3, dayId: DAY_B, dayName: 'Gün B', plannedDayId: DAY_A, plannedDayName: 'Gün A' },
       entries: [
@@ -35,12 +35,12 @@ describe('index satırı: PT bildirimlerinin ayrıntısı', () => {
     assert.deepEqual(row.overloads, [{ title: 'Bench Press', kg: 85, plannedKg: 62.5 }]);
   });
 
-  test('sıradaki gün aynıysa ad yazılmaz; bildirim yoksa ayrıntı da yok', () => {
+  test('planlanan program yapıldıysa ad yazılmaz; bildirim yoksa ayrıntı da yok', () => {
     const row = indexRowOf(finished('s_aaaaaaaa', 0, { program: { revision: 3, dayId: DAY_A, dayName: 'Gün A', plannedDayId: DAY_A } }), 'f'.repeat(40));
     assert.equal('plannedDayName' in row || 'progress' in row || 'overloads' in row, false);
   });
 
-  test('kendi programda başka gün yok (plan danışanın): sıradaki gün farklı olsa da bayrak ve ad yazılmaz', () => {
+  test('kendi programda başka program yok (plan danışanın): planlanan farklı olsa da bayrak ve ad yazılmaz', () => {
     const program = { revision: 1, dayId: OWN_DAY_B, dayName: 'Gün B', plannedDayId: OWN_DAY_A, plannedDayName: 'Gün A', programId: OWN_ID, programName: 'Evde' };
     const row = indexRowOf(finished('s_aaaaaaaa', 0, { program }), 'f'.repeat(40));
     assert.equal(row.otherDay, false);

@@ -87,7 +87,7 @@ function finished(id: string, startedAt: string, reps: number, water = 0): Sessi
 const body = (result: { body: Record<string, unknown> }) => result.body as unknown as WorkoutResponse;
 
 describe('GET /api/me/workout', () => {
-  test('geçmiş yoksa: sıradaki gün, ilk kez; hafta 0, su 0, yarım antrenman yok', async () => {
+  test('geçmiş yoksa: varsayılan gün, ilk kez; hafta 0, su 0, yarım antrenman yok', async () => {
     const { deps } = setup();
     const result = await workoutRoute(deps, null);
     assert.equal(result.status, 200);

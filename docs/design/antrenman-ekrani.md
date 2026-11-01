@@ -31,9 +31,9 @@
 7. Geçmiş veriden **ağırlık ve set artışı önerisi** verilir; algoritma danışanın **o harekette ne kadar süredir** çalıştığını hesaba katar.
 8. Bitiş ekranı: toplam kaldırılan ağırlık, set sayısı, çalışan kaslar; **kaydırılabilir karusel**; gelişim (geçen seferle fark, rekorlar).
 9. Danışan geçmişini görür ve istediği veriyi (antrenman, hareket, set) **silebilir**; her silmede "geri alınamaz" uyarısı. Git geçmişinde eski sürüm kalır: metin bunu dürüstçe söyler.
-10. Önceki kararlar: günler sırayla döner (A → B → C); danışan başka gün seçebilir, **PT'ye bildirim gider**; hazır oluşluk ve ağrı yoklaması sağlık modülünün isteğe bağlı parçasıdır (onaylıysa, §7.5); "bu hafta x/3".
+10. Önceki kararlar: günler sırayla döner (A → B → C); danışan başka gün seçebilir, **PT'ye bildirim gider**; hazır oluşluk ve ağrı yoklaması sağlık modülünün isteğe bağlı parçasıdır (onaylıysa, §7.5); "bu hafta x/3". *(Faz 3'te değişti, 2026-11-01: programlar sırayla dönmez, her biri haftanın günlerine atanır; danışan Bugün'de "Değiştir"le başka program seçebilir, o gün atanmış program varken PT'ye bildirim gider; §2.3, §2.11.)*
 11. **Danışan uygulamasına alt dock** gelir (PT'ninki gibi, telefon öncelikli): Bugün · Geçmiş · İlerleme · Programlar (`kendi-program.md`). Antrenman sırasında dock gizlenir.
-12. **Antrenman günleri (haftanın günleri, takvim değil).** Programı yapan PT, "Haftada kaç gün"ün yanında haftanın hangi günleri çalışılacağını işaretler (Pzt · Sal · Çar · Per · Cum · Cmt · Paz). **Danışan kendi günlerini güncelleyebilir**: doğrudan uygulanır, program geçmişine danışan değişikliği olarak yazılır, PT'ye bildirim gider; PT geçerli günleri görür ve değiştirebilir. Program günlere çakılmaz: A → B → C sırası seçilen günlere dağılır, kaçan gün içeriği atlatmaz (§2.11).
+12. **Antrenman günleri (haftanın günleri, takvim değil).** Programı yapan PT, "Haftada kaç gün"ün yanında haftanın hangi günleri çalışılacağını işaretler (Pzt · Sal · Çar · Per · Cum · Cmt · Paz). **Danışan kendi günlerini güncelleyebilir**: doğrudan uygulanır, program geçmişine danışan değişikliği olarak yazılır, PT'ye bildirim gider; PT geçerli günleri görür ve değiştirebilir. Program günlere çakılmaz: A → B → C sırası seçilen günlere dağılır, kaçan gün içeriği atlatmaz (§2.11). *(Faz 3'te değişti, 2026-11-01, `docs/plans/2026-11-01-faz-3-gune-atanmis-program.md`: PT her programı haftanın günlerine atar (Salı → "Alt vücut"); Bugün bugüne atanmış programı gösterir, danışan her gün istediği programı yapabilir; danışan günleri değiştirmez, kendi programında atamayı o yapar; dönüş yok; yeni varsayılan adlar "Program A"; §2.11.)*
 
 ---
 
@@ -43,7 +43,7 @@ Danışan yalnız telefondan kullanır (SPEC §6). Gezinme alttaki dock'ta; hesa
 
 | Sekme | Adres | İçerik | Faz |
 |---|---|---|---|
-| **Bugün** | `/me` | Sıradaki antrenman kartı (§2.1: başlık "Cuma · Gün A", "Antrenmana başla", "Başka gün seç", kısıt notu, ilk 3 hareket ve "Tümünü gör", hafta şeridinde günlerin antrenmanı), "bu hafta x/3", bugünkü su, yarım kalan antrenmanın "Devam et" kartı (hareketlerin listesi), karar bekleyen kartlar (onay, şifre), antrenmandan ~10 dk sonra "Antrenman ne kadar zordu?" | 1 (kabuk), 3 (antrenman) |
+| **Bugün** | `/me` | Bugünün antrenman kartı (§2.1: başlık "Salı · Alt vücut", "Antrenmana başla", "Değiştir", kısıt notu, ilk 3 hareket ve "Tümünü gör", hafta şeridinde günlere atanmış programlar; atanmamış günde programların listesi; altında "Haftanın programı"), "bu hafta x/3", bugünkü su, yarım kalan antrenmanın "Devam et" kartı (hareketlerin listesi), karar bekleyen kartlar (onay, şifre), antrenmandan ~10 dk sonra "Antrenman ne kadar zordu?" | 1 (kabuk), 3 (antrenman) |
 | **Program** | `/me/programlar` | Antrenörünün programı (salt okuma) ve danışanın kendi programları, "Antrenörünle paylaş" (SPEC §6, `kendi-program.md`) | ✓ (`kendi-program.md` §9) |
 | **İlerleme** | `/me/ilerleme` | İkinci şeritte üç bölüm (`progress-tabs.tsx`): Özet (`/me/ilerleme`: hareket başına grafik (üst ağırlık, e1RM; `progress-chart.tsx`), haftalık tonaj, haftalık kas yükü (gerçekleşen, SPEC §7.4)) · Geçmiş (`/me/gecmis`: geçmiş antrenmanlar, detay, silme; §2.10) · Rekorlar (`/me/ilerleme/rekorlar`: rekorlar ve başarılar (seri, rozet)) | 1 (boş), 9 (Geçmiş), 10 |
 | **Sağlık** | `/me/saglik` | Kısıtlar, bildirim ve hareket taraması (`kisit-tarama.md` §5.2); kamera ölçümü (`/me/olcum`) da bu sekmede. Yalnız kısıtlar ya da tarama onaylıysa görünür | ✓ (`kisit-tarama.md`) |
@@ -58,7 +58,7 @@ Danışan yalnız telefondan kullanır (SPEC §6). Gezinme alttaki dock'ta; hesa
 │ Merhaba, {ad}                      (AY) │ avatar menüsü, 44 px
 │                                         │
 │ ┌─────────────────────────────────────┐ │
-│ │ Cuma · Gün A           Bu hafta 1/3 │ │
+│ │ Salı · Alt vücut       Bu hafta 1/3 │ │
 │ │ …                                   │ │
 │ └─────────────────────────────────────┘ │
 │ ┌─────────────────────────────────────┐ │
@@ -80,7 +80,7 @@ Danışan yalnız telefondan kullanır (SPEC §6). Gezinme alttaki dock'ta; hesa
 
 ```
 Bugün kartı ──[Antrenmana başla]──► (sağlık modülü açık ve onaylıysa) Hazır oluşluk sheet'i · "Bugün atla"
-   └──[Başka gün seç]──► gün sheet'i ──► seçilen günle başlar (PT'ye bildirim)
+   └──[Değiştir]──► "Başka antrenman seç" ──► seçilen programla başlar (bugün atanmış program varsa PT'ye bildirim)
                  │
                  ▼  şu anki hareketin odağıyla açılır (liste altında)
 Hareket ekranı (odak) ──[Set bitti]──► ✓ satırda ──► Dinlenme (sayaç, Su içtim, ±15, atla;
@@ -95,7 +95,7 @@ Hareket ekranı (odak) ──[Set bitti]──► ✓ satırda ──► Dinlenm
    └─────────────┬────────────────────────────────────────────────────────────────────────────┘
                  │
       hepsi bitti ▼                         erken "Bitir" ▼
-"Antrenman tamamlandı, bitirelim mi?"     "Antrenmanı bitir?" · "Sıradaki antrenman: Gün B · Değiştir"
+"Antrenman tamamlandı, bitirelim mi?"     "Antrenmanı bitir?"
                  └───────────────┬────────────────┘
                                  ▼  (plandan sapma ya da öneri varsa)
         "Programını güncelleyelim mi?"  [Evet, güncelle] [Hayır, aynı kalsın] · Tek tek seç
@@ -126,10 +126,10 @@ Genel kurallar:
 
 ```
 ┌─────────────────────────────────────────┐
-│ Cuma · Gün A             Bu hafta 1/4   │ başlık `todayCardTitle`
+│ Salı · Alt vücut         Bu hafta 1/3   │ başlık: bugünün adı ve bugüne atanmış program
 │ 6 hareket · ≈ 55 dk                     │
 │ [        ▶  Antrenmana başla        ]   │ 48 px
-│            Başka gün seç                │ 44 px, bağlantı görünümü
+│               Değiştir                  │ 44 px, bağlantı görünümü; "Başka antrenman seç" (§2.3)
 │ ✚ Sol diz için değiştir: Lunge          │ kısıt notu: hareket başına bir, en çok 2
 │ ✚ Sol diz için dikkat: Back Squat       │
 │   +1 harekette daha not var             │
@@ -137,16 +137,17 @@ Genel kurallar:
 │ 2  Leg Press       3 set · 10–12 tekrar │
 │ 3  Bench Press     3 set · 8–10 tekrar  │
 │ › Tümünü gör (3 hareket daha)           │ 44 px; açılınca 4, 5, 6
-│ Pzt  Sal  Çar  Per  Cum  Cmt  Paz       │ hafta şeridi
-│  ✓    ·    ◌    ·    ◉    ○    ·        │ ✓ yapıldı · ◌ kaçtı · ◉ sırada · ○ planlı
-│  C       kaçtı       A    B             │ yapılanın adı; ilerisi dönüşten tahmin
-│           Günlerini değiştir            │ 44 px
+│ Pzt  Sal  Çar  Per  Cum  Cmt  Paz       │ hafta şeridi (atamalar: Sal Alt vücut, Per Üst vücut, Paz Tüm vücut)
+│  ✓    ◉    ·    ○    ·    ·    ○        │ ✓ yapıldı · ◌ kaçtı · ◉ bugün planlı (kalın) · ○ planlı
+│ Üst  Alt       Üst            Tüm       │ yapılanın adı; ötekiler o güne atanmış program
 └─────────────────────────────────────────┘
 ```
-- **Başlık** sıradaki antrenmanın günü ve adı: "Cuma · Gün A" (`todayCardTitle`). Ad `nextDayId`'den (A → B → C); gün bugünden (bugünkü antrenman yapıldıysa yarından) başlayarak ilk seçili gün; gün seçilmemişse yalnız ad. Yalnız dinlenme gününde ya da bugünkü antrenman yapıldıysa başlığın üstünde kısa satır: "Bugün dinlenme günün" / "Bugünkü antrenmanını yaptın". Yeniden düzenin Faz 3'üne (gün ↔ antrenman eşlemesi; `docs/plans/2026-10-26-kullanilabilirlik-yeniden-duzen-design.md`) kadar dinlenme gününde başlık sıradaki antrenman gününü söyler, "Antrenmana başla" yine bugün başlatır. Altında tek satır "N hareket · ≈ N dk" (set sayısı yok; evreli programda üstünde evre satırı). "Antrenmana başla" ve "Başka gün seç" başlığın hemen altında, kaydırmadan görünür. Sağ üstte "Bu hafta x/y" (`WeekBadge`, `GET /api/me/workout`'un `week`'i): x bu hafta antrenman bitirilen gün sayısı (en çok y), y `week.target` (`weekTarget`): seçili gün sayısı, gün seçilmemişse şu anki evrenin haftalık sıklığı (`daysPerWeek`); o da yoksa yalnız "Bu hafta 1" (§2.11).
+- **Başlık** bugünün adı ve bugüne atanmış program: "Salı · Alt vücut" (Faz 3, `todayAssigned`; şu anki evrenin ataması). Bu yalnız kolaylıktır: danışan her gün istediği programı yapar ("Değiştir", §2.3). Bugünkü antrenman yapıldıysa başlığın üstünde kısa satır "Bugünkü antrenmanını yaptın". Altında tek satır "N hareket · ≈ N dk" (set sayısı yok; evreli programda üstünde evre satırı). "Antrenmana başla" (`?day=<id>`) ve "Değiştir" (erişilebilir adı "Antrenmanı değiştir") başlığın hemen altında, kaydırmadan görünür. Sağ üstte "Bu hafta x/y" (`WeekBadge`, `GET /api/me/workout`'un `week`'i): x bu hafta antrenman bitirilen gün sayısı (en çok y), y `week.target`: atanmış gün sayısı, atama yoksa şu anki evrenin haftalık sıklığı (`daysPerWeek`); o da yoksa yalnız "Bu hafta 1" (§2.11).
+- **Atanmamış gün:** başlık "Bugün atanmış program yok" (evrede hiç atama yoksa "Bugün hangi programı yapacaksın?"), açıklama "Yapmak istediğin programı seç." ve programların listesi: ad, "6 hareket · ≈ 50 dk · son: 21 Eki" ya da "henüz yapılmadı", [Başla] (erişilebilir adı "Başla: Alt vücut"). Öneri yok (kullanıcı kararı 3); kısıt notu ve önizleme bu hâlde yok (antrenman ekranı gösterir). Altında şerit. Çevrimdışı: önbellekte olmayan programın [Başla]'sı ağ ister (kabul edilen gerileme, Faz 3 planı Karar 7).
+- **Haftanın programı:** evrede atama varsa ana kartın ve su kartının altında ayrı kart: hafta günü → program ("Salı · Alt vücut", "6 hareket · ≈ 50 dk"), bugünün satırında "bugün", sonda "Gün atanmamış: Program D".
 - **Kısıt notu** (kısıtlar onaylıysa; antrenmandaki kart notuyla aynı kural, `kisit-tarama.md` §3.5): hareket başına bir satır, "Sol diz için dikkat: Back Squat" (`careLine`); önerilmeyen harekette "değiştir", kendi programda "önerilmiyor". "Değiştir" diyenler önce; en çok 2 satır, fazlası "+n harekette daha not var". Önizlemede notlu hareketin yanında yara bandı (ekran okuyucuda "kısıt notu var").
-- **Önizleme:** günün ilk 3 hareketini dolduran bloklar (`previewBlocks`; grup bölünmez, kütüphanede olmayan satır sayılmaz), kalanı "Tümünü gör (n hareket daha)" altında (yerel `<details>`). Numaralar bütün günden: açılınca 4. hareket yine "4".
-- **Hafta şeridi** (`WeekStrip`, `weekPlan`; günler §2.11): pazartesiden pazara 7 gün, halkanın altında günün antrenmanının kısa adı (`dayShortName`: "Gün A" → "A", kopya gün "Gün A 2" → "A 2", öteki adlarda ilk sözcük). Yapılan gün dolu ✓, adı oturumdan (aynı gün birden çoksa sonuncusu); sıradaki gün (bugün dahil ilk yapılmamış seçili gün) kalın halka; sonraki seçili günler ince halka; kaçan gün soluk halka ve "kaçtı"; seçili olmayan gün dinlenme. Sıradaki ve sonraki günlerin adı **tahmindir**: dönüş sırası (A → B → C) `nextDayId`'den başlayıp seçili günlere dağıtılır; bugün başlamış yarım antrenman varsa onun gününden (dönüş yalnız bitişte ilerler, `weekRotation`). Gerçek gün ↔ antrenman eşlemesi Faz 3'te; o zaman bu tahmin kalkar. Şeridin altındaki "Sırada: yarın · Gün B" satırı (`relativeDayText`; bugünse "bugün") başlık aynı şeyi söylüyorsa çizilmez: bu kartta hiç, "Devam et" kartında yarım antrenman bugün başladıysa ve bugün sıradaki günse. "Günlerini değiştir" gün sheet'ini açar (§2.11); kaydedince kartın başlığı da yeni günlerle gelir.
+- **Önizleme:** programın ilk 3 hareketini dolduran bloklar (`previewBlocks`; grup bölünmez, kütüphanede olmayan satır sayılmaz), kalanı "Tümünü gör (n hareket daha)" altında (yerel `<details>`). Numaralar bütün programdan: açılınca 4. hareket yine "4".
+- **Hafta şeridi** (`WeekStrip`, `assignedWeek`; günler §2.11): pazartesiden pazara 7 gün, halkanın altında o güne atanmış programın kısa adı (`dayShortName`: "Program A" → "A", eski "Gün A" → "A", kopya "Program A 2" → "A 2", öteki adlarda ilk sözcük: "Alt vücut" → "Alt"). Yapılan gün dolu ✓, adı oturumdan (aynı gün birden çoksa sonuncusu; atanmamış günde yapılan da dolu); bugünün planlısı kalın halka ve kalın ad; ilerideki atanmış günler ince halka; geçen atanmış gün antrenmansızsa soluk halka ve "kaçtı" (adı atamadan); atanmamış gün dinlenme. Dönüş tahmini yok: her günün adı o güne atanmış programdır, pazartesi yapılan program salının atamasını kaydırmaz. Ekran okuyucu: "Salı, bugün, antrenman günü: Alt vücut", "Pazartesi, yapıldı: Üst vücut", "Salı, kaçtı: Alt vücut", "Çarşamba, dinlenme" (programda hiç atama yoksa "dinlenme" denmez). Şeridin altında satır ya da düğme yok: "Sırada: …" ve "Günlerini değiştir" Faz 3'te kalktı (danışan günleri değiştirmez).
 - Yarım antrenman (telefonda ya da sunucuda) varsa kart yerine **"Devam et" kartı**:
 
 ```
@@ -159,7 +160,7 @@ Genel kurallar:
 │ ▶ Bench Press                   2/3 set │ şu an, kalın
 │ ○ Face Pull + Curl              0/6 set │ grup tek satır
 │ ⤼ Calf Raise                    0/3 set │
-│ Pzt  Sal  Çar  Per  Cum  Cmt  Paz       │ hafta şeridi ve "Günlerini değiştir"
+│ Pzt  Sal  Çar  Per  Cum  Cmt  Paz       │ hafta şeridi
 └─────────────────────────────────────────┘
 ```
 - Birincil **"Devam et: <şu anki hareket>"**: antrenman ekranı o hareketin odağıyla açılır, liste altında (§4.4). Altında "Antrenmanı bitir" (`?bitir=1`: liste ve bitiş sheet'i). Hepsi bittiyse ya da kalan yalnız plan dışı kayıtsa (günün planında satırı olmayan hareket, örneğin PT'nin o arada programdan kaldırdığı; odağı açılamaz) tek birincil düğme "Antrenmanı bitir". Plan bilinmiyorsa (şu anki hareket yok) birincil "Kaldığın yerden devam et".
@@ -182,17 +183,20 @@ Yalnız `canRecordHealth(client, 'readiness')` (ağrı soruları için `'check_i
 - Ağrı takibi açıksa `assessTolerance` → `applyTolerance` bugünün planına uygulanır (SPEC §7.5).
 - Yazım `health.json` → `checkIns` (sunucu `canRecordHealth` denetler); seans dosyasına sağlık verisi girmez.
 
-### 2.3 Başka gün seç
+### 2.3 Değiştir (başka antrenman)
 ```
-│ Hangi günü yapacaksın?                  │
-│ (•) Gün A · sıradaki                    │
-│ ( ) Gün B · son: 22 Eyl                 │
-│ ( ) Gün C · son: 19 Eyl                 │
-│ Antrenörüne bildirilir. Sıra seçtiğin   │
-│ günden devam eder.                      │
-│ [        Bu günle başla        ]        │
+│ Başka antrenman seç                     │
+│ Bugün Alt vücut planlı; başka birini    │ PT programında, bugün atanmış program varken
+│ seçersen antrenörüne bildirilir.        │ yoksa "Bugün için bir program seç."
+│ (•) Alt vücut                           │
+│     bugün · son: 21 Eki                 │
+│ ( ) Üst vücut                           │
+│     Perşembe · son: 23 Eki              │ atandığı günler
+│ ( ) Tüm vücut                           │
+│     Pazar · henüz yapılmadı             │
+│ [      Bu antrenmanla başla      ]      │
 ```
-Seçilen gün seansa `program.plannedDayId` ≠ `dayId` olarak yazılır → bildirim `other_day`. Bitişte `completeDay(program, dayId)` sırayı seçilen günden sürdürür (zaman denetimiyle, §4.7).
+Faz 3 (2026-11-01; eski adı "Başka gün seç"): Bugün'deki "Değiştir" düğmesi (kullanıcının sözü: gün değiştirilmez, antrenman değiştirilir) şu anki evrenin programlarını açar; bugüne atanmış olan önceden seçili ve "bugün" der, ötekiler atandıkları günlerle, hepsinde son yapıldığı gün. Bugünün programı açılamıyorsa (hareketleri kütüphanede yok) sheet açılabilen ilk programla başlar. Evrede tek program varsa düğme yok. Seçilen program her zaman `?day=<id>` ile başlar. Seansın planlanan programı (`plannedDayId`) antrenmanın gününe atanmış programdır; başkası yapıldıysa antrenman ekranı açılışta söyler ("Üst vücut seçildi" · "Bugün Alt vücut planlıydı; antrenörüne bildirilecek."), bitişte bildirim `other_day` ("Alt vücut yerine Üst vücut yapıldı"). Sunucu bitişte seansın tarihinden yeniden hesaplar (`withPlannedDay`): atanmamış günde, kendi programda ya da seans başka evrede başladıysa bildirim yok. Bitiş hiçbir sırayı ilerletmez.
 
 ### 2.4 Hareket ekranı
 
@@ -331,13 +335,11 @@ Geçilen hareket kaldıysa: "1 hareket geçildi: Calf Raise" [Geçileni yap] [Bi
 │ · Leg Press · 1/3 set                   │
 │ · Calf Raise · geçildi                  │
 │ · Plank                                 │
-│ Sıradaki antrenman: Gün B     Değiştir  │ hazır seçim, tek satır
 │ Neden? (isteğe bağlı)                ⌄  │ kapalı
 │ [        Bitir ve özete geç        ]    │
 │ [          Kalanlara dön           ]    │
 ```
-- Asıl soru rotasyondur ama yorgun danışana "Atla; sıradaki gün…" radyo çifti sorulmaz: sonuç hazır seçilmiş tek satır olarak görünür. "Değiştir" iki seçeneği açar: "Gün B · sıradaki" / "Gün A yine sırada kalsın".
-- Varsayılan: planın ≥ %50'si yapıldıysa sıradaki gün, değilse aynı gün (**[sentez]**). "Sırada kalsın" seçilirse rotasyon ilerlemez (`completeDay` çağrılmaz); seans yine kaydedilir ve haftaya sayılır.
+- "Sıradaki antrenman: Gün B · Değiştir" satırı Faz 3'te kalktı (2026-11-01): dönüş yok, sıradaki program bugünün atamasından gelir. Eski telefonun gönderdiği seçim okunmaz. Seans yine kaydedilir ve haftaya sayılır.
 - "Neden?" açılınca çipler: Zamanım yok · Yoruldum · Alet dolu · Ekipman yok · Diğer (+ onaylıysa Ağrı).
 - 0 set: "Henüz set yok." [Kalanlara dön] [Antrenmanı iptal et]. Dosya ilk sette oluştuğu için silinecek bir şey yok.
 - **Silme bu sheet'te yok.** Yorgun başparmağın düştüğü yerde yıkıcı işlem durmaz; antrenman silme geçmiş detayındadır (§2.10).
@@ -404,14 +406,19 @@ Hesaplar (`workout-summary.ts`, saf):
 ### 2.9 Yoklama sonrası: seans zorluğu
 SPEC §4'e göre seans RPE'si bitişten ~10 dk sonra sorulur. Bugün'de 10 dk – 24 saat arasında kart: "Antrenman ne kadar zordu?" (CR-10) ve süre önceden dolu. Zorunlu değil (v1'de kaydı kilitliyordu).
 
-### 2.11 Antrenman günleri (PT kararı 12)
+### 2.11 Antrenman günleri (PT kararı 12; Faz 3: güne atanmış programlar)
 
-- **Veri.** PT'nin seçtiği günler programda: `schedule.weekdays` (ISO hafta günü, 1 = Pazartesi … 7 = Pazar; boş = seçilmemiş). Danışanın değişikliği PT'nin düzenleyicisini 412'ye düşürmesin diye `clientTargets` gibi ayrı bir katmanda durur (`clientSchedule: { weekdays, at }`); **geçerli günler = danışanınki ?? PT'ninki**. PT günleri değiştirirse danışanın katmanı temizlenir (son söz PT'nin). Seçilen gün sayısı haftalık sıklıktan farklıysa iki tarafta da küçük uyarı; engel değil.
-- **PT.** Program düzenleyicide "Haftada kaç gün" seçicisinin altında 7 günlük `ToggleGroup` (çoklu, 44 px). Danışan değiştirdiyse yanında "Danışan değiştirdi · Sal, Per, Cmt" rozeti ve [PT'nin günlerine dön].
-- **Danışan.** Bugün kartında haftanın 7 günü şeridi (`WeekStrip`, `weekPlan`; §2.1): seçili günler halkalı, halkanın altında günün antrenmanının kısa adı ("A", kopya günde "A 2"). Yapılan gün dolu ✓ ve oturumun adıyla, sıradaki gün kalın halkalı, sonraki seçili günler ince halkalı, kaçan gün soluk halkalı ve "kaçtı" (kaçan gün penceresi PT'nin "Kaçırdı"sıyla aynı: programın kurulduğu, günlerin son değiştiği, danışanın ilk girdiği ve durumunun son değiştiği andan sonra, `scheduleSince`; pencereden önceki seçili gün de soluk ama "kaçtı" demez), seçili olmayan gün dinlenme. Altında "Günlerini değiştir" (sheet: 7 gün çoklu seçim, sıklık uyarısı, Kaydet). Ayarlar'da da aynı satır. Kaydedince program geçmişine `client` türünde "Antrenman günleri: Pzt, Çar, Cum → Sal, Per, Cmt" yazılır, PT'ye bildirim gider.
-- **Sıra (rotasyon) değişmez.** Sıradaki antrenman gününün içeriği bugünkü gibi `nextDayId`'den gelir; günler yalnız **ne zaman** sorusunu cevaplar. Kartın başlığı sıradaki antrenmanın günü ve adıdır: "Çarşamba · Gün B" (`todayCardTitle`; gün, bugünden (bugünkü antrenman yapıldıysa yarından) başlayarak ilk seçili gün); yalnız dinlenme gününde ya da bugünkü antrenman yapıldıysa üstünde kısa satır ("Bugün dinlenme günün", "Bugünkü antrenmanını yaptın"). Şeritteki adlar da bu sıradan **tahmindir**: A → B → C, `nextDayId`'den başlayıp seçili günlere dağıtılır; gerçek gün ↔ antrenman eşlemesi yeniden düzenin Faz 3'ünde gelince tahmin kalkar. Dinlenme gününde de başlatılabilir (sayılır; o gün başlık sıradaki antrenman gününü söyler, "Antrenmana başla" yine bugün başlatır). Kaçan gün içeriği atlatmaz: Gün A bir sonraki seçili güne kayar.
-- **Hafta sayımı.** "Bu hafta x/y": y = seçili gün sayısı (yoksa `daysPerWeek`); hafta Pazartesi başlar, danışanın saat dilimiyle (uygulama ayarı).
-- **PT tarafı.** Genel bakış'ta "Bugün antrenman günü olanlar" ve "Kaçırdı" (seçili gün geçti, o gün antrenman yok) — "Dikkat gerektirenler"e girer (faz 12).
+Faz 3'te (2026-11-01, `docs/plans/2026-11-01-faz-3-gune-atanmis-program.md`) baştan yazıldı: günler artık dönüş sırasının "ne zaman"ı değil, her programın kendi günleri.
+
+- **Veri.** Atama programın (kodda günün) alanıdır: `weekdays` (ISO hafta günü, 1 = Pazartesi … 7 = Pazar), yalnız kendi evresinde geçerli; alan yoksa atanmamış (boş dizi dosyaya yazılmaz). Bir program birden çok güne atanabilir (Tüm vücut hem Pazartesi hem Cuma); bir hafta günü evrede en çok bir programa (şema: "Aynı gün iki programa atanmış."). `schedule.weekdays` türetilmiş veridir: şu anki evrenin atamalarının birleşimi; PT kaydı, evre geçişi ve kendi programın her yazımı yeniden yazar. Atamalı evrede `daysPerWeek` kaydedilmez (sıklık atanmış gün sayısı). Yeni varsayılan adlar "Program A", "Program B"…; saklanan "Gün A" adları değişmez.
+- **PT.** Seçili programın kartında 7 gün çipi ("Günleri", 44 px; "Danışan bu günlerde Bugün ekranında bu programı görür."). Başka programa atanmış gün kapalıdır, nedeni çipin erişilebilir adında ve altındaki satırda ("Başka programda: Per · Üst vücut"). Program düzeyindeki gün seçici kalktı; yerinde salt okunur "Haftanın programı" ("Sal · Alt vücut, Per · Üst vücut, Paz · Tüm vücut"; atanmamışlar "Gün atanmamış: Program D"). "Haftada kaç gün" yalnız atamasız evrede. Evreli programda atama evre başınadır; evre geçişi yeni evrenin atamalarını `schedule`'a yazar.
+- **Danışan günleri değiştirmez.** "Günlerini değiştir" (Bugün'ün şeridi, Ayarlar) bütün PT programlarında kalktı; Ayarlar'daki "Antrenman günleri" salt okunurdur ("Günleri antrenörün belirliyor."). Kendi programında atamayı danışan yapar (programın formunda; Ayarlar'da [Düzenle]). Eski telefonun `POST /api/me/schedule`'ı 409 ve metin döner ("Günlerini antrenörün belirliyor." / "Günleri programını düzenlerken seç."). Kayıttaki eski danışan katmanı (`clientSchedule`) okunur ama yok sayılır: PT'nin program sayfası onu tek satırla söyler ("Danışanın eski gün seçimi (Pzt, Çar) artık kullanılmıyor; programın ilk kaydında silinir."); PT'nin ilk kaydı ya da evre geçişi siler, geçmişe "Danışanın günleri kaldırıldı (…)" yazar. "Danışan değiştirdi" rozeti ve [PT'nin günlerine dön] kalktı.
+- **Bugün.** Bugüne atanmış program varsa kart onu gösterir ("Salı · Alt vücut", §2.1); yoksa programların listesi, öneri yok. Bu yalnız kolaylıktır: danışan her gün istediği programı yapar ("Değiştir", §2.3). Şerit atamalardan (§2.1): yapıldı, kaçtı, planlı (bugün ve ilerideki atanmış gün), dinlenme.
+- **Dönüş yok.** Programlar sırayla dönmez; bitiş hiçbir sırayı ilerletmez (`rotation` yalnız eski dosyalarda, okunmaz). Pazartesi Alt vücut yapıldıysa salı yine Alt vücut önerilir; kaçan gün içeriği kaydırmaz. Sunucunun varsayılan günü (`?day=` yokken) bugüne ya da haftada sıradaki güne atanmış program, atama yoksa evrenin ilk programı (`upcomingAssigned`).
+- **Hafta sayımı.** "Bu hafta x/y": y = atanmış gün sayısı (atama yoksa `daysPerWeek`); hafta Pazartesi başlar, uygulamanın saat diliminde.
+- **Kaçan gün penceresi** (`scheduleSince`): programın kurulduğu, birleşimin son değiştiği (`schedule.at`), danışanın ilk girdiği ve durumunun son değiştiği anların en yenisi; o gün ve öncesi kaçmış sayılmaz. Kayıtta danışanın eski katmanı durdukça pencere bugünden başlar (danışan yayına kadar kendi günlerini izliyordu); PT'nin ilk kaydı katmanı düşürüp `schedule.at`'i o ana alır.
+- **Eski programlar okunurken atanır** (`upgradeProgram`; okuma bir şey yazmaz). Hiçbir programda alan yoksa ve `schedule.weekdays` doluysa her evrede programlar sırayla seçili günlere (A → ilk gün, B → ikinci …); gün programdan fazlaysa başa sarar (3 program, Pzt-Çar-Cum-Cmt → A: Pzt + Cmt), program fazlaysa sondakiler atanmasız kalır. Türetme danışanın katmanına bakmaz. Gün seçilmemişse atama yok, danışan her gün seçer.
+- **PT tarafı.** Genel bakış'ta "Kaçırdı" (atanmış gün geçti, o gün antrenman yok) "Dikkat gerektirenler"e girer; bildirim "Başka program seçildi" yalnız o gün atanmış program varken başkası yapılınca.
 - **Sonra.** Telefona "bugün antrenman günün" hatırlatması web push ister; şimdilik yok.
 
 ### 2.10 Geçmiş (liste, detay, silme)
@@ -425,7 +432,7 @@ SPEC §4'e göre seans RPE'si bitişten ~10 dk sonra sorulur. Bugün'de 10 dk �
 │ │ 17 set · 4.215 kg · 2 rekor         │ │
 │ └─────────────────────────────────────┘ │
 │ ┌─────────────────────────────────────┐ │
-│ │ 24 Per  Gün C · başka gün · yarım   │ │ rozetler
+│ │ 24 Per Gün C · başka program · yarım│ │ rozetler
 │ └─────────────────────────────────────┘ │
 │         Daha fazla göster (12)          │
 └─────────────────────────────────────────┘
@@ -516,7 +523,7 @@ client-<id>/
   sessions-index.json       özet satırları + silinenler (türetilmiş; dosyalardan onarılır)
   proposals.json            danışandan PT'ye program önerileri (bekliyor → onay/ret)
   water.json                antrenman dışı su (dokunuş listesi)
-  program.json              + log türü "client", `clientTargets`, rotasyon (var)
+  program.json              + log türü "client", `clientTargets`; rotasyon yalnız eski dosyalarda (Faz 3'te yazılmaz)
   health.json               yoklamalar ve antrenmana bağlı sağlık ayrıntısı (yalnız onaylıysa; var)
 ```
 - **Yol yalnız kimlikten:** `sessions/<id>.json`. Sunucu dosyayı kimlikle bulur; telefonun gönderdiği tarihten yol kurmaz. Saati ya da saat dilimi farklı bir telefon aynı kimlikle ikinci dosya açamaz. Tarih dosyanın ve index satırının içindedir; sunucu ilk yazımda `todayIn` ile koyar, gece yarısını geçen antrenman başlangıç gününde kalır.
@@ -534,7 +541,7 @@ client-<id>/
   "date": "2026-09-26",                  // sunucu ilk yazımda koyar (todayIn)
   "startedAt": "…", "finishedAt": "…",   // finishedAt yalnız finished'da
   "program": { "revision": 7, "phaseId": "p_…", "dayId": "d_…", "dayName": "Gün A",
-               "plannedDayId": "d_…" },   // ≠ dayId → başka gün seçildi
+               "plannedDayId": "d_…" },   // seansın gününe atanmış program; ≠ dayId → başka program seçildi
   "rotation": { "value": "advance", "updatedAt": "…", "by": "w_ab12cd" },  // advance | keep
   "adjust": "lighter",                   // isteğe bağlı, nötr; nedeni health.json'da
   "writer": "w_ab12cd",                  // son yazan cihaz; değişiklik karşılaştırmasına girmez
@@ -650,7 +657,7 @@ Bu yüzden:
 - **Antrenmanın tamamı:** `DELETE` dosyayı **iz dosyasına** çevirir: `{ "version": 1, "id": "s_…", "status": "deleted", "deletedAt": "…" }` (değer yok). Index satırı çıkar, kimlik index'in `deleted` listesine girer. Sonraki `PUT` 410 alır, ilk seti yeniden yazarak dosyayı diriltemez.
 - Tek commit, **genel mesaj: "Kayıt silindi"** (hareket adı, tarih, değer yok).
 - Önbellek `revalidateTag('session:<id>')`; telefonun yerel kopyası silinir.
-- Rotasyon silmeyle geri alınmaz. "Bu hafta x/3", rekorlar, grafikler ve öneriler türetilmiş olduğu için kendiliğinden düzelir.
+- Silme programa dokunmaz. "Bu hafta x/3", rekorlar, grafikler ve öneriler türetilmiş olduğu için kendiliğinden düzelir.
 - **Silinmeyenler (dürüstlük).** Metin bunları söyler (§2.10 "Ayrıntı"):
   - **Git geçmişi:** dosyanın eski sürümleri ve set commit mesajları (`Set 3/3 · Bench Press · 62,5 kg × 8`, SPEC §7) depoda **kalır**. "Kalabilir" değil, kalır.
   - **Program geçmişi:** danışan kaydı ("Bench Press: çalışma ağırlığı 60 → 65 kg", `sessionId`'li) ve `proposals.json`'daki önerinin `why` metni silinmez; bunlar programın geçmişidir.
@@ -673,7 +680,7 @@ Bu yüzden:
 |---|---|
 | `GET /api/me/workout?day=` | günün planı, geçen seferki değerler, deneyim aşaması, ayar notları |
 | `PUT /api/me/sessions/[id]` | birleştir + yaz (idempotent); birleşmiş belgeyi döner; `deleted` → 410, `finished` → 409 |
-| `POST /api/me/sessions/[id]/finish` | `{ doc, rotation, decisions }` → **tek commit**: seans `finished` + index + `program.json` (rotasyon, danışan kaydı, `clientTargets`) + gerekirse `proposals.json` |
+| `POST /api/me/sessions/[id]/finish` | `{ doc, decisions }` (eski telefonun `rotation`'ı okunmaz, Faz 3) → **tek commit**: seans `finished` + index + gerekirse `program.json` (danışan kaydı, `clientTargets`) + gerekirse `proposals.json` |
 | `PATCH` / `DELETE /api/me/sessions/[id]` | geçmişte silme (iz listeleri, iz dosyası); `PATCH` ayrıca seans RPE'si, su, `addSets` |
 | `POST /api/me/water` | antrenman dışı su (10 sn birleştirilmiş) |
 | `POST /api/clients/[id]/proposals/[pid]` | PT: `approve` / `decline` |
@@ -687,7 +694,7 @@ Hepsi danışan çerezinden kimlik alır (PT ucu hariç: `requirePt()`), yalnız
 4. Ref güncellemesi ileri sarma değilse (arada set yazımı ya da PT kaydı oldu) 1'den bir kez daha; ikinci kez de olmazsa istemci üstel bekler.
 - Dört dosya ya birlikte yazılır ya hiçbiri. Seans zaten `finished` ise 200 no-op doğrudur, çünkü aynı commit'te öteki üç dosya da yazılmıştır.
 - Yine de her adım `sessionId`'ye göre idempotent: aynı `sessionId`'li `client` kaydı varsa eklenmez; index satırı ve öneriler kimlikle upsert edilir.
-- **Rotasyon zamanla korunur:** `completeDay` yalnız `session.startedAt > rotation.lastCompletedAt` ise uygulanır. Çevrimdışı kuyrukta bekleyip sonraki antrenmandan sonra gelen bitiş sırayı geri almaz. (`completeDay` bugün zaman karşılaştırmıyor, `program-plan.ts:702`; denetim çağıranda ya da isteğe bağlı bir parametreyle.)
+- **Planlanan program sunucuda** (Faz 3; eskiden "Rotasyon zamanla korunur"du, dönüş kalktı): bitiş `plannedDayId`'yi seansın tarihinden ve şu anki evreden yeniden hesaplar (`withPlannedDay`); çevrimdışı kuyrukta bekleyip geç gelen bitiş hiçbir sırayı değiştirmez.
 - Commit mesajı: `Antrenman bitti · Gün A · 17 set` + program değişikliği varsa `· Program (danışan): Bench Press …`.
 
 ---
@@ -902,15 +909,15 @@ Program danışanınsa bütün değişiklikler (set sayısı, hareket değişimi
 | İki cihaz | Sunucu belgeyi alan başına, sıradan bağımsız birleştirir (4.3). `writer` farklıysa ve 2 dk içinde yazdıysa "Bu antrenman başka bir cihazda da açık" bandı. Silme iz listeleriyle kalıcı |
 | Başka cihazda bitirildi | 409 `finished` → "Bu telefondaki 2 set eklensin mi?" [Ekle] [Ekleme]; sonra yerel kopya silinir |
 | Silinmiş antrenmana geç istek | 410; yerel kopya silinir, veri geri gelmez |
-| Ağ yok | Üst çubuk: "Çevrimdışı · 3 set telefonda". Setler telefonda birikir, bağlantı gelince gider. Bitiş bağlantı ister, kuyruğa alınmaz: gönderilemezse antrenman telefonda sürer ve "Bağlantı yok; antrenmanın bu telefonda duruyor. Bağlantı gelince yeniden bitir." denir. "Ara ver" de bağlantı ister (Bugün sunucudan gelir; tarayıcı çevrimdışı sayfasına düşerdi): antrenmanda kalınır, "Bağlantı yok; Bugün bağlantı gelince açılır." Geç gelen bitiş rotasyonu geri almaz (4.7) |
+| Ağ yok | Üst çubuk: "Çevrimdışı · 3 set telefonda". Setler telefonda birikir, bağlantı gelince gider. Bitiş bağlantı ister, kuyruğa alınmaz: gönderilemezse antrenman telefonda sürer ve "Bağlantı yok; antrenmanın bu telefonda duruyor. Bağlantı gelince yeniden bitir." denir. "Ara ver" de bağlantı ister (Bugün sunucudan gelir; tarayıcı çevrimdışı sayfasına düşerdi): antrenmanda kalınır, "Bağlantı yok; Bugün bağlantı gelince açılır." Geç gelen bitiş hiçbir sırayı değiştirmez (dönüş yok, 4.7) |
 | GitHub 429 / 5xx | Uç 429 + `Retry-After`; Octokit Route Handler'da beklemez (4.3). Çevrimdışıyla aynı dil ve bekleme; veri kaybı yok. 4xx şema hatası → "Kayıt gönderilemedi · Tekrar dene" + günlük (değer yazılmaz) |
 | Bitiş yarıda kesildi | Tek commit: ya hepsi ya hiçbiri; istemci yeniden gönderir (4.7) |
 | Oturum düştü (erişim kapatıldı, 401) | Veri telefonda kalır: "Oturumun kapandı; kayıtların bu telefonda. Antrenörüne yaz." Yeni girişte aynı danışansa gönderilir |
 | Sağlık onayı yok / geri çekildi | Yoklama sheet'i, "Ağrı" nedeni ve hazır oluşluk ayarı hiç görünmez. Motor `applyTolerance`'sız çalışır. Sunucu `health.json` yazmasını reddeder ve seans belgesindeki sağlık alanlarını siler; eski seanslardaki ayrıntı `health.json`'da kaldığı için PT'ye görünmez |
 | Boş program / boş gün | Bugün'de `Empty`; başlatılamaz |
-| PT antrenman sırasında programı kaydetti | Seans başlangıçtaki günün anlık görüntüsüyle sürer. Bitişte rotasyon `dayId`'yle; tekrar hedefi `baseSets` denetimiyle (6.2); ref ileri sarma değilse bitiş yeniden hesaplanır (4.7) |
+| PT antrenman sırasında programı kaydetti | Seans başlangıçtaki günün anlık görüntüsüyle sürer. Bitişte planlanan program seansın tarihinden ve şu anki evreden (evre değiştiyse yok, "başka program" bildirimi çıkmaz); tekrar hedefi `baseSets` denetimiyle (6.2); ref ileri sarma değilse bitiş yeniden hesaplanır (4.7) |
 | Danışan tekrar hedefini değiştirirken PT düzenleyicisi açık | `revision` artmaz; PT'nin kaydı 412 almaz, override korunur ya da PT'nin değişikliğiyle kalkar (6.2) |
-| Gün silindi / evre değişti | `completeDay` sessizce geçer; seans yine kaydedilir |
+| Gün silindi / evre değişti | Programa yazılacak bir şey yoksa geçilir; seans yine kaydedilir. Evre değiştiyse planlanan program düşer (bildirim yok) |
 | Egzersiz kütüphaneden silindi | Planda satır çizilmez (var olan kural), geçilmiş sayılmaz. Geçmişte `title` anlık görüntüsü + "kütüphanede yok" |
 | Cihaz silindi | `effectiveDeviceId` egzersizin cihazına döner; ağırlık ızgarası ona göre |
 | Aynı gün iki antrenman | İzinli; "bu hafta x/3" günü bir kez sayar (`weekProgress`) |
