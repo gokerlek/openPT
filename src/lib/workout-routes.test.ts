@@ -113,14 +113,15 @@ describe('GET /api/me/workout', () => {
     const days = { schedule: { weekdays: [1, 3, 5] }, clientSchedule: { weekdays: [2, 4, 6, 7], at: '2026-09-25T10:00:00.000Z' } };
     const { deps } = setup({ 'program.json': programFile({}, days) });
     const data = body(await workoutRoute(deps, null));
-    // Faz 3 (Karar 3, 4): günler yalnız PT'nin; katmanın anı yine pencereyi açar (geri gitmez).
+    // Faz 3 (Karar 3, 4): günler yalnız PT'nin; katman kayıtta durdukça pencere bugünden (danışan kendi günlerini
+    // izliyordu, PT'nin günleri o güne kadar kaçmış sayılmaz).
     assert.deepEqual(data.schedule, {
       weekdays: [1, 3, 5],
       pt: [1, 3, 5],
       client: null,
       source: 'pt',
       daysPerWeek: null,
-      since: '2026-09-25',
+      since: '2026-09-26',
     });
     // Danışan sonradan katıldıysa pencere katıldığı günden (Genel bakış'ın "Kaçan gün"üyle aynı kural).
     const joined = setup({ 'program.json': programFile({}, { schedule: { weekdays: [1, 3, 5] } }) });

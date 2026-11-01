@@ -19,8 +19,8 @@ import { appendLog, mondayOf, type ClientSchedule, type ProgramLogEntry, type Pr
  * - Günleri yalnız PT belirler: şu anki evrenin her programı (günü) hafta günlerine atanır (`day-assignments.ts`,
  *   ISO: 1 = Pazartesi … 7 = Pazar). Geçerli günler atamaların birleşimi (`effectiveSchedule`); `schedule.weekdays`
  *   her yazımda bundan türer. Kendi programda yazar danışandır: atamalar programın formunda.
- * - Danışanın eski gün katmanı (`clientSchedule`) okunur ama yok sayılır; yalnız anı kaçan gün penceresini tutar
- *   (`scheduleSince`). PT'nin ilk kaydı ya da evre geçişi katmanı siler.
+ * - Danışanın eski gün katmanı (`clientSchedule`) okunur ama yok sayılır; kayıtta durdukça kaçan gün penceresi bugünden
+ *   başlar (`scheduleSince`). PT'nin ilk kaydı ya da evre geçişi katmanı siler.
  * - Bugün, bugüne atanmış programı gösterir (`todayAssigned`, `upcomingAssigned`); bu yalnız kolaylıktır, danışan her
  *   gün istediği programı yapar. Dönüş (A → B → C) yok: pazartesi yapılan program salının atamasını kaydırmaz.
  * - "Bu hafta x/y": y atanmış gün sayısı, atama yoksa evrenin haftalık sıklığı (`phaseFrequency`); hafta pazartesi
@@ -94,22 +94,25 @@ function latestIso(values: readonly (string | undefined)[]): string | undefined 
 
 /**
  * Kaçan gün penceresinin başladığı an (§2.11): programın kurulduğu, geçerli günlerin son değiştiği (PT'nin
- * değişikliği, danışanın katmanı ya da katmanın kalkması), danışanın ilk girişi ve durumunun son değiştiği
- * (duraklatılıp yeniden açılma) anların en yenisi. O günün kendisi ve öncesi kaçmış sayılmaz: danışan
- * yetişemeyebilirdi. Genel bakış'ın "Kaçan gün"ü (`attention.ts`) ve Bugün'ün gün şeridi (`weekStrip`) aynı
- * kuralla; hiçbiri bilinmiyorsa undefined.
+ * değişikliği ya da danışan katmanının kalkması), danışanın ilk girişi ve durumunun son değiştiği (duraklatılıp
+ * yeniden açılma) anların en yenisi. O günün kendisi ve öncesi kaçmış sayılmaz: danışan yetişemeyebilirdi. Genel
+ * bakış'ın "Kaçan gün"ü (`attention.ts`) ve Bugün'ün gün şeridi (`weekStrip`) aynı kuralla; hiçbiri bilinmiyorsa
+ * undefined.
  *
- * Katmanın anı ham `clientSchedule.at`'ten (Faz 3, Karar 4): `effectiveSchedule` katmanı artık yok saydığı için
- * oradan okunsa pencere kayıttaki eski katmanın anından PT'nin eski anına geri çekilir, geçmiş günler "kaçtı" olurdu.
+ * Kayıtta danışanın eski gün katmanı (ham `clientSchedule`) durdukça pencere şimdiden (`now`) başlar (Faz 3, Karar 3,
+ * 4): `effectiveSchedule` katmanı artık yok sayar ve PT'nin günlerini gösterir, ama danışan yayına kadar kendi
+ * günlerini izliyordu; katmanın anından başlasa aradaki bütün PT günleri "kaçtı" olurdu. İlk PT kaydı ya da evre
+ * geçişi katmanı düşürür ve `schedule.at`'i o ana alır (`settleSchedule`): pencere oradan sürer, iki hâl aynı yere varır.
  */
 export function scheduleSince(
   program: Scheduled & { createdAt?: string | undefined },
   client: { access: { joinedAt?: string | undefined; lastJoinAt?: string | undefined }; statusChangedAt?: string | undefined },
+  now: Date,
 ): string | undefined {
   return latestIso([
     program.createdAt,
     program.schedule?.at,
-    program.clientSchedule?.at,
+    program.clientSchedule ? now.toISOString() : undefined,
     client.access.joinedAt ?? client.access.lastJoinAt,
     client.statusChangedAt,
   ]);

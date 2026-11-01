@@ -117,13 +117,18 @@ describe('dikkat: kaçan gün penceresi (günler ya da durum değişince baştan
     );
   });
 
-  test('danışanın eski katmanı yok sayılır (PT\'nin günleri); "PT\'nin günlerine dön" pencereyi baştan başlatır', () => {
-    // Faz 3 (Karar 3): katmanlı kayıtta da günler PT'nin; Pzt/Çar/Cum'da yapılanlar Sal/Per/Cmt'yi karşılamaz.
+  test('kayıtta danışanın eski katmanı varken kaçan gün yok (pencere bugünden); katman düşünce o andan', () => {
+    // Faz 3 (Karar 3): katmanlı kayıtta da günler PT'nin. Ama danışan yayına kadar kendi günlerini (Pzt/Çar/Cum)
+    // izliyordu: PT'nin Sal/Per/Cmt'si o güne kadar kaçmış sayılmaz; katman kayıtta durdukça pencere bugünden.
     const own = scheduled({ schedule: { weekdays: [2, 4, 6] }, clientSchedule: { weekdays: [1, 3, 5], at: '2026-08-01T10:00:00.000Z' } });
-    assert.deepEqual(missedOf({ program: own }).map((item) => item.text), ['Son 7 günde 3 antrenman günü kaçtı: 19 Eyl Cmt, 22 Eyl Sal, 24 Eyl Per']);
+    assert.deepEqual(missedOf({ program: own }), []);
     const reset = resetClientSchedule(own, new Date(YESTERDAY));
     assert.ok(reset);
     assert.deepEqual(missedOf({ program: reset.program }), []);
+    // Katman yokken aynı günler kaçar (karşılaştırma).
+    assert.deepEqual(missedOf({ program: scheduled({ schedule: { weekdays: [2, 4, 6] } }) }).map((item) => item.text), [
+      'Son 7 günde 3 antrenman günü kaçtı: 19 Eyl Cmt, 22 Eyl Sal, 24 Eyl Per',
+    ]);
   });
 
   test('duraklatmadan dönüş: aradaki günler kaçan sayılmaz', () => {

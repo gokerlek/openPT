@@ -41,7 +41,7 @@ export default async function ClientSettingsPage() {
 
       {program ? (
         <TrainingDaysCard
-          schedule={scheduleOf(program, { client, timeZone: config.timeZone, activeAt })}
+          schedule={scheduleOf(program, { client, timeZone: config.timeZone, activeAt, now: new Date() })}
           own={own?.status === 'ok' ? { programId: own.program.id, name: own.program.name } : null}
         />
       ) : null}

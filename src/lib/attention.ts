@@ -358,12 +358,13 @@ export function attentionFactsOf(input: {
   let schedule: AttentionFacts['schedule'] = null;
   if (selected) {
     // Kendi program: günleri index satırında; pencere programın kurulduğu, günlerin değiştiği ve seçildiği andan sonra.
-    const since = later(scheduleSince({ createdAt: selected.createdAt, schedule: { weekdays: selected.weekdays, at: selected.weekdaysAt } }, client), activeAt);
+    const since = later(scheduleSince({ createdAt: selected.createdAt, schedule: { weekdays: selected.weekdays, at: selected.weekdaysAt } }, client, now), activeAt);
     if (selected.weekdays.length > 0 && since) schedule = { weekdays: normalizeWeekdays(selected.weekdays), since };
   } else if (program) {
     const days = effectiveSchedule(program);
-    // Günler programdan, günlerin son değişmesinden, ilk girişten, duraklatmadan dönüşten ve PT'nin programına dönüşten önce sayılmaz (Bugün'ün şeridiyle aynı kural).
-    const since = later(scheduleSince(program, client), activeAt);
+    // Günler programdan, günlerin son değişmesinden, ilk girişten, duraklatmadan dönüşten ve PT'nin programına dönüşten önce sayılmaz
+    // (Bugün'ün şeridiyle aynı kural); kayıtta danışanın eski katmanı durdukça bugünden.
+    const since = later(scheduleSince(program, client, now), activeAt);
     if (days.weekdays.length > 0 && since) schedule = { weekdays: days.weekdays, since };
   }
 

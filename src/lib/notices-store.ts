@@ -32,7 +32,7 @@ import { readIndex, type OwnReader, type RepoHead } from './session-files-core';
  * Genel bakış her açılışta danışan başına dosya okumasın diye danışanın özeti (ad, `inbox.seenAt`,
  * bildirimler, dikkat özeti) Next'in veri önbelleğindedir (sunucu örnekleri arasında ortak): danışanın
  * bildirim ya da dikkat doğuran her yazımında düşer (bitiş, geçmişte düzeltme ve silme: `session-files.ts`;
- * antrenman günleri: `/api/me/schedule`; PT'nin programı: `programs.ts`; öneri kararları: `proposals-store.ts`;
+ * PT'nin programı (antrenman günleri dahil; Faz 3'te danışan günleri değiştirmez): `programs.ts`; öneri kararları: `proposals-store.ts`;
  * ölçümler: `health.ts`; PT'nin okundu yazımı, danışan kaydı ve davet: `clients.ts`). Elle yapılan
  * değişiklikler için 5 dk üst sınır. Önbellek boşken danışan başına `client.json`, onarılmış index (dalın ucu,
  * `sessions/` ağacı, index'le uyuşmayan dosyalar: bitirilmemiş antrenman da gün sayılsın; set yazımları index'i

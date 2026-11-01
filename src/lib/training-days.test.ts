@@ -1,6 +1,7 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as v from 'valibot';
+import { todayIn } from './format.ts';
 import { applyProgramEdit } from './program-diff.ts';
 import { programSchema } from './schemas/program.ts';
 import { programFile } from './testing/session-fixtures.ts';
@@ -83,15 +84,16 @@ describe('antrenman günleri: takvim', () => {
     assert.equal(weekStrip({ today: '2026-09-27', weekdays: [1, 3, 5], doneDays: [], since: null }).filter((day) => day.missed).length, 3);
   });
 
-  test('pencerenin başı: program, PT\'nin günleri, danışanın katmanı, ilk giriş ve durum değişiminin en yenisi', () => {
+  test('pencerenin başı: program, PT\'nin günleri, ilk giriş ve durum değişiminin en yenisi; kayıtta danışanın katmanı varken şimdi', () => {
     const program = { createdAt: '2026-09-01T10:00:00.000Z', schedule: { weekdays: [1, 3, 5], at: '2026-09-10T10:00:00.000Z' } };
     const client = { access: {}, statusChangedAt: undefined };
-    assert.equal(scheduleSince(program, client), '2026-09-10T10:00:00.000Z');
-    assert.equal(scheduleSince({ ...program, clientSchedule: { weekdays: [2], at: '2026-09-12T10:00:00.000Z' } }, client), '2026-09-12T10:00:00.000Z');
-    assert.equal(scheduleSince(program, { access: { joinedAt: '2026-09-20T10:00:00.000Z', lastJoinAt: '2026-09-25T10:00:00.000Z' } }), '2026-09-20T10:00:00.000Z', 'ilk giriş, son giriş değil');
-    assert.equal(scheduleSince(program, { access: { lastJoinAt: '2026-09-21T10:00:00.000Z' } }), '2026-09-21T10:00:00.000Z', 'eski kayıtta son giriş');
-    assert.equal(scheduleSince(program, { access: {}, statusChangedAt: '2026-09-24T10:00:00.000Z' }), '2026-09-24T10:00:00.000Z', 'duraklatmadan dönüş');
-    assert.equal(scheduleSince({}, { access: {} }), undefined);
+    const now = new Date('2026-09-27T09:00:00.000Z');
+    assert.equal(scheduleSince(program, client, now), '2026-09-10T10:00:00.000Z');
+    assert.equal(scheduleSince({ ...program, clientSchedule: { weekdays: [2], at: '2026-09-12T10:00:00.000Z' } }, client, now), now.toISOString());
+    assert.equal(scheduleSince(program, { access: { joinedAt: '2026-09-20T10:00:00.000Z', lastJoinAt: '2026-09-25T10:00:00.000Z' } }, now), '2026-09-20T10:00:00.000Z', 'ilk giriş, son giriş değil');
+    assert.equal(scheduleSince(program, { access: { lastJoinAt: '2026-09-21T10:00:00.000Z' } }, now), '2026-09-21T10:00:00.000Z', 'eski kayıtta son giriş');
+    assert.equal(scheduleSince(program, { access: {}, statusChangedAt: '2026-09-24T10:00:00.000Z' }, now), '2026-09-24T10:00:00.000Z', 'duraklatmadan dönüş');
+    assert.equal(scheduleSince({}, { access: {} }, now), undefined);
   });
 });
 
@@ -353,6 +355,11 @@ describe('Faz 3: atamalı hafta', () => {
     assert.deepEqual(upcomingAssigned(program, '2026-10-27'), { dayId: 'd_aaaaaa', date: '2026-10-27' });
     assert.deepEqual(upcomingAssigned(program, '2026-10-28'), { dayId: 'd_bbbbbb', date: '2026-10-29' });
     assert.deepEqual(upcomingAssigned(program, '2026-11-02'), { dayId: 'd_aaaaaa', date: '2026-11-03' });
+    // Cuma: sıradaki pazar (7), aynı hafta.
+    assert.deepEqual(upcomingAssigned(program, '2026-10-30'), { dayId: 'd_cccccc', date: '2026-11-01' });
+    // Yalnız salı: çarşambadan 6 gün ileri, hafta sınırını geçer.
+    const tuesdays = { phases: [{ id: 'p_aaaaaa', days: [{ id: 'd_aaaaaa', name: 'Alt vücut', weekdays: [2] }] }], current: program.current };
+    assert.deepEqual(upcomingAssigned(tuesdays, '2026-10-28'), { dayId: 'd_aaaaaa', date: '2026-11-03' });
     const bare = { phases: [{ id: 'p_aaaaaa', days: [{ id: 'd_aaaaaa', name: 'Program A' }] }], current: program.current };
     assert.equal(upcomingAssigned(bare, '2026-10-27'), null);
   });
@@ -398,14 +405,25 @@ describe('Faz 3: atamalı hafta', () => {
     assert.deepEqual(effectiveSchedule(bare), { weekdays: [], pt: [], client: null, source: null });
   });
 
-  test('kaçan gün penceresi: kayıttaki katmanın anı ham alandan (pencere geri gitmez)', () => {
+  // Danışan katman kaydedilmişken yayına kadar kendi günlerini izliyordu: PT'nin o günleri "kaçtı" sayılmaz. Katman
+  // kayıtta durdukça pencere bugünden başlar; ilk PT kaydı (ya da evre geçişi) katmanı düşürür ve `schedule.at`'i
+  // şimdiye alır (`settleSchedule`), iki hâl aynı yere varır.
+  test('kaçan gün penceresi: kayıtta danışanın katmanı varken bugünden; katman düşünce PT\'nin anından', () => {
     const stored = {
       ...program,
       createdAt: '2026-09-01T10:00:00.000Z',
       schedule: { weekdays: [2, 4, 7], at: '2026-09-05T10:00:00.000Z' },
       clientSchedule: { weekdays: [1, 3], at: '2026-10-20T08:00:00.000Z' },
     };
-    assert.equal(scheduleSince(stored, client), '2026-10-20T08:00:00.000Z');
+    const now = new Date('2026-10-29T09:00:00.000Z');
+    assert.equal(scheduleSince(stored, client, now), now.toISOString());
+    const since = todayIn('Europe/Istanbul', new Date(scheduleSince(stored, client, now) as string));
+    const strip = assignedWeek({ today: '2026-10-29', weekdays: [2, 4, 7], names, sessions: [], since });
+    assert.equal(strip.some((day) => day.state === 'missed'), false, 'salı Alt vücut kaçmış sayılmaz');
+    const { clientSchedule: _layer, ...dropped } = stored;
+    const settled = { ...dropped, schedule: { ...stored.schedule, at: '2026-10-28T08:00:00.000Z' } };
+    assert.equal(scheduleSince(settled, client, now), '2026-10-28T08:00:00.000Z');
+    assert.equal(scheduleSince(dropped, client, now), '2026-09-05T10:00:00.000Z');
   });
 
   test('haftalık hedef ve evrenin sıklığı: atanmış gün sayısı, yoksa daysPerWeek', () => {

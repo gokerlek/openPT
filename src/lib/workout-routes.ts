@@ -459,7 +459,7 @@ export function workoutRoute(deps: WorkoutRouteDeps, dayParam: string | null, pr
       ...(problem ? { problem } : {}),
       day,
       week: weekOf(index, program, now, timeZone),
-      schedule: program ? scheduleOf(program, { client, timeZone, activeAt }) : null,
+      schedule: program ? scheduleOf(program, { client, timeZone, activeAt, now }) : null,
       water: {
         file: waterFile && waterFile !== 'broken' ? waterOnDay(parseWaterFile(waterFile.content).file.taps, today, timeZone) : 0,
         sessions: sessionWaterOn(index, today),

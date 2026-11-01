@@ -12,7 +12,7 @@ import { planSession, warmupSets, type LoadSpec, type ProgressionRule, type Sess
 import { recommend, type Why } from './recommend.ts';
 import type { TrainingExperience } from './schemas/client.ts';
 import type { Program } from './schemas/program.ts';
-import { effectiveSchedule, scheduleSince, todayAssigned, upcomingAssigned, weekTarget, type EffectiveSchedule } from './training-days.ts';
+import { effectiveSchedule, programWeekTarget, scheduleSince, todayAssigned, upcomingAssigned, type EffectiveSchedule } from './training-days.ts';
 import type { SessionDoc, SessionEntry, SessionIndex, SessionIndexRow, SkipReason } from './schemas/session.ts';
 import { waterOf } from './session-index.ts';
 import { exerciseHistory } from './session-results.ts';
@@ -661,7 +661,8 @@ export type WeekCount = {
 /**
  * "Bu hafta x/y" (tasarım §2.11): bitmiş antrenmanların günlerinden (`date`: başlangıç günü; gece yarısını
  * geçen ya da ertesi gün bitirilen antrenman başladığı günde, Geçmiş'le aynı), pazartesi başlayan hafta,
- * uygulamanın saat diliminde; y seçili gün sayısı, yoksa şu anki evrenin sıklığı.
+ * uygulamanın saat diliminde; y `programWeekTarget` (atanmış gün sayısı, yoksa şu anki evrenin sıklığı): İlerleme'nin
+ * seri hedefi ve haftalık hedeflerin dondurulması da aynı kuraldan.
  */
 export function weekOf(index: SessionIndex, program: PlanProgram | null, now: Date, timeZone: string): WeekCount {
   const today = todayIn(timeZone, now);
@@ -671,9 +672,7 @@ export function weekOf(index: SessionIndex, program: PlanProgram | null, now: Da
     .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : time(a.startedAt) - time(b.startedAt)));
   const days = [...new Set(rows.map((row) => row.date))].sort();
   const sessions = rows.map((row) => ({ date: row.date, dayName: row.dayName || 'Antrenman' }));
-  const daysPerWeek = program ? currentPhaseOf(program)?.phase.daysPerWeek : undefined;
-  const weekdays = program ? effectiveSchedule(program).weekdays : [];
-  return { done: days.length, target: weekTarget(weekdays, daysPerWeek), days, start, sessions };
+  return { done: days.length, target: (program ? programWeekTarget(program) : undefined) ?? null, days, start, sessions };
 }
 
 /**
@@ -717,7 +716,8 @@ export function afterFinish<
 }
 
 /**
- * Bugün'ün ve Ayarlar'ın "Günlerini değiştir"i için: geçerli günler, PT'ninkiler, danışanınki ve sıklık.
+ * Bugün'ün gün şeridi ve Ayarlar'ın "Antrenman günleri" için: geçerli günler (Faz 3: yalnız PT'nin ya da kendi
+ * programın atamaları; danışanın eski katmanı yok sayılır, `client` hep null) ve sıklık.
  * `since`: kaçan gün penceresinin başladığı takvim günü (uygulamanın saat diliminde; `scheduleSince`, Genel
  * bakış'ın "Kaçan gün"üyle aynı kural): Bugün'ün şeridi o gün ve öncesini "kaçırıldı" diye işaretlemez.
  */
@@ -725,10 +725,10 @@ export type WorkoutSchedule = EffectiveSchedule & { daysPerWeek: number | null; 
 
 export function scheduleOf(
   program: PlanProgram,
-  context: { client: Parameters<typeof scheduleSince>[1]; timeZone: string; activeAt?: string | undefined },
+  context: { client: Parameters<typeof scheduleSince>[1]; timeZone: string; activeAt?: string | undefined; now: Date },
 ): WorkoutSchedule {
   // Kalıcı seçimin anı da pencereyi açar (`docs/design/kendi-program.md` §3.2): seçimden önceki günler kaçmış sayılmaz.
-  const since = latestSince(scheduleSince(program, context.client), context.activeAt);
+  const since = latestSince(scheduleSince(program, context.client, context.now), context.activeAt);
   return {
     ...effectiveSchedule(program),
     daysPerWeek: currentPhaseOf(program)?.phase.daysPerWeek ?? null,
