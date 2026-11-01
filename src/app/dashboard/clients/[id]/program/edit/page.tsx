@@ -77,7 +77,7 @@ export default async function EditProgramPage({ params }: { params: Promise<{ id
         mode="edit"
         initial={{ phased: program.phased, currentPhaseId: program.current.phaseId, phases: program.phases, weekdays: program.schedule?.weekdays ?? [] }}
         base={{ revision: program.revision, createdAt: program.createdAt }}
-        stored={{ current: program.current, rotation: program.rotation }}
+        stored={{ current: program.current }}
         templates={templates}
         exercises={pickerExercises(exercises)}
         devices={pickerDevices(devices)}

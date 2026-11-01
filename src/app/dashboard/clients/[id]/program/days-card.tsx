@@ -19,7 +19,6 @@ export function DaysCard({
   form,
   phases,
   selectedDayId,
-  nextDayId,
   missingDayIds,
   hasTemplates,
   actions,
@@ -28,7 +27,6 @@ export function DaysCard({
   form: ProgramFormStore;
   phases: ProgramPhase[];
   selectedDayId: string | null;
-  nextDayId: string | null;
   missingDayIds: ReadonlySet<string>;
   hasTemplates: boolean;
   actions: PhaseActions;
@@ -71,9 +69,7 @@ export function DaysCard({
             phase={phase}
             phaseIndex={0}
             phased={false}
-            isCurrent
             selectedDayId={selectedDayId}
-            nextDayId={nextDayId}
             missingDayIds={missingDayIds}
             actions={actions}>
             <AddDayMenu

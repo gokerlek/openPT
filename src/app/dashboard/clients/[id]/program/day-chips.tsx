@@ -6,10 +6,11 @@ import { Plus } from '@/components/line-icons';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { blankDay, canAddDay, copyDay, programIdSource, addDay, type ProgramPhase } from '@/lib/program-plan';
+import { weekdayNamesText, weekdaysText } from '@/lib/training-days';
 import { cn } from '@/lib/utils';
 import type { PhaseActions, ProgramFormStore } from './program-form';
 
-/** Evrenin günü eklenir: evreyi güncel hâlinden bulur, yeni günü seçer. */
+/** Evreye program eklenir: evreyi güncel hâlinden bulur, yeni programı seçer. */
 function addDayTo(actions: PhaseActions, phaseId: string, make: (phase: ProgramPhase, all: ProgramPhase[]) => ProgramPhase['days'][number], after?: string) {
   const all = actions.current();
   const phase = all.find((item) => item.id === phaseId);
@@ -18,7 +19,7 @@ function addDayTo(actions: PhaseActions, phaseId: string, make: (phase: ProgramP
   actions.update((phasesNow) => addDay(phasesNow, phaseId, day, after), { select: day.id, announce: `${day.name} eklendi` });
 }
 
-/** "+ Gün": boş gün, şablondan, seçili günün kopyası. */
+/** "+ Program": boş program, şablondan, seçili programın kopyası (kopya ve yeni program atamasız gelir). */
 export function AddDayMenu({
   phase,
   phases,
@@ -39,14 +40,14 @@ export function AddDayMenu({
     <DropdownMenu>
       <DropdownMenuTrigger
         disabled={!canAddDay(phases, phase.id)}
-        render={<Button type="button" variant="outline" size="sm" aria-label={phased ? `${phase.name} evresine gün ekle` : 'Programa gün ekle'} />}>
+        render={<Button type="button" variant="outline" size="sm" aria-label={phased ? `'${phase.name}' evresine program ekle` : 'Program ekle'} />}>
         <Plus data-icon="inline-start" />
-        Gün
+        Program
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="min-w-52 touch:**:data-[slot=dropdown-menu-item]:min-h-11 touch:**:data-[slot=dropdown-menu-sub-trigger]:min-h-11">
         <DropdownMenuItem onClick={() => addDayTo(actions, phase.id, (target, all) => blankDay(target, programIdSource(all)))}>
           <Square />
-          Boş gün
+          Boş program
         </DropdownMenuItem>
         <DropdownMenuItem disabled={!hasTemplates} onClick={() => actions.openAddDay(phase.id)}>
           <FileText />
@@ -66,7 +67,7 @@ export function AddDayMenu({
               )
             }>
             <Copy />
-            Seçili günün kopyası
+            Seçili programın kopyası
           </DropdownMenuItem>
         ) : null}
       </DropdownMenuContent>
@@ -75,18 +76,16 @@ export function AddDayMenu({
 }
 
 /**
- * Evrenin (evresizde programın) günleri: seçilebilir çipler; seçili gün aşağıdaki gün
- * düzenleyicide açılır. Sıradaki gün noktayla, hatalı gün kırmızı çerçeveyle işaretlenir.
- * Sonuna `children` (ör. "+ Gün") eklenir.
+ * Evrenin (evresizde bütün planın) programları: seçilebilir çipler; seçili program aşağıdaki düzenleyicide açılır.
+ * Çipte adın yanında atandığı günler küçük ve soluk ("Alt vücut Sal"); dönüş olmadığı için "sıradaki" işareti yok
+ * (Faz 3). Hatalı program kırmızı çerçeveyle işaretlenir. Sonuna `children` (ör. "+ Program") eklenir.
  */
 export function DayChips({
   form,
   phase,
   phaseIndex,
   phased,
-  isCurrent,
   selectedDayId,
-  nextDayId,
   missingDayIds,
   actions,
   children,
@@ -95,9 +94,7 @@ export function DayChips({
   phase: ProgramPhase;
   phaseIndex: number;
   phased: boolean;
-  isCurrent: boolean;
   selectedDayId: string | null;
-  nextDayId: string | null;
   missingDayIds: ReadonlySet<string>;
   actions: PhaseActions;
   children?: React.ReactNode;
@@ -107,7 +104,7 @@ export function DayChips({
       {phase.days.map((day, dayIndex) => {
         const selected = day.id === selectedDayId;
         const failing = Boolean(getDeepError(form, { path: ['phases', phaseIndex, 'days', dayIndex] })) || missingDayIds.has(day.id);
-        const isNext = isCurrent && day.id === nextDayId;
+        const assigned = day.weekdays ?? [];
         return (
           <Button
             key={day.id}
@@ -115,12 +112,17 @@ export function DayChips({
             size="sm"
             variant={selected ? 'default' : 'outline'}
             aria-pressed={selected}
-            aria-label={`${phased ? `${phase.name} · ` : ''}${day.name}${isNext ? ', sıradaki gün' : ''}${failing ? ', hatalı' : ''}`}
+            aria-label={`${phased ? `${phase.name} · ` : ''}${day.name}, ${weekdayNamesText(assigned) || 'gün atanmadı'}${failing ? ', hatalı' : ''}`}
             className={cn(failing && 'ring-2 ring-destructive')}
             onClick={() => actions.select(day.id)}>
             {failing ? <WarningCircle data-icon="inline-start" className="text-destructive" /> : null}
             {day.name}
-            {isNext ? <span className="size-1.5 rounded-full bg-current" title="Sıradaki gün" aria-hidden /> : null}
+            {assigned.length > 0 ? (
+              // Seçili (dolu) çipte soluk gri okunmaz: yazının kendi rengi biraz açılır.
+              <span className={cn('text-xs font-normal', selected ? 'opacity-80' : 'text-muted-foreground')} aria-hidden>
+                {weekdaysText(assigned)}
+              </span>
+            ) : null}
           </Button>
         );
       })}

@@ -21,30 +21,28 @@ import {
   addDay,
   dayFromTemplateForEditing,
   droppedDeviceNotice,
-  keepHiddenPhase,
   locateDay,
   mergePhases,
   mergePhasesCheck,
   missingExerciseDays,
   moveDayToPhase,
-  nextDayId,
   prepareProgramForEditing,
   programIdSource,
-  reconcileRotation,
   replaceDayBlocks,
   savedTemplateOption,
   type ProgramBase,
   type ProgramBody,
   type ProgramPhase,
-  type ProgramRotation,
   type TemplateOption,
 } from '@/lib/program-plan';
+import { todayIn } from '@/lib/format';
 import { fetchJson } from '@/lib/query/errors';
 import { applyFieldErrors } from '@/lib/query/field-errors';
 import { useServiceMutation } from '@/lib/query/use-service';
 import { programFormSchema, type ProgramFormInput, type ProgramFormValues } from '@/lib/schemas/program';
 import type { EditorDevice, PickerExercise } from '@/lib/template-edit';
 import type { TemplateBlock } from '@/lib/template-plan';
+import { upcomingAssigned } from '@/lib/training-days';
 import { PROGRAM_DRAFT_BASE, programDraftKey } from '@/lib/unsaved-changes';
 import { AddDayDialog } from './add-day-dialog';
 import { DayEditor } from './day-editor';
@@ -55,8 +53,8 @@ import { WeekdayField, type ClientDays } from './weekday-field';
 
 export type ProgramFormStore = FormStore<typeof programFormSchema>;
 
-/** Kayıttaki şu anki evre ve rotasyon (düzenlemede; oluştururken yok). */
-export type StoredState = { current: { phaseId: string; startedAt: string }; rotation: ProgramRotation };
+/** Kayıttaki şu anki evre (düzenlemede; oluştururken yok). Faz 3'te dönüş yok: rotasyon taşınmaz. */
+export type StoredState = { current: { phaseId: string; startedAt: string } };
 
 /** Evre ve gün işlemlerinin ortak arayüzü (program-form sağlar, evreler ve gün düzenleyici kullanır). */
 export type PhaseActions = {
@@ -213,14 +211,10 @@ export function ProgramForm({
     return restored.length > 0 ? new Set([...droppedRowIds, ...restored]) : droppedRowIds;
   }, [draft.restored, droppedRowIds, deviceIds]);
 
-  // İlk seçili gün: danışanın sıradaki günü, yoksa şu anki evrenin ilk günü.
+  // İlk seçili program: bugüne ya da haftada sıradaki güne atanmış program, yoksa şu anki evrenin ilki. Bugün
+  // sayfanın yüklendiği andan (`now`) hesaplanır: sunucu ve tarayıcı aynı programı seçer, hydration uyuşmazlığı olmaz.
   const [selectedDayId, setSelectedDayId] = useState(
-    () =>
-      nextDayId({
-        phases: initial.phases,
-        current: { phaseId: initial.currentPhaseId, startedAt: '' },
-        rotation: stored?.rotation ?? {},
-      }) ?? '',
+    () => upcomingAssigned({ phases: initial.phases, current: { phaseId: initial.currentPhaseId } }, todayIn(timeZone, new Date(now)))?.dayId ?? '',
   );
 
   // Seçim her çizimde çözülür: silinen gün eski yolla hiç çizilmez (Formisch yolu dizinle bulur).
@@ -230,12 +224,6 @@ export function ProgramForm({
   const selectedPhase = located ? phases[located.phaseIndex] : undefined;
   const selectedDay = located ? selectedPhase?.days[located.dayIndex] : undefined;
 
-  // Sıradaki gün: şu anki evre kayıttakiyse rotasyon (silinen son gün uzlaştırılarak), değiştiyse yeni evrenin ilk günü.
-  // Evresiz program evresiz kalırsa gizli evre kayıttakidir (sunucu da öyle kaydeder): evreler açılıp kapansa da rotasyon sürer.
-  const kept = keepHiddenPhase(initial, { phased, currentPhaseId, phases });
-  const rotation =
-    stored && kept.currentPhaseId === stored.current.phaseId ? reconcileRotation(initial.phases, kept.phases, stored.rotation) : {};
-  const next = nextDayId({ phases: kept.phases, current: { phaseId: kept.currentPhaseId, startedAt: '' }, rotation });
   const missingDayIds = useMemo(() => new Set(missing.map((item) => item.dayId)), [missing]);
   // Antrenman günleri programın: evresizde "Haftada kaç gün"ün altında, evrelide evrelerin üstünde (§2.11).
   const weekdaysField = (
@@ -363,7 +351,7 @@ export function ProgramForm({
     },
   };
 
-  // Oluştururken: ilk gün ("Gün A") başlangıç şablonuyla dolar ya da boşalır.
+  // Oluştururken: ilk program ("Program A") başlangıç şablonuyla dolar ya da boşalır.
   const chooseStart = (value: string) => {
     setStartChoice(value);
     const before = current();
@@ -496,7 +484,7 @@ export function ProgramForm({
   const skeleton = locateDay(phases, start.skeletonDayId);
   const skeletonPhase = skeleton ? phases[skeleton.phaseIndex] : phases[0];
   const skeletonDay = skeleton ? skeletonPhase?.days[skeleton.dayIndex] : skeletonPhase?.days[0];
-  const startTarget = skeletonPhase && skeletonDay ? dayLabel(skeletonPhase.name, skeletonDay.name) : 'İlk gün';
+  const startTarget = skeletonPhase && skeletonDay ? dayLabel(skeletonPhase.name, skeletonDay.name) : 'İlk program';
   const addDayPhase = phases.find((phase) => phase.id === addDayPhaseId);
   const startLabels: Record<string, string> = {
     [NO_TEMPLATE]: 'Şablonsuz (boş)',
@@ -543,13 +531,13 @@ export function ProgramForm({
           <AlertTitle>Kaydedilemedi</AlertTitle>
           <AlertDescription>
             {hiddenPhase && hiddenDay
-              ? `${dayLabel(hiddenPhase.name, hiddenDay.name)} gününde düzeltilecek alan var: ${hidden.errors[0] ?? ''}`
+              ? `${dayLabel(hiddenPhase.name, hiddenDay.name)} programında düzeltilecek alan var: ${hidden.errors[0] ?? ''}`
               : hidden.errors[0]}
           </AlertDescription>
           {hiddenDay && hiddenDay.id !== selectedDay?.id ? (
             <div className="col-start-2 mt-2">
               <Button type="button" variant="outline" size="sm" onClick={() => setSelectedDayId(hiddenDay.id)}>
-                O güne git
+                O programa git
               </Button>
             </div>
           ) : null}
@@ -599,7 +587,7 @@ export function ProgramForm({
                 <FieldLabel htmlFor="startTemplate">Başlangıç şablonu</FieldLabel>
                 <LabeledSelect id="startTemplate" value={startChoice} labels={startLabels} onChange={chooseStart} />
                 <FieldDescription>
-                  {startTarget} bu şablonla dolar. Başka günleri &quot;Gün ekle → Şablondan&quot; ile eklersin.
+                  {startTarget} bu şablonla dolar. Başka programları &quot;+ Program → Şablondan…&quot; ile eklersin.
                 </FieldDescription>
               </Field>
             </CardContent>
@@ -613,7 +601,6 @@ export function ProgramForm({
             currentPhaseId={currentPhaseId}
             stored={stored}
             selectedDayId={selectedDay?.id ?? null}
-            nextDayId={next}
             missingDayIds={missingDayIds}
             hasTemplates={templateList.length > 0}
             now={now}
@@ -626,7 +613,6 @@ export function ProgramForm({
             form={form}
             phases={phases}
             selectedDayId={selectedDay?.id ?? null}
-            nextDayId={next}
             missingDayIds={missingDayIds}
             hasTemplates={templateList.length > 0}
             actions={actions}
@@ -644,7 +630,6 @@ export function ProgramForm({
             phaseIndex={located.phaseIndex}
             day={selectedDay}
             dayIndex={located.dayIndex}
-            isNext={selectedPhase.id === currentPhaseId && selectedDay.id === next}
             templateIds={templateIds}
             exercises={exercises}
             devices={devices}

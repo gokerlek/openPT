@@ -44,7 +44,6 @@ type Shared = {
   currentPhaseId: string;
   stored: StoredState | null;
   selectedDayId: string | null;
-  nextDayId: string | null;
   missingDayIds: ReadonlySet<string>;
   hasTemplates: boolean;
   actions: PhaseActions;
@@ -105,7 +104,7 @@ function PhaseMenu({ phase, index, shared }: { phase: ProgramPhase; index: numbe
 
 /** Bir evre: ad, süre, sıklık, durum rozeti, menü; altında günler (seçilebilir çipler) ve "+ Gün". */
 function PhaseRow({ phase, index, shared }: { phase: ProgramPhase; index: number; shared: Shared }) {
-  const { form, phases, currentPhaseId, stored, selectedDayId, nextDayId, missingDayIds, hasTemplates, actions } = shared;
+  const { form, phases, currentPhaseId, stored, selectedDayId, missingDayIds, hasTemplates, actions } = shared;
   const nameField = useField(form, { path: ['phases', index, 'name'] });
   const weeksField = useField(form, { path: ['phases', index, 'weeks'] });
   const daysArray = useFieldArray(form, { path: ['phases', index, 'days'] });
@@ -176,9 +175,7 @@ function PhaseRow({ phase, index, shared }: { phase: ProgramPhase; index: number
           phase={phase}
           phaseIndex={index}
           phased
-          isCurrent={isCurrent}
           selectedDayId={selectedDayId}
-          nextDayId={nextDayId}
           missingDayIds={missingDayIds}
           actions={actions}>
           <AddDayMenu
