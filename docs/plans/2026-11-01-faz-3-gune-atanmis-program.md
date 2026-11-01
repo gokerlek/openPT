@@ -5,7 +5,7 @@
 **Goal:** Programın günleri ("Gün A", "Gün B"…) artık A → B → C dönmez: PT her programı (antrenmanı) haftanın
 günlerine atar (Salı → "Alt vücut", Perşembe → "Üst vücut", Pazar → "Tüm vücut"). Bugün, bugüne atanmış programı
 gösterir ("Salı · Alt vücut", Antrenmana başla); bu yalnız kolaylıktır, danışan her gün istediği programı yapar
-("Başka program seç"). Atanmamış günde danışan programların listesinden seçer; öneri yok. Varsayılan adlar
+("Değiştir"). Atanmamış günde danışan programların listesinden seçer; öneri yok. Varsayılan adlar
 "Program A", "Program B"… olur; "gün" sözcüğü yalnız hafta günleri için kalır. Danışan günleri değiştiremez; kendi
 programında atamayı danışan yapar (yazar o).
 
@@ -86,7 +86,7 @@ Plan kararları (yöneticinin; incelemeden sonra kesinleşti):
    programdan fazlaysa **başa sarar** (3 program, Pzt-Çar-Cum-Cmt → A: Pzt + Cmt). Gerekçe: birleşim kayıttaki
    `schedule.weekdays`'in aynısı kalır; haftalık hedef, kaçan gün ve Genel bakış eski dosyada birebir aynı sonucu
    verir, PT'nin seçtiği sıklık korunur; atanmasız bırakmak seçili günleri "atanmamış güne" çevirirdi. Program
-   günden fazlaysa sondakiler atanmasız kalır ("Başka program seç"ten yapılır; PT düzenleyicide "Gün atanmamış:
+   günden fazlaysa sondakiler atanmasız kalır ("Değiştir"ten yapılır; PT düzenleyicide "Gün atanmamış:
    Program D" görür). Hafta günü seçilmemişse atama yok, danışan her gün seçer. Türetme `clientSchedule`'a bakmaz.
    Eski sekme ve eski taslak (gün başına alan yok, program düzeyinde `weekdays` var) aynı kuralla atanır
    (`upgradeProgramBody`, `bodyWithAssignments`, taslağın `prepare`'i); kendi programın eski sekmesi günleri açılıştaki
@@ -122,7 +122,7 @@ Plan kararları (yöneticinin; incelemeden sonra kesinleşti):
    Bildirim (`other_day`) yalnız o gün atanmış program varken başkası yapılınca: "Alt vücut yerine Üst vücut yapıldı"
    (kalıp aynı); rozet "başka program". Kendi programda bildirim yok (bugünkü gibi).
 7. **Bugün kartı.** Bugüne atanmış program varsa kart onu gösterir ("Salı · Alt vücut", önizleme, kısıt notları,
-   Antrenmana başla → `/me/antrenman?day=<id>`, "Başka program seç"). Yoksa "Bugün atanmış program yok" ve programların
+   Antrenmana başla → `/me/antrenman?day=<id>`, "Değiştir"). Yoksa "Bugün atanmış program yok" ve programların
    listesi (özet, "son: 21 Eki" bilgi olarak, [Başla]). Hafta şeridi: yapıldı (oturumun adı), kaçtı (atanmış gün geçti,
    antrenman yok), planlı (bugün ve ilerideki atanmış gün, atamanın adı), dinlenme; "sırada" durumu ve şeridin
    altındaki "Sırada: …" satırı kalkar. "Sonraki günler · Günler sırayla döner" kartı "Haftanın programı" olur.
@@ -131,9 +131,9 @@ Plan kararları (yöneticinin; incelemeden sonra kesinleşti):
    Bu gerileme kabul edildi: bütün programların planlarını önceden çekmek GitHub'daki depolamaya yük olurdu.
 8. **Adlar ve terimler.** Yeni varsayılan "Program A…" (`nextDayName`; harf "Gün X" ya da "Program X" ile alınmışsa
    atlanır: "Gün A", "Gün B" olan programa eklenen "Program C" olur). Şeridin kısa adı iki öneki de tanır. Tekil öğe ve
-   eylem "program" ("Program A", "+ Program", "Başka program seç"); **sayım "antrenman"** ("2 antrenman · haftada 2");
+   eylem "program" ("Program A", "+ Program", "Değiştir"); **sayım "antrenman"** ("2 antrenman · haftada 2");
    haftalık görünümün tek adı **"Haftanın programı"** (danışan ve PT). **Risk:** "program" aynı zamanda bütün plan
-   (Program sekmesi, "Antrenörünün programı", program çipi, "Programını güncelleyelim mi?"); "Başka program seç"
+   (Program sekmesi, "Antrenörünün programı", program çipi, "Programını güncelleyelim mi?"); "Değiştir"
    Bugün'ün program çipiyle (PT'nin programı ↔ kendi program) karıştırılabilir. Kullanıcı bu adı seçti; programı
    silen menü öğesi "Kaldır" olur, sayfa başlıkları bütün planı söylemeye devam eder.
 9. **PT düzenleyici.** Seçili programın kartında 7 gün çipi ("Günleri"): başka programa atanmış gün kapalıdır, nedeni
@@ -164,14 +164,18 @@ Plan kararları (yöneticinin; incelemeden sonra kesinleşti):
 
 ### Metin tablosu
 
+Kullanıcının sözü (2026-11-01, kesin): Bugün'de "Antrenmana başla"nın altındaki düğme **"Değiştir"**; açtığı sheet
+"Başka antrenman seç". Düğmede "gün" geçmez: programlar zaten günlere atanır, gün değiştirilmez, antrenman
+değiştirilir.
+
 | Yer | Eski | Yeni | Görev |
 |---|---|---|---|
 | Bugün, atanmış gün | başlık "Çarşamba · Gün B" | "Salı · Alt vücut" | 12 |
 | Bugün, atanmamış gün | — | başlık "Bugün atanmış program yok", açıklama "Yapmak istediğin programı seç."; programda hiç atama yoksa başlık "Bugün hangi programı yapacaksın?" | 12 |
 | Bugün liste satırı | — | ad · "6 hareket · ≈ 50 dk" · "son: 21 Eki" ya da "henüz yapılmadı" · [Başla] (erişilebilir ad "Başla: Alt vücut") | 12 |
 | Bugün kısa satırı | "Bugün dinlenme günün" | kalkar ("Bugünkü antrenmanını yaptın" kalır) | 12 |
-| Bugün ikincil düğme | "Başka gün seç" | "Başka program seç" | 11 |
-| Seçim sheet'i | "Hangi günü yapacaksın?" · "Antrenörüne bildirilir. Sıra seçtiğin günden devam eder." · satır "sıradaki" · "Bu günle başla" | "Hangi programı yapacaksın?" · PT'de bugün atanmışsa "Bugün Alt vücut planlı; başka birini seçersen antrenörüne bildirilir.", değilse "Bugün için bir program seç." · satır "bugün" ya da "Perşembe" · "son: 23 Eki" / "henüz yapılmadı" · "Bu programla başla" | 11 |
+| Bugün ikincil düğme | "Başka gün seç" | "Değiştir" (erişilebilir ad "Antrenmanı değiştir"; kullanıcının sözü, 2026-11-01) | 11 |
+| Seçim sheet'i | "Hangi günü yapacaksın?" · "Antrenörüne bildirilir. Sıra seçtiğin günden devam eder." · satır "sıradaki" · "Bu günle başla" | "Başka antrenman seç" · PT'de bugün atanmışsa "Bugün Alt vücut planlı; başka birini seçersen antrenörüne bildirilir.", değilse "Bugün için bir program seç." · satır "bugün" ya da "Perşembe" · "son: 23 Eki" / "henüz yapılmadı" · "Bu antrenmanla başla" | 11 |
 | Haftalık kart | "Sonraki günler" · "Günler sırayla döner." | "Haftanın programı"; satır "Salı · Alt vücut", "6 hareket · ≈ 50 dk", bugünün satırında "bugün"; sonda "Gün atanmamış: Program D" | 12 |
 | Şerit, ekran okuyucu | "Çarşamba, bugün, sırada: Gün B" | "Salı, bugün, antrenman günü: Alt vücut" · "Pazartesi, yapıldı: Üst vücut" · "Salı, kaçtı: Alt vücut" · "Çarşamba, dinlenme" | 11 |
 | Şeridin altı | "Sırada: yarın · Gün B" · "Günlerini değiştir" / "Antrenman günlerini seç" | ikisi de kalkar | 11 |
@@ -1211,7 +1215,7 @@ atamaların düşeceğini söylüyor (pencere açılır, onaylanmaz). Kayıt yok
 
 ## D · Danışan
 
-### Task 11: Hafta şeridi, "Başka program seç", Ayarlar
+### Task 11: Hafta şeridi, "Değiştir" (başka antrenman), Ayarlar
 
 **Boyut:** M · **Files:** Modify `src/app/me/training-week.tsx`, `src/app/me/today-workout.tsx`,
 `src/app/me/(sekmeler)/ayarlar/page.tsx`, `src/app/me/program-card.tsx` (yalnız içe aktarılan ad ve kalkan
@@ -1240,7 +1244,7 @@ atamaların düşeceğini söylüyor (pencere açılır, onaylanmaz). Kayıt yok
 - `program-card.tsx`: yalnız `OtherProgramButton` adı ve `WeekStrip`'in prop'u (kartın kendisi 12. görevde).
 - Dosya başı yorumları Faz 3'e göre.
 
-typecheck, lint, test · Commit: `feat(today): week strip from assignments; "Başka program seç"; no client day changes`
+typecheck, lint, test · Commit: `feat(today): week strip from assignments; "Değiştir"; no client day changes`
 
 **Controller doğrulaması (375 px):** şeritte Sal/Per/Paz altında "Alt", "Üst", "Tüm"; geçen atanmış gün "kaçtı";
 "Sırada" satırı ve "Günlerini değiştir" yok; Ayarlar'da atamalar ve "Günleri antrenörün belirliyor.", düğme yok;
@@ -1293,7 +1297,7 @@ Etkilenen testler: yok (UI) — `npm test` yine.
 typecheck, lint, test · Commit: `feat(today): today's assigned workout card and the weekly program`
 
 **Controller doğrulaması (375 px):** turun günü atanmış günse (Sal, Per, Paz) kart "<Gün> · <Program>", "Antrenmana
-başla" ilk ekranda, "Başka program seç" ve "Haftanın programı"; değilse "Bugün atanmış program yok", üç satır ve
+başla" ilk ekranda, "Değiştir" ve "Haftanın programı"; değilse "Bugün atanmış program yok", üç satır ve
 [Başla]; Programlar sekmesinde günler ve "bugün".
 
 ---
@@ -1328,7 +1332,7 @@ if (!announced && data.day.source !== 'own' && data.day.plannedDayId && data.day
 
 typecheck, lint, test · Commit: `refactor(workout): drop the finish rotation picker`
 
-**Controller doğrulaması (375 px; `/api/me/sessions*` yazımları engelli):** "Başka program seç" → başka program →
+**Controller doğrulaması (375 px; `/api/me/sessions*` yazımları engelli):** "Değiştir" → başka program →
 bildirim "… seçildi · Bugün … planlıydı; antrenörüne bildirilecek." (yalnız atanmış günde); bitiş sheet'inde
 "Sıradaki antrenman" yok.
 
@@ -1399,11 +1403,11 @@ bu plan (son inceleme notu)
 
 - `docs/SPEC.md`: §7.4 (481) programlar "Program A…", hafta günlerine atanır, dönüş yok; 483 "Antrenman günleri"
   paragrafı Kararlar 1–6'ya göre yeniden (danışan günleri değiştirmez); 487 geçmiş örneği "Gün A: …" yerine "Alt vücut:
-  …" ve "Günleri: Per → Per, Cum"; 386 (§6 danışan) Bugün ve "Başka program seç"; 154–230 JSON örneklerinde günlere
+  …" ve "Günleri: Per → Per, Cum"; 386 (§6 danışan) Bugün ve "Değiştir"; 154–230 JSON örneklerinde günlere
   `weekdays`, `rotation` ve `clientSchedule`'ın "yalnız eski dosyalar, okunur" notu; §12 yol haritası satırı (643
   civarı) Faz 3; §13'e `POST /api/dev/seed-program`.
 - `docs/design/antrenman-ekrani.md`: PT kararları 10 ve 12 (34–36) "(Faz 3'te değişti, 2026-11-01: …)" notuyla;
-  §2.1 Bugün başlığı ve şerit (146, 149); §2.3 "Başka program seç" (çizim, metin, bildirim kuralı; `completeDay`
+  §2.1 Bugün başlığı ve şerit (146, 149); §2.3 "Değiştir" (çizim, metin, bildirim kuralı; `completeDay`
   cümlesi düşer); §2.7'deki "Sıradaki antrenman" maddesi kalkar; §2.11 baştan (veri, PT, danışan değiştirmez, dönüş
   yok, hafta sayımı, kaçan gün penceresi, eski programların atanması).
 - `docs/design/kendi-program.md`: kendi programda "Günlerini değiştir" (§3.2 ve geçtiği yerler) → günler formda,
@@ -1420,7 +1424,7 @@ bu plan (son inceleme notu)
      kurulur; antrenman denemesinde `/api/me/sessions*` zaten engelli. Tohum: PT oturumuyla (`/api/dev/login`)
      `POST /api/dev/seed-program { "clientId": "c_zmrbywaz" }` bir kez; yanıtta üç program ve günleri.
   2. Test danışanı olarak Bugün: turun gününe göre atanmış ya da atanmamış hâl (12. görevin doğrulaması); şerit;
-     "Haftanın programı"; "Başka program seç" → başka program → antrenman ekranı ve bildirim (atanmış günde) → hiçbir
+     "Haftanın programı"; "Değiştir" → başka program → antrenman ekranı ve bildirim (atanmış günde) → hiçbir
      set kaydedilmeden Bugün'e dönüş.
   3. Ayarlar'da atamalar, düğme yok; Programlar sekmesinde günler.
   4. PT olarak: program sayfası, düzenleyicide çipler ve kapalı gün, özet; **Kaydet'e basılmaz**.
