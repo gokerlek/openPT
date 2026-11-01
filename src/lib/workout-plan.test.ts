@@ -86,8 +86,8 @@ describe('günün planı', () => {
     assert.equal('plannedDayName' in (wednesday ?? {}), false);
     // Gün istenmezse atanmamış günde haftada sıradaki atanmış program (dün yapılan kaydırmaz).
     assert.equal(buildWorkoutDay({ ...base, today: '2026-10-28' })?.dayId, DAY_B);
-    // Dönüş dalı 13. göreve kadar durur: evrenin günleri yine planda.
-    assert.deepEqual(tuesday?.rotationDays?.map((day) => day.id), [DAY_A, DAY_B]);
+    // Dönüş yok (13. görev): bitişteki "Sıradaki antrenman" satırı kalktı, evrenin günleri planda taşınmaz.
+    assert.equal('rotationDays' in (tuesday ?? {}), false);
   });
 
   test('varsayılan gün: bugünkü, yoksa haftada sıradaki atanmış, atama yoksa ilk', () => {

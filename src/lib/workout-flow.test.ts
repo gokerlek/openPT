@@ -2,7 +2,7 @@ import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as v from 'valibot';
 import { sessionDocSchema, type SessionDoc } from './schemas/session.ts';
-import { at, DAY_A, DAY_B, programFile, sessionDoc, sessionEntry, singleBlock, W1, workingSet } from './testing/session-fixtures.ts';
+import { at, DAY_A, DAY_B, sessionDoc, sessionEntry, W1, workingSet } from './testing/session-fixtures.ts';
 import { BENCH, CRUNCH, DB_PRESS, dayWithBlocks, DEVICES, PLANK, PUSH_UP, workoutDay } from './testing/workout-fixtures.ts';
 import { mergeAll } from './session-merge.ts';
 import { addExtraRound, afterLog, cursorOf, easyShortcut, ensureEntries, logSet, logWarmup, newSessionDoc, nextSet, setViews } from './workout-session.ts';
@@ -13,7 +13,6 @@ import {
   dropAt,
   dropWithUndo,
   effectiveDay,
-  finishRotation,
   firstSkippedKey,
   itemName,
   listView,
@@ -393,35 +392,11 @@ describe('günün etkin planı', () => {
   });
 });
 
-describe('bitişte rotasyon satırı (§2.7)', () => {
-  // Gün A fikstürün gününe (cumartesi) atanmış: planlanan program o (Faz 3).
-  const three = programFile({}, { schedule: { weekdays: [6] } });
-  const withC = {
-    ...three,
-    phases: [{ ...three.phases[0], days: [...(three.phases[0]?.days ?? []), { id: 'd_cccccc', name: 'Gün C', blocks: [singleBlock('b_dddddd', 'r_dddddd', 2)] }] }],
-  };
-
-  test('hazır seçim planın yarısına göre; "sıradaki" bu günün arkasındaki, "sırada kalsın" sıradaki gün', () => {
-    const day = workoutDay({ raw: withC });
-    assert.equal(day.dayId, DAY_A);
-    assert.deepEqual(finishRotation(day, { doneSets: 3, plannedSets: 5 }), { initial: 'advance', advance: 'Gün B', keep: 'Gün A' });
-    assert.deepEqual(finishRotation(day, { doneSets: 2, plannedSets: 5 }), { initial: 'keep', advance: 'Gün B', keep: 'Gün A' });
-  });
-
-  test('başka gün seçildi: "sırada kalsın" asıl sıradaki gün; iki seçenek aynı güne çıkıyorsa satır yok', () => {
-    const other = workoutDay({ raw: withC, dayId: DAY_B });
-    assert.deepEqual(finishRotation(other, { doneSets: 1, plannedSets: 3 }), { initial: 'keep', advance: 'Gün C', keep: 'Gün A' });
-    const twoDays = workoutDay({ dayId: DAY_B });
-    assert.equal(finishRotation(twoDays, { doneSets: 1, plannedSets: 3 }), null);
-    // Yeni antrenman sıradaki günün adını taşır (PT'nin bildirimi: "Gün A yerine Gün B yapıldı").
-    assert.deepEqual(start(twoDays).program, { revision: 7, phaseId: 'p_aaaaaa', dayId: DAY_B, dayName: 'Gün B', plannedDayId: DAY_A, plannedDayName: 'Gün A' });
-    assert.equal(start(workoutDay()).program?.plannedDayName, undefined, 'sıradaki gün yapılıyorsa ad yazılmaz');
-  });
-
-  test('eski anlık görüntüde gün listesi yok ya da gün evrede değil: satır yok', () => {
-    const { rotationDays: _days, ...legacy } = workoutDay({ raw: withC });
-    assert.equal(finishRotation(legacy, { doneSets: 1, plannedSets: 3 }), null);
-    assert.equal(finishRotation({ ...legacy, rotationDays: [{ id: 'd_zzzzzz', name: 'Gün Z' }, { id: 'd_yyyyyy', name: 'Gün Y' }] }, { doneSets: 1, plannedSets: 3 }), null);
+describe('başka program seçildi (Faz 3)', () => {
+  test('yeni antrenman planlanan programın adını taşır; planlanan yapılıyorsa ad yok', () => {
+    // Gün A fikstürün gününe (cumartesi) atanmış: planlanan program o. PT'nin bildirimi: "Gün A yerine Gün B yapıldı".
+    assert.deepEqual(start(workoutDay({ dayId: DAY_B })).program, { revision: 7, phaseId: 'p_aaaaaa', dayId: DAY_B, dayName: 'Gün B', plannedDayId: DAY_A, plannedDayName: 'Gün A' });
+    assert.equal(start(workoutDay()).program?.plannedDayName, undefined, 'planlanan program yapılıyorsa ad yazılmaz');
   });
 });
 

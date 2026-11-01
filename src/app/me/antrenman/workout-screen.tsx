@@ -15,7 +15,7 @@ import { DRAG, DURATION, EASE, tween, WORKOUT } from '@/lib/motion';
 import { EFFORT_LABELS } from '@/lib/progression';
 import { ApiError, fetchJson } from '@/lib/query/errors';
 import { feedbackItems, feedbackMessage, resolveFeedback, withFeedbackFlags, type FeedbackItem, type FeedbackOutcome } from '@/lib/program-feedback';
-import type { FinishFeedback, FinishHealth, RotationChoice, SessionDoc } from '@/lib/schemas/session';
+import type { FinishFeedback, FinishHealth, SessionDoc } from '@/lib/schemas/session';
 import {achievementNotice} from '@/lib/workout-achievements';
 import { waterOf } from '@/lib/session-index';
 import { rowKeyOf, type CursorUnit } from '@/lib/workout-cursor';
@@ -23,7 +23,6 @@ import {
   addExercise,
   canSwap,
   dropWithUndo,
-  finishRotation,
   firstSkippedKey,
   itemName,
   listView,
@@ -115,7 +114,7 @@ const NEXT_REST_MS = 700;
 type LoadState = { phase: 'loading' } | { phase: 'ready' } | { phase: 'empty'; problem?: string | undefined } | { phase: 'error'; message: string };
 
 /** Bitiş sorusu cevaplandı, "Programını güncelleyelim mi?" bekliyor: maddeler ve bitişin öteki seçimleri. */
-type PendingUpdate = { items: FeedbackItem[]; rotation: RotationChoice | null; health: FinishHealth | undefined };
+type PendingUpdate = { items: FeedbackItem[]; health: FinishHealth | undefined };
 
 /** Az önce kaydedilen set: panel değişene kadar gösterilir. */
 type Saving = { next: NextSet };
@@ -157,7 +156,7 @@ function untouched(clientId: string, local: LocalWorkout): boolean {
 
 /**
  * Taze yanıt telefondaki boş antrenmanı değiştirir mi: sunucuda aynı günün yarım antrenmanı var (başka
- * cihaz) ya da gün planı farklı (PT programı kaydetti). Başka günün yarım antrenmanı buradan devralınmaz.
+ * cihaz) ya da gün planı farklı (PT programı kaydetti). Başka programın yarım antrenmanı buradan devralınmaz.
  */
 function planChanged(local: LocalWorkout, fresh: WorkoutResponse): boolean {
   if (fresh.active) return fresh.active.program?.dayId === local.plan.dayId;
@@ -262,11 +261,11 @@ function addressMarked(): boolean {
  * Başlangıç ağ beklemez: Bugün'de çekilen plan tazeyse o, değilse `GET /api/me/workout`; çevrimdışıysa
  * son okunan plan. Telefonda yarım antrenman varsa o; yoksa sunucudaki yarım antrenman; o da yoksa yeni
  * belge (dosya ilk setle oluşur). Saklanan planla açılan boş antrenman arka planda taze planla
- * karşılaştırılır; PT o arada programı değiştirdiyse güncel planla yeniden kurulur. Başka gün seçildiyse
- * (`?day=`) "Gün C seçildi · Antrenörüne bildirilecek".
+ * karşılaştırılır; PT o arada programı değiştirdiyse güncel planla yeniden kurulur. Bugüne atanmış program varken
+ * başka program seçildiyse (`?day=`, Faz 3) "Üst vücut seçildi · Bugün Alt vücut planlıydı; antrenörüne bildirilecek.".
  *
- * Bitiş (§2.7): "Antrenman tamamlandı, bitirelim mi?" ya da erken bitişte yapılmayanlar, hazır seçilmiş
- * "Sıradaki antrenman: Gün B · Değiştir" (`finishRotation`) ve bir kez sorulan isteğe bağlı neden; plandan
+ * Bitiş (§2.7): "Antrenman tamamlandı, bitirelim mi?" ya da erken bitişte yapılmayanlar ve bir kez sorulan
+ * isteğe bağlı neden (sıradaki antrenman sorulmaz: programlar günlere atanır, bitiş dönüşü ilerletmez); plandan
  * sapma ya da öneri varsa ardından "Programını güncelleyelim mi?" (`program-feedback.ts`), kararlar bitişin
  * tek commit'ine biner. Bitince özet karuseli açılır (§2.8, `/me/antrenman/ozet/[id]`).
  *
@@ -751,10 +750,12 @@ export function WorkoutScreen({
       if (!data.day) return setLoad({ phase: 'empty', problem: data.problem });
       const doc = newSessionDoc(data.day, { today: data.today, now: new Date(), writer: writerId() });
       adopt(createLocalWorkout(doc, data.day, null, options));
-      // Başka gün seçildi (§2.3): antrenöre bitişte bildirilir (`other_day`); kendi programda bildirim yok.
+      // Başka program seçildi (Faz 3): o gün atanmış program varken antrenöre bitişte bildirilir (`other_day`); kendi programda yok.
       if (!announced && data.day.source !== 'own' && data.day.plannedDayId && data.day.plannedDayId !== data.day.dayId) {
         announced = true;
-        toast(`${data.day.dayName} seçildi`, { description: 'Antrenörüne bildirilecek' });
+        toast(`${data.day.dayName} seçildi`, {
+          description: data.day.plannedDayName ? `Bugün ${data.day.plannedDayName} planlıydı; antrenörüne bildirilecek.` : 'Antrenörüne bildirilecek.',
+        });
       }
     };
     const query = [
@@ -791,7 +792,7 @@ export function WorkoutScreen({
     }
     // Bayat girdi: adres işaretli (`?liste=1`, `?hareket=`) ama ne telefonda antrenman var ne sunucuda yarım antrenman. Girdi
     // biten ya da bırakılan bir antrenmanın (geri/ileri tuşu: `exitTo` ileri geçmişi silmez; eski sürümün çıkışları işaretsiz
-    // ve liste girdisini de geride bırakırdı). Yeni antrenman başlatılmaz (sıradaki günden boş antrenman, Bugün'de 0 setle
+    // ve liste girdisini de geride bırakırdı). Yeni antrenman başlatılmaz (varsayılan programdan boş antrenman, Bugün'de 0 setle
     // "Yarım kalan antrenman" olurdu), Bugün açılır. Yenilemede ve ara verdikten sonra ileri tuşunda antrenman telefonda,
     // başka cihazın yarım antrenmanı sunucuda (`active`), "Antrenmanı değiştir"in adresi işaretsiz: üçü de buraya düşmez.
     // Bağlantı yoksa (saklanan yanıt) Bugün açılamaz (Next tam yüklemeye düşer, tarayıcının çevrimdışı sayfası): ekran söyler.
@@ -802,8 +803,9 @@ export function WorkoutScreen({
       else setLoad({ phase: 'error', message: 'Bağlantı yok; bu antrenman telefonunda kayıtlı değil.' });
     };
     const cached = readWorkoutCache(clientId);
-    // Saklanan yanıt bu açılışın günü mü: istenen gün ya da (gün istenmediyse) rotasyonda sıradaki gün;
-    // "Başka gün seç"le çekilmiş bir gün sonraki olağan başlangıçta kullanılmaz.
+    // Saklanan yanıt bu açılışın günü mü: istenen gün ya da gün istenmediyse sunucunun varsayılan günü (`nextDayId`,
+    // Faz 3: bugünün ya da sıradaki atanmış program); "Değiştir"le çekilmiş başka program sonraki olağan başlangıçta
+    // kullanılmaz.
     // Program da aynı olmalı: tek seferlik seçimde istenen program, yoksa kalıcı seçim (`docs/design/kendi-program.md` §2.6).
     const sameProgram = (data: WorkoutResponse) =>
       data.active !== null || (programParam ? responseProgram(data) === programParam : !data.selection?.oneOff);
@@ -1542,7 +1544,7 @@ export function WorkoutScreen({
    * yeni antrenmana taşınmaz), ekran yeni plan gelene kadar iskelette bekler. Açılış
    * kuralının bayrağı (`opened`) ve `focusPushed` de sıfırlanır: yeni antrenman Bugün'den açılmış gibi önce liste
    * işaretini, sonra ilk hareketin odağını iter (bayrak `doc.id` başına olduğundan yeni kimlikle zaten yeniden karar
-   * verilirdi; sıfırlamak bunu kimliğe bırakmaz). Gün ve program sayfanın props'larıyla aynıysa (sunucu başka günün yarım
+   * verilirdi; sıfırlamak bunu kimliğe bırakmaz). Gün ve program sayfanın props'larıyla aynıysa (sunucu başka programın yarım
    * antrenmanını açmıştı) props değişmez, açılış effect'i kendiliğinden çalışmaz: adres yerinde değişir, açılış yeniden
    * denenir (`attempt`).
    */
@@ -1586,7 +1588,7 @@ export function WorkoutScreen({
    * arkadan gelir. Bitirilemediyse (antrenman bu telefonda sürüyor) false.
    */
   const submitFinish = useCallback(
-    async (rotation: RotationChoice | null, health: FinishHealth | undefined, feedback: FinishFeedback | undefined): Promise<boolean> => {
+    async (health: FinishHealth | undefined, feedback: FinishFeedback | undefined): Promise<boolean> => {
       let current = localRef.current;
       if (!current) return false;
       if (feedback) {
@@ -1602,7 +1604,7 @@ export function WorkoutScreen({
       try {
         const result = await fetchJson<{ doc?: SessionDoc; feedback?: FeedbackOutcome }>(`/api/me/sessions/${current.doc.id}/finish`, {
           method: 'POST',
-          body: JSON.stringify({ doc, ...(rotation ? { rotation } : {}), ...(health ? { health } : {}), ...(feedback ? { feedback } : {}) }),
+          body: JSON.stringify({ doc, ...(health ? { health } : {}), ...(feedback ? { feedback } : {}) }),
         });
         // Tarih sunucunun (ilk yazımda koyduğu); yanıt gelmediyse telefondaki.
         const saved = result.doc ?? doc;
@@ -1620,7 +1622,7 @@ export function WorkoutScreen({
           toast.success('Yaptığın setler kaydedildi; seçtiğin antrenman açılıyor.');
         } else {
           // Özet işaretsiz girdinin yerine (`exitTo`): özette geri tuşu antrenmanın altındakine (genellikle Bugün) gider;
-          // liste girdisine inseydi ekran boş bağlanır, sıradaki günden yeni antrenman başlatırdı.
+          // liste girdisine inseydi ekran boş bağlanır, varsayılan programdan yeni antrenman başlatırdı.
           exitTo(`/me/antrenman/ozet/${current.doc.id}`, { canStay: false });
         }
         // Kendi programda mesaj programın adıyla; yazılamayan madde varsa [Programı aç] (§2.9).
@@ -1661,15 +1663,14 @@ export function WorkoutScreen({
   );
 
   /**
-   * Bitir; `reason`: yapılmayanların isteğe bağlı nedeni (ağrı yalnız onayla, ayrıntısı `health.json`'a);
-   * `rotation`: "Sıradaki antrenman" satırındaki seçim (gösterilmediyse sunucunun hazır seçimi). Plandan
+   * Bitir; `reason`: yapılmayanların isteğe bağlı nedeni (ağrı yalnız onayla, ayrıntısı `health.json`'a). Plandan
    * sapma ya da öneri varsa önce "Programını güncelleyelim mi?" (§2.7 c), özetten önce; öneri katmanının set
    * artışı adayları (`plan.setIncrease`, §5.6) orada "Antrenörüne öner" olarak. Günün her satırının kaydı
    * açılır (`ensureEntries`): hafifletilen günde planın set sayısı kayda yazılır, sunucunun "yarım bırakıldı
    * (x/y set)" sayısı sheet'tekiyle aynı olur.
    */
   const onFinish = useCallback(
-    (reason: FinishReason | null, rotation: RotationChoice | null) => {
+    (reason: FinishReason | null) => {
       let current = localRef.current;
       if (!current) return;
       const ready = ensureEntries(planOf(current), current.doc, stampOf(current));
@@ -1686,11 +1687,11 @@ export function WorkoutScreen({
       }
       const items = feedbackItems({ day: current.plan, doc: current.doc, extras: current.extras, suggestions: current.plan.setIncrease });
       if (items.length === 0) {
-        void submitFinish(rotation, health, undefined);
+        void submitFinish(health, undefined);
         return;
       }
       setFinishOpen(false);
-      setUpdate({ items, rotation, health });
+      setUpdate({ items, health });
     },
     [commit, submitFinish],
   );
@@ -1703,7 +1704,7 @@ export function WorkoutScreen({
       // Kararsız kapandı: sheet kapanır, bitiş arkada gider; cevapta sheet düğmesinde bekler.
       if (!answer) setUpdate(null);
       const feedback = resolveFeedback(pending.items, answer?.answer ?? 'none', answer?.picked);
-      void submitFinish(pending.rotation, pending.health, feedback);
+      void submitFinish(pending.health, feedback);
     },
     [update, submitFinish],
   );
@@ -2122,7 +2123,7 @@ export function WorkoutScreen({
       const ready = ensureEntries(planOf(current), current.doc, stampOf(current));
       const changed = withFinishReason(planOf(current), ready, 'other', stampOf(current));
       commit(withChange(current, changed.doc, { send: false }));
-      if (await submitFinish(null, undefined, undefined)) return;
+      if (await submitFinish(undefined, undefined)) return;
       const latest = localRef.current;
       if (!latest || latest.doc.id !== current.doc.id) return;
       commit(withChange(latest, undoSwitchPrep(latest.doc, current.doc, changed.doc, stampOf(latest)), { send: false }));
@@ -2252,7 +2253,6 @@ export function WorkoutScreen({
   const shown = saving?.next ?? next;
   const shownRow = shown ? (plan.rows[shown.rowId] ?? null) : null;
   const summary = workoutSummary(plan, doc, new Date(now));
-  const rotation = finishRotation(plan, summary);
   // "+ Set ekle": birim sınırda değilse (en çok `EXTRA_ROUNDS_MAX` tur).
   const addable = (key: string) => (addExtraRound(plan, doc, key)[key] ?? 0) > (plan.extraRounds?.[key] ?? 0);
   const todayIds = new Set(Object.values(plan.rows).map((item) => item.exerciseId));
@@ -2517,11 +2517,10 @@ export function WorkoutScreen({
         effort={finishEffort}
         amrap={lastSet?.target?.amrap ? { reps: lastSet.reps ?? 0 } : null}
         pain={local.pain}
-        rotation={rotation}
         onEffort={onEffort}
         onAmrap={(reps) => (lastSetId ? onAmrapReps(lastSetId, reps) : undefined)}
         onDoSkipped={onDoSkipped}
-        onFinish={(reason, choice) => void onFinish(reason, choice)}
+        onFinish={(reason) => void onFinish(reason)}
         onCancelWorkout={onCancelWorkout}
       />
       <WorkoutSwitchSheet

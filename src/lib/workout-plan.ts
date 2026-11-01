@@ -179,11 +179,6 @@ export type WorkoutDay = {
   plannedDayId: string | null;
   /** Planlanan programın adı; yalnız seçilenden farklıyken (PT'nin "Alt vücut yerine Üst vücut yapıldı" bildirimi). */
   plannedDayName?: string;
-  /**
-   * Şu anki evrenin günleri, dönüş sırasıyla: bitişteki "Sıradaki antrenman: Gün B" satırı. Eski anlık
-   * görüntüde yok (satır görünmez, sunucu varsayılanı uygular).
-   */
-  rotationDays?: { id: string; name: string }[];
   /** Günün blokları (kütüphanede olmayan satırlar çıkmış): imleç bununla yürür. */
   blocks: TemplateBlock[];
   rows: Record<string, WorkoutRow>;
@@ -587,8 +582,6 @@ export function buildWorkoutDay(input: {
     ...(owner ? { programId: owner.programId, programName: owner.name } : {}),
     plannedDayId: planned?.id ?? null,
     ...(plannedName ? { plannedDayName: plannedName } : {}),
-    // Bitişteki dönüş satırı 13. görevde kalkar; o zamana kadar telefon bunu okur.
-    rotationDays: (current?.days ?? []).map((item) => ({ id: item.id, name: item.name })),
     blocks,
     rows,
   };
