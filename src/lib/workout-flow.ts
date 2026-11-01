@@ -256,6 +256,21 @@ export function nextUnitAfter(day: WorkoutDay, doc: Pick<SessionDoc, 'entries' |
   return cursorOf(day, doc).units.find((unit) => unit.key !== except && openable(day, unit) && !isFinished(unit))?.key ?? null;
 }
 
+/**
+ * Odakta "‹ Önceki": listede `key`'in hemen önündeki açılabilen birim (biten, şu an ya da sırada; yapılış sırası, `listView`
+ * gibi). Atlanan birim ve plan dışı kayıt açılamaz (`validFocus`), üstlerinden geçilir. `key` ilk açılabilen birimse ya da
+ * günde yoksa null. `nextUnitAfter`'ın aksine sıradaki iş değil, listedeki komşu: biten bir hareketi düzeltmeye dönmek için.
+ */
+export function previousUnitBefore(day: WorkoutDay, doc: Pick<SessionDoc, 'entries' | 'order'>, key: string): string | null {
+  const units = cursorOf(day, doc).units;
+  const index = units.findIndex((unit) => unit.key === key);
+  for (let at = index - 1; at >= 0; at -= 1) {
+    const unit = units[at];
+    if (unit && openable(day, unit)) return unit.key;
+  }
+  return null;
+}
+
 export type ListWindow<T> = {
   shown: T[];
   /** Pencerenin üstünde ve altında kalan hareketler (grupta her üye ayrı hareket): "Önceki n hareket", "+n hareket daha". */

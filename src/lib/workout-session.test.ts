@@ -14,6 +14,7 @@ import { buildWorkoutDay } from './workout-plan.ts';
 import { feedbackItems } from './program-feedback.ts';
 import { completion } from './session-finish.ts';
 import { withExtraRounds } from './workout-flow.ts';
+import { mergeAll } from './session-merge.ts';
 import {
   addExtraRound,
   addWaterTap,
@@ -37,6 +38,7 @@ import {
   nextText,
   overloadState,
   previousText,
+  restoreSet,
   setEntryEffort,
   setSetEffort,
   setSetupNote,
@@ -170,6 +172,59 @@ describe('antrenman belgesi: Set bitti, düzelt, sil', () => {
     doc = logNext(day, doc, 7);
     assert.deepEqual(doc.entries[0]?.sets.map((set) => set.setIndex), [0, 2, 1]);
     assert.notEqual(doc.entries[0]?.sets.at(-1)?.id, middle?.id);
+  });
+
+  test('"Geri al": silinen set yeni kimlikle aynı yerine, değerleri ve anıyla döner; durum yeniden hesaplanır', () => {
+    const day = workoutDay();
+    let doc = start(day);
+    for (const minute of [1, 3, 5]) doc = logNext(day, doc, minute, { kg: 22.5 });
+    const middle = doc.entries[0]?.sets.find((set) => set.setIndex === 1);
+    assert.ok(middle);
+    const found = findSet(doc, middle.id);
+    assert.ok(found);
+    const removed = deleteSet(day, doc, middle.id, stamp(6));
+    assert.equal(removed.entries[0]?.status, 'partial');
+    const back = restoreSet(day, removed, found, stamp(7), sequence());
+    assert.ok(back);
+    assert.equal(v.safeParse(sessionDocSchema, back.doc).success, true);
+    assert.notEqual(back.setId, middle.id);
+    assert.deepEqual(back.doc.deletedSetIds, [middle.id]);
+    assert.equal(back.doc.entries[0]?.status, 'done');
+    const set = findSet(back.doc, back.setId)?.set;
+    assert.deepEqual(set && { setIndex: set.setIndex, kg: set.kg, reps: set.reps, at: set.at, target: set.target }, {
+      setIndex: 1,
+      kg: 22.5,
+      reps: middle.reps,
+      at: middle.at,
+      target: middle.target,
+    });
+    // Sıralama yapıldığı ana göre: geri gelen set ortada kalır; hareket bitti, imleç sıradaki harekette.
+    assert.deepEqual(back.doc.entries[0]?.sets.map((item) => item.setIndex), [0, 1, 2]);
+    assert.equal(nextSet(day, back.doc)?.rowId, 'r_bbbbbb');
+  });
+
+  test('"Geri al" yeniden yapılan sete, muadili seçilen harekete yazılmaz; eski kopya birleşimde geri gelmez', () => {
+    const day = workoutDay();
+    let doc = start(day);
+    for (const minute of [1, 3]) doc = logNext(day, doc, minute);
+    const last = doc.entries[0]?.sets.at(-1);
+    const found = last ? findSet(doc, last.id) : null;
+    assert.ok(last && found);
+    const removed = deleteSet(day, doc, last.id, stamp(4));
+    // O arada aynı set yeniden yapıldı: iki set aynı yeri tutmaz.
+    assert.equal(restoreSet(day, logNext(day, removed, 5), found, stamp(6)), null);
+    // Hareket değişti (muadil): set başka harekete yazılmaz.
+    const swapped = { ...removed, entries: removed.entries.map((entry) => ({ ...entry, exerciseId: 'dumbbell-press' })) };
+    assert.equal(restoreSet(day, swapped, found, stamp(6)), null);
+    // Başka cihazın eski kopyasında silinen set durur: birleşimde iz onu siler, yalnız geri gelen kalır.
+    const back = restoreSet(day, removed, found, stamp(6), sequence());
+    assert.ok(back);
+    const merged = mergeAll([doc, back.doc]);
+    assert.ok(merged.status !== 'deleted');
+    assert.deepEqual(merged.entries[0]?.sets.map((set) => [set.setIndex, set.id === back.setId]), [
+      [0, false],
+      [1, true],
+    ]);
   });
 
   test('düzeltme: değer değişir, yapıldığı an kalır, birleştirme editedAt ile', () => {

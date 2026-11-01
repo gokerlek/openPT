@@ -23,6 +23,7 @@ import {
   moveUnitTo,
   nextUnitAfter,
   optionText,
+  previousUnitBefore,
   restoreAt,
   swapRow,
   undoSkip,
@@ -863,6 +864,50 @@ describe('liste + odak: geçerli odak ve sıradaki birim', () => {
     // "Geri al" atlanan birimi geri getirir: yeniden seçilebilir.
     const back = undoSkip(day, goblet.doc, goblet.undo, stamp(6));
     assert.equal(nextUnitAfter(day, back, null), 'b_dddddd');
+  });
+});
+
+describe('liste + odak: önceki birim ("‹ Önceki")', () => {
+  test('listede hemen önceki birim, durumu ne olursa olsun; ilk birimde ve günde olmayan birimde yok', () => {
+    const day = threeDay();
+    let doc = start(day);
+    assert.equal(previousUnitBefore(day, doc, 'b_aaaaaa'), null);
+    assert.equal(previousUnitBefore(day, doc, 'b_bbbbbb'), 'b_aaaaaa');
+    assert.equal(previousUnitBefore(day, doc, 'b_dddddd'), 'b_bbbbbb');
+    assert.equal(previousUnitBefore(day, doc, 'b_zzzzzz'), null);
+    // Biten (Bench) ve şu anki (Plank) birim de açılır: biten hareketi düzeltmeye dönülür.
+    for (let minute = 1; minute <= 4; minute += 1) doc = logNext(day, doc, minute);
+    assert.deepEqual(listView(day, doc).items.map((item) => item.state), ['done', 'current', 'pending']);
+    assert.equal(previousUnitBefore(day, doc, 'b_bbbbbb'), 'b_aaaaaa');
+    assert.equal(previousUnitBefore(day, doc, 'b_dddddd'), 'b_bbbbbb');
+  });
+
+  test('yapılış sırasıyla: atlanan birimin üstünden geçilir; sona inen atlanan birim önceki olmaz', () => {
+    const day = threeDay();
+    // Plank atlandı: sıra Bench, Goblet, Plank ⤼.
+    const skipped = dropAt(day, start(day), 'b_bbbbbb', stamp(1), sequence());
+    assert.deepEqual(listView(day, skipped).items.map((item) => item.key), ['b_aaaaaa', 'b_dddddd', 'b_bbbbbb']);
+    assert.equal(previousUnitBefore(day, skipped, 'b_dddddd'), 'b_aaaaaa');
+    // Başka cihazın sırasında atlanan birim ortada: üstünden geçilir.
+    const ids = (key: string) => cursorOf(day, skipped).units.find((unit) => unit.key === key)?.members.flatMap((member) => (member.entryId ? [member.entryId] : [])) ?? [];
+    const middle = { ...skipped, order: { value: [...ids('b_aaaaaa'), ...ids('b_bbbbbb'), ...ids('b_dddddd')], updatedAt: at(2), by: W1 } };
+    assert.deepEqual(listView(day, middle).items.map((item) => [item.key, item.state]), [
+      ['b_aaaaaa', 'current'],
+      ['b_bbbbbb', 'skipped'],
+      ['b_dddddd', 'pending'],
+    ]);
+    assert.equal(previousUnitBefore(day, middle, 'b_dddddd'), 'b_aaaaaa');
+  });
+
+  test('plan dışı kayıt açılamaz: üstünden geçilir; plan verisi olan cihazda önceki odur', () => {
+    const day = threeDay();
+    const extra = rekeyExtra(addedRowFor({ key: 'push-up', exercise: PUSH_UP, devices: DEVICES, history: [] }), 'e_added1');
+    let doc = addExercise(day, start(day), { entryId: 'e_added1', extra, stamp: stamp(1), random: sequence() });
+    doc = moveUnitTo(day, doc, 'e_added1', 'b_bbbbbb', stamp(2)); // Bench, eklenen, Plank, Goblet
+    assert.equal(previousUnitBefore(day, doc, 'b_bbbbbb'), 'b_aaaaaa');
+    const live = effectiveDay(day, doc, { [extraKey('e_added1', 'push-up')]: extra });
+    assert.equal(previousUnitBefore(live, doc, 'b_bbbbbb'), 'e_added1');
+    assert.equal(previousUnitBefore(live, doc, 'e_added1'), 'b_aaaaaa');
   });
 });
 

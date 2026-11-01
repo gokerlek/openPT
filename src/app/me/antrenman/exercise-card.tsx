@@ -3,12 +3,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion, useIsPresent, useReducedMotion } from 'motion/react';
 import { ArrowBendUpRight, ArrowDown, ArrowUp, Bandaids, NotePencil, Play, Sparkle, Swap, Wrench } from '@phosphor-icons/react';
-import { Check, Equals, Plus, X } from '@/components/line-icons';
+import { Check, Equals, Plus } from '@/components/line-icons';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Table, TableBody, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { rowCareText } from '@/lib/constraint-filter';
 import { formatNumber } from '@/lib/format';
 import { DURATION, EASE, tween, WORKOUT } from '@/lib/motion';
@@ -19,7 +19,8 @@ import { isStraight } from '@/lib/set-plan';
 import { cn } from '@/lib/utils';
 import type { GroupMemberStatus, GroupView } from '@/lib/workout-groups';
 import type { WorkoutRow } from '@/lib/workout-plan';
-import { previousText, setValueText, targetCell, type SetView, type WarmupView } from '@/lib/workout-session';
+import type { SetView, WarmupView } from '@/lib/workout-session';
+import { SetRow, swallowClick } from './set-row';
 
 const UP = new Set<string>(['increase', 'range_increase']);
 const DOWN = new Set<string>(['decrease', 'deload', 'calibrate', 'pain_reduce']);
@@ -180,7 +181,8 @@ function SetupNoteForm({ note, onSave }: { note: string | undefined; onSave: (te
  * ayar notu, PT'nin notu), gerekiyorsa ısınma satırı ve set tablosu. Tablo gerçek `<table>`: Set ·
  * Önceki · (setlerin hedefi farklıysa Hedef) · kg · Tekrar/Süre · durum. Planın değerleri bir kez
  * görünür: düz setlerde hedef paneldedir; AMRAP set "8+". Şu anki satır vurgulu (şerit sonraki sete
- * kayar); yapılan sete dokunmak "Seti düzelt"i açar. Yeni kaydın ✓'u satıra, panel değişmeden önce düşer
+ * kayar). Yapılan sete dokunmak onu alttaki panelde düzenlemeye açar (şerit o satıra geçer); ✓'a dokunmak
+ * işareti kaldırır, sola kaydırmak "Sil"i açar (`SetRow`). Yeni kaydın ✓'u satıra, panel değişmeden önce düşer
  * (iOS'ta titreşim yok; kaydedildiğini bu gösterir). Onaylanmış aşırı yük satırda ↑ ile görünür.
  *
  * Grupta (süperset, devre, kompleks) başlığın yerinde tur ve üyeler; altta şu anki üyenin çipleri ve
@@ -200,9 +202,13 @@ export function ExerciseCard({
   warmups,
   setupNote,
   currentSetIndex,
+  editingSetId,
   currentKg,
   freshSetId,
+  locked,
   onEditSet,
+  onUntickSet,
+  onDeleteSet,
   onToggleWarmup,
   onSetupNote,
   onSwap,
@@ -217,11 +223,20 @@ export function ExerciseCard({
   setupNote: string | undefined;
   /** Şu anki set (satırdaki yeri); hareket bittiyse null. */
   currentSetIndex: number | null;
+  /** Panelde düzenlenen set: şerit onun satırında (şu anki setin değil). */
+  editingSetId: string | null;
   /** Şu anki setin önceden dolu (ya da değiştirilmiş) ağırlığı. */
   currentKg: number | undefined;
   /** Az önce kaydedilen set: ✓'u belirerek gelir. */
   freshSetId: string | null;
+  /** Set kaydedilirken ya da süreli set sayarken satırlar kaydırılmaz (dokunuşlara ekran karar verir). */
+  locked: boolean;
+  /** Yapılan sete dokunmak: alttaki panelde düzenlemek. */
   onEditSet: (setId: string) => void;
+  /** ✓'u kaldırmak: set yapılmadı (silinir, "Geri al" toast'ta). */
+  onUntickSet: (setId: string) => void;
+  /** Sola kaydırıp "Sil": set silinir ("Geri al" toast'ta). */
+  onDeleteSet: (setId: string) => void;
   onToggleWarmup: (index: number, done: boolean) => void;
   onSetupNote: (text: string) => void;
   /** Kısıt notundaki "Değiştir": muadil açıksa sheet'ini açar; kapalıysa null. */
@@ -238,15 +253,19 @@ export function ExerciseCard({
   // Grupta üye değişince (ya da hareket muadille değişince) açık çip kapanır (her hareketin kendi notu var).
   const shownKey = `${row.rowId}:${row.exerciseId}`;
   const [shownRow, setShownRow] = useState(shownKey);
+  // Sola kaydırılıp "Sil"i açık satır (kartta aynı anda tek).
+  const [swipeOpen, setSwipeOpen] = useState<string | null>(null);
   if (shownRow !== shownKey) {
     setShownRow(shownKey);
     setOpen(null);
     setWarmOpen(false);
+    setSwipeOpen(null);
   }
   const reduced = useReducedMotion();
   // Hareket değişirken çıkan kart başlığın kimliğini bırakır: odak yeni kartın başlığına gider.
   const present = useIsPresent();
   const currentRef = useRef<HTMLTableRowElement>(null);
+  const tableRef = useRef<HTMLTableElement>(null);
   const weighted = row.trackingType === 'weight_reps';
   const showTarget = !isStraight(sets.map((set) => set.target));
   const valueHead = row.trackingType === 'duration' ? 'Süre' : 'Tekrar';
@@ -260,10 +279,34 @@ export function ExerciseCard({
   // Danışanın kısıtından not (tasarım `kisit-tarama.md` §3.5): tanı adı yok, bölge ve taraf var.
   const care = row.care ? rowCareText(row.care) : null;
 
-  // Şu anki satır panelin üstünde görünür kalsın (4+ sette, grupta tablo kayar).
+  // Şu anki (ya da düzenlenen) satır panelin üstünde görünür kalsın (4+ sette, grupta tablo kayar).
   useEffect(() => {
     currentRef.current?.scrollIntoView({ block: 'nearest', behavior: reduced ? 'auto' : 'smooth' });
-  }, [currentSetIndex, row.rowId, reduced]);
+  }, [currentSetIndex, editingSetId, row.rowId, reduced]);
+
+  // Açık "Sil" yalnız kaydırılabilen, hâlâ yapılmış bir satırda geçerli: set silindiyse, kilitlendiyse ya da düzenlemeye
+  // açıldıysa kapanmış sayılır (yoksa aşağıdaki dinleyici tablodaki sonraki dokunuşu boşuna yutardı).
+  const openRow = !locked && swipeOpen !== null && swipeOpen !== editingSetId && sets.some((set) => set.logged?.id === swipeOpen) ? swipeOpen : null;
+  // Açık "Sil"i dışarı dokunmak ve Esc kapatır (`SwipeGroup` gibi). Tablodaki dokunuş yalnız kapatır: o satırı düzenlemeye
+  // açmaz, ✓'unu kaldırmaz. Açık satırın kendisine dokunmak satırın işi (yalnız kapatır; "Sil"e basmak siler).
+  useEffect(() => {
+    if (!openRow) return;
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target instanceof Element ? event.target : null;
+      if (target?.closest(`[data-set-row="${openRow}"]`)) return;
+      setSwipeOpen(null);
+      if (target && tableRef.current?.contains(target)) swallowClick(event);
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setSwipeOpen(null);
+    };
+    document.addEventListener('pointerdown', onPointerDown, true);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown, true);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [openRow]);
 
   const title = group ? `${group.members.find((member) => member.rowId === row.rowId)?.letter ?? ''}: ${row.title}` : row.title;
 
@@ -345,7 +388,7 @@ export function ExerciseCard({
 
             {warmups.length > 0 && (!warmDone || warmOpen) ? <WarmupRow warmups={warmups} onToggle={onToggleWarmup} /> : null}
 
-            <Table aria-label={`${row.title} setleri`} className="table-fixed tabular-nums">
+            <Table ref={tableRef} aria-label={`${row.title} setleri`} className="table-fixed tabular-nums">
               {/* 375 px'te: 40 + Önceki + (48) + 56 + 56 + 44; "Önceki" en az ~100 px kalır. */}
               <colgroup>
                 <col className="w-10" />
@@ -369,79 +412,29 @@ export function ExerciseCard({
               </TableHeader>
               <TableBody>
                 {sets.map((set) => {
-                  const current = set.setIndex === currentSetIndex;
                   const logged = set.logged;
-                  const kg = logged ? logged.kg : current ? currentKg : set.plannedKg;
-                  const value = logged ? (logged.reps ?? logged.seconds) : undefined;
-                  const label = `Set ${set.position + 1}`;
-                  const amrap = Boolean(set.target.amrap);
+                  const highlight = editingSetId !== null ? (logged?.id === editingSetId ? 'editing' : null) : set.setIndex === currentSetIndex ? 'current' : null;
                   return (
-                    <TableRow
+                    <SetRow
                       key={set.extra ? `extra-${set.setIndex}` : set.setIndex}
-                      ref={current ? currentRef : undefined}
-                      aria-current={current ? 'step' : undefined}
-                      onClick={logged ? () => onEditSet(logged.id) : undefined}
-                      className={cn('h-12 scroll-mb-3 hover:bg-transparent', current && 'bg-primary/10 hover:bg-primary/10', logged && 'cursor-pointer')}>
-                      <TableCell className="relative pl-3 font-medium">
-                        {current ? (
-                          <motion.span layoutId="current-set-strip" transition={tween(DURATION.base)} className="absolute inset-y-0 left-0 w-[3px] bg-primary-strong" aria-hidden />
-                        ) : null}
-                        {set.position + 1}
-                        {amrap ? <span className="sr-only">, AMRAP</span> : null}
-                      </TableCell>
-                      <TableCell className="truncate text-muted-foreground">{set.extra ? 'fazladan' : previousText(set.previous, row.trackingType)}</TableCell>
-                      {showTarget ? <TableCell className="text-muted-foreground">{targetCell(set.target, row.trackingType)}</TableCell> : null}
-                      {weighted ? (
-                        <TableCell className={cn(logged ? 'font-semibold' : 'text-muted-foreground')}>
-                          <span className="inline-flex items-center gap-0.5">
-                            {kg !== undefined ? formatNumber(kg) : '—'}
-                            {logged?.overload ? (
-                              <>
-                                <ArrowUp weight="bold" className="size-3.5 text-destructive-text" aria-hidden />
-                                <span className="sr-only">, hedefin çok üzerinde</span>
-                              </>
-                            ) : null}
-                          </span>
-                        </TableCell>
-                      ) : null}
-                      <TableCell className={cn(logged ? 'font-semibold' : 'text-muted-foreground')}>
-                        {value !== undefined
-                          ? row.trackingType === 'duration'
-                            ? `${value} sn`
-                            : value
-                          : amrap && !showTarget
-                            ? targetCell(set.target, row.trackingType)
-                            : '—'}
-                      </TableCell>
-                      <TableCell className="p-0 text-center">
-                        {logged ? (
-                          <button
-                            type="button"
-                            aria-label={`${label}, ${setValueText(logged)}, yapıldı. Düzelt`}
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              onEditSet(logged.id);
-                            }}
-                            className="inline-flex size-11 items-center justify-center rounded-full outline-none focus-visible:ring-3 focus-visible:ring-ring/50">
-                            <motion.span
-                              initial={logged.id === freshSetId ? { scale: 0.6, opacity: 0 } : false}
-                              animate={{ scale: 1, opacity: 1 }}
-                              transition={tween(DURATION.fast)}
-                              className="inline-flex size-7 items-center justify-center rounded-full bg-primary/20 text-primary [&_svg]:size-4">
-                              <Check weight="bold" />
-                            </motion.span>
-                          </button>
-                        ) : set.extra ? (
-                          <button
-                            type="button"
-                            aria-label={`${label}, fazladan: ${group ? 'turu' : 'seti'} kaldır`}
-                            onClick={onDropExtra}
-                            className="inline-flex size-11 items-center justify-center rounded-full text-muted-foreground outline-none focus-visible:ring-3 focus-visible:ring-ring/50 [&_svg]:size-4">
-                            <X weight="bold" />
-                          </button>
-                        ) : null}
-                      </TableCell>
-                    </TableRow>
+                      set={set}
+                      trackingType={row.trackingType}
+                      showTarget={showTarget}
+                      group={group !== null}
+                      highlight={highlight}
+                      currentKg={currentKg}
+                      fresh={logged !== undefined && logged.id === freshSetId}
+                      rowRef={highlight ? currentRef : undefined}
+                      open={logged !== undefined && logged.id === openRow}
+                      locked={locked || highlight === 'editing'}
+                      onOpenChange={(next) => {
+                        if (logged) setSwipeOpen((now) => (next ? logged.id : now === logged.id ? null : now));
+                      }}
+                      onEdit={onEditSet}
+                      onUntick={onUntickSet}
+                      onDelete={onDeleteSet}
+                      onDropExtra={onDropExtra}
+                    />
                   );
                 })}
               </TableBody>

@@ -31,6 +31,7 @@ import {
   moveUnit,
   moveUnitTo,
   nextUnitAfter,
+  previousUnitBefore,
   restoreAt,
   swapRow,
   undoSkip,
@@ -66,6 +67,7 @@ import {
   nextSet,
   nextText,
   overloadState,
+  restoreSet,
   setEntryEffort,
   setSetEffort,
   setSetupNote,
@@ -89,6 +91,8 @@ import { EntryPanel, type TimerView, type TransitionView } from './entry-panel';
 import { ExerciseCard } from './exercise-card';
 import { ProgramUpdateSheet, type ProgramAnswer } from './program-update-sheet';
 import { RestPanel, RestStrip, type EffortPromptView, type RestView } from './rest-panel';
+import { SetEditPanel, type SetEditValues, type SetEditView } from './set-edit-panel';
+import { setEditButtonId } from './set-row';
 import { StartCheck, type StartCheckHandle } from './start-check';
 import { SwapSheet, type SwapTarget } from './swap-sheet';
 import { useWorkoutOutbox } from './use-workout-outbox';
@@ -96,7 +100,7 @@ import { beep, isIOS, unlockAudio, useWakeLock, vibrate } from './workout-feedba
 import { WorkoutHeader, type FocusActions, type WorkoutStatus } from './workout-header';
 import { LIST_TITLE_ID, listRowId, WorkoutList, WorkoutListBar } from './workout-list';
 import { WorkoutSwitchSheet } from './workout-switch-sheet';
-import { DeleteSetDialog, EditSetSheet, FinishedElsewhereDialog, FinishSheet, PauseDialog, type EditTarget, type EditValues } from './workout-sheets';
+import { FinishedElsewhereDialog, FinishSheet, PauseDialog } from './workout-sheets';
 
 /**
  * Bugün'de çekilen plan bu kadar tazeyse başlangıç ağ beklemez; yine de arka planda taze plan istenir ve
@@ -117,7 +121,7 @@ type PendingUpdate = { items: FeedbackItem[]; rotation: RotationChoice | null; h
 type Saving = { next: NextSet };
 
 /** Ekranın sheet ve dialog'ları (açık katman; "Ara verilsin mi?" hariç). */
-type Layer = 'elsewhere' | 'check' | 'delete' | 'edit' | 'swap' | 'add' | 'update' | 'finish' | 'switch';
+type Layer = 'elsewhere' | 'check' | 'swap' | 'add' | 'update' | 'finish' | 'switch';
 
 function useNow(intervalMs: number): number {
   const [now, setNow] = useState(() => Date.now());
@@ -209,6 +213,36 @@ function restingRowOf(unit: CursorUnit, doc: SessionDoc): string | null {
   return best?.rowId ?? unit.members[0]?.rowId ?? null;
 }
 
+/**
+ * Panelde düzenlenen set, gösterilen birimdeyse: kaydı, satırı ve tablodaki yeri. Değilse null (set silindi, başka birimin seti,
+ * çalışma seti değil): panel giriş paneline döner.
+ */
+function editOf(plan: WorkoutDay, doc: SessionDoc, setId: string, unitKey: string): SetEditView | null {
+  const found = findSet(doc, setId);
+  const rowKey = found ? rowKeyOf(found.entry) : undefined;
+  const row = rowKey ? plan.rows[rowKey] : undefined;
+  if (!found || !row || found.set.type !== 'working' || unitKeyOfRow(plan, row.rowId) !== unitKey) return null;
+  const views = setViews(plan, doc, row.rowId);
+  const position = views.find((item) => item.logged?.id === setId)?.position;
+  if (position === undefined) return null;
+  return {
+    setId,
+    row,
+    position,
+    total: views.length,
+    kg: found.set.kg,
+    value: found.set.reps ?? found.set.seconds ?? 0,
+    effort: found.set.target?.amrap ? null : found.set.effort,
+    extra: found.set.extra === true,
+  };
+}
+
+/** Süreli setin sayacı gösterilen setin sayacı mı (çizimdeki `timerRunning` ile aynı kural; işleyiciler için). */
+function timedSetRunning(local: LocalWorkout, focus: string | null): boolean {
+  const next = local.timer ? nextSet(planOf(local), local.doc, local.draft, focus) : null;
+  return Boolean(local.timer && next && local.timer.rowId === next.rowId && local.timer.setIndex === next.setIndex);
+}
+
 /** Adresteki odak (`window.location`): geri tuşu onu hemen değiştirir, `useSearchParams` ve `focusRef` sonra yetişir. */
 function addressFocus(): string | null {
   return focusOf(new URLSearchParams(window.location.search));
@@ -254,9 +288,15 @@ function addressMarked(): boolean {
  * şu anki hareketin odağıyla açılır (açılış kuralı: liste işaretli girdinin üstünde odak girdisi). Listeden geri tuşu
  * işaretsiz girdiye döner ve "Ara verilsin mi?" sorar (`PauseDialog`: Devam et · Ara ver). Üst çubuk
  * `WorkoutHeader` (⋯ menüsünde "Antrenmanı değiştir" ve "Ara ver"; odakta önce "Muadil seç" ve "Bu hareketi atla").
- * Odakta giriş panelinin altında "Sıradaki: <ad>" (kendiliğinden geçişin açacağı hareket, `nextUnitAfter`); biten
- * hareket açılınca panel "Bu hareket bitti" der (Sıradaki ya da Antrenmanı bitir, Set ekle). Dinlenme ekranı
- * kilitlemez: listeye dönülünce tam panel küçülür, listede alt çubuğun üstündeki şeritte sürer.
+ * Odakta giriş panelinin altında "Sıradaki: <ad>" (kendiliğinden geçişin açacağı hareket, `nextUnitAfter`) ve solunda
+ * "‹ Önceki" (listede önceki açılabilen hareket, `previousUnitBefore`); biten hareket açılınca panel "Bu hareket bitti"
+ * der (Sıradaki ya da Antrenmanı bitir, Set ekle). Dinlenme ekranı kilitlemez: listeye dönülünce tam panel küçülür,
+ * listede alt çubuğun üstündeki şeritte sürer.
+ *
+ * Yapılan set (§2.4): tablodaki satıra (ya da dinlenmenin "Düzelt"ine) dokunmak onu alttaki panelde düzeltmeye açar
+ * (`SetEditPanel`, satır vurgulu; yazım eski "Seti düzelt" sheet'ininki). ✓'a dokunmak işareti kaldırır; sola kaydırıp
+ * "Sil" ve panelin "Seti sil"i seti siler: onay yok, 5 sn toast'ta "Geri al" (`restoreSet`). Süreli set sayarken ikisi
+ * de yapılmaz.
  *
  * Atlama ve muadil (§2.6): odakta ⋯ menüsünde tek dokunuşluk "Bu hareketi atla" (atlananlara; 5 sn toast [Geri al])
  * ve "Muadil seç" (kendi geçmişiyle; kısıt notunda da "Değiştir"). Ekran günün etkin planıyla çalışır (`planOf`:
@@ -304,8 +344,8 @@ export function WorkoutScreen({
   // `finishing`'in güncel kopyası (effect'te yazılır): toast'ın "Geri al"ı atlama anında kurulur, state'i eski kalırdı.
   const finishingRef = useRef(false);
   const [update, setUpdate] = useState<PendingUpdate | null>(null);
-  const [editing, setEditing] = useState<EditTarget | null>(null);
-  const [deleting, setDeleting] = useState<(EditTarget & { text: string }) | null>(null);
+  // Alttaki panelde düzenlenen set (kimliği): yalnız gösterilen birimde geçerli (`editOf`), birim değişince düşer.
+  const [editing, setEditing] = useState<string | null>(null);
   const [elsewhere, setElsewhere] = useState<{ server: SessionDoc; count: number } | null>(null);
   const [elsewhereBusy, setElsewhereBusy] = useState(false);
   const [announcement, setAnnouncement] = useState('');
@@ -462,9 +502,9 @@ export function WorkoutScreen({
   }, []);
 
   /**
-   * Gösterilen hareket değişti (başka hareket ya da liste; dokunuşla ya da geri/ileri tuşuyla): süren set sayacı ve
-   * devrenin istasyon geçişi düşer (o hareketindi). Geçerlilik `listView`'ın kuralı (`validFocus`): geçersiz odak
-   * liste sayılır. Taslak zaten yalnız kendi setinde geçerli (`nextSet`). Listeye dönülüyorsa bırakılan hareket not
+   * Gösterilen hareket değişti (başka hareket ya da liste; dokunuşla ya da geri/ileri tuşuyla): süren set sayacı,
+   * devrenin istasyon geçişi ve paneldeki set düzeltmesi düşer (o hareketindi; düzeltme kaydedilmemişti). Geçerlilik
+   * `listView`'ın kuralı (`validFocus`): geçersiz odak liste sayılır. Taslak zaten yalnız kendi setinde geçerli (`nextSet`). Listeye dönülüyorsa bırakılan hareket not
    * edilir (`leftUnit`) ve tam dinlenme küçülür (`mode: 'mini'`): dinlenme ekranı kilitlemez, listede alt çubuğun
    * üstündeki şeritte sürer ("‹ Liste", geri tuşu, geçersiz odak; odak zaten geçersizse de). Gösterilen bir hareketten
    * listeye dönüldüyse true (`goToList`'in niyeti).
@@ -482,6 +522,7 @@ export function WorkoutScreen({
         if (shownTo === null) leftUnit.current = shownFrom;
         if (next.timer) next = { ...next, timer: null };
         setTransition(null);
+        setEditing(null);
       }
       if (next !== current) commit(next);
       return shownFrom !== null && shownTo === null;
@@ -1037,7 +1078,10 @@ export function WorkoutScreen({
     const shown = saving?.next ?? next;
     const unitKey = shown?.unitKey ?? shownFocus;
     const unit = unitKey ? cursor.units.find((item) => item.key === unitKey) : undefined;
-    const rowId = shown?.rowId ?? (unit ? restingRowOf(unit, doc) : null);
+    // Panelde düzenlenen set: kart onun satırının tablosunu gösterir (grupta şu anki üye başkası olabilir; dinlenmenin
+    // "Düzelt"i), şerit onun satırında.
+    const edit = editing && shownFocus && !saving ? editOf(plan, doc, editing, shownFocus) : null;
+    const rowId = edit?.row.rowId ?? shown?.rowId ?? (unit ? restingRowOf(unit, doc) : null);
     const row = rowId ? (plan.rows[rowId] ?? null) : null;
     return {
       plan,
@@ -1049,6 +1093,9 @@ export function WorkoutScreen({
       // Kendiliğinden geçişin açacağı birim (odaktaki hariç; listede "Devam et"inki): "Sıradaki" satırı, biten hareketin
       // birincil düğmesi ve dinlenmenin "Sıradaki"si. Başka birimde bekleyen fazladan set sayılmaz.
       following: nextUnitAfter(plan, doc, shownFocus),
+      // "‹ Önceki": listede gösterilen birimin önündeki açılabilen birim (ilk birimde yok).
+      previous: shownFocus ? previousUnitBefore(plan, doc, shownFocus) : null,
+      edit,
       unitKey,
       row,
       sets: row ? setViews(plan, doc, row.rowId) : [],
@@ -1056,7 +1103,7 @@ export function WorkoutScreen({
       warmups: row ? warmupViews(plan, doc, row.rowId) : [],
       setupNote: row ? setupNoteOf(plan, doc, row.rowId) : undefined,
     };
-  }, [local, saving, focus]);
+  }, [local, saving, focus, editing]);
 
   // Adresteki odak geçersiz (başka cihazda silindi, adres elle değişti, birim atlandı, plan dışı kayıt): listeye
   // dönülür (`goToList`: altında bu sayfanın liste girdisi varsa geri, yoksa `replaceState`). Odak bu arada yine
@@ -1332,69 +1379,158 @@ export function WorkoutScreen({
     announce(`Su: ${waterOf(doc)} bardak`);
   }, [commit, announce]);
 
-  const openEdit = useCallback((setId: string) => {
-    const current = localRef.current;
-    if (!current) return;
-    const found = findSet(current.doc, setId);
-    const rowId = found ? rowKeyOf(found.entry) : undefined;
-    const row = rowId ? planOf(current).rows[rowId] : undefined;
-    if (!found || !row || !rowId) return;
-    const position = setViews(planOf(current), current.doc, rowId).find((item) => item.logged?.id === setId)?.position ?? 0;
-    const sent = current.acked?.entries.some((entry) => entry.sets.some((set) => set.id === setId)) ?? false;
-    setEditing({
-      setId,
-      title: row.title,
-      position,
-      trackingType: row.trackingType,
-      spec: row.spec,
-      kg: found.set.kg,
-      value: found.set.reps ?? found.set.seconds ?? 0,
-      effort: found.set.target?.amrap ? null : found.set.effort,
-      sent,
-    });
-  }, []);
-
-  const onSaveEdit = useCallback(
-    (values: EditValues) => {
+  /**
+   * Kaydedilmiş seti alttaki panelde düzeltmek (tasarım §2.4): tablodaki satıra (klavyede set numarasına) ya da dinlenmenin
+   * "Düzelt"ine dokunmak. Panel giriş panelinin yerinde (`SetEditPanel`), satır tabloda vurgulu. Set başka birimdeyse
+   * (hareket bitti, kart sıradakine geçti; dinlenmenin "Düzelt"i) önce o birimin odağı açılır: danışan düzelttiği satırı
+   * görür. Set kaydedilirken ve bitiş yoldayken açılmaz; süreli set sayarken de (düzeltme sayacı bırakırdı, süren set
+   * kaybolurdu): toast önce bitirmeyi ya da vazgeçmeyi söyler. Açıldıysa true.
+   */
+  const onEditSet = useCallback(
+    (setId: string): boolean => {
       const current = localRef.current;
-      if (!current || !editing) return;
+      if (!current || saving || finishingRef.current) return false;
+      if (timedSetRunning(current, focusRef.current)) {
+        toast('Süre sayıyor', { description: 'Seti düzeltmek için önce bitir ya da vazgeç.' });
+        return false;
+      }
+      const plan = planOf(current);
+      const found = findSet(current.doc, setId);
+      const rowKey = found ? rowKeyOf(found.entry) : undefined;
+      const unitKey = rowKey ? unitKeyOfRow(plan, rowKey) : undefined;
+      const edit = unitKey && validFocus(plan, current.doc, unitKey) !== null ? editOf(plan, current.doc, setId, unitKey) : null;
+      if (!unitKey || !edit) return false;
+      if (focusRef.current !== unitKey) openFocus(unitKey);
+      setEditing(setId);
+      guard();
+      announce(`Set ${edit.position + 1} düzenleniyor`);
+      focusLater('set-edit-title', DURATION.fast);
+      return true;
+    },
+    [saving, openFocus, guard, announce, focusLater],
+  );
+
+  /** Dinlenmenin "Düzelt"i: set alttaki panelde düzeltilir, dinlenme küçülüp şeritte sürer (panel görünsün). */
+  const onEditFromRest = useCallback(
+    (setId: string) => {
+      if (onEditSet(setId)) updateRest((timer) => ({ ...acknowledgeRest(timer), mode: 'mini' }));
+    },
+    [onEditSet, updateRest],
+  );
+
+  /** Panel kapanınca klavye odağı açan yere: düzenlenen satırın düğmesine; o yoksa "Set bitti"ye ya da başlığa. */
+  const returnFocus = useCallback(
+    (setId: string) =>
+      later(DURATION.fast, () => {
+        for (const id of [setEditButtonId(setId), 'set-done', 'exercise-title']) {
+          const element = document.getElementById(id);
+          if (element) {
+            element.focus({ preventScroll: true });
+            return;
+          }
+        }
+      }),
+    [later],
+  );
+
+  /** Panelin "Kaydet"i: eski "Seti düzelt" sheet'inin yazımı (`editSet`, zorluk `setSetEffort`), hemen gönderilir. */
+  const onSaveEdit = useCallback(
+    (values: SetEditValues) => {
+      const current = localRef.current;
+      if (!current || !editing || finishingRef.current) return;
       const stamp = stampOf(current);
-      let doc = editSet(current.doc, editing.setId, values, stamp);
-      if ('effort' in values) doc = setSetEffort(doc, editing.setId, values.effort, stamp);
+      let doc = editSet(current.doc, editing, values, stamp);
+      if ('effort' in values) doc = setSetEffort(doc, editing, values.effort, stamp);
       commit(withChange(current, doc, { send: true }));
       outbox.schedule();
       setEditing(null);
+      guard();
       toast.success('Set düzeltildi');
+      returnFocus(editing);
     },
-    [commit, editing, outbox],
+    [commit, editing, outbox, guard, returnFocus],
   );
 
-  const onAskDelete = useCallback(() => {
-    const current = localRef.current;
-    if (!current || !editing) return;
-    const set = findSet(current.doc, editing.setId)?.set;
-    setDeleting({ ...editing, text: `${editing.title} · Set ${editing.position + 1}${set ? ` · ${setValueText(set)}` : ''}` });
+  /** Panelin "Vazgeç"i (ve Esc): hiçbir şey yazılmaz, panel sıradaki sete döner. */
+  const onCancelEdit = useCallback(() => {
+    if (!editing) return;
     setEditing(null);
-  }, [editing]);
-
-  const onConfirmDelete = useCallback(() => {
-    const current = localRef.current;
-    if (!current || !deleting) return;
-    const plan = planOf(current);
-    const found = findSet(current.doc, deleting.setId);
-    const doc = deleteSet(plan, current.doc, deleting.setId, stampOf(current));
-    const rest = current.rest?.setId === deleting.setId ? null : current.rest;
-    // Tek harekette silinen fazladan set istenen turdan da düşer (yeniden beklemesin); grupta tur üyelerle paylaşılır.
-    const rowKey = found?.set.extra ? rowKeyOf(found.entry) : undefined;
-    const unitKey = rowKey ? unitKeyOfRow(plan, rowKey) : undefined;
-    const single = unitKey ? plan.blocks.find((block) => block.id === unitKey)?.rows.length === 1 : false;
-    const extraRounds = unitKey && single ? dropExtraRound(plan, unitKey) : current.extraRounds;
-    commit(withChange({ ...current, rest, draft: null, extraRounds }, doc, { send: true }));
-    outbox.schedule();
-    setDeleting(null);
-    announce('Set silindi');
     guard();
-  }, [commit, deleting, outbox, announce, guard]);
+    returnFocus(editing);
+  }, [editing, guard, returnFocus]);
+
+  /**
+   * Seti kaldırır: ✓'u kaldırmak (`untick`: set yapılmadı) ya da sola kaydırıp "Sil", panelin "Seti sil"i (`delete`). İkisi
+   * de eski onaylı silmenin yazımı (`deleteSet`, hemen gönderilir), onay sormaz: 5 sn toast'taki "Geri al" seti geri getirir
+   * (`restoreSet`: yeni kimlikle, aynı yerine). Fark fazladan sette: silmek tek harekette istenen turu da bırakır (yeniden
+   * beklemesin), ✓'u kaldırmak bırakmaz (satır bekleyen fazladan set olur). Setin dinlenmesi biter. Taslak kalır: yalnız
+   * kendi setinde geçerli, kaldırılan set panelde sıradaki olunca dokunulmaz, o yazılınca kendi setine yine döner. Set
+   * kaydedilirken, bitiş yoldayken ve süreli set sayarken yapılmaz (`onEditSet` gibi).
+   *
+   * "Geri al" toast'ı ekranın dışında (genel Toaster): ara verilirken, bitiş yoldayken ya da ekran kapandıktan sonra hiçbir
+   * şey yazmaz (`mountedRef`, `pausingRef`, `finishingRef`; atlamanın "Geri al"ı gibi).
+   */
+  const removeSet = useCallback(
+    (setId: string, kind: 'untick' | 'delete') => {
+      const current = localRef.current;
+      if (!current || saving || finishingRef.current) return;
+      if (timedSetRunning(current, focusRef.current)) {
+        toast('Süre sayıyor', { description: 'Seti değiştirmek için önce bitir ya da vazgeç.' });
+        return;
+      }
+      const plan = planOf(current);
+      const found = findSet(current.doc, setId);
+      const rowKey = found ? rowKeyOf(found.entry) : undefined;
+      if (!found || !rowKey || found.set.type !== 'working') return;
+      const position = setViews(plan, current.doc, rowKey).find((item) => item.logged?.id === setId)?.position ?? 0;
+      const title = plan.rows[rowKey]?.title ?? found.entry.title;
+      const unitKey = unitKeyOfRow(plan, rowKey);
+      const single = unitKey ? plan.blocks.find((block) => block.id === unitKey)?.rows.length === 1 : false;
+      const dropped = kind === 'delete' && found.set.extra === true && unitKey !== undefined && single && (plan.extraRounds?.[unitKey] ?? 0) > 0;
+      const doc = deleteSet(plan, current.doc, setId, stampOf(current));
+      const rest = current.rest?.setId === setId ? null : current.rest;
+      const extraRounds = dropped && unitKey ? dropExtraRound(plan, unitKey) : current.extraRounds;
+      const focused = document.activeElement;
+      commit(withChange({ ...current, rest, extraRounds }, doc, { send: true }));
+      outbox.schedule();
+      setEditing((now) => (now === setId ? null : now));
+      guard();
+      const text = `Set ${position + 1} ${kind === 'untick' ? 'geri alındı' : 'silindi'}`;
+      announce(text);
+      // Klavye odağı kalkan düğmedeyse (✓, "Seti sil") "Set bitti"ye, o yoksa başlığa.
+      later(DURATION.fast, () => {
+        if (!(focused instanceof HTMLElement) || focused.isConnected) return;
+        (document.getElementById('set-done') ?? document.getElementById('exercise-title'))?.focus({ preventScroll: true });
+      });
+      const sessionId = current.doc.id;
+      toast(text, {
+        // Hangi hareketin seti: toast başka harekete geçildikten sonra da görünür (grupta "Set 2" iki üyede de var).
+        description: `${title} · ${setValueText(found.set)}`,
+        duration: WORKOUT.skipToastMs,
+        classNames: TOAST_BUTTONS,
+        action: {
+          label: 'Geri al',
+          onClick: () => {
+            const latest = localRef.current;
+            if (!mountedRef.current || pausingRef.current || !latest || latest.doc.id !== sessionId || finishingRef.current) return;
+            const back = restoreSet(planOf(latest), latest.doc, found, stampOf(latest));
+            if (!back) {
+              toast(`Set ${position + 1} geri getirilemedi`, { description: 'O arada yeniden yapıldı ya da hareket değişti.' });
+              return;
+            }
+            // Silmenin bıraktığı fazladan tur da geri gelir.
+            const rounds = dropped && unitKey ? { ...latest.extraRounds, [unitKey]: (latest.extraRounds[unitKey] ?? 0) + 1 } : latest.extraRounds;
+            commit(withChange({ ...latest, extraRounds: rounds }, back.doc, { send: true }));
+            outbox.schedule();
+            announce(`Set ${position + 1} geri geldi`);
+          },
+        },
+      });
+    },
+    [saving, commit, outbox, guard, announce, later],
+  );
+  const onUntickSet = useCallback((setId: string) => removeSet(setId, 'untick'), [removeSet]);
+  const onDeleteSet = useCallback((setId: string) => removeSet(setId, 'delete'), [removeSet]);
 
   /**
    * "Antrenmanı değiştir"in sonu (eski antrenman silindi ya da bitti, yerel kopyası düştü): seçilen gün açılır.
@@ -1418,6 +1554,7 @@ export function WorkoutScreen({
       setSwitchOpen(false);
       setSaving(null);
       setTransition(null);
+      setEditing(null);
       setLoad({ phase: 'loading' });
       setOpened(null);
       // Korkuluğun tek sıfırlandığı yer: adres birazdan işaretsiz (seçilen gün) olur, eski korkuluk orada sormamalı. Yeni
@@ -2028,21 +2165,17 @@ export function WorkoutScreen({
     ? 'elsewhere'
     : checkOpen
       ? 'check'
-      : deleting
-        ? 'delete'
-        : editing
-          ? 'edit'
-          : swapTarget
-            ? 'swap'
-            : addOpen
-              ? 'add'
-              : update
-                ? 'update'
-                : finishOpen
-                  ? 'finish'
-                  : switchOpen
-                    ? 'switch'
-                    : null;
+      : swapTarget
+        ? 'swap'
+        : addOpen
+          ? 'add'
+          : update
+            ? 'update'
+            : finishOpen
+              ? 'finish'
+              : switchOpen
+                ? 'switch'
+                : null;
   const layerClosable =
     topLayer !== null && topLayer !== 'elsewhere' && !(finishing && (topLayer === 'update' || topLayer === 'finish' || topLayer === 'switch'));
   const marked = params.has(LIST_PARAM) || params.has(FOCUS_PARAM);
@@ -2051,8 +2184,6 @@ export function WorkoutScreen({
   const closeLayer = useCallback(
     (layer: Layer) => {
       if (layer === 'check') checkRef.current?.close();
-      else if (layer === 'delete') setDeleting(null);
-      else if (layer === 'edit') setEditing(null);
       else if (layer === 'swap') setSwapTarget(null);
       else if (layer === 'add') setAddOpen(false);
       else if (layer === 'update') onProgramAnswer(null);
@@ -2110,7 +2241,7 @@ export function WorkoutScreen({
     );
   }
 
-  const { plan, doc, focus: shownFocus, list, cursor, next, following: followingKey, unitKey, row, sets, group, warmups, setupNote } = view;
+  const { plan, doc, focus: shownFocus, list, cursor, next, following: followingKey, previous: previousKey, edit, unitKey, row, sets, group, warmups, setupNote } = view;
   // Odak yoksa (ya da geçersizse) ana ekran liste; varsa o hareketin kartı ve giriş paneli.
   const listMode = shownFocus === null;
   // Listeden geri tuşu (9. görev): korkuluk kurulu ve adres işaretsiz girdide → "Ara verilsin mi?". İşaretsiz bir odak
@@ -2136,6 +2267,9 @@ export function WorkoutScreen({
   // Odakta "Sıradaki: <ad>" (giriş panelinin altında; biten harekette birincil düğme): kendiliğinden geçişin açacağı birim.
   const followingItem = followingKey ? list.items.find((item) => item.key === followingKey) : undefined;
   const following = followingItem ? { name: itemName(followingItem), onOpen: () => onOpenUnit(followingItem.key) } : null;
+  // Solunda "‹ Önceki" (listede önceki açılabilen birim): "Sıradaki" gibi açılır, gizlendiği yerler de aynı.
+  const previousItem = previousKey ? list.items.find((item) => item.key === previousKey) : undefined;
+  const previous = previousItem ? { name: itemName(previousItem), onOpen: () => onOpenUnit(previousItem.key) } : null;
   // Odakta ⋯: "Muadil seç" kartın satırında (odaktaki birimin şu anki üyesi; set kaydedildiyse ya da eklenen harekette
   // nedeniyle devre dışı), "Bu hareketi atla" bitmemiş birimde (`dropWithUndo`'nun kuralı). Set kaydedilirken ikisi de
   // devre dışı (işleyiciler o arada bir şey yapmaz; kart birazdan sıradaki sete ya da harekete geçer).
@@ -2255,9 +2389,13 @@ export function WorkoutScreen({
                       // Kaydedilirken vurgu kaydedilen satırda kalır; panel değişince sonraki sete kayar.
                       saving ? (saving.next.rowId === row.rowId ? saving.next.setIndex : null) : next && next.rowId === row.rowId ? next.setIndex : null
                     }
+                    editingSetId={edit?.setId ?? null}
                     currentKg={next?.kg}
                     freshSetId={fresh}
-                    onEditSet={openEdit}
+                    locked={saving !== null || timerRunning}
+                    onEditSet={onEditSet}
+                    onUntickSet={onUntickSet}
+                    onDeleteSet={onDeleteSet}
                     onToggleWarmup={(index, done) => onToggleWarmup(row.rowId, index, done)}
                     onSetupNote={(text) => onSetupNote(row.rowId, text)}
                     onSwap={!saving && canSwap(local.plan, doc, row.rowId) ? () => openSwap(row.rowId) : null}
@@ -2295,26 +2433,32 @@ export function WorkoutScreen({
               onPointerDownCapture={swallow}
               onClickCapture={swallow}
               className="relative border-t bg-card px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
-              <EntryPanel
-                row={shownRow}
-                next={shown}
-                frozen={saving !== null}
-                overload={next && !saving ? overloadState(plan, doc, next, next.kg) : 'none'}
-                nextLetter={saving ? null : nextMemberLetter(plan, doc, shownFocus)}
-                transition={transition}
-                timer={timerRunning ? timerView : null}
-                now={now}
-                onChange={onDraft}
-                onResetKg={onResetKg}
-                onDone={() => onDone()}
-                onStartTimer={onStartTimer}
-                onStopTimer={onStopTimer}
-                onCancelTimer={onCancelTimer}
-                onDropExtra={() => (next ? onDropExtra(next.unitKey) : undefined)}
-                onFinish={() => setFinishOpen(true)}
-                following={following}
-                addSet={!saving && unitKey && addable(unitKey) ? { label: group ? 'Tur ekle' : 'Set ekle', onAdd: () => onAddSet(unitKey) } : null}
-              />
+              {/* Yapılan sete dokunulduysa panel o seti düzeltir (`SetEditPanel`); değilse sıradaki set. */}
+              {edit ? (
+                <SetEditPanel key={edit.setId} edit={edit} onSave={onSaveEdit} onCancel={onCancelEdit} onDelete={() => onDeleteSet(edit.setId)} />
+              ) : (
+                <EntryPanel
+                  row={shownRow}
+                  next={shown}
+                  frozen={saving !== null}
+                  overload={next && !saving ? overloadState(plan, doc, next, next.kg) : 'none'}
+                  nextLetter={saving ? null : nextMemberLetter(plan, doc, shownFocus)}
+                  transition={transition}
+                  timer={timerRunning ? timerView : null}
+                  now={now}
+                  onChange={onDraft}
+                  onResetKg={onResetKg}
+                  onDone={() => onDone()}
+                  onStartTimer={onStartTimer}
+                  onStopTimer={onStopTimer}
+                  onCancelTimer={onCancelTimer}
+                  onDropExtra={() => (next ? onDropExtra(next.unitKey) : undefined)}
+                  onFinish={() => setFinishOpen(true)}
+                  previous={previous}
+                  following={following}
+                  addSet={!saving && unitKey && addable(unitKey) ? { label: group ? 'Tur ekle' : 'Set ekle', onAdd: () => onAddSet(unitKey) } : null}
+                />
+              )}
             </section>
           )}
         </div>
@@ -2355,7 +2499,7 @@ export function WorkoutScreen({
                 onAdjust={(seconds) => updateRest((timer) => adjustRest(acknowledgeRest(timer), seconds, Date.now()))}
                 onWater={onWater}
                 onUndoWater={onUndoWater}
-                onEditSaved={openEdit}
+                onEditSaved={onEditFromRest}
                 onTouch={() => {
                   if (localRef.current?.rest && alarmPending(localRef.current.rest)) updateRest(acknowledgeRest);
                 }}
@@ -2388,8 +2532,6 @@ export function WorkoutScreen({
       />
       <SwapSheet target={swapTarget} onClose={() => setSwapTarget(null)} onPick={onPickSwap} />
       <AddExerciseSheet open={addOpen} onOpenChange={setAddOpen} todayIds={todayIds} busyId={addBusy} onPick={(item) => void onPickAdd(item)} />
-      <EditSetSheet target={editing} onClose={() => setEditing(null)} onSave={onSaveEdit} onDelete={onAskDelete} />
-      <DeleteSetDialog target={deleting} onCancel={() => setDeleting(null)} onConfirm={onConfirmDelete} />
       <ProgramUpdateSheet
         items={update?.items ?? null}
         busy={finishing}
