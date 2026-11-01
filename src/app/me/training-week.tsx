@@ -38,7 +38,7 @@ import { clearWorkoutCache, readWorkoutCache } from './workout-storage';
  *   oturumun adı, ilerisinde dönüşten tahmin, `weekPlan`; bugün başlamış yarım antrenman varsa onun gününden),
  *   kaçanda "kaçtı"; altında "Sırada: yarın · Gün B" (kart başlığı zaten sıradaki günü söylüyorsa gizlenir,
  *   `showNext`) ve "Günlerini değiştir"; program kartında ve yarım antrenmanın "Devam et" kartında;
- * - "Başka gün seç": gün sheet'i, antrenörüne bildirilir (kendi programda değil), sıra seçilen günden sürer;
+ * - "Değiştir" (başka antrenman): antrenman sheet'i, antrenörüne bildirilir (kendi programda değil);
  * - telefondaki gün planının tazeliği: sunucuda taze okunan programın damgası saklanan planınkinden
  *   farklıysa (PT programı değiştirdi) saklanan plan atılır, "Antrenmana başla" güncel planı açar.
  */
@@ -187,9 +187,10 @@ export function WeekStrip({ clientId, showNext = true, activeDay = null }: { cli
 }
 
 /**
- * "Başka gün seç" (§2.3): bu evrenin günleri, sıradaki işaretli, ötekilerde son yapıldığı gün. Seçilen
- * günle antrenman başlar; sıradaki gün değilse antrenörüne bildirilir (`other_day`) ve sıra seçilen
- * günden sürer. Evrede tek gün varsa görünmez.
+ * "Değiştir" (§2.3; eski adı "Başka gün seç"): bu evrenin antrenmanları, sıradaki işaretli, ötekilerde son
+ * yapıldığı gün. Seçilen antrenman başlar; sıradaki değilse antrenörüne bildirilir (`other_day`). Düğmede "gün"
+ * yok: kullanıcının sözü, gün değil antrenman değişir (Faz 3'te antrenmanlar günlere atanır). Evrede tek antrenman
+ * varsa görünmez.
  */
 export function OtherDayButton({ clientId }: { clientId: string }) {
   const router = useRouter();
@@ -203,18 +204,18 @@ export function OtherDayButton({ clientId }: { clientId: string }) {
   const selected = picked ?? next ?? days[0]?.id ?? '';
   return (
     <>
-      <Button variant="ghost" className="h-11 w-full text-muted-foreground" onClick={() => setOpen(true)}>
-        Başka gün seç
+      <Button variant="ghost" className="h-11 w-full text-muted-foreground" aria-label="Antrenmanı değiştir" onClick={() => setOpen(true)}>
+        Değiştir
       </Button>
       <Drawer open={open} onOpenChange={setOpen} onOpenChangeComplete={(isOpen) => (isOpen ? undefined : setPicked(null))}>
         <DrawerContent showCloseButton={false} className="gap-0">
           <DrawerHeader className="gap-1.5 pt-5">
             <DrawerTitle id="other-day-title" className="text-lg font-semibold">
-              Hangi günü yapacaksın?
+              Başka antrenman seç
             </DrawerTitle>
             {/* Kendi programda PT'ye bildirilmez (`docs/design/kendi-program.md` §3.4). */}
             <DrawerDescription>
-              {data?.program?.source === 'own' ? 'Sıra seçtiğin günden devam eder.' : 'Antrenörüne bildirilir. Sıra seçtiğin günden devam eder.'}
+              {data?.program?.source === 'own' ? 'Bugün yapmak istediğini seç.' : 'Bugün yapmak istediğini seç; sıradakinden farklıysa antrenörüne bildirilir.'}
             </DrawerDescription>
           </DrawerHeader>
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4">
@@ -246,7 +247,7 @@ export function OtherDayButton({ clientId }: { clientId: string }) {
                 ].join('&');
                 router.push(query ? `/me/antrenman?${query}` : '/me/antrenman');
               }}>
-              Bu günle başla
+              Bu antrenmanla başla
             </Button>
           </DrawerFooter>
         </DrawerContent>

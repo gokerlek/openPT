@@ -83,7 +83,7 @@ function Unavailable({ children, top }: { children?: React.ReactNode; top?: Reac
  *   satır. Faz 3'e (gün ↔ antrenman eşlemesi) kadar dinlenme gününde başlık sıradaki günü söyler, "Antrenmana başla"
  *   yine bugün başlatır;
  * - tek satır "N hareket · ≈ N dk" (evreli programda üstünde evre satırı);
- * - "Antrenmana başla" ve "Başka gün seç" (§2.3) kaydırmadan görünür (Faz 0: 375×812'de düğmenin alt kenarı 700 px'ten
+ * - "Antrenmana başla" ve "Değiştir" (§2.3) kaydırmadan görünür (Faz 0: 375×812'de düğmenin alt kenarı 700 px'ten
  *   yukarıda; başlık kısa tutulur). "Antrenmana başla" tek dokunuştur: plan Bugün açılınca telefona alınmıştır, ağ
  *   beklenmez; telefondaki plan programın bu sürümüne (ya da kısıtların bu hâline) ait değilse atılır
  *   (`WorkoutFreshness`);
