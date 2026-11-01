@@ -470,14 +470,12 @@ export function applyProgramEdit(
   // Antrenman günleri: gövdenin şu anki evresinin atamalarının birleşimi; danışanın eski katmanı düşer.
   const current = phases.find((phase) => phase.id === body.currentPhaseId) ?? phases[0];
   const schedule = settleSchedule(stored, current?.days ?? [], at);
-  const diff = [
-    ...diffProgram(
-      { phased: stored.phased, currentPhaseId: stored.current.phaseId, phases: stored.phases },
-      { phased: body.phased, currentPhaseId: body.currentPhaseId, phases },
-      ctx,
-    ),
-    ...schedule.changes.map((text): ProgramChange => ({ text })),
-  ];
+  const structural = diffProgram(
+    { phased: stored.phased, currentPhaseId: stored.current.phaseId, phases: stored.phases },
+    { phased: body.phased, currentPhaseId: body.currentPhaseId, phases },
+    ctx,
+  );
+  const diff = [...structural, ...schedule.changes.map((text): ProgramChange => ({ text }))];
   if (diff.length === 0) return null;
   // Danışanın satır hedefleri: değişmeyen satırda kalır, PT'nin değiştirdiği satırda düşer (kayda yazılır).
   const targets = ptTargetsEdit(stored.phases, phases, stored.clientTargets, {
@@ -490,7 +488,9 @@ export function applyProgramEdit(
   const revision = stored.revision + 1;
   const currentChanged = body.currentPhaseId !== stored.current.phaseId;
   const toggled = stored.phased !== body.phased;
-  const kind: LogKind = currentChanged && diff.length === 1 && !toggled ? 'phase' : 'edit';
+  // Türü programın kendi farkı belirler: evre geçişi atamalı evreler arasında günlerin satırlarını da (birleşim,
+  // danışanın katmanı) getirir; onlar "Evre geçişi"ni "Düzenlendi" yapmasın (`startPhase` de aynı kaydı yazar).
+  const kind: LogKind = currentChanged && structural.length === 1 && !toggled ? 'phase' : 'edit';
   const { lastDayId: _dropped, ...withoutDay } = stored.rotation;
   const { schedule: _schedule, clientSchedule: _clientSchedule, clientTargets: _clientTargets, ...rest } = stored;
 

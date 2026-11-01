@@ -523,6 +523,41 @@ describe('Faz 3: atamalar ve antrenman günleri', () => {
     assert.deepEqual(texts(result.changes), ['Günleri: Sal → yok', 'Günleri: Per → yok', 'Antrenman günleri kaldırıldı (önce Sal, Per)']);
   });
 
+  test('atamalı evreler arasında düzenleyicide evre geçişi: günlerin satırları da olsa "Evre geçişi"', () => {
+    const at = '2026-09-01T00:00:00.000Z';
+    const uyum = evre1([gun('d_aaaaaa', 'Gün A', [single('b_aaaaaa', goblet)], { weekdays: [1, 3] })], { name: 'Uyum' });
+    const guc: ProgramPhase = {
+      id: 'p_guc001',
+      name: 'Güç',
+      days: [gun('d_bbbbbb', 'Alt vücut', [single('b_bbbbbb', press)], { weekdays: [2] }), gun('d_cccccc', 'Üst vücut', [single('b_cccccc', curl)], { weekdays: [4] })],
+    };
+    const stored: ProgramState = {
+      version: 2,
+      phased: true,
+      revision: 5,
+      createdAt: at,
+      updatedAt: at,
+      phases: [uyum, guc],
+      current: { phaseId: uyum.id, startedAt: at },
+      schedule: { weekdays: [1, 3], at },
+      rotation: {},
+      log: [],
+    };
+    const result = applyProgramEdit(stored, { phased: true, currentPhaseId: guc.id, phases: stored.phases }, ctx, NOW);
+    assert.ok(result);
+    assert.deepEqual(texts(result.changes), ["Şu anki evre: 'Uyum' → 'Güç'", 'Antrenman günleri: Pzt, Çar → Sal, Per']);
+    assert.equal(result.program.log[0]?.kind, 'phase');
+    assert.deepEqual(result.program.schedule, { weekdays: [2, 4], at: NOW.toISOString() });
+    // Kayıttaki danışan katmanının düşmesi de evre geçişini "Düzenlendi" yapmaz.
+    const layered = { ...stored, clientSchedule: { weekdays: [5], at } };
+    const dropped = applyProgramEdit(layered, { phased: true, currentPhaseId: guc.id, phases: stored.phases }, ctx, NOW);
+    assert.equal(dropped?.changes.length, 3);
+    assert.equal(dropped?.program.log[0]?.kind, 'phase');
+    // Evre geçişiyle birlikte bir program değişirse "Düzenlendi".
+    const edited = applyProgramEdit(stored, { phased: true, currentPhaseId: guc.id, phases: [{ ...uyum, name: 'Uyum 2' }, guc] }, ctx, NOW);
+    assert.equal(edited?.program.log[0]?.kind, 'edit');
+  });
+
   test('gövdenin program düzeyindeki günleri okunmaz: birleşim atamalardan', () => {
     const stored = old();
     assert.equal(applyProgramEdit(stored, { phased: false, currentPhaseId: PHASE, phases: stored.phases, weekdays: [1, 6] }, ctx, NOW), null);

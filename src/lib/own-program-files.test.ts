@@ -101,6 +101,15 @@ describe('oluşturma', () => {
     assert.equal(result.status, 'invalid');
     assert.equal(gh.commitCount(), 0);
   });
+
+  test('alansız gövdenin günleri açılıştakiyle aynı olsa da (AI taslağı) programlara atanır', async () => {
+    const gh = fakeSessionRepo({ 'program.json': programFile() });
+    assert.equal((await save(gh, createBody({ weekdays: [4, 1], baseWeekdays: [1, 4] }))).status, 'created');
+    const program = gh.get(PATH) as OwnProgram;
+    assert.deepEqual(program.phases[0]?.days.map((day) => day.weekdays), [[1], [4]]);
+    assert.deepEqual(program.schedule, { weekdays: [1, 4], at: NOW.toISOString() });
+    assert.equal((await save(gh, createBody({ weekdays: [4, 1], baseWeekdays: [1, 4] }))).status, 'unchanged');
+  });
 });
 
 describe('kayıt', () => {
@@ -173,15 +182,6 @@ describe('kayıt', () => {
     assert.equal(cleared.phases[0]?.days.some((day) => 'weekdays' in day), false);
     assert.equal(cleared.schedule, undefined);
   });
-});
-
-test('oluşturma: alansız gövdenin günleri açılıştakiyle aynı olsa da (AI taslağı) programlara atanır', async () => {
-  const gh = fakeSessionRepo({ 'program.json': programFile() });
-  assert.equal((await save(gh, createBody({ weekdays: [4, 1], baseWeekdays: [1, 4] }))).status, 'created');
-  const program = gh.get(PATH) as OwnProgram;
-  assert.deepEqual(program.phases[0]?.days.map((day) => day.weekdays), [[1], [4]]);
-  assert.deepEqual(program.schedule, { weekdays: [1, 4], at: NOW.toISOString() });
-  assert.equal((await save(gh, createBody({ weekdays: [4, 1], baseWeekdays: [1, 4] }))).status, 'unchanged');
 });
 
 describe('kısıt: kütüphaneden eklenen yasak', () => {
