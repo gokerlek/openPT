@@ -22,7 +22,7 @@ import { dayBody, entryPlanOf, type WorkoutDay, type WorkoutRow } from './workou
 
 /**
  * Antrenman ekranının telefondaki işleri (tasarım §2.4, §2.5, §4.2) — saf: yeni belge, sıradaki set ve
- * önceden dolu değerleri, "Set bitti", setin düzeltilmesi ve silinmesi, su, bitiş özeti, ekran metinleri.
+ * önceden dolu değerleri, "Set bitti", setin düzeltilmesi, silinmesi ve "Geri al"la geri gelmesi, su, bitiş özeti, ekran metinleri.
  * Belge değişiklikleri `session-merge.ts`'in kanonik biçimine döner; imleç `workout-cursor.ts`'ten.
  *
  * - Hareket kaydı (entry) ilk setle oluşur; set o günkü hedefi (`target`), planın üst ağırlığını ve set
@@ -421,7 +421,7 @@ export function findSet(doc: Pick<SessionDoc, 'entries'>, setId: string): { entr
   return null;
 }
 
-/** "Seti düzelt": değerler değişir, yapıldığı an (`at`) değişmez; birleştirme `editedAt`'le. */
+/** Setin düzeltmesi (alttaki panelin "Kaydet"i): değerler değişir, yapıldığı an (`at`) değişmez; birleştirme `editedAt`'le. */
 export function editSet(doc: SessionDoc, setId: string, values: { kg?: number | undefined; value: number }, stamp: Stamp): SessionDoc {
   const found = findSet(doc, setId);
   if (!found) return doc;
@@ -437,7 +437,7 @@ export function editSet(doc: SessionDoc, setId: string, values: { kg?: number | 
   return normalizeSession({ ...doc, entries });
 }
 
-/** Setin zorluğu ("Seti düzelt", "Kolaydı" kısayolu); `undefined` zorluğu kaldırır (motor `good` sayar). */
+/** Setin zorluğu (setin düzeltmesi, "Kolaydı" kısayolu); `undefined` zorluğu kaldırır (motor `good` sayar). */
 export function setSetEffort(doc: SessionDoc, setId: string, effort: Effort | undefined, stamp: Stamp): SessionDoc {
   const found = findSet(doc, setId);
   if (!found || found.set.type !== 'working' || found.set.effort === effort) return doc;
@@ -447,16 +447,46 @@ export function setSetEffort(doc: SessionDoc, setId: string, effort: Effort | un
   return normalizeSession({ ...doc, entries });
 }
 
-/** "Seti sil" (etkin antrenmanda): kimlik kalıcı iz listesine girer, hareketin durumu yeniden hesaplanır. */
+/** Kaydın durumunu hesaplayan planlı set sayısı (silme ve geri getirme aynı kuralla). */
+function plannedOf(day: WorkoutDay, entry: SessionEntry): number {
+  return entry.rowId ? (day.rows[entry.rowId]?.plan.sets.length ?? 0) : (entry.plannedSets ?? 0);
+}
+
+/**
+ * Seti siler (etkin antrenmanda: ✓'u kaldırmak, sola kaydırıp "Sil", panelin "Seti sil"i): kimlik kalıcı iz listesine girer,
+ * hareketin durumu yeniden hesaplanır.
+ */
 export function deleteSet(day: WorkoutDay, doc: SessionDoc, setId: string, stamp: Stamp): SessionDoc {
   const found = findSet(doc, setId);
   if (!found) return doc;
   const removed = withDeletions(doc, { setIds: [setId] });
-  const planned = found.entry.rowId ? (day.rows[found.entry.rowId]?.plan.sets.length ?? 0) : (found.entry.plannedSets ?? 0);
+  const planned = plannedOf(day, found.entry);
   return normalizeSession({
     ...removed,
     entries: removed.entries.map((entry) => (entry.id === found.entry.id ? withStatus(entry, planned, stamp) : entry)),
   });
+}
+
+/**
+ * Silinen setin toast'taki "Geri al"ı: set aynı kayda **yeni kimlikle** döner (eski kimlik kalıcı iz listesinde, `deleteSet`;
+ * birleşim onu her kopyadan siler). Değerleri, zorluğu, yeri (`setIndex`) ve yapıldığı an (`at`) aynı: "şu an" ve sıralama
+ * bozulmaz; hareketin durumu yeniden hesaplanır. Olmazsa null: kayıt yok ya da hareketi değişti (o arada muadil seçildi), ya
+ * da o yerde yine bir set var (o arada yeniden yapıldı; iki set aynı yeri tutmaz).
+ */
+export function restoreSet(
+  day: WorkoutDay,
+  doc: SessionDoc,
+  removed: { entry: Pick<SessionEntry, 'id' | 'exerciseId'>; set: SessionSet },
+  stamp: Stamp,
+  random?: Random,
+): { doc: SessionDoc; setId: string } | null {
+  const entry = doc.entries.find((item) => item.id === removed.entry.id);
+  const { set } = removed;
+  if (!entry || entry.exerciseId !== removed.entry.exerciseId) return null;
+  if (entry.sets.some((item) => item.type === set.type && item.setIndex === set.setIndex && Boolean(item.extra) === Boolean(set.extra))) return null;
+  const setId = randomId('st', SESSION_ID_LENGTHS.st, takenIds(doc), random);
+  const back: SessionSet = { ...set, id: setId, by: stamp.by };
+  return { doc: putEntry(doc, withStatus({ ...entry, sets: [...entry.sets, back] }, plannedOf(day, entry), stamp)), setId };
 }
 
 /** "Su içtim" (+1) ya da "Geri al" (−1 dokunuşu, kalıcı). */
@@ -598,7 +628,7 @@ export function effortQuestions(day: WorkoutDay, doc: Pick<SessionDoc, 'entries'
   });
 }
 
-/** Cevap hareketin AMRAP olmayan bütün çalışma setlerine yazılır (set başına ayrım "Seti düzelt"te). */
+/** Cevap hareketin AMRAP olmayan bütün çalışma setlerine yazılır (set başına ayrım setin düzeltmesinde). */
 export function setEntryEffort(doc: SessionDoc, entryId: string, effort: Effort, stamp: Stamp): SessionDoc {
   const entry = doc.entries.find((item) => item.id === entryId);
   if (!entry) return doc;
