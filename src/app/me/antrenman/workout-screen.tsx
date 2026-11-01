@@ -31,6 +31,7 @@ import {
   moveUnit,
   moveUnitTo,
   nextUnitAfter,
+  previousUnitBefore,
   restoreAt,
   swapRow,
   undoSkip,
@@ -254,9 +255,10 @@ function addressMarked(): boolean {
  * şu anki hareketin odağıyla açılır (açılış kuralı: liste işaretli girdinin üstünde odak girdisi). Listeden geri tuşu
  * işaretsiz girdiye döner ve "Ara verilsin mi?" sorar (`PauseDialog`: Devam et · Ara ver). Üst çubuk
  * `WorkoutHeader` (⋯ menüsünde "Antrenmanı değiştir" ve "Ara ver"; odakta önce "Muadil seç" ve "Bu hareketi atla").
- * Odakta giriş panelinin altında "Sıradaki: <ad>" (kendiliğinden geçişin açacağı hareket, `nextUnitAfter`); biten
- * hareket açılınca panel "Bu hareket bitti" der (Sıradaki ya da Antrenmanı bitir, Set ekle). Dinlenme ekranı
- * kilitlemez: listeye dönülünce tam panel küçülür, listede alt çubuğun üstündeki şeritte sürer.
+ * Odakta giriş panelinin altında "Sıradaki: <ad>" (kendiliğinden geçişin açacağı hareket, `nextUnitAfter`) ve solunda
+ * "‹ Önceki" (listede önceki açılabilen hareket, `previousUnitBefore`); biten hareket açılınca panel "Bu hareket bitti"
+ * der (Sıradaki ya da Antrenmanı bitir, Set ekle). Dinlenme ekranı kilitlemez: listeye dönülünce tam panel küçülür,
+ * listede alt çubuğun üstündeki şeritte sürer.
  *
  * Atlama ve muadil (§2.6): odakta ⋯ menüsünde tek dokunuşluk "Bu hareketi atla" (atlananlara; 5 sn toast [Geri al])
  * ve "Muadil seç" (kendi geçmişiyle; kısıt notunda da "Değiştir"). Ekran günün etkin planıyla çalışır (`planOf`:
@@ -1049,6 +1051,8 @@ export function WorkoutScreen({
       // Kendiliğinden geçişin açacağı birim (odaktaki hariç; listede "Devam et"inki): "Sıradaki" satırı, biten hareketin
       // birincil düğmesi ve dinlenmenin "Sıradaki"si. Başka birimde bekleyen fazladan set sayılmaz.
       following: nextUnitAfter(plan, doc, shownFocus),
+      // "‹ Önceki": listede gösterilen birimin önündeki açılabilen birim (ilk birimde yok).
+      previous: shownFocus ? previousUnitBefore(plan, doc, shownFocus) : null,
       unitKey,
       row,
       sets: row ? setViews(plan, doc, row.rowId) : [],
@@ -2110,7 +2114,7 @@ export function WorkoutScreen({
     );
   }
 
-  const { plan, doc, focus: shownFocus, list, cursor, next, following: followingKey, unitKey, row, sets, group, warmups, setupNote } = view;
+  const { plan, doc, focus: shownFocus, list, cursor, next, following: followingKey, previous: previousKey, unitKey, row, sets, group, warmups, setupNote } = view;
   // Odak yoksa (ya da geçersizse) ana ekran liste; varsa o hareketin kartı ve giriş paneli.
   const listMode = shownFocus === null;
   // Listeden geri tuşu (9. görev): korkuluk kurulu ve adres işaretsiz girdide → "Ara verilsin mi?". İşaretsiz bir odak
@@ -2136,6 +2140,9 @@ export function WorkoutScreen({
   // Odakta "Sıradaki: <ad>" (giriş panelinin altında; biten harekette birincil düğme): kendiliğinden geçişin açacağı birim.
   const followingItem = followingKey ? list.items.find((item) => item.key === followingKey) : undefined;
   const following = followingItem ? { name: itemName(followingItem), onOpen: () => onOpenUnit(followingItem.key) } : null;
+  // Solunda "‹ Önceki" (listede önceki açılabilen birim): "Sıradaki" gibi açılır, gizlendiği yerler de aynı.
+  const previousItem = previousKey ? list.items.find((item) => item.key === previousKey) : undefined;
+  const previous = previousItem ? { name: itemName(previousItem), onOpen: () => onOpenUnit(previousItem.key) } : null;
   // Odakta ⋯: "Muadil seç" kartın satırında (odaktaki birimin şu anki üyesi; set kaydedildiyse ya da eklenen harekette
   // nedeniyle devre dışı), "Bu hareketi atla" bitmemiş birimde (`dropWithUndo`'nun kuralı). Set kaydedilirken ikisi de
   // devre dışı (işleyiciler o arada bir şey yapmaz; kart birazdan sıradaki sete ya da harekete geçer).
@@ -2312,6 +2319,7 @@ export function WorkoutScreen({
                 onCancelTimer={onCancelTimer}
                 onDropExtra={() => (next ? onDropExtra(next.unitKey) : undefined)}
                 onFinish={() => setFinishOpen(true)}
+                previous={previous}
                 following={following}
                 addSet={!saving && unitKey && addable(unitKey) ? { label: group ? 'Tur ekle' : 'Set ekle', onAdd: () => onAddSet(unitKey) } : null}
               />

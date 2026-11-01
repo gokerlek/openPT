@@ -1,7 +1,7 @@
 'use client';
 
 import { motion } from 'motion/react';
-import { ArrowRight, CaretRight, CheckCircle, FlagCheckered, Play, Stop, WarningCircle } from '@phosphor-icons/react';
+import { ArrowRight, CaretLeft, CaretRight, CheckCircle, FlagCheckered, Play, Stop, WarningCircle } from '@phosphor-icons/react';
 import { Check, Plus } from '@/components/line-icons';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -23,26 +23,54 @@ export type TransitionView = { endsAt: number; total: number };
 /** Sayılan süreli set: saniyede bir değişen hâli. */
 export type TimerView = Pick<SetTimerTick, 'seconds' | 'toMin' | 'fraction' | 'phase'>;
 
-/** Odaktaki hareketten sonra açılacak hareket (kendiliğinden geçişin açacağı, `nextUnitAfter`): adı ve açan iş. */
+/**
+ * Odaktaki hareketin komşusu: sonra açılacak hareket (kendiliğinden geçişin açacağı, `nextUnitAfter`) ya da listede önceki
+ * hareket (`previousUnitBefore`); adı ve açan iş.
+ */
 export type FollowingView = { name: string; onOpen: () => void };
+
+/** "‹ Önceki": kısa (adı yalnız erişilebilir adda), satırın ya da başlığın kenarında. */
+function PreviousButton({ previous, className }: { previous: FollowingView; className?: string }) {
+  return (
+    <Button
+      variant="ghost"
+      aria-label={`Önceki hareket: ${previous.name}`}
+      className={cn('h-11 gap-1 px-2 text-sm font-normal text-muted-foreground', className)}
+      onClick={previous.onOpen}>
+      <CaretLeft data-icon="inline-start" weight="bold" />
+      Önceki
+    </Button>
+  );
+}
 
 /**
  * Giriş panelinin altında tek satır (8. görev, "Sıradaki her an görünür"): "Sıradaki: Goblet Squat ›" dokununca o hareketi
- * açar; sonra hareket kalmadıysa "Son hareket". Ana düğmenin hemen altında tam genişlikte bir şerit değil: çizgiyle
- * ayrılır ve düğme yazısı kadar geniş (ortada), "Set bitti"yi ıskalayan başparmak onu açmasın. `hidden`: süreli set
- * sayarken ve set kaydedilirken satır yok (yanlış dokunuş süren seti bırakırdı); yeri boş kalır, panel kaymaz.
+ * açar; sonra hareket kalmadıysa "Son hareket". Listede önceki hareket varsa solda kısa "‹ Önceki" (biten bir harekete
+ * dönüp setini düzeltmek için), "Sıradaki" sağa yaslanır ve adı kırpılır; ilk harekette yalnız "Sıradaki", ortada. Ana
+ * düğmenin hemen altında tam genişlikte bir şerit değil: çizgiyle ayrılır ve düğmeler yazıları kadar geniş, "Set bitti"yi
+ * ıskalayan başparmak onları açmasın. `hidden`: süreli set sayarken ve set kaydedilirken satır yok (yanlış dokunuş süren
+ * seti bırakırdı); yeri boş kalır, panel kaymaz.
  */
-function NextUp({ following, hidden }: { following: FollowingView | null; hidden: boolean }) {
+function NextUp({ previous, following, hidden }: { previous: FollowingView | null; following: FollowingView | null; hidden: boolean }) {
   return (
-    <div className="mt-1 flex min-h-11 items-center justify-center border-t pt-1">
-      {hidden ? null : following ? (
-        <Button variant="ghost" className="h-11 w-auto max-w-full min-w-0 gap-1 px-3 text-sm font-normal text-muted-foreground" onClick={following.onOpen}>
-          <span className="shrink-0">Sıradaki:</span>
-          <span className="min-w-0 truncate font-medium text-foreground">{following.name}</span>
-          <CaretRight data-icon="inline-end" weight="bold" />
-        </Button>
-      ) : (
-        <p className="text-sm text-muted-foreground">Son hareket</p>
+    <div className={cn('mt-1 flex min-h-11 items-center gap-2 border-t pt-1', previous && !hidden ? 'justify-between' : 'justify-center')}>
+      {hidden ? null : (
+        <>
+          {previous ? <PreviousButton previous={previous} className="-ml-2 shrink-0" /> : null}
+          {following ? (
+            <Button
+              variant="ghost"
+              aria-label={`Sıradaki hareket: ${following.name}`}
+              className={cn('h-11 w-auto max-w-full min-w-0 gap-1 px-3 text-sm font-normal text-muted-foreground', previous && '-mr-2 shrink')}
+              onClick={following.onOpen}>
+              <span className="shrink-0">Sıradaki:</span>
+              <span className="min-w-0 truncate font-medium text-foreground">{following.name}</span>
+              <CaretRight data-icon="inline-end" weight="bold" />
+            </Button>
+          ) : (
+            <p className="text-sm text-muted-foreground">Son hareket</p>
+          )}
+        </>
       )}
     </div>
   );
@@ -90,7 +118,7 @@ function TimerBox({ view, target }: { view: TimerView; target: NextSet['target']
  *
  * - Odaktaki harekette set kalmadı (biten hareket açıldı): "Bu hareket bitti", birincil **Sıradaki: <ad>** (yoksa
  *   **Antrenmanı bitir**), ikincil **Set ekle** (grupta **Tur ekle**; fazladan set). "Sıradaki" satırı burada yok:
- *   birincil düğme odur.
+ *   birincil düğme odur; "‹ Önceki" başlığın sağında.
  *
  * - Süreli set: "Başlat ▶" sayacı kurar (saniye kronometreyle sayılır, alt sınırda tek bip), "Bitir ■"
  *   geçen süreyi yazar; elle stepper ve "Set bitti" de var.
@@ -117,6 +145,7 @@ export function EntryPanel({
   onCancelTimer,
   onDropExtra,
   onFinish,
+  previous,
   following,
   addSet,
 }: {
@@ -141,6 +170,8 @@ export function EntryPanel({
   /** Fazladan sette "Kaldır": istenen fazladan set (grupta tur) bırakılır. */
   onDropExtra: () => void;
   onFinish: () => void;
+  /** Listede önceki hareket ("‹ Önceki"); ilk harekette null. */
+  previous: FollowingView | null;
   /** Sıradaki hareket (kendiliğinden geçişin açacağı); sonra hareket kalmadıysa null. */
   following: FollowingView | null;
   /** Biten harekette "Set ekle" (grupta "Tur ekle"); sınırdaysa ya da kaydedilirken null. */
@@ -149,10 +180,13 @@ export function EntryPanel({
   if (!next || !row) {
     return (
       <div className="flex flex-col gap-2 pt-2">
-        <p className="flex min-h-11 items-center gap-2 text-sm font-medium">
-          <CheckCircle weight="fill" className="size-5 shrink-0 text-primary" aria-hidden />
-          Bu hareket bitti
-        </p>
+        <div className="flex min-h-11 items-center gap-2">
+          <p className="flex min-w-0 flex-1 items-center gap-2 text-sm font-medium">
+            <CheckCircle weight="fill" className="size-5 shrink-0 text-primary" aria-hidden />
+            Bu hareket bitti
+          </p>
+          {previous ? <PreviousButton previous={previous} className="-mr-2 shrink-0" /> : null}
+        </div>
         {following ? (
           <Button size="lg" className="h-14 w-full text-base" onClick={following.onOpen}>
             <span className="min-w-0 truncate">Sıradaki: {following.name}</span>
@@ -309,7 +343,7 @@ export function EntryPanel({
       ) : (
         doneButton
       )}
-      <NextUp following={following} hidden={running || frozen} />
+      <NextUp previous={previous} following={following} hidden={running || frozen} />
     </div>
   );
 }
