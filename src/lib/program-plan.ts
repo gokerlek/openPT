@@ -234,14 +234,17 @@ export function reIdBlocks(blocks: readonly TemplateBlock[], ids: IdSource): Tem
 
 const DAY_LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
 
-/** Sıradaki gün adı: "Gün A"…"Gün Z" içinde kullanılmayan ilk harf (özel adlar sayılmaz). */
+/**
+ * Sıradaki program adı (Faz 3; saklanan "Gün A" adları değişmez): "Program A"…"Program Z" içinde kullanılmayan ilk
+ * harf. Harf eski "Gün X" adıyla da alınmış sayılır ("Gün A", "Gün B" olan programa eklenen "Program C" olur; iki "A"
+ * şeritte ayırt edilemezdi). Özel adlar sayılmaz; harfler bitince "Program n".
+ */
 export function nextDayName(days: readonly { name: string }[]): string {
   const taken = new Set(days.map((day) => nameKey(day.name)));
   for (const letter of DAY_LETTERS) {
-    const name = `Gün ${letter}`;
-    if (!taken.has(nameKey(name))) return name;
+    if (!taken.has(nameKey(`Program ${letter}`)) && !taken.has(nameKey(`Gün ${letter}`))) return `Program ${letter}`;
   }
-  return `Gün ${days.length + 1}`;
+  return `Program ${days.length + 1}`;
 }
 
 /** Sıradaki evre adı: "Evre n", n evre sayısının bir fazlasından başlayıp boş olana kadar. */
@@ -273,7 +276,7 @@ export function blankProgramBody(ids: ProgramIdSource): ProgramBody {
   return {
     phased: false,
     currentPhaseId: phaseId,
-    phases: [{ id: phaseId, name: DEFAULT_PHASE_NAME, days: [{ id: ids('d'), name: 'Gün A', blocks: [] }] }],
+    phases: [{ id: phaseId, name: DEFAULT_PHASE_NAME, days: [{ id: ids('d'), name: nextDayName([]), blocks: [] }] }],
   };
 }
 
@@ -284,7 +287,7 @@ export function blankPhase(phases: Phases, ids: ProgramIdSource): ProgramPhase {
     id: ids('p'),
     name: nextPhaseName(phases),
     ...(daysPerWeek !== undefined ? { daysPerWeek } : {}),
-    days: [{ id: ids('d'), name: 'Gün A', blocks: [] }],
+    days: [{ id: ids('d'), name: nextDayName([]), blocks: [] }],
   };
 }
 
@@ -418,7 +421,7 @@ export function sameProgramBase(a: ProgramBase, b: ProgramBase): boolean {
   return a.revision === b.revision && (a.createdAt === undefined || b.createdAt === undefined || a.createdAt === b.createdAt);
 }
 
-/** Şablondan program: evresiz, şablonla dolu tek gün ("Gün A"). */
+/** Şablondan program: evresiz, şablonla dolu tek program ("Program A"). */
 export function createProgramFromTemplate(template: TemplateOption, ids: ProgramIdSource, now: Date): ProgramState {
   const phaseId = ids('p');
   const day = dayFromTemplate({ days: [] }, template, ids, now);
@@ -561,7 +564,7 @@ function unassigned(day: ProgramDay): ProgramDay {
 
 /**
  * Evreleri kaldırır: bütün günler program sırasıyla şu anki evrenin kimliğinde birleşir
- * (rotasyon ve şu anki evre değişmez); aynı adlı gün "Gün A 2" olur. Süre düşer, ad
+ * (rotasyon ve şu anki evre değişmez); aynı adlı gün "Program A 2" olur. Süre düşer, ad
  * 'Evre 1', sıklık şu anki evreninki. Kimlikler ve günlerin içi aynen kalır. Yalnız şu anki
  * evrenin atamaları kalır: öteki evrelerin günleri onlarla çakışabilir, atamasız gelir.
  */
@@ -615,7 +618,7 @@ export function canMoveDay(phases: Phases, dayId: string, targetPhaseId: string)
   return target.days.length < PROGRAM_LIMITS.daysPerPhase;
 }
 
-/** Evrenin yerine geçilebilecek tek günü: hareketsiz ve kaynaksız (yeni evrenin boş "Gün A"sı). */
+/** Evrenin yerine geçilebilecek tek günü: hareketsiz ve kaynaksız (yeni evrenin boş "Program A"sı). */
 function blankReplaceable(phase: ProgramPhase): ProgramDay | null {
   const [only] = phase.days;
   return phase.days.length === 1 && only && only.blocks.length === 0 && !only.source ? only : null;

@@ -350,12 +350,13 @@ export function weekRotation(input: {
 }
 
 /**
- * Şeritteki kısa ad: "Gün" ile başlayanda ardından gelen her şey ("Gün A" → "A"; uygulamanın kopyaladığı
- * "Gün A 2" → "A 2", ikisi şeritte ayırt edilsin); öteki adlarda ilk sözcük ("Üst vücut" → "Üst").
+ * Şeritteki kısa ad: varsayılan önekle ("Program", Faz 3; saklanan eski adlarda "Gün") başlayanda ardından gelen her
+ * şey ("Program A" → "A", "Gün B" → "B"; uygulamanın kopyaladığı "Program A 2" → "A 2", ikisi şeritte ayırt edilsin);
+ * öteki adlarda ilk sözcük ("Üst vücut" → "Üst", "Programım" → "Programım").
  */
 export function dayShortName(name: string): string {
   const trimmed = name.trim();
-  const rest = trimmed.match(/^gün\s+(.+)$/iu)?.[1];
+  const rest = trimmed.match(/^(?:gün|program)\s+(.+)$/iu)?.[1];
   return rest ?? trimmed.split(/\s+/u)[0] ?? trimmed;
 }
 

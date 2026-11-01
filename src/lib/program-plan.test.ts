@@ -152,11 +152,15 @@ describe('kimlikler ve adlar', () => {
     assert.equal(next('d'), 'd_eeeeee');
   });
 
-  test('sıradaki gün adı: kullanılmayan ilk harf; özel adlar sayılmaz', () => {
-    assert.equal(nextDayName([]), 'Gün A');
-    assert.equal(nextDayName([{ name: 'Gün A' }, { name: 'Gün B' }]), 'Gün C');
-    assert.equal(nextDayName([{ name: 'Gün A' }, { name: 'Gün C' }]), 'Gün B');
-    assert.equal(nextDayName([{ name: 'Bacak' }]), 'Gün A');
+  test('yeni varsayılan "Program A…"; harf eski "Gün X" adıyla da alınmış sayılır', () => {
+    assert.equal(nextDayName([]), 'Program A');
+    assert.equal(nextDayName([{ name: 'Program A' }]), 'Program B');
+    assert.equal(nextDayName([{ name: 'program a' }, { name: 'Alt vücut' }]), 'Program B');
+    assert.equal(nextDayName([{ name: 'Gün A' }, { name: 'Gün B' }]), 'Program C');
+    assert.equal(nextDayName([{ name: 'Gün A' }, { name: 'Program C' }]), 'Program B');
+    assert.equal(nextDayName([{ name: 'Bacak' }]), 'Program A');
+    assert.equal(blankProgramBody(ids()).phases[0]?.days[0]?.name, 'Program A');
+    assert.equal(blankPhase([], ids()).days[0]?.name, 'Program A');
   });
 
   test('sıradaki evre adı', () => {
@@ -192,7 +196,7 @@ describe('kimlikler ve adlar', () => {
 });
 
 describe('şablondan program', () => {
-  test('evresiz, şablonla dolu Gün A, tek "oluşturuldu" kaydı', () => {
+  test('evresiz, şablonla dolu Program A, tek "oluşturuldu" kaydı', () => {
     const created = createProgramFromTemplate(sablon, ids(), simdi);
     const at = simdi.toISOString();
     assert.equal(created.version, 2);
@@ -206,7 +210,7 @@ describe('şablondan program', () => {
     assert.equal(phase?.weeks, undefined);
     assert.equal('weeks' in (phase ?? {}), false);
     assert.equal(phase?.days.length, 1);
-    assert.equal(phase?.days[0]?.name, 'Gün A');
+    assert.equal(phase?.days[0]?.name, 'Program A');
     assert.deepEqual(phase?.days[0]?.source, { templateId: 't_k2m9x4qa', templateName: 'Alt vücut A', at });
     assert.deepEqual(created.current, { phaseId: phase?.id, startedAt: at });
     assert.deepEqual(created.rotation, {});
@@ -294,7 +298,7 @@ describe('şablondan program', () => {
 
   test('şablondan gün sıradaki harfi alır ve kaynağın tarihini yazar', () => {
     const day = dayFromTemplate(uyum, sablon, ids(), simdi);
-    assert.equal(day.name, 'Gün D');
+    assert.equal(day.name, 'Program D');
     assert.deepEqual(day.source, { templateId: sablon.id, templateName: sablon.name, at: simdi.toISOString() });
     assert.equal(day.blocks.length, 2);
   });
@@ -523,7 +527,7 @@ describe('düzenleyici işlemleri', () => {
     const eklendi = addDay([uyum], 'p_uyum01', blankDay(uyum, next), 'd_aaaaaa');
     assert.deepEqual(
       eklendi[0]?.days.map((day) => day.name),
-      ['Gün A', 'Gün D', 'Gün B', 'Gün C'],
+      ['Gün A', 'Program D', 'Gün B', 'Gün C'],
     );
     assert.equal(addPhase(onIki, blankPhase(onIki, next)), onIki);
   });
@@ -633,7 +637,7 @@ describe('düzenleyici işlemleri', () => {
 
     // Düzenleyici ("Gün ekle → Şablondan", başlangıç şablonu `program-form.tsx`): açılıştaki hazırlıkla aynı adım.
     const prepared = dayFromTemplateForEditing(phase, template, programIdSource([phase]), simdi, deviceIds);
-    assert.equal(prepared.day.name, 'Gün B');
+    assert.equal(prepared.day.name, 'Program B');
     assert.deepEqual(prepared.day.source, { templateId: 't_aaaaaaaa', templateName: 'Alt vücut', at: simdi.toISOString() });
     const [gone, kept] = prepared.day.blocks.flatMap((block) => block.rows);
     assert.notEqual(gone?.id, 'r_tmpl01'); // yeni kimlik

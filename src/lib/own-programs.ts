@@ -8,6 +8,7 @@ import {
   PROGRAM_LIMITS,
   appendLog,
   dayFromTemplate,
+  nextDayName,
   sourceNames,
   uniqueName,
   type ClientTargets,
@@ -134,7 +135,7 @@ export type OwnStart =
 
 /**
  * PT'nin günlerinin kopyası (program sırasıyla, seçilenler): hareketler danışanın geçerli hedefleriyle
- * (`withClientTargets`), blok ve satırlar yeni kimlikle; ad hedefte varsa "Gün A 2". Gün `copiedFrom` taşır.
+ * (`withClientTargets`), blok ve satırlar yeni kimlikle; ad hedefte varsa "Program A 2". Gün `copiedFrom` taşır.
  * Kopyalar atamasız gelir (PT'nin hafta günleri kopyalanmaz; danışan formda atar). Hedefteki günlerle birlikte
  * 7'yi aşmaz.
  */
@@ -174,7 +175,7 @@ function reId(blocks: ProgramDay['blocks'], ids: ProgramIdSource): ProgramDay['b
 /** Düzenleyicinin başlangıç gövdesi: tek gizli evre; PT günlerinden hiçbiri seçilmediyse boş gün. */
 export function ownStartBody(start: OwnStart, ids: ProgramIdSource, now: Date): { currentPhaseId: string; phases: OwnProgramPhase[] } {
   const phaseId = ids('p');
-  const blank = (): OwnProgramDay[] => [{ id: ids('d'), name: 'Gün A', blocks: [] }];
+  const blank = (): OwnProgramDay[] => [{ id: ids('d'), name: nextDayName([]), blocks: [] }];
   let days: OwnProgramDay[];
   switch (start.kind) {
     case 'blank':

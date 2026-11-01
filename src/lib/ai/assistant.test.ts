@@ -11,7 +11,7 @@ import { saveOwnProgram } from '../own-program-files.ts';
 import { saveResponse } from '../own-program-routes.ts';
 import { OWN_INDEX_PATH } from '../own-programs.ts';
 import type { OwnIndex } from '../own-program-index.ts';
-import { assistantProgram } from './assistant-engine.ts';
+import { assistantAttention, assistantProgram } from './assistant-engine.ts';
 import { ASSISTANT_PATH, selectionSchema, type AssistantSelection, type AssistantView, type AssistantStore } from './assistant-contract.ts';
 import { getAssistant, requestAssistant, saveAssistantDraft, permissionHash, type AssistantDeps } from './assistant-routes.ts';
 import { interpretGoal } from './assistant-gemini.ts';
@@ -179,6 +179,23 @@ test('editing an AI draft updates saved preview and attention to the actual week
   const own = f.gh.get(OWN_INDEX_PATH) as OwnIndex;
   const edited = { ...own, items: own.items.map(i => ({ ...i, clientEditedAt: '2026-10-06T12:00:00.000Z' })) };
   assert.deepEqual(assistantNotices(f.gh.get(ASSISTANT_PATH), permissionHash(f.deps, f.client()), edited, new Date('2026-10-06T12:00:00.000Z')), []);
+});
+test('taslak programları "Program A…" adlandırır ve her birini kendi gününe atar', () => {
+  const f = setup();
+  const picked = { ...selection, conditions: { ...selection.conditions, weekdays: [5, 1, 3] } };
+  const result = assistantProgram(f.context, picked, 'program', f.deps.id, 'client');
+  assert.ok('body' in result && result.body);
+  const [phase] = result.body.phases;
+  assert.deepEqual(phase?.days.map((day) => [day.name, day.weekdays]), [['Program A', [1]], ['Program B', [3]], ['Program C', [5]]]);
+  assert.deepEqual(result.body.weekdays, [1, 3, 5]);
+  assert.equal(phase?.daysPerWeek, undefined);
+  const workout = assistantProgram(f.context, picked, 'workout', f.deps.id, 'client');
+  assert.ok('body' in workout && workout.body);
+  assert.deepEqual(workout.body.phases[0]?.days.map((day) => [day.name, day.weekdays]), [['Program A', [1]]]);
+  // Program düzeyinde gün yoksa dikkat notları atamalardan: Pzt ve Sal ardışık.
+  const { weekdays: _program, ...bare } = result.body;
+  const consecutive = { ...bare, phases: [{ ...phase!, days: phase!.days.slice(0, 2).map((day, index) => ({ ...day, weekdays: [index + 1] })) }] };
+  assert.ok(assistantAttention(f.context, picked, consecutive).some((text) => /Ardışık/.test(text)));
 });
 test('ordinary fitness goal wording tanımla is not classified as a diagnosis', async () => {
   const f = setup(); f.deps.connection = async () => 'client';

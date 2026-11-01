@@ -292,7 +292,12 @@ describe('hafta planı', () => {
     assert.deepEqual(weekRotation({ days: [], nextDayId: null, today, active: { dayId: 'd_a', date: today } }), { names: [], next: 0, active: null });
   });
 
-  test('kısa ad: "Gün …" → ardından gelen her şey, ötekinde ilk sözcük', () => {
+  test('kısa ad: "Program …" ve "Gün …" → ardından gelen her şey, ötekinde ilk sözcük', () => {
+    assert.equal(dayShortName('Program A'), 'A');
+    assert.equal(dayShortName('Program A 2'), 'A 2');
+    assert.equal(dayShortName('Gün B'), 'B');
+    assert.equal(dayShortName('Alt vücut'), 'Alt');
+    assert.equal(dayShortName('Programım'), 'Programım');
     assert.equal(dayShortName('Gün A'), 'A');
     assert.equal(dayShortName('Gün A 2'), 'A 2');
     assert.equal(dayShortName('  gün  B  '), 'B');

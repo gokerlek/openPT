@@ -3,7 +3,8 @@ import { eligibleExercises, type CoachContext } from './coach-engine.ts';
 import { GOAL_LABELS, type AssistantSelection } from './assistant-contract.ts';
 import { MUSCLE_LABELS } from '../schemas/exercise.ts';
 import { defaultSets, DEFAULT_REST_SECONDS } from '../template-plan.ts';
-import type { ProgramBody } from '../program-plan.ts';
+import { phaseWeekdays } from '../day-assignments.ts';
+import { nextDayName, type ProgramBody } from '../program-plan.ts';
 import { programFormSchema } from '../schemas/program.ts';
 
 /**
@@ -30,9 +31,12 @@ export function assistantProgram(context: CoachContext, selection: AssistantSele
   const phaseId = id('p');
   const used = new Set<string>();
   const chosenMuscles = new Set<string>();
+  const named: { name: string }[] = [];
+  // Faz 3: gün başına bir program, o güne atanmış ("Program A" ilk güne…); atamalı evrede sıklık yazılmaz (sıklık
+  // atanmış gün sayısı). Program düzeyindeki `weekdays` eski gövdeyi bekleyen okuyucularla uyum için kalır.
   const body = {
     phased: false, currentPhaseId: phaseId, weekdays: days,
-    phases: [{ id: phaseId, name: GOAL_LABELS[selection.goal], daysPerWeek: days.length, days: days.map((_, index) => {
+    phases: [{ id: phaseId, name: GOAL_LABELS[selection.goal], days: days.map((weekday) => {
       const selected: typeof pool = [], patterns = new Set<string>();
       // Cover primary regions first; across days prefer movements not selected yet, then practiced ones.
       const candidates = [...ordered].sort((a, b) => Number(used.has(a.id)) - Number(used.has(b.id)));
@@ -45,7 +49,9 @@ export function assistantProgram(context: CoachContext, selection: AssistantSele
         const next = remaining[0]; if (!next) break;
         selected.push(next); used.add(next.id); patterns.add(next.pattern ?? next.primaryMuscles[0] ?? next.id); next.primaryMuscles.forEach(m => chosenMuscles.add(m));
       }
-      return { id: id('d'), name: `${['Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi', 'Pazar'][days[index]! - 1]} · Gün ${index + 1}`, blocks: selected.map(e => ({ id: id('b'), kind: 'single' as const, restSeconds: DEFAULT_REST_SECONDS[e.category], rows: [{ id: id('r'), exerciseId: e.id, sets: defaultSets(e, e.category === 'warmup' || e.category === 'cooldown' ? 1 : 2) }] })) };
+      const name = nextDayName(named);
+      named.push({ name });
+      return { id: id('d'), name, weekdays: [weekday], blocks: selected.map(e => ({ id: id('b'), kind: 'single' as const, restSeconds: DEFAULT_REST_SECONDS[e.category], rows: [{ id: id('r'), exerciseId: e.id, sets: defaultSets(e, e.category === 'warmup' || e.category === 'cooldown' ? 1 : 2) }] })) };
     }) }],
   };
   const parsed = v.safeParse(programFormSchema, body);
@@ -65,7 +71,8 @@ export function assistantAttention(context: CoachContext, selection: AssistantSe
   const ids = new Set(body.phases.flatMap(p => p.days.flatMap(d => d.blocks.flatMap(b => b.rows.map(r => r.exerciseId)))));
   const covered = new Set(context.exercises.filter(e => ids.has(e.id)).flatMap(e => e.primaryMuscles));
   const missing = selection.muscles.filter(m => !covered.has(m));
-  const days = body.weekdays ?? [];
+  // Eski gövdede program düzeyindeki günler; yoksa programların atamaları.
+  const days = body.weekdays ?? phaseWeekdays(body.phases[0]?.days ?? []);
   const short = body.phases.some(p => p.days.some(d => d.blocks.flatMap(b => b.rows).length < 4));
   return [
     ...(!context.existingExerciseIds.length ? ['Önceki hareket geçmişi yok; başlangıç yükünü ve tekniği birlikte belirleyin.'] : []),

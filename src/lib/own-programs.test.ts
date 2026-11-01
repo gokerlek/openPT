@@ -98,7 +98,7 @@ describe('oluşturma', () => {
   test('başlangıç: boş, PT günleri (hiçbiri seçilmediyse boş gün), şablon', () => {
     const ids = programIdSource([], counter());
     const blank = ownStartBody({ kind: 'blank' }, ids, NOW);
-    assert.equal(blank.phases[0]?.days[0]?.name, 'Gün A');
+    assert.equal(blank.phases[0]?.days[0]?.name, 'Program A');
     assert.equal(blank.phases[0]?.id, blank.currentPhaseId);
     const none = ownStartBody({ kind: 'pt', program: parsedProgram(), dayIds: [] }, ids, NOW);
     assert.equal(none.phases[0]?.days[0]?.blocks.length, 0);

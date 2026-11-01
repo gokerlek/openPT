@@ -123,6 +123,16 @@ test('unavailable health or unavailable equipment stops the draft; numbers stay 
   assert.equal(result.body.phases[0]?.days.length, 2);
   assert.ok(result.body.phases[0]?.days.every(d => d.blocks.every(b => b.rows.every(row => row.sets.length === 2))));
 });
+test('taslak programları "Program A…" adlandırır ve her birini kendi gününe atar', () => {
+  const f = setup();
+  const result = draftCoachProgram(f.context, { ...conditions, weekdays: [5, 1, 3] }, [], f.deps.id);
+  assert.ok('body' in result);
+  const [phase] = result.body.phases;
+  assert.deepEqual(phase?.days.map((day) => [day.name, day.weekdays]), [['Program A', [1]], ['Program B', [3]], ['Program C', [5]]]);
+  assert.deepEqual(result.body.weekdays, [1, 3, 5]);
+  // Atamalı evrede sıklık yazılmaz (sıklık atanmış gün sayısı).
+  assert.equal(phase?.daysPerWeek, undefined);
+});
 test('facts are rendered from records; empty measurements are not invented', () => {
   const f = setup();
   assert.match(answerCoach({ intent: 'overview', exerciseIds: [] }, f.context).answer, /3 antrenman/);

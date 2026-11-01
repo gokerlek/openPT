@@ -4,7 +4,7 @@ import { defaultSets, DEFAULT_REST_SECONDS } from '../template-plan.ts';
 import type { PlanExercise } from '../template-plan.ts';
 import { programFormSchema } from '../schemas/program.ts';
 import { cleanWeekdays, hasAssignments } from '../day-assignments.ts';
-import { bodyWithAssignments, type ProgramBody, type ProgramState } from '../program-plan.ts';
+import { bodyWithAssignments, nextDayName, type ProgramBody, type ProgramDay, type ProgramState } from '../program-plan.ts';
 import { evaluateCare, hasCare, type CareInput } from '../constraint-filter.ts';
 import type { CoachConditions, CoachIntent } from './coach-contract.ts';
 
@@ -60,15 +60,17 @@ export function draftCoachProgram(context: CoachContext, conditions: CoachCondit
   }
   if (selected.length < 2) return { error: 'Bu koşullarda yeterli, değerlendirilebilir hareket bulunamadı. Ekipman seçimini kontrol edelim veya PT kütüphaneye uygun bir alternatif eklesin.' };
   const phaseId = id('p');
-  const body: ProgramBody = {
-    phased: false, currentPhaseId: phaseId, weekdays: conditions.weekdays,
-    phases: [{ id: phaseId, name: 'AI taslağı', daysPerWeek: conditions.weekdays.length,
-      days: conditions.weekdays.map((_, index) => ({ id: id('d'), name: `Gün ${index + 1}`, blocks: selected.map(e => ({
-        id: id('b'), kind: 'single' as const, restSeconds: DEFAULT_REST_SECONDS[e.category],
-        rows: [{ id: id('r'), exerciseId: e.id, sets: defaultSets(e, 2) }],
-      })) })),
-    }],
-  };
+  // Faz 3: gün başına bir program, o güne atanmış ("Program A" ilk güne…); atamalı evrede sıklık yazılmaz (sıklık
+  // atanmış gün sayısı). Program düzeyindeki `weekdays` eski gövdeyi bekleyen okuyucularla uyum için kalır.
+  const weekdays = cleanWeekdays(conditions.weekdays);
+  const days: ProgramDay[] = [];
+  for (const weekday of weekdays) {
+    days.push({ id: id('d'), name: nextDayName(days), weekdays: [weekday], blocks: selected.map(e => ({
+      id: id('b'), kind: 'single' as const, restSeconds: DEFAULT_REST_SECONDS[e.category],
+      rows: [{ id: id('r'), exerciseId: e.id, sets: defaultSets(e, 2) }],
+    })) });
+  }
+  const body: ProgramBody = { phased: false, currentPhaseId: phaseId, weekdays, phases: [{ id: phaseId, name: 'AI taslağı', days }] };
   const parsed = v.safeParse(programFormSchema, body);
   if (!parsed.success) return { error: 'Taslak program kurallarını karşılamadı; program değiştirilmedi.' };
   return { body: parsed.output, rationale: [

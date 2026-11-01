@@ -26,16 +26,17 @@ export function scheduleText(input: { weekdays: readonly number[]; daysPerWeek?:
 }
 
 /**
- * Programın satırı: "2 gün · haftada 2 · Sal, Per · son: 22 Eyl"; gün seçilmemişse sıklık ("haftada 3"), o da
- * yoksa "gün seçilmedi". Haftalık sayı seçili gün sayısıdır, yoksa sıklık (`weekTarget` gibi).
+ * Programın satırı: "2 antrenman · haftada 2 · Sal, Per · son: 22 Eyl" (Faz 3: sayım "antrenman", "gün" yalnız hafta
+ * günleri); gün atanmamışsa sıklık ("haftada 3"), o da yoksa "gün atanmadı". Haftalık sayı atanmış gün sayısıdır,
+ * yoksa sıklık (`weekTarget` gibi).
  */
 export function programLine(input: { days: number; weekdays: readonly number[]; daysPerWeek?: number | undefined }, lastDate?: string | undefined): string {
   const weekdays = weekdaysText(input.weekdays);
   const perWeek = weekdays ? normalizeWeekdays(input.weekdays).length : input.daysPerWeek;
   return [
-    `${formatNumber(input.days)} gün`,
+    `${formatNumber(input.days)} antrenman`,
     ...(perWeek !== undefined ? [`haftada ${formatNumber(perWeek)}`] : []),
-    ...(weekdays ? [weekdays] : perWeek === undefined ? ['gün seçilmedi'] : []),
+    ...(weekdays ? [weekdays] : perWeek === undefined ? ['gün atanmadı'] : []),
     ...(lastDate ? [`son: ${formatDayShort(lastDate)}`] : []),
   ].join(' · ');
 }
