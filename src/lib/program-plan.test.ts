@@ -710,6 +710,25 @@ describe('evresiz program ve evreleri kaldırma', () => {
     );
   });
 
+  // PT boş programa gün atadıysa onu bir amaçla kurmuştur: taşınan program onu sessizce silmez.
+  test('hedefin boş ama günlere atanmış programı yerinde kalır', () => {
+    const next = ids();
+    const fresh = blankPhase([uyum], next);
+    const only = fresh.days[0]!;
+    const assigned = { ...fresh, days: [{ ...only, weekdays: [3] }] };
+    const phases = moveDayToPhase([uyum, assigned], 'd_cccccc', fresh.id);
+    assert.deepEqual(
+      phases[1]?.days.map((day) => day.id),
+      [only.id, 'd_cccccc'],
+    );
+    // Boş dizi atama değildir: yine yerine geçilir.
+    const cleared = { ...fresh, days: [{ ...only, weekdays: [] }] };
+    assert.deepEqual(
+      moveDayToPhase([uyum, cleared], 'd_cccccc', fresh.id)[1]?.days.map((day) => day.id),
+      ['d_cccccc'],
+    );
+  });
+
   test('aynı ad hedefte varsa "… 2"; tek gün ya da dolu hedef taşınmaz', () => {
     const target: ProgramPhase = { id: 'p_hedef1', name: 'Hedef', days: [gun('d_ffffff', 'Gün B')] };
     const moved = moveDayToPhase([uyum, target], 'd_bbbbbb', 'p_hedef1');

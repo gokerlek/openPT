@@ -26,7 +26,7 @@ import {
 import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { WeekdayToggle } from '@/components/weekday-toggle';
-import { assignWeekdays, takenWeekdays } from '@/lib/day-assignments';
+import { assignWeekdays, takenWeekdays, weekdaysInput } from '@/lib/day-assignments';
 import { dayBlocksPath } from '@/lib/editor-undo';
 import { formatDate } from '@/lib/format';
 import { exerciseSetWeights } from '@/lib/muscles';
@@ -75,6 +75,7 @@ export function DayEditor({
   footer,
   clientTargets,
   care = null,
+  startedWithDays = false,
 }: {
   form: ProgramFormStore;
   phases: ProgramPhase[];
@@ -95,6 +96,8 @@ export function DayEditor({
   clientTargets?: Readonly<Record<string, RowClientTarget>> | undefined;
   /** Danışanın kısıtları: sheet'te işaret, kartta rozet. */
   care?: EditorCare | null;
+  /** Programın formdaki başlangıç değerinde gün alanı var mı (`weekdaysInput`: boş seçim alanı yazar mı). */
+  startedWithDays?: boolean;
 }) {
   const nameField = useField(form, { path: ['phases', phaseIndex, 'days', dayIndex, 'name'] });
   const path = ['phases', phaseIndex, 'days', dayIndex, 'blocks'] as const;
@@ -119,7 +122,7 @@ export function DayEditor({
     const days = actions.current().find((item) => item.id === phase.id)?.days ?? [];
     const assigned = assignWeekdays(days, day.id, next).find((item) => item.id === day.id);
     if (!assigned) return;
-    setInput(form, { path: ['phases', phaseIndex, 'days', dayIndex, 'weekdays'], input: assigned.weekdays ? [...assigned.weekdays] : undefined });
+    setInput(form, { path: ['phases', phaseIndex, 'days', dayIndex, 'weekdays'], input: weekdaysInput(assigned.weekdays, startedWithDays) });
   };
 
   const copy = () => {
@@ -217,8 +220,8 @@ export function DayEditor({
           </Field>
           <Field className="gap-1.5">
             <FieldLabel id={weekdaysLabelId}>Günleri</FieldLabel>
-            <WeekdayToggle id={weekdaysLabelId} value={weekdays} taken={taken} onChange={assign} className="max-w-sm" />
-            <FieldDescription>
+            <WeekdayToggle id={weekdaysLabelId} describedBy={`${weekdaysLabelId}-hint`} value={weekdays} taken={taken} onChange={assign} className="max-w-sm" />
+            <FieldDescription id={`${weekdaysLabelId}-hint`}>
               {taken.size > 0 ? `Başka programda: ${takenText}` : 'Danışan bu günlerde Bugün ekranında bu programı görür.'}
             </FieldDescription>
           </Field>

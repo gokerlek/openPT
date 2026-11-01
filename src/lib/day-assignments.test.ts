@@ -15,6 +15,7 @@ import {
   weekdayConflicts,
   weekdayNames,
   weekdaysChangeText,
+  weekdaysInput,
   weekdaysText,
 } from './day-assignments.ts';
 
@@ -53,6 +54,14 @@ describe('hafta günü atamaları', () => {
     assert.equal(assignWeekdays(plan, 'd_aaaaaa', [2]), plan);
     assert.deepEqual(assignWeekdays(plan, 'd_aaaaaa', [])[0]?.weekdays, []);
     assert.equal(assignWeekdays(plan, 'd_zzzzzz', [1]), plan);
+  });
+
+  // Gün açıp kapamak formu kirli bırakmasın; başlangıçta günü olan programın boş seçimi "hepsi kaldırıldı" kalsın.
+  test('formun gün alanı: boş seçimde başlangıçta alan yoksa alan yok, varsa boş dizi', () => {
+    assert.deepEqual(weekdaysInput([2, 4], false), [2, 4]);
+    assert.equal(weekdaysInput([], false), undefined);
+    assert.deepEqual(weekdaysInput([], true), []);
+    assert.equal(weekdaysInput(undefined, true), undefined);
   });
 
   test('eski program: sırayla; fazla gün başa sarar; fazla program atanmasız', () => {

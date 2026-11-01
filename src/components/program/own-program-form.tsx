@@ -22,7 +22,7 @@ import { showUndoToast } from '@/components/undo-toast';
 import { UnsavedChangesGuard, type UnsavedChangesGuardHandle } from '@/components/unsaved-changes-guard';
 import { WeekdayToggle } from '@/components/weekday-toggle';
 import type { EditorCare } from '@/lib/constraint-filter';
-import { assignWeekdays, hasAssignments, takenWeekdays, upgradeAssignments } from '@/lib/day-assignments';
+import { assignWeekdays, hasAssignments, takenWeekdays, upgradeAssignments, weekdaysInput } from '@/lib/day-assignments';
 import { dayBlocksPath } from '@/lib/editor-undo';
 import { formatNumber } from '@/lib/format';
 import { copyPtDays, OWN_PROGRAM_LIMITS, ownNameProblem, type OwnProgramDay, type OwnProgramPhase } from '@/lib/own-programs';
@@ -138,6 +138,11 @@ export function OwnProgramForm(props: OwnProgramFormProps) {
     return { input, dropped: prepared.droppedDeviceRowIds, added, firstDayId: (added ? phases[0]?.days.at(-1)?.id : phases[0]?.days[0]?.id) ?? '' };
   });
   const form = useForm({ schema: ownProgramFormSchema, initialInput: start.input });
+  // Açılışta gün alanı olan programlar: boş seçim onlarda boş dizi, ötekilerde alansız (`weekdaysInput`; form kirli kalmasın).
+  const startedWithDays = useMemo(
+    () => new Set(start.input.phases.flatMap((phase) => phase.days.filter((day) => day.weekdays !== undefined).map((day) => day.id))),
+    [start],
+  );
   const phasesInput = useField(form, { path: ['phases'] }).input;
   const phases = useMemo(() => (phasesInput ?? []) as unknown as OwnProgramPhase[], [phasesInput]);
   const nameField = useField(form, { path: ['name'] });
@@ -438,7 +443,13 @@ export function OwnProgramForm(props: OwnProgramFormProps) {
                 </Button>
               );
             })}
-            <Button type="button" variant="outline" className="h-11 shrink-0 border-dashed px-4" disabled={!canAdd} onClick={() => setAddOpen(true)}>
+            <Button
+              type="button"
+              variant="outline"
+              className="h-11 shrink-0 border-dashed px-4"
+              aria-label="Program ekle"
+              disabled={!canAdd}
+              onClick={() => setAddOpen(true)}>
               <Plus data-icon="inline-start" />
               Program
             </Button>
@@ -449,7 +460,7 @@ export function OwnProgramForm(props: OwnProgramFormProps) {
         {selectedDay && phase ? (
           <>
             <DayName form={form} dayIndex={dayIndex} dayId={selectedDay.id} />
-            <DayWeekdays form={form} days={days} dayIndex={dayIndex} day={selectedDay} own={own} current={current} />
+            <DayWeekdays form={form} days={days} dayIndex={dayIndex} day={selectedDay} own={own} current={current} startedWithDays={startedWithDays.has(selectedDay.id)} />
             <BlockEditor
               key={`${selectedDay.id}.${draft.generation}`}
               form={form as unknown as BlocksFormStore}
@@ -662,6 +673,7 @@ function DayWeekdays({
   day,
   own,
   current,
+  startedWithDays,
 }: {
   form: OwnFormStore;
   days: readonly OwnProgramDay[];
@@ -669,6 +681,8 @@ function DayWeekdays({
   day: OwnProgramDay;
   own: boolean;
   current: () => OwnProgramPhase[];
+  /** Programın formdaki başlangıç değerinde gün alanı var mı (`weekdaysInput`). */
+  startedWithDays: boolean;
 }) {
   const taken = takenWeekdays(days, day.id);
   const takenText = [...taken].map(([weekday, name]) => `${WEEKDAY_SHORT[weekday as Weekday]} · ${name}`).join(', ');
@@ -676,13 +690,13 @@ function DayWeekdays({
   const assign = (next: readonly number[]) => {
     const assigned = assignWeekdays(current()[0]?.days ?? [], day.id, next).find((item) => item.id === day.id);
     if (!assigned) return;
-    setInput(form, { path: ['phases', 0, 'days', dayIndex, 'weekdays'], input: assigned.weekdays ? [...assigned.weekdays] : undefined });
+    setInput(form, { path: ['phases', 0, 'days', dayIndex, 'weekdays'], input: weekdaysInput(assigned.weekdays, startedWithDays) });
   };
   return (
     <Field className="gap-1.5">
       <FieldLabel id={labelId}>Günleri</FieldLabel>
-      <WeekdayToggle id={labelId} value={day.weekdays ?? []} taken={taken} onChange={assign} />
-      <FieldDescription>
+      <WeekdayToggle id={labelId} describedBy={`${labelId}-hint`} value={day.weekdays ?? []} taken={taken} onChange={assign} />
+      <FieldDescription id={`${labelId}-hint`}>
         {taken.size > 0
           ? `Başka programda: ${takenText}`
           : own

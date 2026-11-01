@@ -105,6 +105,7 @@ export function DayChips({
         const selected = day.id === selectedDayId;
         const failing = Boolean(getDeepError(form, { path: ['phases', phaseIndex, 'days', dayIndex] })) || missingDayIds.has(day.id);
         const assigned = day.weekdays ?? [];
+        // 375 px'te uzun ad ve günler satıra sığmazsa ad kırpılır (tam adı erişilebilir adda); günler hep görünür.
         return (
           <Button
             key={day.id}
@@ -113,13 +114,13 @@ export function DayChips({
             variant={selected ? 'default' : 'outline'}
             aria-pressed={selected}
             aria-label={`${phased ? `${phase.name} · ` : ''}${day.name}, ${weekdayNamesText(assigned) || 'gün atanmadı'}${failing ? ', hatalı' : ''}`}
-            className={cn(failing && 'ring-2 ring-destructive')}
+            className={cn('max-w-full', failing && 'ring-2 ring-destructive')}
             onClick={() => actions.select(day.id)}>
             {failing ? <WarningCircle data-icon="inline-start" className="text-destructive" /> : null}
-            {day.name}
+            <span className="min-w-0 truncate">{day.name}</span>
             {assigned.length > 0 ? (
               // Seçili (dolu) çipte soluk gri okunmaz: yazının kendi rengi biraz açılır.
-              <span className={cn('text-xs font-normal', selected ? 'opacity-80' : 'text-muted-foreground')} aria-hidden>
+              <span className={cn('shrink-0 text-xs font-normal', selected ? 'opacity-80' : 'text-muted-foreground')} aria-hidden>
                 {weekdaysText(assigned)}
               </span>
             ) : null}

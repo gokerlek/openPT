@@ -618,15 +618,18 @@ export function canMoveDay(phases: Phases, dayId: string, targetPhaseId: string)
   return target.days.length < PROGRAM_LIMITS.daysPerPhase;
 }
 
-/** Evrenin yerine geçilebilecek tek günü: hareketsiz ve kaynaksız (yeni evrenin boş "Program A"sı). */
+/**
+ * Evrenin yerine geçilebilecek tek günü: hareketsiz, kaynaksız ve atamasız (yeni evrenin boş "Program A"sı). Günlere
+ * atanmış boş program PT'nin kurduğu bir yerdir: taşınan program onu sessizce silmez.
+ */
 function blankReplaceable(phase: ProgramPhase): ProgramDay | null {
   const [only] = phase.days;
-  return phase.days.length === 1 && only && only.blocks.length === 0 && !only.source ? only : null;
+  return phase.days.length === 1 && only && only.blocks.length === 0 && !only.source && cleanWeekdays(only.weekdays).length === 0 ? only : null;
 }
 
 /**
  * Günü başka evreye taşır (sona); adı hedefte varsa "… 2" olur. Hedefte yalnız tek,
- * hareketsiz, kaynaksız bir gün varsa (yeni evrenin boş günü) onun yerine geçer. Taşınan
+ * hareketsiz, kaynaksız, atamasız bir gün varsa (yeni evrenin boş günü) onun yerine geçer. Taşınan
  * gün atamasız gelir: atamaları kendi evresindeydi, hedefin günleriyle çakışabilir.
  * Taşınamıyorsa (`canMoveDay`) aynı dizi döner.
  */

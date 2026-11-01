@@ -134,6 +134,17 @@ export function assignWeekdays<D extends AssignableDay>(days: readonly D[], dayI
   return days.map((day) => (day.id === dayId ? { ...day, weekdays: next } : day));
 }
 
+/**
+ * Formun programa yazacağı gün alanı (PT düzenleyicisi, kendi program formu). Boş seçimde, programın formdaki başlangıç
+ * değerinde alan yoksa alan yazılmaz: bir günü açıp kapamak formu açılıştaki hâlinden farklı (kirli) bırakmasın.
+ * Başlangıçta alan varken boş dizi kalır: kayıt "bütün günleri kaldırıldı"yı günleri göndermeyen eski gövdeden
+ * ayırır (`keepStoredAssignments`).
+ */
+export function weekdaysInput(weekdays: readonly number[] | undefined, startedWithField: boolean): number[] | undefined {
+  if (weekdays === undefined) return undefined;
+  return weekdays.length > 0 || startedWithField ? [...weekdays] : undefined;
+}
+
 /** Seçili günlerin programlara sırayla dağılımı: sıra → günler. Gün programdan fazlaysa başa sarar. */
 function slotsInOrder(count: number, selected: readonly number[]): Map<number, number[]> {
   if (count === 0) return new Map();

@@ -17,7 +17,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Field, FieldDescription, FieldLabel } from '@/components/ui/field';
 import { showUndoToast } from '@/components/undo-toast';
 import { UnsavedChangesGuard, type UnsavedChangesGuardHandle } from '@/components/unsaved-changes-guard';
-import { upgradeAssignments } from '@/lib/day-assignments';
+import { cleanWeekdays, upgradeAssignments } from '@/lib/day-assignments';
 import {
   addDay,
   dayFromTemplateForEditing,
@@ -162,6 +162,11 @@ export function ProgramForm({
     };
   });
   const form = useForm({ schema: programFormSchema, initialInput: start.input });
+  // Açılışta gün alanı olan programlar: boş seçim onlarda boş dizi, ötekilerde alansız (`weekdaysInput`; form kirli kalmasın).
+  const startedWithDays = useMemo(
+    () => new Set(start.input.phases.flatMap((phase) => phase.days.filter((day) => day.weekdays !== undefined).map((day) => day.id))),
+    [start],
+  );
   const phases = (useField(form, { path: ['phases'] }).input ?? []) as unknown as ProgramPhase[];
   const currentPhaseId = useField(form, { path: ['currentPhaseId'] }).input ?? '';
   const phased = useField(form, { path: ['phased'] }).input ?? false;
@@ -323,9 +328,11 @@ export function ProgramForm({
       const day = all.flatMap((phase) => phase.days).find((item) => item.id === dayId);
       const target = all.find((phase) => phase.id === phaseId);
       if (!day || !target) return;
+      // Atama evreye bağlı: taşınan program atamasız gelir (`moveDayToPhase`); günleri varsa söylenir.
+      const hadDays = cleanWeekdays(day.weekdays).length > 0;
       update((phasesNow) => moveDayToPhase(phasesNow, dayId, phaseId), {
         select: dayId,
-        announce: `${day.name} '${target.name}' evresine taşındı`,
+        announce: `${day.name} '${target.name}' evresine taşındı${hadDays ? '; günleri kaldırıldı' : ''}`,
       });
     },
     openAddDay: (phaseId) => {
@@ -625,6 +632,7 @@ export function ProgramForm({
             footer={formEnd}
             clientTargets={clientTargets}
             care={care}
+            startedWithDays={startedWithDays.has(selectedDay.id)}
           />
         ) : (
           <>

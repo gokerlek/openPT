@@ -83,8 +83,9 @@ export function PhaseLoad({
   const weeklyCaption = byAssignment
     ? `Planlanan haftalık yük atanmış günlere göre (${weekdaysText(assigned)}).`
     : `Planlanan haftalık yük: haftada ${formatNumber(daysPerWeek ?? 0)} gün, ${formatNumber(dayCount)} antrenman → her antrenman ortalama haftada ${formatNumber(factor ?? 0)} kez.`;
-  // Haftalık görünümün yolu: programlara gün atamak ya da (atamasız evrede) haftalık sıklık.
-  const weeklyHint = "programlara gün ata ya da 'haftada kaç gün' ekle";
+  // Haftalık görünümün yolu: programlara gün atamak ya da (atamasız evrede) haftalık sıklık. PT sayfalarında; PT metni
+  // kişisiz (ürün beyaz etiket).
+  const weeklyHint = "programlara gün atanmalı ya da 'haftada kaç gün' seçilmeli";
   const doneTab = done ? (
     <TabsContent value="done" className="flex flex-col gap-4 pt-3">
       {done.sessions > 0 ? (

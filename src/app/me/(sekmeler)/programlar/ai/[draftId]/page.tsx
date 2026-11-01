@@ -23,7 +23,7 @@ export default async function AIDraftPage({ params }: { params: Promise<{ draftI
   // Gün başına atamadan önceki taslak (program düzeyinde `weekdays`) okunan eski dosya gibi atanır: form o alanı okumaz.
   const body = bodyWithAssignments(draft.body);
   return <main className="flex flex-col gap-6"><ClientHeader client={client} appName={config.appName} title="AI taslağını düzenle" back={{ href: '/me/programlar', label: 'Program' }} />
-    <p className="rounded-xl border bg-muted/30 p-4 text-sm leading-relaxed">Hareketleri, setleri ve günleri kontrol et. Kaydedince kendi programın olarak PT’ye görünür; PT gerektiğinde düzenleyebilir. Mevcut PT programın değişmez. Hedef veya kayıtların değiştiyse yeni taslak hazırla.</p>
+    <p className="rounded-xl border bg-muted/30 p-4 text-sm leading-relaxed">Programları, günlerini, hareketleri ve setleri kontrol et. Kaydedince kendi programın olarak PT’ye görünür; PT gerektiğinde düzenleyebilir. Mevcut PT programın değişmez. Hedef veya kayıtların değiştiyse yeni taslak hazırla.</p>
     <OwnProgramForm mode="own" clientId={client.id} programId={draft.programId} draftIdentity={draft.id} creating initial={{ name: draft.name, currentPhaseId: body.currentPhaseId, phases: body.phases }} base={null} exercises={library.exercises} devices={library.devices} templates={templates} otherNames={overview.state.index.items.map(i => i.name)} timeZone={config.timeZone} saveUrl={`/api/me/coach/drafts/${draft.id}`} doneHref="/me/programlar/{id}" />
   </main>;
 }

@@ -11,14 +11,16 @@ import { normalizeWeekdays, WEEKDAY_NAMES, WEEKDAY_SHORT, WEEKDAYS, type Weekday
  * sıralı.
  *
  * `taken`: evrede başka programa atanmış günler → o programın adı. Bir gün evrede en çok bir programa atanır; alınmış
- * gün kapalıdır, nedeni erişilebilir adında ve `title`'da ("Perşembe, Üst vücut programında"). Görünen satırı
- * ("Başka programda: …") çağıran yazar: kapalı düğme odak almaz, neden yalnız orada kalmasın.
+ * gün kapalıdır, nedeni erişilebilir adında ("Perşembe, Üst vücut programında"). Görünen satırı ("Başka programda: …")
+ * çağıran yazar ve `describedBy` ile gruba bağlar: kapalı düğme odak almaz, ekran okuyucu nedeni grupta duysun.
+ * `title` yok: kapalı düğmede imleç olayı yok (`pointer-events-none`), hiç görünmezdi.
  */
 export function WeekdayToggle({
   value,
   onChange,
   label,
   id,
+  describedBy,
   disabled,
   invalid,
   taken,
@@ -30,6 +32,8 @@ export function WeekdayToggle({
   label?: string;
   /** Görünen etiketin `id`'si (`aria-labelledby`). */
   id?: string;
+  /** Altındaki açıklamanın `id`'si (`aria-describedby`): alınmış günlerin nedeni ("Başka programda: …"). */
+  describedBy?: string;
   disabled?: boolean;
   invalid?: boolean;
   /** Başka programa atanmış günler → sahibinin adı (`takenWeekdays`); bunlar seçilemez. */
@@ -43,6 +47,7 @@ export function WeekdayToggle({
       spacing={1}
       disabled={disabled}
       {...(id ? { 'aria-labelledby': id } : { 'aria-label': label ?? 'Antrenman günleri' })}
+      aria-describedby={describedBy}
       aria-invalid={invalid || undefined}
       value={normalizeWeekdays(value).map(String)}
       onValueChange={(next) => onChange(normalizeWeekdays(next.map(Number)))}
@@ -56,7 +61,6 @@ export function WeekdayToggle({
             value={String(day)}
             disabled={owner !== undefined}
             aria-label={name}
-            title={owner === undefined ? undefined : name}
             className="h-11 min-w-0 px-0 text-sm">
             {WEEKDAY_SHORT[day]}
           </ToggleGroupItem>
