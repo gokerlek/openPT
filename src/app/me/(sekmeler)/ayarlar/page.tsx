@@ -7,20 +7,21 @@ import { readAppConfig } from '@/lib/config';
 import { currentClient } from '@/lib/guards';
 import { activeItem } from '@/lib/own-program-index';
 import { readOwnOverview, readOwnProgramOf } from '@/lib/own-programs-store';
+import { currentPhaseOf } from '@/lib/program-plan';
 import { readClientSession } from '@/lib/session';
-import { scheduleOf, type PlanProgram } from '@/lib/workout-plan';
+import type { PlanProgram } from '@/lib/workout-plan';
 import { ClientHeader } from '../../client-header';
 import { ConsentCard } from '../../consent-card';
 import { PasswordCard } from '../../password-card';
-import { TrainingDaysCard } from '../../schedule-sheet';
+import { TrainingDaysCard } from '../../training-days-card';
 
 export const metadata: Metadata = { title: 'Ayarlar' };
 
 /**
  * Danışanın ayarları (avatar menüsünden; dock'ta yok, dock'ta etkin sekme de yok): antrenman günleri
- * (program varsa; Bugün'deki "Günlerini değiştir"le aynı sheet, tasarım §2.11), sağlık takibi onayı
- * (ver / geri çek) ve şifre. Ana sayfada yalnız karar bekleyenler durur (onay sorusu, şifresi olmayana
- * şifre kartı); verilmiş kararlar burada.
+ * (program varsa; şu anki evrenin atamaları salt okunur, Faz 3: günleri PT belirler, kendi programda "Düzenle"),
+ * sağlık takibi onayı (ver / geri çek) ve şifre. Ana sayfada yalnız karar bekleyenler durur (onay sorusu, şifresi
+ * olmayana şifre kartı); verilmiş kararlar burada.
  * Sayfa yetkiyi kendisi denetler (SPEC §5): kapatılmış erişim, arşiv ya da eski kuşak giremez.
  */
 export default async function ClientSettingsPage() {
@@ -33,7 +34,6 @@ export default async function ClientSettingsPage() {
   const selected = activeItem(overview?.state.index);
   const own = selected ? await readOwnProgramOf(client.id, selected.id).catch(() => null) : null;
   const program: PlanProgram | null = own?.status === 'ok' ? own.program : selected ? null : (overview?.pt?.program ?? null);
-  const activeAt = overview?.state.index.active?.at;
 
   return (
     <main className="flex flex-col gap-6">
@@ -41,7 +41,7 @@ export default async function ClientSettingsPage() {
 
       {program ? (
         <TrainingDaysCard
-          schedule={scheduleOf(program, { client, timeZone: config.timeZone, activeAt, now: new Date() })}
+          days={currentPhaseOf(program)?.phase.days ?? []}
           own={own?.status === 'ok' ? { programId: own.program.id, name: own.program.name } : null}
         />
       ) : null}

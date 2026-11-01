@@ -9,199 +9,141 @@ import { Field, FieldContent, FieldDescription, FieldLabel, FieldTitle } from '@
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Drawer, DrawerContent, DrawerDescription, DrawerFooter, DrawerHeader, DrawerTitle } from '@/components/ui/drawer';
 import { Skeleton } from '@/components/ui/skeleton';
-import { formatDayShort, todayIn } from '@/lib/format';
+import { dayOnWeekday, weekdayNames } from '@/lib/day-assignments';
+import { formatDayShort } from '@/lib/format';
 import {
+  assignedWeek,
   dayShortName,
-  relativeDayText,
+  isoWeekdayOf,
   WEEKDAY_NAMES,
   WEEKDAY_SHORT,
-  weekPlan,
-  weekRotation,
-  weekStrip,
-  weekTarget,
-  type ActiveDay,
-  type WeekPlanDay,
-  type WeekPlanState,
+  weekdayNamesText,
+  type WeekDay,
+  type WeekDayState,
 } from '@/lib/training-days';
 import { cn } from '@/lib/utils';
-import type { WorkoutSchedule } from '@/lib/workout-plan';
 import type { WorkoutResponse } from '@/lib/workout-routes';
-import { ScheduleSheet } from './schedule-sheet';
 import { useWorkoutOverview, useWorkoutProgram, WORKOUT_OVERVIEW_KEY } from './workout-overview';
 import { clearWorkoutCache, readWorkoutCache } from './workout-storage';
 
 /**
- * Bugün kartının antrenman günleri parçaları (tasarım §2.1, §2.3, §2.11) — istemcide, `GET /api/me/workout`
- * yanıtından (`useWorkoutOverview`); kartın başlığı ("Çarşamba · Gün B") sunucuda çizilir (`program-card.tsx`):
- * - 7 günlük şerit (pazartesi başlar): seçili günler halkalı, yapılanlar dolu, kaçanlar ve pencereden önceki
- *   geçmiş seçili günler soluk halkalı, sıradaki kalın halkalı; halkanın altında günün antrenmanı (yapılanda
- *   oturumun adı, ilerisinde dönüşten tahmin, `weekPlan`; bugün başlamış yarım antrenman varsa onun gününden),
- *   kaçanda "kaçtı"; altında "Sırada: yarın · Gün B" (kart başlığı zaten sıradaki günü söylüyorsa gizlenir,
- *   `showNext`) ve "Günlerini değiştir"; program kartında ve yarım antrenmanın "Devam et" kartında;
- * - "Değiştir" (başka antrenman): antrenman sheet'i, antrenörüne bildirilir (kendi programda değil);
+ * Bugün kartının antrenman günleri parçaları (tasarım §2.1, §2.3; Faz 3: güne atanmış programlar) — istemcide,
+ * `GET /api/me/workout` yanıtından (`useWorkoutOverview`); kartın başlığı ("Salı · Alt vücut") sunucuda çizilir
+ * (`program-card.tsx`):
+ * - 7 günlük şerit (pazartesi başlar, `assignedWeek`): yapılanlar dolu (altında oturumun adı), atanmış günler
+ *   halkalı (altında o güne atanmış program; bugünün planlısı kalın), geçen atanmış gün antrenmansızsa soluk halka ve
+ *   "kaçtı", öteki günler dinlenme. Dönüş tahmini, "Sırada" satırı ve "Günlerini değiştir" yok: günleri yalnız PT
+ *   belirler (kendi programda programın formu), her günün adı o güne atanmış program;
+ * - "Değiştir" (başka antrenman): bu evrenin programları; bugüne atanmış program varken başkası seçilirse antrenörüne
+ *   bildirilir (kendi programda değil);
  * - telefondaki gün planının tazeliği: sunucuda taze okunan programın damgası saklanan planınkinden
  *   farklıysa (PT programı değiştirdi) saklanan plan atılır, "Antrenmana başla" güncel planı açar.
  */
 
-
-const STATE_TEXT: Record<WeekPlanState, string> = { done: 'yapıldı', missed: 'kaçtı', next: 'sırada', planned: 'antrenman günü', rest: 'dinlenme' };
+const STATE_TEXT: Record<WeekDayState, string> = { done: 'yapıldı', missed: 'kaçtı', planned: 'antrenman günü', rest: 'dinlenme' };
 
 /**
- * Halkanın altındaki kelime ve ekran okuyucu satırındaki karşılığı. Seçili günün "dinlenme" durumu: geçmişteyse
- * pencereden (`since`) önceki, yapılmamış gün (soluk halka) "antrenman günü, geçti"; ilerideyse (programsız şerit)
- * "antrenman günü".
+ * Halkanın altındaki kelime ve ekran okuyucu satırındaki karşılığı. Seçili günün "dinlenme" durumu yalnız geçmişte,
+ * pencereden (`since`) önceki yapılmamış atanmış günde olur (soluk halka): "antrenman günü, geçti".
  */
-function stateText(day: WeekPlanDay, today: string): string {
-  if (day.state === 'rest' && day.selected) return day.date < today ? 'antrenman günü, geçti' : 'antrenman günü';
+function stateText(day: WeekDay, today: string): string {
+  if (day.state === 'rest' && day.selected && day.date < today) return 'antrenman günü, geçti';
   return STATE_TEXT[day.state];
 }
 
-/** Ekran okuyucu: "Çarşamba, bugün, sırada: Gün B", "Pazartesi, yapıldı: Gün A", "Salı, dinlenme", "Pazartesi, antrenman günü, geçti". */
-function dayLabel(day: WeekPlanDay, today: string): string {
+/** Ekran okuyucu: "Salı, bugün, antrenman günü: Alt vücut", "Pazartesi, yapıldı: Üst vücut", "Salı, kaçtı: Alt vücut", "Çarşamba, dinlenme". */
+function dayLabel(day: WeekDay, today: string): string {
   const state = stateText(day, today);
   return [WEEKDAY_NAMES[day.weekday], day.today ? 'bugün' : null, day.label ? `${state}: ${day.label}` : state].filter(Boolean).join(', ');
 }
 
 /**
- * Şeridin günleri: program varsa `weekPlan` (dönüş `weekRotation`'dan: `nextDayId`'nin sırası, bulunamazsa ilk
- * gün, "Başka gün seç" gibi; bugün başlamış yarım antrenman varsa onun günü, dönüş yalnız bitişte ilerler; bitişte
- * "keep" seçilmişse yine `nextDayId`); yoksa
- * bugünkü şerit (sıradaki işaretlenmez, ad yok). Program kurulmadan, günler değişmeden ya da danışan katılmadan
- * önceki günler kaçmış sayılmaz (Genel bakış'la aynı kural).
- */
-function planOf(data: WorkoutResponse, schedule: WorkoutSchedule, active: ActiveDay | null): WeekPlanDay[] {
-  const base = { today: data.today, weekdays: schedule.weekdays, since: schedule.since };
-  if (!data.program) {
-    return weekStrip({ ...base, doneDays: data.week.days }).map((day): WeekPlanDay => ({ ...day, state: day.done ? 'done' : day.missed ? 'missed' : 'rest', label: null }));
-  }
-  const rotation = weekRotation({ days: data.program.days, nextDayId: data.program.nextDayId, today: data.today, active });
-  return weekPlan({ ...base, doneDays: data.week.days, sessions: data.week.sessions ?? [], rotation });
-}
-
-/**
- * Yedi günlük şerit, sıradaki gün ve "Günlerini değiştir".
- *
- * `showNext` (varsayılan açık): şeridin altındaki "Sırada: Çarşamba · Gün B" satırı. Kartın başlığı sıradaki günü
- * zaten söylüyorsa (program kartı, "Çarşamba · Gün B") çağıran `showNext={false}` verir; satır tekrarlanmaz.
- *
- * `activeDay`: yarım antrenman varsa ("Devam et" kartı) onun günü, tarihi ve bitişteki dönüşü (`weekRotation`); bugün
- * başladıysa şerit o günden sürer. Bugün de şeridin sıradaki günüyse (açık antrenman günü) "Sırada" satırı gizlenir:
- * kartın başlığı ("Yarım kalan antrenman · Gün B") onu zaten söylüyor. Dinlenme gününde satır kalır (sıradaki gün
- * ileride). Bunu şerit karar verir: bugünün sıradaki gün olup olmadığını yalnız `weekPlan` bilir.
+ * Yedi günlük şerit (Faz 3). Günler geçerli günlerden (`schedule.weekdays`: şu anki evrenin atamaları, atamasız
+ * eski programda PT'nin günleri), adlar atamalardan (`weekdayNames`). Program kurulmadan, günler değişmeden ya da
+ * danışan katılmadan önceki günler kaçmış sayılmaz (`schedule.since`, Genel bakış'la aynı kural).
  *
  * Çevrimdışıyken (sorgu duraklatıldı, `networkMode: 'online'`) yanıt yoksa şerit çizilmez: yer tutucu sonsuza dek
  * dönmez.
  */
-export function WeekStrip({ clientId, showNext = true, activeDay = null }: { clientId: string; showNext?: boolean; activeDay?: ActiveDay | null }) {
+export function WeekStrip({ clientId }: { clientId: string }) {
   const { data, isPending, fetchStatus } = useWorkoutOverview(clientId);
-  const queryClient = useQueryClient();
-  const router = useRouter();
-  const program = useWorkoutProgram();
-  const [open, setOpen] = useState(false);
-  // Gerçek şeridin yüksekliği: sütun 81 px (py-1.5 + text-xs 16 + gap 6 + halka 28 + gap 6 + ad 13), gap-1 ile
-  // "Sırada" satırı (text-sm 20) ve h-11 düğme: 153 px; satırsız 129 px.
   if (isPending && fetchStatus === 'paused') return null;
-  // Bugün başlamış yarım antrenmanın günü bugünse "Sırada" satırı gizlenir (aşağıda): iskelet de kısa.
-  const lineHidden = !showNext || activeDay?.date === todayIn(Intl.DateTimeFormat().resolvedOptions().timeZone);
-  if (isPending) return <Skeleton className={cn('w-full rounded-lg', lineHidden ? 'h-[8.0625rem]' : 'h-[9.5625rem]')} />;
+  // İskelet gerçek şeritle aynı yükseklikte: sütun 81 px (py-1.5 12 + text-xs 16 + gap 6 + halka 28 + gap 6 + ad 13);
+  // altında satır ya da düğme yok.
+  if (isPending) return <Skeleton className="h-[5.0625rem] w-full rounded-lg" />;
   if (!data?.schedule) return null;
   const schedule = data.schedule;
-  const days = planOf(data, schedule, activeDay);
-  const upcoming = days.find((day) => day.state === 'next');
-  const nextLine = showNext && upcoming && !(upcoming.today && activeDay?.date === data.today) ? upcoming : null;
-
-  const saved = (next: WorkoutSchedule) => {
-    // Hemen görünsün; sonra sunucudan taze (plan damgası değişti, telefondaki plan da yenilenir).
-    queryClient.setQueryData<WorkoutResponse>([...WORKOUT_OVERVIEW_KEY, program ?? 'default'], (old) =>
-      old ? { ...old, schedule: next, week: { ...old.week, target: weekTarget(next.weekdays, next.daysPerWeek ?? undefined) } } : old,
-    );
-    clearWorkoutCache(clientId);
-    void queryClient.invalidateQueries({ queryKey: WORKOUT_OVERVIEW_KEY });
-    // Kartın başlığı ve dinlenme satırı sunucuda çizilir (`program-card.tsx`): onlar da yeni günlerle gelsin.
-    router.refresh();
-  };
+  const days = assignedWeek({
+    today: data.today,
+    weekdays: schedule.weekdays,
+    names: weekdayNames(data.program?.days ?? []),
+    doneDays: data.week.days,
+    sessions: data.week.sessions ?? [],
+    since: schedule.since,
+  });
 
   return (
-    <div className="flex flex-col gap-1">
-      <ol className="grid grid-cols-7 gap-1" aria-label="Bu haftanın günleri">
-        {days.map((day) => {
-          const isNext = day.state === 'next';
-          // Seçili, geçmiş ve yapılmamış: kaçan ya da pencereden (`since`) önceki gün; ikisi de soluk halka (gelecekteki
-          // planlı gün gibi görünmez), yalnız kaçan "kaçtı" der.
-          const faded = day.selected && !day.done && day.date < data.today;
-          const short = day.state === 'missed' ? stateText(day, data.today) : day.label ? dayShortName(day.label) : null;
-          return (
-            <li key={day.date} className={cn('flex min-w-0 flex-col items-center gap-1.5 rounded-lg py-1.5', day.today && 'bg-muted')}>
-              <span className="sr-only">{dayLabel(day, data.today)}</span>
-              <span aria-hidden className={cn('text-xs', day.today || isNext ? 'font-semibold text-foreground' : 'text-muted-foreground')}>
-                {WEEKDAY_SHORT[day.weekday]}
-              </span>
-              <span
-                aria-hidden
-                className={cn(
-                  'flex size-7 items-center justify-center rounded-full',
-                  day.done && 'bg-primary text-primary-foreground',
-                  isNext && 'ring-4 ring-primary-text ring-inset',
-                  !day.done && !isNext && day.selected && !faded && 'ring-2 ring-primary-text ring-inset',
-                  faded && 'opacity-40 ring-2 ring-muted-foreground ring-inset',
-                )}>
-                {day.done ? <Check className="size-3.5" /> : !day.selected ? <span className="size-1.5 rounded-full bg-muted-foreground/40" /> : null}
-              </span>
-              {/* Sütun ~41 px (375 px'te 7 sütun): uzun ad kesilir; py-px Türkçe işaretleri (ç, Ü) kırpılmasın diye. Boşken de yer tutar.
-                  "kaçtı" soldurulmaz: düz muted-foreground AA kontrastı geçer, solukluk halkada. */}
-              <span
-                aria-hidden
-                className={cn(
-                  'block w-full truncate px-0.5 py-px text-center text-[0.6875rem] leading-none',
-                  isNext ? 'font-semibold text-foreground' : 'text-muted-foreground',
-                )}>
-                {short ?? '\u00a0'}
-              </span>
-            </li>
-          );
-        })}
-      </ol>
-      {nextLine ? (
-        <p className="text-center text-sm break-words text-muted-foreground">
-          Sırada: {nextLine.today ? 'bugün' : relativeDayText(nextLine.date, data.today)}
-          {nextLine.label ? (
-            <>
-              {' · '}
-              <span className="font-medium text-foreground">{nextLine.label}</span>
-            </>
-          ) : null}
-        </p>
-      ) : null}
-      <Button variant="ghost" className="h-11 self-center px-3 text-muted-foreground" onClick={() => setOpen(true)}>
-        {schedule.weekdays.length > 0 ? 'Günlerini değiştir' : 'Antrenman günlerini seç'}
-      </Button>
-      <ScheduleSheet
-        open={open}
-        onOpenChange={setOpen}
-        schedule={schedule}
-        own={data.program?.source === 'own' && data.program.id ? { programId: data.program.id, name: data.program.name ?? '' } : null}
-        onSaved={saved}
-      />
-    </div>
+    <ol className="grid grid-cols-7 gap-1" aria-label="Bu haftanın günleri">
+      {days.map((day) => {
+        // Bugünün planlısı kalın halkalı ve kalın adlı: kartın başlığındaki programla aynı gün.
+        const strong = day.state === 'planned' && day.today;
+        // Seçili, geçmiş ve yapılmamış: kaçan ya da pencereden (`since`) önceki gün; ikisi de soluk halka (gelecekteki
+        // planlı gün gibi görünmez), yalnız kaçan "kaçtı" der.
+        const faded = day.selected && !day.done && day.date < data.today;
+        const short = day.state === 'missed' ? stateText(day, data.today) : day.label ? dayShortName(day.label) : null;
+        return (
+          <li key={day.date} className={cn('flex min-w-0 flex-col items-center gap-1.5 rounded-lg py-1.5', day.today && 'bg-muted')}>
+            <span className="sr-only">{dayLabel(day, data.today)}</span>
+            <span aria-hidden className={cn('text-xs', day.today ? 'font-semibold text-foreground' : 'text-muted-foreground')}>
+              {WEEKDAY_SHORT[day.weekday]}
+            </span>
+            <span
+              aria-hidden
+              className={cn(
+                'flex size-7 items-center justify-center rounded-full',
+                day.done && 'bg-primary text-primary-foreground',
+                strong && 'ring-4 ring-primary-text ring-inset',
+                !day.done && !strong && day.selected && !faded && 'ring-2 ring-primary-text ring-inset',
+                faded && 'opacity-40 ring-2 ring-muted-foreground ring-inset',
+              )}>
+              {day.done ? <Check className="size-3.5" /> : !day.selected ? <span className="size-1.5 rounded-full bg-muted-foreground/40" /> : null}
+            </span>
+            {/* Sütun ~41 px (375 px'te 7 sütun): uzun ad kesilir; py-px Türkçe işaretleri (ç, Ü) kırpılmasın diye. Boşken de yer tutar.
+                "kaçtı" soldurulmaz: düz muted-foreground AA kontrastı geçer, solukluk halkada. */}
+            <span
+              aria-hidden
+              className={cn(
+                'block w-full truncate px-0.5 py-px text-center text-[0.6875rem] leading-none',
+                strong ? 'font-semibold text-foreground' : 'text-muted-foreground',
+              )}>
+              {short ?? ' '}
+            </span>
+          </li>
+        );
+      })}
+    </ol>
   );
 }
 
 /**
- * "Değiştir" (§2.3; eski adı "Başka gün seç"): bu evrenin antrenmanları, sıradaki işaretli, ötekilerde son
- * yapıldığı gün. Seçilen antrenman başlar; sıradaki değilse antrenörüne bildirilir (`other_day`). Düğmede "gün"
- * yok: kullanıcının sözü, gün değil antrenman değişir (Faz 3'te antrenmanlar günlere atanır). Evrede tek antrenman
- * varsa görünmez.
+ * "Değiştir" (§2.3; Faz 3): bu evrenin programları, bugüne atanmış olan "bugün", ötekiler atandıkları günlerle;
+ * hepsinde son yapıldığı gün. Seçilen program başlar (her zaman `?day=`); PT programında bugüne atanmış program
+ * varken başkası seçilirse antrenörüne bildirilir (`other_day`, sunucu bitişte seansın tarihinden karar verir).
+ * Düğmede "gün" yok: kullanıcının sözü, gün değil antrenman değişir. Evrede tek program varsa görünmez.
  */
-export function OtherDayButton({ clientId }: { clientId: string }) {
+export function OtherProgramButton({ clientId }: { clientId: string }) {
   const router = useRouter();
   const { data } = useWorkoutOverview(clientId);
   const program = useWorkoutProgram();
   const [open, setOpen] = useState(false);
-  const days = data?.program?.days ?? [];
-  const next = data?.program?.nextDayId ?? null;
   const [picked, setPicked] = useState<string | null>(null);
-  if (days.length < 2) return null;
-  const selected = picked ?? next ?? days[0]?.id ?? '';
+  const days = data?.program?.days ?? [];
+  if (!data || days.length < 2) return null;
+  // Bugün: yanıtın günü (uygulamanın saat diliminde), kartın başlığıyla aynı kural (`todayAssigned`).
+  const todayDay = dayOnWeekday(days, isoWeekdayOf(data.today));
+  const todayId = todayDay?.id ?? null;
+  const selected = picked ?? todayId ?? days[0]?.id ?? '';
+  const own = data.program?.source === 'own';
   return (
     <>
       <Button variant="ghost" className="h-11 w-full text-muted-foreground" aria-label="Antrenmanı değiştir" onClick={() => setOpen(true)}>
@@ -210,26 +152,32 @@ export function OtherDayButton({ clientId }: { clientId: string }) {
       <Drawer open={open} onOpenChange={setOpen} onOpenChangeComplete={(isOpen) => (isOpen ? undefined : setPicked(null))}>
         <DrawerContent showCloseButton={false} className="gap-0">
           <DrawerHeader className="gap-1.5 pt-5">
-            <DrawerTitle id="other-day-title" className="text-lg font-semibold">
+            <DrawerTitle id="other-program-title" className="text-lg font-semibold">
               Başka antrenman seç
             </DrawerTitle>
-            {/* Kendi programda PT'ye bildirilmez (`docs/design/kendi-program.md` §3.4). */}
+            {/* Bildirim yalnız PT programında ve bugüne atanmış program varken (kendi programda yok,
+                `docs/design/kendi-program.md` §3.4). */}
             <DrawerDescription>
-              {data?.program?.source === 'own' ? 'Bugün yapmak istediğini seç.' : 'Bugün yapmak istediğini seç; sıradakinden farklıysa antrenörüne bildirilir.'}
+              {!own && todayDay ? `Bugün ${todayDay.name} planlı; başka birini seçersen antrenörüne bildirilir.` : 'Bugün için bir program seç.'}
             </DrawerDescription>
           </DrawerHeader>
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4">
-            <RadioGroup aria-labelledby="other-day-title" value={selected} onValueChange={(value) => setPicked(String(value))}>
+            <RadioGroup aria-labelledby="other-program-title" value={selected} onValueChange={(value) => setPicked(String(value))}>
               {days.map((day) => (
-                <FieldLabel key={day.id} htmlFor={`other-day-${day.id}`}>
+                <FieldLabel key={day.id} htmlFor={`other-program-${day.id}`}>
                   <Field orientation="horizontal" className="min-h-11">
                     <FieldContent>
                       <FieldTitle>{day.name}</FieldTitle>
                       <FieldDescription>
-                        {day.id === next ? 'sıradaki' : day.lastDate ? `son: ${formatDayShort(day.lastDate)}` : 'henüz yapılmadı'}
+                        {[
+                          day.id === todayId ? 'bugün' : weekdayNamesText(day.weekdays ?? []) || null,
+                          day.lastDate ? `son: ${formatDayShort(day.lastDate)}` : 'henüz yapılmadı',
+                        ]
+                          .filter(Boolean)
+                          .join(' · ')}
                       </FieldDescription>
                     </FieldContent>
-                    <RadioGroupItem value={day.id} id={`other-day-${day.id}`} />
+                    <RadioGroupItem value={day.id} id={`other-program-${day.id}`} />
                   </Field>
                 </FieldLabel>
               ))}
@@ -239,13 +187,12 @@ export function OtherDayButton({ clientId }: { clientId: string }) {
             <Button
               size="lg"
               className="h-14 w-full text-base"
+              disabled={!selected}
               onClick={() => {
                 setOpen(false);
-                const query = [
-                  ...(selected && selected !== next ? [`day=${encodeURIComponent(selected)}`] : []),
-                  ...(program ? [`program=${encodeURIComponent(program)}`] : []),
-                ].join('&');
-                router.push(query ? `/me/antrenman?${query}` : '/me/antrenman');
+                // Her zaman açık gün: sunucunun varsayılanı atanmamış günde sıradaki atanmış program olurdu.
+                const query = [`day=${encodeURIComponent(selected)}`, ...(program ? [`program=${encodeURIComponent(program)}`] : [])].join('&');
+                router.push(`/me/antrenman?${query}`);
               }}>
               Bu antrenmanla başla
             </Button>

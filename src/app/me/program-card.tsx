@@ -23,7 +23,7 @@ import { programStamp, type PlanOwner, type PlanProgram } from '@/lib/workout-pl
 import { ClientDayPlan } from './client-day-plan';
 import { NewPtProgramBanner, ProgramChip, PtEditLine, type ProgramChoice } from './program-choice';
 import { WeekBadge } from './today-workout';
-import { OtherDayButton, WeekStrip, WorkoutFreshness } from './training-week';
+import { OtherProgramButton, WeekStrip, WorkoutFreshness } from './training-week';
 
 const NO_CARE: TodayCare = { stamp: '', input: null };
 
@@ -271,7 +271,7 @@ export async function ProgramCard({
                 <Play data-icon="inline-start" weight="fill" />
                 Antrenmana başla
               </Button>
-              <OtherDayButton clientId={clientId} />
+              <OtherProgramButton clientId={clientId} />
             </div>
           ) : null}
           {cares.lines.length > 0 ? (
@@ -314,7 +314,7 @@ export async function ProgramCard({
           ) : (
             <p className="text-sm text-muted-foreground">Bu günün hareketleri şu an açılamıyor. Antrenörüne haber ver.</p>
           )}
-          <WeekStrip clientId={clientId} showNext={false} />
+          <WeekStrip clientId={clientId} />
         </CardContent>
       </Card>
       {children}

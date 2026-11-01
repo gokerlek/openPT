@@ -184,15 +184,12 @@ export function TodayWorkout({ clientId, children }: { clientId: string; childre
       : null;
   if (!progress) return <>{children}</>;
   const timeZone = data?.timeZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
-  // Dönüş yalnız bitişte ilerler: şerit bugün başlamış yarım antrenmanın gününden sürer (`weekRotation`; "keep"
-  // seçildiyse sıradaki günden).
-  const { doc } = progress;
-  const activeDay = doc.program ? { dayId: doc.program.dayId, date: doc.date } : null;
+  // Şerit atamalardan (Faz 3): yarım antrenman şeridin adlarını değiştirmez, dönüş yok.
   return (
     <ResumeCard
       progress={progress}
       timeZone={timeZone}
-      strip={<WeekStrip clientId={clientId} activeDay={activeDay} />}
+      strip={<WeekStrip clientId={clientId} />}
       clientWater={<WaterCard clientId={clientId} />}
     />
   );
