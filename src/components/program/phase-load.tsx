@@ -6,6 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { formatNumber } from '@/lib/format';
 import type { LoadRow } from '@/lib/program-insights';
 import { MUSCLE_LABELS, type Muscle } from '@/lib/schemas/exercise';
+import { weekdaysText } from '@/lib/training-days';
 
 /**
  * Kas adları açıklama listesinde kırpılmaz, satıra kayar ("Ön kol bükücü…" değil): harita bileşeni
@@ -51,9 +52,10 @@ function LoadVersus({ rows }: { rows: readonly LoadRow[] }) {
 }
 
 /**
- * Evrenin (evresizde programın) kas yükü. Sıklık varsa haftalık plan (bir tur × sıklık ÷ gün sayısı;
- * varsayılan) ve bir tur (bütün günler birer kez). `done` verilirse "Bu hafta" sekmesi: bu hafta yapılan
- * setlerin kas yükü (İlerleme sekmesiyle aynı hesap) ve haftalık planla yan yana, kas başına "yapılan / plan".
+ * Evrenin (evresizde programın) kas yükü. Haftalık plan (varsayılan): evrede atama varsa her programın yükü × atandığı
+ * gün sayısı (`assigned`: atanmış günler, Faz 3), yoksa sıklık varken bir tur × sıklık ÷ antrenman sayısı (ortalama;
+ * dönüş yok). Bir tur: bütün antrenmanlar birer kez. `done` verilirse "Bu hafta" sekmesi: bu hafta yapılan setlerin
+ * kas yükü (İlerleme sekmesiyle aynı hesap) ve haftalık planla yan yana, kas başına "yapılan / plan".
  */
 export function PhaseLoad({
   cycle,
@@ -61,6 +63,7 @@ export function PhaseLoad({
   factor,
   daysPerWeek,
   dayCount,
+  assigned = [],
   label,
   done,
 }: {
@@ -69,11 +72,19 @@ export function PhaseLoad({
   factor: number | null;
   daysPerWeek?: number;
   dayCount: number;
+  /** Evrenin atanmış günleri (`phaseMuscleLoad`); doluysa haftalık yük atamalardan. */
+  assigned?: readonly number[];
   label: string;
   done?: DoneLoad | null;
 }) {
-  const cycleCaption = `Bir tur: ${formatNumber(dayCount)} gün birer kez; kas başına çalışma seti.`;
-  const hasWeekly = Boolean(weekly && factor !== null && daysPerWeek !== undefined);
+  const cycleCaption = `Bir tur: ${formatNumber(dayCount)} antrenman birer kez; kas başına çalışma seti.`;
+  const byAssignment = assigned.length > 0;
+  const hasWeekly = Boolean(weekly && (byAssignment || (factor !== null && daysPerWeek !== undefined)));
+  const weeklyCaption = byAssignment
+    ? `Planlanan haftalık yük atanmış günlere göre (${weekdaysText(assigned)}).`
+    : `Planlanan haftalık yük: haftada ${formatNumber(daysPerWeek ?? 0)} gün, ${formatNumber(dayCount)} antrenman → her antrenman ortalama haftada ${formatNumber(factor ?? 0)} kez.`;
+  // Haftalık görünümün yolu: programlara gün atamak ya da (atamasız evrede) haftalık sıklık.
+  const weeklyHint = "programlara gün ata ya da 'haftada kaç gün' ekle";
   const doneTab = done ? (
     <TabsContent value="done" className="flex flex-col gap-4 pt-3">
       {done.sessions > 0 ? (
@@ -84,17 +95,17 @@ export function PhaseLoad({
       {hasWeekly && done.versus ? <LoadVersus rows={done.versus} /> : null}
       <p className="text-center text-xs text-muted-foreground">
         Bu hafta ({done.range}): {formatNumber(done.sessions)} antrenman · {formatNumber(done.sets)} set. Bitmiş antrenmanların çalışma setleri;
-        {hasWeekly ? ' çubuk planlanan haftalık yüke göre dolar.' : " planla karşılaştırmak için 'haftada kaç gün' ekle."}
+        {hasWeekly ? ' çubuk planlanan haftalık yüke göre dolar.' : ` planla karşılaştırmak için ${weeklyHint}.`}
       </p>
     </TabsContent>
   ) : null;
 
-  if (!hasWeekly || !weekly || factor === null || daysPerWeek === undefined) {
+  if (!hasWeekly || !weekly) {
     const cycleView = (
       <div className="flex flex-col gap-2">
         <TemplateMuscleMap variant="full" bodyClassName="h-56" load={cycle} label={`${label}: bir tur`} />
         <p className="text-center text-xs text-muted-foreground">
-          {cycleCaption} Haftalık görünüm için &apos;haftada kaç gün&apos; ekle.
+          {cycleCaption} Haftalık görünüm için {weeklyHint}.
         </p>
       </div>
     );
@@ -134,8 +145,7 @@ export function PhaseLoad({
       <TabsContent value="weekly" className="flex flex-col gap-2 pt-3">
         <TemplateMuscleMap variant="full" bodyClassName="h-56" load={weekly} label={`${label}: planlanan haftalık`} />
         <p className="text-center text-xs text-muted-foreground">
-          Planlanan haftalık yük: haftada {formatNumber(daysPerWeek)} gün, {formatNumber(dayCount)} günlük döngü → her gün haftada{' '}
-          {formatNumber(factor)} kez. Kas başına set; programdan hesaplanır, antrenman kayıtlarından değil.
+          {weeklyCaption} Kas başına set; programdan hesaplanır, antrenman kayıtlarından değil.
         </p>
       </TabsContent>
       {doneTab}

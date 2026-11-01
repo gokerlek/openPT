@@ -32,7 +32,6 @@ import {
   currentPhaseOf,
   frequencyLabel,
   missingExerciseDays,
-  nextDayId,
   phaseMuscleLoad,
   phaseProgress,
   phaseStatus,
@@ -51,26 +50,34 @@ import { sessionRepo } from '@/lib/session-files';
 import { lastWorkout } from '@/lib/session-history';
 import { templateSummary } from '@/lib/template-plan';
 import { templateChoices } from '@/lib/templates';
-import { effectiveSchedule, weekdaysText } from '@/lib/training-days';
+import {
+  assignmentsText,
+  isoWeekdayOf,
+  phaseFrequency,
+  upcomingAssigned,
+  WEEKDAY_NAMES,
+  weekdaysText,
+} from '@/lib/training-days';
 import { cn } from '@/lib/utils';
 import { readOwnState } from '@/lib/own-program-files';
 import { InvalidProgramAlert } from './invalid-program-alert';
 import { OwnActiveAlert, SharedProgramsCard } from './own-programs-card';
 import { PhaseTransition } from './phase-transition';
 import { ProposalsCard, type ProposalView } from './proposals-card';
-import { ResetDaysButton } from './weekday-field';
 
 export const metadata: Metadata = { title: 'Program' };
 
 /**
  * Danışanın programı — yalnız gösterim; tek eylem "Düzenle" (SPEC §6). İstisnalar: şu anki
- * evrenin süresi dolunca sonraki evreye geçiş önerisi burada onaylanır (SPEC §7.4); danışan antrenman
- * günlerini değiştirdiyse "Danışan değiştirdi" ve [PT'nin günlerine dön] (tasarım §2.11); en üstte
+ * evrenin süresi dolunca sonraki evreye geçiş önerisi burada onaylanır (SPEC §7.4); en üstte
  * "Danışandan öneriler (n)" [Uygula] [Reddet] (tasarım §6.4); danışanın tekrar hedefi olan satırda
  * "Danışan güncelledi" rozeti (§6.2). Kas yükünde planlanan haftalığın yanında bu hafta yapılan (SPEC §7.4);
  * İleri aşamadaki harekette hafifletme ipucu (tasarım §5.3, `deloadHintDue`).
- * Evresiz programda evreden söz edilmez: "Döngü" kartı (sıradaki gün, sıklık, planlanan
- * haftalık yük) ve sırayla dönen günler.
+ *
+ * Faz 3: programlar haftanın günlerine atanır, dönüş yok. Üstte bugünün ya da haftada sıradaki atanmış program
+ * (`upcomingAssigned`), "Haftanın programı" kartında programlar atandıkları günlerle; evresiz programda evreden söz
+ * edilmez ("Durum" kartı: bugün / sıradaki, sıklık, antrenman günleri). Danışan günleri değiştiremez (Karar 3):
+ * kayıtta danışanın eski gün katmanı kaldıysa yalnız soluk bir satır söyler, PT'nin ilk kaydı onu siler.
  * Danışan kendi programıyla çalışıyorsa en üstte bilgi satırı; paylaştığı programlar en altta
  * (`docs/design/kendi-program.md` §4).
  */
@@ -153,23 +160,30 @@ export default async function ProgramPage({ params }: { params: Promise<{ id: st
   const now = new Date();
   const status = phaseStatus(program, now);
   const progress = phaseProgress(program, now);
-  const nextId = nextDayId(program);
+  // Bugün uygulamanın saat diliminde: bugünün ya da haftada sıradaki atanmış program (dönüş yok, Faz 3).
+  const today = todayIn(timeZone, now);
+  const upcoming = upcomingAssigned(program, today);
+  const nextId = upcoming?.dayId ?? null;
   const nextDay = current?.phase.days.find((day) => day.id === nextId);
+  // "Bugün · Alt vücut" ya da "Perşembe · Üst vücut"; atama yoksa yok.
+  const upcomingWhen = upcoming ? (upcoming.date === today ? 'Bugün' : WEEKDAY_NAMES[isoWeekdayOf(upcoming.date)]) : null;
+  const upcomingText = upcomingWhen && nextDay ? `${upcomingWhen} · ${nextDay.name}` : null;
   const missingRows = missingExerciseDays(program.phases, new Set(byId.keys())).reduce((sum, item) => sum + item.rowIds.length, 0);
   const sources = sourceNames(program.phases);
   const load = current ? phaseMuscleLoad(current.phase, byId, exerciseSetWeights) : null;
   const nextPhase = status.kind === 'due' ? program.phases.find((phase) => phase.id === status.nextPhaseId) : undefined;
   const weeksText = (weeks: number | undefined) => (weeks === undefined ? 'süresiz' : `${weeks} hafta`);
   const perWeek = (daysPerWeek: number | undefined) => frequencyLabel(daysPerWeek)?.toLocaleLowerCase('tr') ?? null;
-  const frequency = frequencyLabel(current?.phase.daysPerWeek);
+  // Sıklık atanmış gün sayısı, atama yoksa evrenin `daysPerWeek`'i (`phaseFrequency`).
+  const frequency = frequencyLabel(current ? phaseFrequency(current.phase) : undefined);
   const created = `${formatDate(program.createdAt, timeZone)} tarihinde oluşturuldu`;
   const description = phased
-    ? `${program.phases.length} evre · ${countDays(program.phases)} gün · ${created}`
-    : [`${countDays(program.phases)} gün`, perWeek(current?.phase.daysPerWeek), created].filter(Boolean).join(' · ');
+    ? `${program.phases.length} evre · ${countDays(program.phases)} antrenman · ${created}`
+    : [`${countDays(program.phases)} antrenman`, current ? perWeek(phaseFrequency(current.phase)) : null, created].filter(Boolean).join(' · ');
   // Son antrenman: PT programında bitmişlerin en yenisi, yarım dahil (danışan ekranıyla aynı kural).
   const last = lastWorkout(sessions?.index ?? null);
   // Bu hafta yapılan (İlerleme sekmesiyle aynı hesap), planlanan haftalığın yanında.
-  const week = sessions ? thisWeekLoad({ index: sessions.index, today: todayIn(timeZone, now), exercises: byId, setWeightsOf: exerciseSetWeights }) : null;
+  const week = sessions ? thisWeekLoad({ index: sessions.index, today, exercises: byId, setWeightsOf: exerciseSetWeights }) : null;
   const done: DoneLoad | null = week
     ? {
         load: week.muscles,
@@ -187,6 +201,7 @@ export default async function ProgramPage({ params }: { params: Promise<{ id: st
         factor={load.factor}
         daysPerWeek={current.phase.daysPerWeek}
         dayCount={current.phase.days.length}
+        assigned={load.assigned}
         label={phased ? 'Şu anki evrenin kas yükü' : 'Programın kas yükü'}
         done={done}
       />
@@ -221,23 +236,29 @@ export default async function ProgramPage({ params }: { params: Promise<{ id: st
         faded: isFaded(item, now),
       }))
     : [];
-  // Antrenman günleri (§2.11): geçerli olanlar; danışan değiştirdiyse rozet ve PT'nin günlerine dönüş.
-  const days = effectiveSchedule(program);
+  // Antrenman günleri (Faz 3): şu anki evrenin atamaları. Danışanın eski gün katmanı (ham `clientSchedule`) artık
+  // okunmaz; kayıtta durdukça soluk satır söyler, PT'nin ilk kaydı ya da evre geçişi siler (Karar 3). Rozet ve geri
+  // dönüş yok.
   const daysRow = (
     <TableRow>
       <TableCell className="text-muted-foreground">Antrenman günleri</TableCell>
       <TableCell className="whitespace-normal">
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-          <span>{weekdaysText(days.weekdays) || 'Seçilmedi'}</span>
-          {days.client ? <Badge variant="secondary">Danışan değiştirdi</Badge> : null}
-          {days.client ? <ResetDaysButton clientId={id} className="-my-1" /> : null}
+        <div className="flex flex-col gap-1">
+          <span className="break-words">{(current ? assignmentsText(current.phase.days) : '') || 'Henüz gün atanmadı.'}</span>
+          {program.clientSchedule ? (
+            <span className="text-xs text-muted-foreground">
+              Danışanın eski gün seçimi ({weekdaysText(program.clientSchedule.weekdays)}) artık kullanılmıyor; programın ilk
+              kaydında silinir.
+            </span>
+          ) : null}
         </div>
-        {days.client ? (
-          <span className="text-xs text-muted-foreground">
-            {days.pt.length > 0 ? `Programdaki günler: ${weekdaysText(days.pt)}` : 'Programda gün seçilmemişti.'}
-          </span>
-        ) : null}
       </TableCell>
+    </TableRow>
+  );
+  const upcomingRow = (
+    <TableRow>
+      <TableCell className="text-muted-foreground">Bugün / sıradaki</TableCell>
+      <TableCell className="whitespace-normal">{upcomingText ?? '—'}</TableCell>
     </TableRow>
   );
 
@@ -245,15 +266,17 @@ export default async function ProgramPage({ params }: { params: Promise<{ id: st
     <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
       {phase.days.map((day) => {
         const summary = templateSummary({ blocks: day.blocks }, byId);
+        // Bugünün ya da haftada sıradaki atanmış programı (yalnız şu anki evrede) işaretli.
         const isNext = phase.id === current?.phase.id && day.id === nextId;
         const source = day.source;
         return (
           <li key={day.id} className={cn('flex flex-col gap-3 rounded-lg border p-3', isNext && 'bg-primary/5 ring-2 ring-primary-text')}>
             <div className="flex flex-col gap-1">
               <div className="flex items-center justify-between gap-2">
-                <span className="font-medium">{day.name}</span>
-                {isNext ? <Badge>Sıradaki</Badge> : null}
+                <span className="font-medium break-words">{day.name}</span>
+                {isNext ? <Badge>{upcoming?.date === today ? 'Bugün' : 'Sıradaki'}</Badge> : null}
               </div>
+              <span className="text-sm text-muted-foreground">{weekdaysText(day.weekdays ?? []) || 'Gün atanmadı'}</span>
               <span className="text-sm tabular-nums text-muted-foreground">
                 {formatNumber(summary.rows)} hareket · {formatNumber(summary.workingSets)} set · ≈ {formatNumber(summary.minutes)} dk
               </span>
@@ -279,13 +302,12 @@ export default async function ProgramPage({ params }: { params: Promise<{ id: st
   );
 
   /*
-   * Sıra telefonda işe göre (DOM sırası): sıradaki gün ve hareketleri → bütün günler → evre ya da
-   * döngü özeti → evreler → kas yükü → geçmiş. Masaüstünde iki sütun: sıradaki gün evre özetinin
-   * yanında, günler tam genişlikte, kas yükü evrelerin yanında (`lg:order-*`).
+   * Sıra telefonda işe göre (DOM sırası): bugünün ya da sıradaki atanmış program ve hareketleri → haftanın programı
+   * → evre ya da durum özeti → evreler → kas yükü → geçmiş. Masaüstünde iki sütun: bugünün programı evre özetinin
+   * yanında, programlar tam genişlikte, kas yükü evrelerin yanında (`lg:order-*`).
    */
   // Kısıtlarla çelişen satırlar (tasarım `kisit-tarama.md` §3.3): yalnız kısıtların onayı sürdükçe.
   // Bugün kısıtların günü ve çelişkinin "sıradaki"si için (Faz 3: bugünkü ya da sıradaki atanmış program).
-  const today = todayIn(config.timeZone);
   const careInput = await loadCareInput(client, today);
   const conflicts = careInput ? programConflicts(program, new Map(exercises.map((exercise) => [exercise.id, exercise])), careInput, today) : [];
 
@@ -383,10 +405,10 @@ export default async function ProgramPage({ params }: { params: Promise<{ id: st
       ) : null}
 
       <div className="grid gap-6 lg:grid-cols-2 lg:items-start">
-        {nextDay && nextSummary ? (
+        {nextDay && nextSummary && upcomingText ? (
           <Card className="lg:order-1">
             <CardHeader>
-              <CardTitle>Sıradaki gün: {nextDay.name}</CardTitle>
+              <CardTitle>{upcoming?.date === today ? upcomingText : `Sıradaki: ${upcomingText}`}</CardTitle>
               <CardDescription className="tabular-nums">
                 {[
                   phased ? current?.phase.name : null,
@@ -404,11 +426,11 @@ export default async function ProgramPage({ params }: { params: Promise<{ id: st
 
         <Card className="lg:order-3 lg:col-span-2">
           <CardHeader>
-            <CardTitle>Günler</CardTitle>
+            <CardTitle>Haftanın programı</CardTitle>
             <CardDescription>
               {phased
-                ? 'Şu anki evrenin günleri sırayla döner (A → B → C); sıradaki gün işaretli.'
-                : 'Günler sırayla döner (A → B → C); sıradaki gün işaretli.'}
+                ? 'Her evrenin programları kendi günlerine atanır; danışan şu anki evrenin atanan programını o gün Bugün ekranında görür.'
+                : 'Danışan atanan programı o gün Bugün ekranında görür.'}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -462,10 +484,7 @@ export default async function ProgramPage({ params }: { params: Promise<{ id: st
                     <TableCell>{frequency ?? 'Belirtilmedi'}</TableCell>
                   </TableRow>
                   {daysRow}
-                  <TableRow>
-                    <TableCell className="text-muted-foreground">Sıradaki gün</TableCell>
-                    <TableCell>{nextDay?.name ?? '—'}</TableCell>
-                  </TableRow>
+                  {upcomingRow}
                 </TableBody>
               </Table>
             </CardContent>
@@ -473,15 +492,14 @@ export default async function ProgramPage({ params }: { params: Promise<{ id: st
         ) : (
           <Card className="lg:order-2">
             <CardHeader>
-              <CardTitle>Döngü</CardTitle>
-              <CardDescription>Günler sırayla döner; danışan sıradaki günü görür.</CardDescription>
+              <CardTitle>Durum</CardTitle>
             </CardHeader>
             <CardContent className="flex flex-col gap-4">
               <Table>
                 <TableBody>
                   <TableRow>
-                    <TableCell className="w-36 text-muted-foreground">Sıradaki gün</TableCell>
-                    <TableCell>{nextDay?.name ?? '—'}</TableCell>
+                    <TableCell className="w-36 text-muted-foreground">Bugün / sıradaki</TableCell>
+                    <TableCell className="whitespace-normal">{upcomingText ?? '—'}</TableCell>
                   </TableRow>
                   <TableRow>
                     <TableCell className="text-muted-foreground">Sıklık</TableCell>
@@ -528,7 +546,7 @@ export default async function ProgramPage({ params }: { params: Promise<{ id: st
                         )}
                       </div>
                       <span className="text-sm text-muted-foreground">
-                        {[weeksText(phase.weeks), perWeek(phase.daysPerWeek), phase.days.map((day) => day.name).join(', ')]
+                        {[weeksText(phase.weeks), perWeek(phaseFrequency(phase)), phase.days.map((day) => day.name).join(', ')]
                           .filter(Boolean)
                           .join(' · ')}
                       </span>
@@ -559,7 +577,7 @@ export default async function ProgramPage({ params }: { params: Promise<{ id: st
         <Card id="gecmis" className="scroll-mt-4 lg:order-6 lg:col-span-2">
           <CardHeader>
             <CardTitle>Program geçmişi</CardTitle>
-            <CardDescription>Her kaydettiğinde ve danışan programını güncellediğinde (günleri, kilo ve tekrar hedefi) ne değiştiği buraya yazılır.</CardDescription>
+            <CardDescription>Her kaydettiğinde ve danışan programını güncellediğinde (kilo ve tekrar hedefi) ne değiştiği buraya yazılır.</CardDescription>
           </CardHeader>
           <CardContent>
             <ChangeLog entries={program.log} timeZone={timeZone} initial={20} />

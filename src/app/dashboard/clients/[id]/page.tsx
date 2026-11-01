@@ -24,10 +24,11 @@ import { formatDate, formatDayShort, formatNumber, todayIn } from '@/lib/format'
 import type { HealthRecord } from '@/lib/schemas/health';
 import { newestFirst, painHistory } from '@/lib/screening';
 import { clientRepoName } from '@/lib/github/client';
-import { countDays, currentPhaseOf, frequencyLabel, nextDayId, phaseStatus, phaseStatusLabel } from '@/lib/program-plan';
+import { countDays, currentPhaseOf, frequencyLabel, phaseStatus, phaseStatusLabel } from '@/lib/program-plan';
 import { readProgramFile, type ProgramFile } from '@/lib/programs';
 import { CLIENT_ID_PATTERN, CLIENT_STATUS_LABELS, HEALTH_FIELD_INFO, TRAINING_EXPERIENCE_LABELS, type HealthField } from '@/lib/schemas/client';
 import { templateSummary } from '@/lib/template-plan';
+import { programWeekTarget, upcomingAssigned, weekdaysText } from '@/lib/training-days';
 import { cn } from '@/lib/utils';
 import { HEALTH_STATE_DETAILS, HEALTH_STATE_LABELS } from '../health-state';
 import { AccessBadge, accessDetail, accessOf, passwordOf } from '../invite-state';
@@ -211,8 +212,9 @@ function SessionsCard({ clientId, list }: { clientId: string; list: HistoryList 
 }
 
 /**
- * Programın özeti: şu anki evre, günleri (sıradaki işaretli), son değişiklik. Program
- * yoksa "Program oluştur"; okunamıyorsa sorunu. `undefined`: GitHub'dan okunamadı.
+ * Programın özeti: şu anki evre, programları atandıkları günlerle (Faz 3: bugünün ya da haftada sıradaki atanmış
+ * program işaretli; dönüş yok), son değişiklik. Program yoksa "Program oluştur"; okunamıyorsa sorunu. `undefined`:
+ * GitHub'dan okunamadı.
  */
 function ProgramCard({
   clientId,
@@ -277,13 +279,16 @@ function ProgramCard({
 
   const program = file.program;
   const current = currentPhaseOf(program);
-  const status = phaseStatus(program, new Date());
-  const next = nextDayId(program);
-  const perWeek = frequencyLabel(current?.phase.daysPerWeek)?.toLocaleLowerCase('tr');
-  // Evresiz programda evreden söz edilmez: gün sayısı ve sıklık.
+  const now = new Date();
+  const status = phaseStatus(program, now);
+  const today = todayIn(timeZone, now);
+  const upcoming = upcomingAssigned(program, today);
+  // Sıklık atanmış gün sayısı, atama yoksa evrenin `daysPerWeek`'i (`programWeekTarget`).
+  const perWeek = frequencyLabel(programWeekTarget(program))?.toLocaleLowerCase('tr');
+  // Evresiz programda evreden söz edilmez: antrenman sayısı ve sıklık.
   const description = program.phased
     ? [current?.phase.name, phaseStatusLabel(status)].filter(Boolean).join(' · ') + (perWeek ? ` · ${perWeek}` : '')
-    : [`${countDays(program.phases)} gün`, perWeek].filter(Boolean).join(' · ');
+    : [`${countDays(program.phases)} antrenman`, perWeek].filter(Boolean).join(' · ');
   return (
     <Card>
       <CardHeader>
@@ -296,15 +301,16 @@ function ProgramCard({
         ) : null}
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
-        <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3" aria-label={program.phased ? 'Şu anki evrenin günleri' : 'Programın günleri'}>
+        <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3" aria-label={program.phased ? 'Şu anki evrenin programları' : 'Programlar'}>
           {current?.phase.days.map((day) => {
             const summary = templateSummary({ blocks: day.blocks }, exercises);
-            const isNext = day.id === next;
+            const isNext = day.id === upcoming?.dayId;
             return (
               <li key={day.id}>
                 <Item variant="outline" size="sm" className={isNext ? 'bg-primary/5 ring-2 ring-primary-text' : undefined}>
                   <ItemContent>
-                    <ItemTitle>{day.name}</ItemTitle>
+                    <ItemTitle className="break-words">{day.name}</ItemTitle>
+                    <ItemDescription>{weekdaysText(day.weekdays ?? []) || 'Gün atanmadı'}</ItemDescription>
                     <ItemDescription className="tabular-nums">
                       {formatNumber(summary.rows)} hareket · {formatNumber(summary.workingSets)} set · ≈{' '}
                       {formatNumber(summary.minutes)} dk
@@ -312,7 +318,7 @@ function ProgramCard({
                   </ItemContent>
                   {isNext ? (
                     <ItemActions>
-                      <Badge>Sıradaki</Badge>
+                      <Badge>{upcoming?.date === today ? 'Bugün' : 'Sıradaki'}</Badge>
                     </ItemActions>
                   ) : null}
                 </Item>

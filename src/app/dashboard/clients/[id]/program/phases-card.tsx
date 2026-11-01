@@ -19,6 +19,7 @@ import {
 import { Field, FieldError, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { InputGroup, InputGroupAddon, InputGroupInput } from '@/components/ui/input-group';
+import { hasAssignments } from '@/lib/day-assignments';
 import { formatDate } from '@/lib/format';
 import {
   PROGRAM_LIMITS,
@@ -37,6 +38,7 @@ import { AddDayMenu, DayChips } from './day-chips';
 import { FrequencySelect } from './frequency-select';
 import type { PhaseActions, ProgramFormStore, StoredState } from './program-form';
 import { UnphaseDialog } from './unphase-dialog';
+import { AssignmentSummary } from './weekday-field';
 
 type Shared = {
   form: ProgramFormStore;
@@ -102,7 +104,10 @@ function PhaseMenu({ phase, index, shared }: { phase: ProgramPhase; index: numbe
   );
 }
 
-/** Bir evre: ad, süre, sıklık, durum rozeti, menü; altında günler (seçilebilir çipler) ve "+ Gün". */
+/**
+ * Bir evre: ad, süre, sıklık (yalnız evrede hiç atama yokken), durum rozeti, menü; altında programlar (seçilebilir
+ * çipler, atandıkları günlerle) ve "+ Program".
+ */
 function PhaseRow({ phase, index, shared }: { phase: ProgramPhase; index: number; shared: Shared }) {
   const { form, phases, currentPhaseId, stored, selectedDayId, missingDayIds, hasTemplates, actions } = shared;
   const nameField = useField(form, { path: ['phases', index, 'name'] });
@@ -158,7 +163,9 @@ function PhaseRow({ phase, index, shared }: { phase: ProgramPhase; index: number
             <InputGroupAddon align="inline-end">hafta</InputGroupAddon>
           </InputGroup>
         </Field>
-        <FrequencySelect form={form} phaseIndex={index} id={`phase-frequency-${phase.id}`} label="Haftada" compact className="w-32" />
+        {hasAssignments(phase.days) ? null : (
+          <FrequencySelect form={form} phaseIndex={index} id={`phase-frequency-${phase.id}`} label="Haftada" compact className="w-32" />
+        )}
         <div className="flex flex-1 items-center justify-end gap-2 pb-1 sm:flex-none">
           {isCurrent ? <Badge variant="secondary">{pending ? 'Şu an (kaydedince)' : 'Şu an'}</Badge> : null}
           <PhaseMenu phase={phase} index={index} shared={shared} />
@@ -169,7 +176,7 @@ function PhaseRow({ phase, index, shared }: { phase: ProgramPhase; index: number
       ) : null}
 
       <div className="flex flex-col gap-1.5">
-        <span className="text-xs text-muted-foreground">Günler</span>
+        <span className="text-xs text-muted-foreground">Programlar</span>
         <DayChips
           form={form}
           phase={phase}
@@ -205,7 +212,7 @@ function Suggestion({ shared, now, timeZone }: { shared: Shared; now: string; ti
       <Alert>
         <Info />
         <AlertDescription>
-          Kaydedince &apos;{target?.name}&apos; evresine geçilir; danışanın sıradaki antrenmanı bu evrenin ilk günü olur.
+          Kaydedince &apos;{target?.name}&apos; evresine geçilir; danışan bu evrenin programlarını atandıkları günlerde görür.
         </AlertDescription>
         {canRevert ? (
           <div className="col-start-2 mt-2">
@@ -253,23 +260,21 @@ function Suggestion({ shared, now, timeZone }: { shared: Shared; now: string; ti
 }
 
 /**
- * Evreler (program evrelere bölündüyse): programın antrenman günleri (bütün evrelerde aynı), evre başına
- * ad, süre ve sıklık alanları, evre menüsü, günler.
- * Günler çip olarak seçilir; seçili gün aşağıdaki gün düzenleyicide açılır. Hatalı gün
- * kırmızı çerçeveyle işaretlenir. "Evreleri kaldır" günleri tek listede birleştirir.
+ * Evreler (program evrelere bölündüyse): şu anki evrenin "Haftanın programı" özeti (atama evre başınadır; danışan şu
+ * anki evrenin atamalarını görür), evre başına ad, süre ve sıklık alanları, evre menüsü, programlar. Programlar çip
+ * olarak seçilir; seçili program aşağıdaki düzenleyicide açılır, günleri orada atanır. Hatalı program kırmızı
+ * çerçeveyle işaretlenir. "Evreleri kaldır" programları tek listede birleştirir; yalnız şu anki evrenin atamaları kalır.
  */
 export function PhasesCard({
   now,
   timeZone,
-  weekdays,
   ...shared
 }: Shared & {
   now: string;
   timeZone: string;
-  /** Antrenman günleri alanı (program düzeyinde, bütün evrelerde; `WeekdayField`). */
-  weekdays: React.ReactNode;
 }) {
   const { form, phases, currentPhaseId, actions } = shared;
+  const currentPhase = phases.find((phase) => phase.id === currentPhaseId) ?? phases[0];
   // Formisch kancası: günlerin `getDeepError` okumaları bu bileşenin çizimine bağlansın.
   const phasesArray = useFieldArray(form, { path: ['phases'] });
   const [unphasing, setUnphasing] = useState(false);
@@ -289,8 +294,8 @@ export function PhasesCard({
       <CardHeader>
         <CardTitle>Evreler</CardTitle>
         <CardDescription>
-          Her evrenin günleri sırayla döner; süre dolunca sonraki evreye geçmeyi önerir. Günü başka evreye günün menüsünden
-          taşırsın.
+          Her evrenin programları kendi günlerine atanır; süre dolunca sonraki evreye geçiş önerilir. Program başka evreye
+          menüsünden taşınır.
         </CardDescription>
         <CardAction className="flex items-center gap-1">
           <Button type="button" variant="outline" size="sm" disabled={!canAddPhase(phases)} onClick={addNewPhase}>
@@ -312,7 +317,7 @@ export function PhasesCard({
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
         <Suggestion shared={shared} now={now} timeZone={timeZone} />
-        {weekdays}
+        {currentPhase ? <AssignmentSummary days={currentPhase.days} label={`Haftanın programı · '${currentPhase.name}' evresi`} /> : null}
         <ol className="flex flex-col gap-3" aria-label="Evreler">
           {phases.map((phase, index) => (
             <PhaseRow key={phase.id} phase={phase} index={index} shared={shared} />
