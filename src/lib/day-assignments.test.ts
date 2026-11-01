@@ -43,12 +43,16 @@ describe('hafta günü atamaları', () => {
   test('çakışan gün ve başka programın günleri', () => {
     assert.deepEqual(weekdayConflicts([...plan, { id: 'd_dddddd', name: 'Kardiyo', weekdays: [4, 5] }]), [4]);
     assert.deepEqual([...takenWeekdays(plan, 'd_aaaaaa')], [[4, 'Üst vücut'], [7, 'Tüm vücut']]);
+    assert.deepEqual(weekdayConflicts([{ id: 'd_aaaaaa', name: 'Alt vücut', weekdays: [2, 2] }]), []);
+    const twice = [{ id: 'd_aaaaaa', name: 'Alt vücut', weekdays: [2] }, { id: 'd_bbbbbb', name: 'Üst vücut', weekdays: [2] }];
+    assert.deepEqual([[...takenWeekdays(twice, 'd_aaaaaa')], [...takenWeekdays(twice, 'd_bbbbbb')]], [[], [[2, 'Alt vücut']]]);
   });
 
   test('atama: başka programın günü alınmaz; değişmezse aynı dizi; boş atama alanı tutar', () => {
     assert.deepEqual(assignWeekdays(plan, 'd_aaaaaa', [5, 2, 4])[0]?.weekdays, [2, 5]);
     assert.equal(assignWeekdays(plan, 'd_aaaaaa', [2]), plan);
     assert.deepEqual(assignWeekdays(plan, 'd_aaaaaa', [])[0]?.weekdays, []);
+    assert.equal(assignWeekdays(plan, 'd_zzzzzz', [1]), plan);
   });
 
   test('eski program: sırayla; fazla gün başa sarar; fazla program atanmasız', () => {
@@ -73,10 +77,13 @@ describe('hafta günü atamaları', () => {
     assert.equal(upgradeAssignments(raw, []), raw);
     const odd = [{ id: 'p_aaaaaa', days: 'bozuk' }, null];
     assert.deepEqual(upgradeAssignments(odd, [1]), odd);
+    assert.deepEqual(upgradeAssignments([{ id: 'p_aaaaaa', days: [null, bare(1)[0]] }], [1, 3]), [{ id: 'p_aaaaaa', days: [null, { ...bare(1)[0], weekdays: [3] }] }]);
+    assert.equal(hasAssignmentField([{ id: 'p_aaaaaa', days: [{ ...bare(1)[0], weekdays: undefined }] }]), false);
   });
 
   test('eski sekmenin günleri açılıştakiyle aynı: kayıttaki atamalar gün kimliğiyle korunur', () => {
     const sent = [{ id: 'd_aaaaaa', name: 'Alt vücut' }, { id: 'd_eeeeee', name: 'Yeni' }];
     assert.deepEqual(keepAssignments(sent, plan).map((day) => day.weekdays), [[2], undefined]);
+    assert.deepEqual(keepAssignments([{ id: 'd_aaaaaa', name: 'Alt vücut', weekdays: [] }], plan)[0]?.weekdays, []);
   });
 });

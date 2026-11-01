@@ -106,8 +106,13 @@ export function weekdayConflicts(days: readonly AssignableDay[]): number[] {
 
 /** Bu programın dışında atanmış günler → sahibinin adı, pazartesiden sıralı: düzenleyicide kapalı çipler. */
 export function takenWeekdays(days: readonly AssignableDay[], dayId: string): Map<number, string> {
-  const others = days.filter((day) => day.id !== dayId);
-  return new Map(weekAssignments(others).map(({ weekday, day }): [number, string] => [weekday, day.name]));
+  // Sahiplik önce bütün günlerde belirlenir, sonra bu programınkiler düşer: bozuk kayıtta iki programa atanmış gün
+  // `dayOnWeekday` gibi ilkinindir; ilki düzenlenirken açık, ikincisi düzenlenirken kapalı görünür.
+  return new Map(
+    weekAssignments(days)
+      .filter(({ day }) => day.id !== dayId)
+      .map(({ weekday, day }): [number, string] => [weekday, day.name]),
+  );
 }
 
 /**
@@ -125,6 +130,7 @@ export function assignWeekdays<D extends AssignableDay>(days: readonly D[], dayI
 
 /** Seçili günlerin programlara sırayla dağılımı: sıra → günler. Gün programdan fazlaysa başa sarar. */
 function slotsInOrder(count: number, selected: readonly number[]): Map<number, number[]> {
+  if (count === 0) return new Map();
   const byIndex = new Map<number, number[]>();
   selected.forEach((weekday, index) => {
     const at = index % count;
@@ -148,7 +154,11 @@ export function deriveAssignments<D extends AssignableDay>(days: readonly D[], w
   });
 }
 
-/** Alanı olmayan günlere kayıttaki aynı kimlikli günün ataması (kendi programın eski sekmesi). */
+/**
+ * Alanı olmayan günlere kayıttaki aynı kimlikli günün ataması (kendi programın eski sekmesi). Ön koşul: `days`'te
+ * atanmış gün yok (eski sekme alanı hiç göndermez); olsaydı korunan atama onun gününe çakışabilirdi. Alanı olan gün
+ * (boş dizi de) olduğu gibi kalır.
+ */
 export function keepAssignments<D extends AssignableDay>(days: readonly D[], stored: readonly AssignableDay[]): (D & AssignableDay)[] {
   const byId = new Map(stored.map((day): [string, number[]] => [day.id, cleanWeekdays(day.weekdays)]));
   return days.map((day) => {
@@ -158,11 +168,14 @@ export function keepAssignments<D extends AssignableDay>(days: readonly D[], sto
   });
 }
 
-/** Ham evrelerde herhangi bir günde `weekdays` anahtarı var mı (varsa yeni biçim; türetme yok). */
+/**
+ * Ham evrelerde herhangi bir günde `weekdays` alanı var mı (varsa yeni biçim; türetme yok). `undefined` değerli
+ * anahtar alan sayılmaz: `keepAssignments` gibi.
+ */
 export function hasAssignmentField(phases: unknown): boolean {
   return (
     Array.isArray(phases) &&
-    phases.some((phase) => isRecord(phase) && Array.isArray(phase.days) && phase.days.some((day) => isRecord(day) && 'weekdays' in day))
+    phases.some((phase) => isRecord(phase) && Array.isArray(phase.days) && phase.days.some((day) => isRecord(day) && day.weekdays !== undefined))
   );
 }
 
