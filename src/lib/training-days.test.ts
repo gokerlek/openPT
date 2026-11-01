@@ -2,25 +2,30 @@ import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as v from 'valibot';
 import { applyProgramEdit } from './program-diff.ts';
-import type { ProgramLogEntry } from './program-plan.ts';
 import { programSchema } from './schemas/program.ts';
 import { programFile } from './testing/session-fixtures.ts';
+import { weekdayNames } from './day-assignments.ts';
 import {
   addDays,
-  applyClientSchedule,
+  assignedWeek,
+  assignmentsText,
   dayShortName,
   effectiveSchedule,
   frequencyMismatch,
   isoWeekdayOf,
   nextTrainingDate,
   normalizeWeekdays,
+  phaseFrequency,
   programWeekTarget,
   relativeDayText,
   resetClientSchedule,
   scheduleSince,
+  todayAssigned,
   todayCardTitle,
   todayState,
+  upcomingAssigned,
   weekDates,
+  weekdayNamesText,
   weekdaysChangeText,
   weekdaysText,
   weekPlan,
@@ -297,51 +302,16 @@ describe('hafta planı', () => {
   });
 });
 
-describe('antrenman günleri: danışanın katmanı', () => {
-  test('geçerli günler = danışanınki ?? PT\'ninki', () => {
+// Faz 3 (Karar 3): danışan günleri değiştirmez; kayıttaki eski katman okunur ama yok sayılır. Danışanın "Günlerini
+// değiştir"i (`applyClientSchedule`) kalktı; PT'nin "Programdaki günlere dön"ü 15. göreve kadar çalışır.
+describe('antrenman günleri: danışanın eski katmanı', () => {
+  test('geçerli günler yalnız PT\'nin: kayıttaki katman yok sayılır', () => {
     assert.deepEqual(effectiveSchedule(program()), { weekdays: [], pt: [], client: null, source: null });
     const pt = program({ schedule: { weekdays: [5, 1, 3] } });
     assert.deepEqual(effectiveSchedule(pt).weekdays, [1, 3, 5]);
     assert.equal(effectiveSchedule(pt).source, 'pt');
     const own = program({ schedule: { weekdays: [1, 3, 5] }, clientSchedule: { weekdays: [2, 4, 6], at: '2026-09-25T10:00:00.000Z' } });
-    assert.deepEqual(effectiveSchedule(own), { weekdays: [2, 4, 6], pt: [1, 3, 5], client: { weekdays: [2, 4, 6], at: '2026-09-25T10:00:00.000Z' }, source: 'client' });
-  });
-
-  test('danışan değiştirir: katmana yazılır, geçmişe "client", revision ve PT\'nin günleri aynı kalır', () => {
-    const before = program({ schedule: { weekdays: [1, 3, 5] } });
-    const result = applyClientSchedule(before, [6, 2, 4], NOW);
-    assert.ok(result);
-    assert.equal(result.text, 'Antrenman günleri: Pzt, Çar, Cum → Sal, Per, Cmt');
-    assert.deepEqual(result.program.clientSchedule, { weekdays: [2, 4, 6], at: NOW.toISOString() });
-    assert.deepEqual(result.program.schedule, { weekdays: [1, 3, 5] });
-    assert.equal(result.program.revision, before.revision);
-    assert.equal(result.program.updatedAt, before.updatedAt);
-    const entry = result.program.log[0] as ProgramLogEntry;
-    assert.deepEqual(entry, { at: NOW.toISOString(), revision: before.revision, kind: 'client', changes: [{ text: 'Antrenman günleri: Pzt, Çar, Cum → Sal, Per, Cmt' }] });
-    assert.ok(v.is(programSchema, result.program), 'şemaya uyar');
-  });
-
-  test('geçerli günlerle aynı seçim ya da boş seçim değişiklik değildir', () => {
-    const pt = program({ schedule: { weekdays: [1, 3, 5] } });
-    assert.equal(applyClientSchedule(pt, [5, 3, 1], NOW), null);
-    assert.equal(applyClientSchedule(pt, [], NOW), null);
-  });
-
-  test('PT\'nin günlerine dönen seçim katmanı kaldırır (geçmişe yine yazılır)', () => {
-    const own = program({ schedule: { weekdays: [1, 3, 5] }, clientSchedule: { weekdays: [2, 4], at: '2026-09-25T10:00:00.000Z' } });
-    const result = applyClientSchedule(own, [1, 3, 5], NOW);
-    assert.ok(result);
-    assert.equal('clientSchedule' in result.program, false);
-    assert.equal(result.text, 'Antrenman günleri: Sal, Per → Pzt, Çar, Cum');
-    // Geçerli günler şimdi değişti: kaçan gün penceresi buradan başlar.
-    assert.deepEqual(result.program.schedule, { weekdays: [1, 3, 5], at: NOW.toISOString() });
-  });
-
-  test('PT gün seçmediyse danışanın seçimi katman olur', () => {
-    const result = applyClientSchedule(program(), [2, 4], NOW);
-    assert.ok(result);
-    assert.equal(result.text, 'Antrenman günleri: Sal, Per');
-    assert.deepEqual(result.program.clientSchedule?.weekdays, [2, 4]);
+    assert.deepEqual(effectiveSchedule(own), { weekdays: [1, 3, 5], pt: [1, 3, 5], client: null, source: 'pt' });
   });
 
   test('"PT\'nin günlerine dön": katman silinir, revision artmaz; katman yoksa değişiklik yok', () => {
@@ -354,6 +324,97 @@ describe('antrenman günleri: danışanın katmanı', () => {
     assert.equal(result.text, 'Danışanın günleri kaldırıldı (Sal, Per, Cmt); geçerli günler: Pzt, Çar, Cum');
     assert.equal(result.program.log[0]?.kind, 'edit');
     assert.equal(resetClientSchedule(program({ schedule: { weekdays: [1] } }), NOW), null);
+  });
+});
+
+describe('Faz 3: atamalı hafta', () => {
+  // 26 Ekim 2026 pazartesi.
+  const phase = {
+    id: 'p_aaaaaa',
+    days: [
+      { id: 'd_aaaaaa', name: 'Alt vücut', weekdays: [2] },
+      { id: 'd_bbbbbb', name: 'Üst vücut', weekdays: [4] },
+      { id: 'd_cccccc', name: 'Tüm vücut', weekdays: [7] },
+    ],
+  };
+  const program = { phases: [phase], current: { phaseId: 'p_aaaaaa', startedAt: '2026-10-01T00:00:00.000Z' } };
+  const names = weekdayNames(phase.days);
+  const client = { access: {}, statusChangedAt: undefined };
+  const rows = (days: ReturnType<typeof assignedWeek>) => days.map((day) => [day.state, day.label]);
+
+  test('bugünün ve sıradaki atanmış program', () => {
+    assert.equal(todayAssigned(phase.days, '2026-10-27')?.name, 'Alt vücut');
+    assert.equal(todayAssigned(phase.days, '2026-10-28'), null);
+    assert.deepEqual(upcomingAssigned(program, '2026-10-27'), { dayId: 'd_aaaaaa', date: '2026-10-27' });
+    assert.deepEqual(upcomingAssigned(program, '2026-10-28'), { dayId: 'd_bbbbbb', date: '2026-10-29' });
+    assert.deepEqual(upcomingAssigned(program, '2026-11-02'), { dayId: 'd_aaaaaa', date: '2026-11-03' });
+    const bare = { phases: [{ id: 'p_aaaaaa', days: [{ id: 'd_aaaaaa', name: 'Program A' }] }], current: program.current };
+    assert.equal(upcomingAssigned(bare, '2026-10-27'), null);
+  });
+
+  test('pazartesi Alt vücut yapıldı: salı yine Alt vücut (kaydırma yok)', () => {
+    const days = assignedWeek({ today: '2026-10-27', weekdays: [2, 4, 7], names, sessions: [{ date: '2026-10-26', dayName: 'Alt vücut' }], since: null });
+    assert.deepEqual(rows(days), [
+      ['done', 'Alt vücut'],
+      ['planned', 'Alt vücut'],
+      ['rest', null],
+      ['planned', 'Üst vücut'],
+      ['rest', null],
+      ['rest', null],
+      ['planned', 'Tüm vücut'],
+    ]);
+  });
+
+  test('atanmış gün geçti, antrenman yok: kaçtı (adıyla); pencereden önce kaçmış sayılmaz', () => {
+    const missed = assignedWeek({ today: '2026-10-29', weekdays: [2, 4, 7], names, sessions: [], since: null });
+    assert.deepEqual(rows(missed).slice(1, 4), [['missed', 'Alt vücut'], ['rest', null], ['planned', 'Üst vücut']]);
+    const fresh = assignedWeek({ today: '2026-10-29', weekdays: [2, 4, 7], names, sessions: [], since: '2026-10-28' });
+    assert.equal(fresh[1]?.state, 'rest');
+    assert.equal(fresh[1]?.selected, true);
+  });
+
+  test('aynı gün iki antrenman: sonuncusunun adı; atanmamış günde yapılan da "yapıldı"', () => {
+    const days = assignedWeek({
+      today: '2026-10-29',
+      weekdays: [2, 4, 7],
+      names,
+      sessions: [{ date: '2026-10-28', dayName: 'Üst vücut' }, { date: '2026-10-28', dayName: 'Tüm vücut' }],
+      since: null,
+    });
+    assert.deepEqual(days[2] && [days[2].state, days[2].label], ['done', 'Tüm vücut']);
+  });
+
+  test('geçerli günler yalnız PT\'nin: atamalıda birleşim, danışanın katmanı her zaman yok sayılır', () => {
+    const layer = { weekdays: [1, 3], at: '2026-10-20T08:00:00.000Z' };
+    assert.deepEqual(effectiveSchedule({ ...program, schedule: { weekdays: [2, 4, 7] }, clientSchedule: layer }), {
+      weekdays: [2, 4, 7], pt: [2, 4, 7], client: null, source: 'pt',
+    });
+    const bare = { phases: [{ id: 'p_aaaaaa', days: [{ id: 'd_aaaaaa', name: 'Program A' }] }], current: program.current, clientSchedule: layer };
+    assert.deepEqual(effectiveSchedule(bare), { weekdays: [], pt: [], client: null, source: null });
+  });
+
+  test('kaçan gün penceresi: kayıttaki katmanın anı ham alandan (pencere geri gitmez)', () => {
+    const stored = {
+      ...program,
+      createdAt: '2026-09-01T10:00:00.000Z',
+      schedule: { weekdays: [2, 4, 7], at: '2026-09-05T10:00:00.000Z' },
+      clientSchedule: { weekdays: [1, 3], at: '2026-10-20T08:00:00.000Z' },
+    };
+    assert.equal(scheduleSince(stored, client), '2026-10-20T08:00:00.000Z');
+  });
+
+  test('haftalık hedef ve evrenin sıklığı: atanmış gün sayısı, yoksa daysPerWeek', () => {
+    assert.equal(programWeekTarget({ ...program, schedule: { weekdays: [2, 4, 7] } }), 3);
+    const bare = { id: 'p_aaaaaa', daysPerWeek: 2, days: [{ id: 'd_aaaaaa', name: 'Program A' }] };
+    assert.equal(phaseFrequency(bare), 2);
+    assert.equal(phaseFrequency(phase), 3);
+    assert.equal(programWeekTarget({ phases: [bare], current: program.current }), 2);
+  });
+
+  test('metinler', () => {
+    assert.equal(assignmentsText(phase.days), 'Sal · Alt vücut, Per · Üst vücut, Paz · Tüm vücut');
+    assert.equal(assignmentsText([{ id: 'd_aaaaaa', name: 'Program A' }]), '');
+    assert.equal(weekdayNamesText([4, 2]), 'Salı, Perşembe');
   });
 });
 

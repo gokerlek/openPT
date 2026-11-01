@@ -102,7 +102,7 @@ describe('deneme geçmişi: kimlikler ve tohum', () => {
 });
 
 describe('deneme geçmişi: takvim', () => {
-  test('antrenman günleri: danışanınki ?? PT\'ninki, yoksa sıklığa göre, o da yoksa 3 gün', () => {
+  test('antrenman günleri: PT\'ninki (danışanın eski katmanı yok sayılır), yoksa sıklığa göre, o da yoksa 3 gün', () => {
     const cases: [ReturnType<typeof demoProgram>, number[]][] = [
       [demoProgram({ weekdays: [2, 4, 6] }), [2, 4, 6]],
       [demoProgram({ weekdays: null, daysPerWeek: 2 }), [2, 5]],
@@ -111,7 +111,7 @@ describe('deneme geçmişi: takvim', () => {
     ];
     for (const [program, expected] of cases) assert.deepEqual(demoWeekdays(program), expected);
     const own = { ...demoProgram({ weekdays: [1, 3, 5] }), clientSchedule: { weekdays: [2, 7], at: '2026-06-03T10:00:00.000Z' } };
-    assert.deepEqual(demoWeekdays(own), [2, 7]);
+    assert.deepEqual(demoWeekdays(own), [1, 3, 5]);
   });
 
   test('tarihler: bugünden önceki haftalarda seçili günler; 4+ haftada yolun ~%40\'ında bir hafta boş', () => {

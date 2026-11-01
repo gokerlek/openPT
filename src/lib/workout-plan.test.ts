@@ -288,8 +288,8 @@ describe('Bugün: index\'ten', () => {
     assert.deepEqual(weekOf(index(), parsedProgram({ ...raw, schedule: { weekdays: [1, 2, 4, 6] } }), now, TZ), { done: 2, target: 4, ...week });
     assert.deepEqual(
       weekOf(index(), parsedProgram({ ...raw, schedule: { weekdays: [1, 2, 4, 6] }, clientSchedule: { weekdays: [2, 6], at: '2026-09-25T10:00:00.000Z' } }), now, TZ).target,
-      2,
-      'danışanın günleri geçerli',
+      4,
+      'danışanın eski katmanı yok sayılır (Faz 3)',
     );
     assert.deepEqual(weekOf(index(), null, now, TZ), { done: 2, target: null, ...week });
   });

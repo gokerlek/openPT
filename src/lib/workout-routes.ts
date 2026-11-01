@@ -25,18 +25,16 @@ import type { TrackingType } from './progression.ts';
 import { parseProposals, PROPOSALS_PATH } from './proposals.ts';
 import type { Client } from './schemas/client.ts';
 import { EQUIPMENT_LABELS, type Category, type Equipment } from './schemas/exercise.ts';
-import { readOwnProgram, readOwnState, scheduleOwnProgram, type OwnState } from './own-program-files.ts';
+import { readOwnProgram, readOwnState, type OwnState } from './own-program-files.ts';
 import { activeProgramId, shownProgram } from './own-program-index.ts';
 import { lastDateByProgram } from './own-program-text.ts';
 import { isOwnProgramId, PT_PROGRAM_NAME } from './own-programs.ts';
-import { scheduleBodySchema } from './schemas/own-program.ts';
 import { programSchema, type Program } from './schemas/program.ts';
 import { parseStoredSession, type SessionDoc, type SessionIndex } from './schemas/session.ts';
 import { readIndex, type SessionRepo, type StoredJson } from './session-files-core.ts';
 import { run, type SessionRouteDeps, type SessionRouteResult } from './session-routes.ts';
 import { readinessFromHealth, setSuggestionsFor, type SuggestionExercise } from './set-suggestions.ts';
 import { firstForMuscleRowIds, ROW_ID_PATTERN } from './template-plan.ts';
-import { applyClientSchedule } from './training-days.ts';
 import { mergeWaterTaps, parseWaterFile, WATER_PATH, waterMessage, waterOnDay, waterPostSchema } from './water.ts';
 import {
   activeRow,
@@ -90,9 +88,9 @@ import {
  *   Kısıtın izinsiz yasakladığı hareket listede yok, eklenemez (409).
  * - `POST /api/me/water`: antrenman dışı su dokunuşları `water.json`'a, kimlikle birleşerek
  *   (idempotent); değişiklik yoksa yazılmaz, çakışmada taze okuyup bir kez daha. Bozuk dosya ezilmez.
- * - `POST /api/me/schedule`: danışanın antrenman günleri (§2.11) `program.json` → `clientSchedule`;
- *   revision artmaz, program geçmişine `client` kaydı, PT'nin bildirim özeti düşer. `programId` bir kendi
- *   programsa günler o programa yazılır (`scheduleOwnProgram`); null PT'nin programı, verilmezse kalıcı seçim.
+ * - `POST /api/me/schedule`: eski telefonun "Günlerini değiştir"i. Faz 3'te danışan günleri değiştirmez (Karar 3):
+ *   PT programında günleri PT atar, kendi programda günler programın formundadır. Program okunmaz, hiçbir şey yazılmaz;
+ *   409 ve telefonun göstereceği metin. Hedef eskisi gibi: `programId` (kendi program; null PT'nin), yoksa kalıcı seçim.
  */
 
 export type WorkoutRouteDeps = SessionRouteDeps & {
@@ -678,64 +676,25 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+/** Eski telefonun gün değişikliğine yanıt (Faz 3, Karar 3): PT programında günleri antrenör atar. */
+const DAYS_BY_PT = 'Günlerini antrenörün belirliyor.';
+/** Kendi programda günler programın formunda (atamalar; `schedule` onların birleşimi). */
+const DAYS_IN_FORM = 'Günleri programını düzenlerken seç.';
+
 /**
- * Danışanın antrenman günleri (tasarım §2.11; Bugün'deki ve Ayarlar'daki "Günlerini değiştir"):
- * doğrudan uygulanır (`applyClientSchedule`), program geçmişine `client` türünde yazılır, revision
- * artmaz; PT'nin açık düzenleyicisi 412 almaz. Dosya ham hâliyle korunur: yalnız danışanın katmanı ve
- * geçmiş değişir (bilinmeyen alanlar düşmez). Değişiklik yoksa yazılmaz; çakışmada taze okuyup bir kez
- * daha. Yazınca PT'nin bildirim özeti düşer ("Danışan programını güncelledi").
+ * Danışanın antrenman günleri (eski telefonun Bugün'deki ve Ayarlar'daki "Günlerini değiştir"i). Faz 3'te danışan
+ * günleri hiçbir programda değiştirmez (Karar 3): PT programında, atamalı ya da atamasız, günleri PT atar; kendi
+ * programda günler programın formundadır. Eskiden kendi programa doğrudan `schedule` yazılırdı, atamalarla uyuşmayan
+ * günler doğardı; PT programında danışanın katmanı yazılırdı, artık yok sayılıyor. Bu yüzden uç hiçbir programı okumaz
+ * ya da yazmaz: her istek 409, telefonun göstereceği metinle. Hedef eskisi gibi seçilir: gövdedeki `programId` (kendi
+ * program; null PT'nin programı), yoksa kalıcı seçim. Gövde doğrulanmaz, yalnız hangi metnin döneceğini seçer.
  */
 export function scheduleRoute(deps: SessionRouteDeps, headers: Headers, origin: string, input: unknown): Promise<SessionRouteResult> {
   const blocked = postGuard(headers, origin);
   if (blocked) return Promise.resolve(blocked);
-  return run(deps, null, 'schedule', async ({ client, repo }) => {
-    const parsed = v.safeParse(scheduleBodySchema, input);
-    if (!parsed.success) return { status: 400, body: { error: 'En az bir gün seç.' } };
-    const timeZone = await deps.timeZone();
-    // Gösterilen program (`docs/design/kendi-program.md` §3.2): verilmezse kalıcı seçim; kendi programda doğrudan
-    // `schedule` (program + index tek commit), PT'ninkinde danışanın katmanı.
-    const target = parsed.output.programId !== undefined ? parsed.output.programId : activeProgramId((await readOwnState(repo)).index);
-    if (target) {
-      const result = await scheduleOwnProgram(repo, target, parsed.output.weekdays, deps.now());
-      if (!('program' in result)) {
-        return result.status === 'missing'
-          ? { status: 404, body: { error: 'Bu program artık yok.' } }
-          : { status: 409, body: { error: 'Programın şu an açılamıyor.' } };
-      }
-      if (result.status === 'saved') deps.log(`[kendi program] ${client.id} günler`);
-      const body: ScheduleResponse = { schedule: scheduleOf(result.program, { client, timeZone }), ...(result.status === 'unchanged' ? { unchanged: true as const } : {}) };
-      return { status: 200, body };
-    }
-    for (let attempt = 0; ; attempt += 1) {
-      // Bozuk JSON 500 fırlatır: dosya ezilmez.
-      const file = await repo.read('program.json');
-      if (!file) return { status: 404, body: { error: 'Henüz programın yok; antrenörün hazırlayınca günlerini seçebilirsin.' } };
-      const program = v.safeParse(programSchema, file.content);
-      if (!program.success) return { status: 409, body: { error: PROGRAM_PROBLEM } };
-      const applied = applyClientSchedule(program.output, parsed.output.weekdays, deps.now());
-      if (!applied) {
-        const body: ScheduleResponse = { schedule: scheduleOf(program.output, { client, timeZone }), unchanged: true };
-        return { status: 200, body };
-      }
-      const raw = isRecord(file.content) && file.content.version === 2 ? file.content : program.output;
-      const { clientSchedule: _dropped, ...rest } = raw as Record<string, unknown>;
-      // PT'nin günlerine dönüşte `schedule.at` şimdi olur (`applyClientSchedule`): kaçan gün penceresi eski katmanın anına geri açılmasın.
-      const next = {
-        ...rest,
-        ...(applied.program.schedule ? { schedule: applied.program.schedule } : {}),
-        ...(applied.program.clientSchedule ? { clientSchedule: applied.program.clientSchedule } : {}),
-        log: applied.program.log,
-      };
-      try {
-        await repo.write('program.json', next, { sha: file.sha, message: `Program (danışan): ${applied.text}` });
-        repo.noticesChanged();
-        deps.log(`[program] ${client.id} günler`);
-        const body: ScheduleResponse = { schedule: scheduleOf(applied.program, { client, timeZone }) };
-        return { status: 200, body };
-      } catch (error) {
-        if (attempt === 0 && error instanceof GithubError && error.status === 409) continue;
-        throw error;
-      }
-    }
+  return run(deps, null, 'schedule', async ({ repo }) => {
+    const programId = isRecord(input) ? input.programId : undefined;
+    const own = programId === null ? false : isOwnProgramId(programId) || activeProgramId((await readOwnState(repo)).index) !== null;
+    return { status: 409, body: { error: own ? DAYS_IN_FORM : DAYS_BY_PT } };
   });
 }

@@ -1,19 +1,32 @@
-import { cleanWeekdays, sameWeekdays, WEEKDAY_NAMES, WEEKDAYS, weekdaysChangeText, weekdaysText, type Weekday } from './day-assignments.ts';
+import {
+  cleanWeekdays,
+  dayOnWeekday,
+  hasAssignments,
+  phaseWeekdays,
+  WEEKDAY_NAMES,
+  WEEKDAY_SHORT,
+  WEEKDAYS,
+  weekAssignments,
+  weekdaysText,
+  type AssignableDay,
+  type Weekday,
+} from './day-assignments.ts';
 import { appendLog, mondayOf, type ClientSchedule, type ProgramLogEntry, type ProgramSchedule } from './program-plan.ts';
 
 /**
- * Antrenman günleri (tasarım §2.11, PT kararı 12) — saf. Haftanın günleri, takvim değil.
+ * Antrenman günleri (tasarım §2.11; Faz 3: güne atanmış programlar) — saf. Haftanın günleri, takvim değil.
  *
- * - PT programda günleri işaretler (`schedule.weekdays`, ISO: 1 = Pazartesi … 7 = Pazar). Danışan kendi
- *   günlerini değiştirebilir: değişikliği ayrı bir katmanda durur (`clientSchedule`), revision artmaz,
- *   PT'nin açık düzenleyicisi 412 almaz. **Geçerli günler = danışanınki ?? PT'ninki.** PT günleri
- *   değiştirince danışanın katmanı silinir (son söz PT'nin); "PT'nin günlerine dön" de siler.
- * - Günler yalnız "ne zaman" sorusunu cevaplar: sıradaki antrenmanın içeriği yine rotasyondan
- *   (`nextDayId`, A → B → C). Kaçan gün içeriği atlatmaz; dinlenme gününde de başlatılabilir.
- * - "Bu hafta x/y": y seçili gün sayısı (yoksa haftalık sıklık); hafta pazartesi başlar, uygulamanın
- *   saat diliminde (`weekOf`).
- * - Danışanın değişikliği program geçmişine `client` türünde yazılır ("Antrenman günleri: Pzt, Çar,
- *   Cum → Sal, Per, Cmt"); PT'nin bildirimleri bu kayıttan türetilir (`notices.ts`).
+ * - Günleri yalnız PT belirler: şu anki evrenin her programı (günü) hafta günlerine atanır (`day-assignments.ts`,
+ *   ISO: 1 = Pazartesi … 7 = Pazar). Geçerli günler atamaların birleşimi (`effectiveSchedule`); `schedule.weekdays`
+ *   her yazımda bundan türer. Kendi programda yazar danışandır: atamalar programın formunda.
+ * - Danışanın eski gün katmanı (`clientSchedule`) okunur ama yok sayılır; yalnız anı kaçan gün penceresini tutar
+ *   (`scheduleSince`). PT'nin ilk kaydı ya da evre geçişi katmanı siler.
+ * - Bugün, bugüne atanmış programı gösterir (`todayAssigned`, `upcomingAssigned`); bu yalnız kolaylıktır, danışan her
+ *   gün istediği programı yapar. Dönüş (A → B → C) yok: pazartesi yapılan program salının atamasını kaydırmaz.
+ * - "Bu hafta x/y": y atanmış gün sayısı, atama yoksa evrenin haftalık sıklığı (`phaseFrequency`); hafta pazartesi
+ *   başlar, uygulamanın saat diliminde (`weekOf`).
+ * - Dönüşe dayanan Faz 2 işlevleri (`weekPlan`, `weekRotation`, `todayCardTitle`, `todayState`,
+ *   `nextTrainingDate`, `relativeDayText`) ekranlar yenilerine geçene kadar kalır.
  *
  * Tarihler takvim günüdür ("2026-09-26"): UTC'de hesaplanır, saat dilimine çevrilmez.
  */
@@ -38,25 +51,36 @@ export function normalizeWeekdays(list: readonly unknown[]): Weekday[] {
   return cleanWeekdays(list) as Weekday[];
 }
 
-type Scheduled = { schedule?: ProgramSchedule | undefined; clientSchedule?: ClientSchedule | undefined };
+type AssignedPhase = { id: string; daysPerWeek?: number | undefined; days: readonly AssignableDay[] };
+type Assigned = { phases?: readonly AssignedPhase[] | undefined; current?: { phaseId: string } | undefined };
+type Scheduled = { schedule?: ProgramSchedule | undefined; clientSchedule?: ClientSchedule | undefined } & Assigned;
+
+/** Şu anki evre (`currentPhaseOf` gibi: kimlik bulunamazsa ilk evre); evre yoksa null. */
+function currentPhase<P extends { id: string }>(program: { phases?: readonly P[] | undefined; current?: { phaseId: string } | undefined }): P | null {
+  const phases = program.phases ?? [];
+  return phases.find((phase) => phase.id === program.current?.phaseId) ?? phases[0] ?? null;
+}
 
 export type EffectiveSchedule = {
-  /** Geçerli günler (danışanınki ?? PT'ninki); boşsa seçilmemiş. */
+  /** Geçerli günler (Faz 3: yalnız PT'nin); boşsa atanmamış. */
   weekdays: Weekday[];
-  /** PT'nin seçtiği günler. */
+  /** PT'nin günleri (`weekdays`'in aynısı). */
   pt: Weekday[];
-  /** Danışanın katmanı; yoksa null. */
+  /** Faz 3'te hep null: danışanın katmanı yok sayılır. Alan, tüketenleri kalkana kadar duruyor. */
   client: { weekdays: Weekday[]; at: string } | null;
-  /** Geçerli günlerin kaynağı; hiç seçilmemişse null. */
+  /** Geçerli günlerin kaynağı; hiç gün yoksa null (Faz 3'te hiç 'client' değil). */
   source: 'client' | 'pt' | null;
 };
 
+/**
+ * Geçerli günler (Faz 3): yalnız PT'nin. Atamalı programda şu anki evrenin birleşimi, atamasızda `schedule.weekdays`
+ * (eski dosyada türetme yüzünden pratikte boş). Danışanın katmanı (`clientSchedule`) okunur ama yok sayılır:
+ * `client` hep null, `source` 'pt' ya da null.
+ */
 export function effectiveSchedule(program: Scheduled): EffectiveSchedule {
-  const pt = normalizeWeekdays(program.schedule?.weekdays ?? []);
-  const own = program.clientSchedule ? normalizeWeekdays(program.clientSchedule.weekdays) : [];
-  const client = program.clientSchedule && own.length > 0 ? { weekdays: own, at: program.clientSchedule.at } : null;
-  const weekdays = client ? client.weekdays : pt;
-  return { weekdays, pt, client, source: client ? 'client' : pt.length > 0 ? 'pt' : null };
+  const days = currentPhase(program)?.days ?? [];
+  const pt = hasAssignments(days) ? normalizeWeekdays(phaseWeekdays(days)) : normalizeWeekdays(program.schedule?.weekdays ?? []);
+  return { weekdays: pt, pt: [...pt], client: null, source: pt.length > 0 ? 'pt' : null };
 }
 
 function latestIso(values: readonly (string | undefined)[]): string | undefined {
@@ -74,6 +98,9 @@ function latestIso(values: readonly (string | undefined)[]): string | undefined 
  * (duraklatılıp yeniden açılma) anların en yenisi. O günün kendisi ve öncesi kaçmış sayılmaz: danışan
  * yetişemeyebilirdi. Genel bakış'ın "Kaçan gün"ü (`attention.ts`) ve Bugün'ün gün şeridi (`weekStrip`) aynı
  * kuralla; hiçbiri bilinmiyorsa undefined.
+ *
+ * Katmanın anı ham `clientSchedule.at`'ten (Faz 3, Karar 4): `effectiveSchedule` katmanı artık yok saydığı için
+ * oradan okunsa pencere kayıttaki eski katmanın anından PT'nin eski anına geri çekilir, geçmiş günler "kaçtı" olurdu.
  */
 export function scheduleSince(
   program: Scheduled & { createdAt?: string | undefined },
@@ -82,7 +109,7 @@ export function scheduleSince(
   return latestIso([
     program.createdAt,
     program.schedule?.at,
-    effectiveSchedule(program).client?.at,
+    program.clientSchedule?.at,
     client.access.joinedAt ?? client.access.lastJoinAt,
     client.statusChangedAt,
   ]);
@@ -94,17 +121,58 @@ export function weekTarget(weekdays: readonly number[], daysPerWeek?: number): n
   return count > 0 ? count : (daysPerWeek ?? null);
 }
 
+/** Evrenin haftalık sıklığı: atanmış gün sayısı, atama yoksa `daysPerWeek` (ekranlardaki "haftada 3"). */
+export function phaseFrequency(phase: { daysPerWeek?: number | undefined; days: readonly AssignableDay[] }): number | undefined {
+  const assigned = phaseWeekdays(phase.days).length;
+  return assigned > 0 ? assigned : phase.daysPerWeek;
+}
+
 /**
- * "Bu hafta x/y"nin y'si programdan: geçerli günlerin sayısı, yoksa şu anki evrenin sıklığı (İlerleme'nin
- * `plannedDays`'iyle aynı kural). Haftalık hedeflerin dondurulması (`writeProgramFile`) bunu kullanır: eski
- * programın ilk PT kaydı atamalı evrede `daysPerWeek`'i düşürür, yalnız sıklığa bakan dondurma sonraki yazımda
- * hedefi kalıcı olarak 1 yapardı. Yoksa undefined.
+ * "Bu hafta x/y"nin y'si programdan: şu anki evrenin `phaseFrequency`'si (Bugün, İlerleme, hedeflerin
+ * dondurulması). Dondurma (`writeProgramFile`) bunu kullanır: eski programın ilk PT kaydı atamalı evrede
+ * `daysPerWeek`'i düşürür, yalnız sıklığa bakan dondurma sonraki yazımda hedefi kalıcı olarak 1 yapardı. Evre ya da
+ * sıklık yoksa undefined.
  */
-export function programWeekTarget(
-  program: Scheduled & { phases: readonly { id: string; daysPerWeek?: number | undefined }[]; current: { phaseId: string } },
-): number | undefined {
-  const phase = program.phases.find((item) => item.id === program.current.phaseId) ?? program.phases[0];
-  return weekTarget(effectiveSchedule(program).weekdays, phase?.daysPerWeek) ?? undefined;
+export function programWeekTarget(program: Scheduled & { phases: readonly AssignedPhase[]; current: { phaseId: string } }): number | undefined {
+  const phase = currentPhase(program);
+  return phase ? phaseFrequency(phase) : undefined;
+}
+
+/** Bugüne atanmış program (Bugün kartı, `plannedDayId`); yoksa null. */
+export function todayAssigned<D extends AssignableDay>(days: readonly D[], today: string): D | null {
+  return dayOnWeekday(days, isoWeekdayOf(today));
+}
+
+/**
+ * Bugünün ya da sıradaki atanmış program (Faz 3, `nextDayId`'nin yerine): şu anki evrede bugüne atanmış program,
+ * yoksa bugünden sonraki ilk atanmış gün (en çok 6 gün ileri). Atama yoksa null. Dün yapılan program sırayı
+ * kaydırmaz (kullanıcı kararı 4).
+ */
+export function upcomingAssigned(
+  program: { phases: readonly { id: string; days: readonly AssignableDay[] }[]; current: { phaseId: string } },
+  today: string,
+): { dayId: string; date: string } | null {
+  const days = currentPhase(program)?.days ?? [];
+  for (let offset = 0; offset < WEEKDAYS.length; offset += 1) {
+    const date = addDays(today, offset);
+    const day = dayOnWeekday(days, isoWeekdayOf(date));
+    if (day) return { dayId: day.id, date };
+  }
+  return null;
+}
+
+/** "Sal · Alt vücut, Per · Üst vücut"; atama yoksa boş. */
+export function assignmentsText(days: readonly AssignableDay[]): string {
+  return weekAssignments(days)
+    .map(({ weekday, day }) => `${WEEKDAY_SHORT[weekday as Weekday]} · ${day.name}`)
+    .join(', ');
+}
+
+/** "Salı, Perşembe" (PT'nin program kartı, sheet satırı); pazartesiden sıralı. */
+export function weekdayNamesText(list: readonly number[]): string {
+  return normalizeWeekdays(list)
+    .map((weekday) => WEEKDAY_NAMES[weekday])
+    .join(', ');
 }
 
 /** Seçilen gün sayısı haftalık sıklıktan farklı mı (iki tarafta küçük uyarı; engel değil). */
@@ -164,6 +232,35 @@ export function weekStrip(input: { today: string; weekdays: readonly number[]; d
     const isDone = done.has(date);
     const counted = !input.since || date > input.since;
     return { date, weekday, selected: isSelected, done: isDone, missed: isSelected && !isDone && date < input.today && counted, today: date === input.today };
+  });
+}
+
+export type WeekDayState = 'done' | 'missed' | 'planned' | 'rest';
+export type WeekDay = StripDay & { state: WeekDayState; label: string | null };
+
+/**
+ * Bugün'ün hafta şeridi (Faz 3): yapıldı (oturumun adı; aynı gün birden çoksa sonuncusu) · kaçtı (seçili gün geçti,
+ * antrenman yok; pencereden önce değil; ad atamadan) · planlı (bugün ve ilerideki seçili gün; ad atamadan) ·
+ * dinlenme. `weekdays`: geçerli günler (`effectiveSchedule`); `names`: şu anki evrenin atamaları (`weekdayNames`).
+ * Dönüş tahmini yok: her günün adı o güne atanmış program.
+ */
+export function assignedWeek(input: {
+  today: string;
+  weekdays: readonly number[];
+  names: Readonly<Partial<Record<number, string>>>;
+  /** Yapılan günler (`week.days`); adlar `sessions`'tan. Ad yoksa gün yine "yapıldı". */
+  doneDays?: Iterable<string>;
+  sessions: readonly { date: string; dayName: string }[];
+  since?: string | null | undefined;
+}): WeekDay[] {
+  const done = new Map(input.sessions.map((session) => [session.date, session.dayName]));
+  const doneDays = new Set([...(input.doneDays ?? []), ...done.keys()]);
+  const strip = weekStrip({ today: input.today, weekdays: input.weekdays, doneDays, since: input.since });
+  return strip.map((day): WeekDay => {
+    if (day.done) return { ...day, state: 'done', label: done.get(day.date) ?? null };
+    if (day.missed) return { ...day, state: 'missed', label: input.names[day.weekday] ?? null };
+    if (day.selected && day.date >= input.today) return { ...day, state: 'planned', label: input.names[day.weekday] ?? null };
+    return { ...day, state: 'rest', label: null };
   });
 }
 
@@ -320,42 +417,18 @@ function withoutClientSchedule<P extends Scheduled>(program: P): P {
 }
 
 /**
- * Danışanın "Günlerini değiştir"i: doğrudan uygulanır, program geçmişine `client` türünde yazılır,
- * revision artmaz. PT'nin günleriyle aynıysa danışanın katmanı kalkar (geçerli günler yine PT'ninki;
- * `schedule.at` şimdi olur: kaçan gün penceresi eski katmanın anına geri açılmasın). Geçerli günlerle
- * aynıysa değişiklik yok (null); boş seçim de yok sayılır.
- */
-export function applyClientSchedule<P extends SchedulableProgram>(program: P, weekdays: readonly number[], now: Date): { program: P; text: string } | null {
-  const next = normalizeWeekdays(weekdays);
-  const current = effectiveSchedule(program);
-  if (next.length === 0 || sameWeekdays(next, current.weekdays)) return null;
-  const at = now.toISOString();
-  const text = weekdaysChangeText(current.weekdays, next);
-  const base = withoutClientSchedule(program);
-  const toPt = sameWeekdays(next, current.pt);
-  return {
-    program: {
-      ...base,
-      ...(toPt && program.schedule ? { schedule: { ...program.schedule, at } } : {}),
-      ...(toPt ? {} : { clientSchedule: { weekdays: next, at } }),
-      log: appendLog(program.log, { at, revision: program.revision, kind: 'client', changes: [{ text }] }),
-    },
-    text,
-  };
-}
-
-/**
  * PT: "PT'nin günlerine dön": danışanın katmanı silinir, geçmişe PT'nin kaydı olarak yazılır; revision
- * artmaz (açık düzenleyici 412 almaz). Geçerli günler değiştiği için `schedule.at` şimdi olur. Danışanın
- * katmanı yoksa null.
+ * artmaz (açık düzenleyici 412 almaz). `schedule.at` şimdi olur (kaçan gün penceresi katmanın anından geri
+ * gitmesin). Katman `effectiveSchedule`'da yok sayıldığı için kayıttaki ham alandan okunur; boşsa ya da yoksa null.
  */
 export function resetClientSchedule<P extends SchedulableProgram>(program: P, now: Date): { program: P; text: string } | null {
-  const current = effectiveSchedule(program);
-  if (!current.client) return null;
+  const layer = normalizeWeekdays(program.clientSchedule?.weekdays ?? []);
+  if (layer.length === 0) return null;
+  const pt = effectiveSchedule(program).pt;
   const at = now.toISOString();
-  const text = current.pt.length > 0
-    ? `Danışanın günleri kaldırıldı (${weekdaysText(current.client.weekdays)}); geçerli günler: ${weekdaysText(current.pt)}`
-    : `Danışanın günleri kaldırıldı (${weekdaysText(current.client.weekdays)})`;
+  const text = pt.length > 0
+    ? `Danışanın günleri kaldırıldı (${weekdaysText(layer)}); geçerli günler: ${weekdaysText(pt)}`
+    : `Danışanın günleri kaldırıldı (${weekdaysText(layer)})`;
   return {
     program: {
       ...withoutClientSchedule(program),

@@ -20,7 +20,7 @@ import type { SessionIndexExercise, SessionIndexRow } from './schemas/session.ts
 import { ownIndexItemOf, type OwnIndex } from './own-program-index.ts';
 import { OWN_ID, ownProgram } from './testing/own-fixtures.ts';
 import { programFile, singleBlock } from './testing/session-fixtures.ts';
-import { applyClientSchedule, resetClientSchedule } from './training-days.ts';
+import { resetClientSchedule } from './training-days.ts';
 
 // Cumartesi 26 Eylül 2026, İstanbul'da 19:00.
 const NOW = new Date('2026-09-26T16:00:00.000Z');
@@ -117,15 +117,13 @@ describe('dikkat: kaçan gün penceresi (günler ya da durum değişince baştan
     );
   });
 
-  test('"PT\'nin günlerine dön" ve danışanın PT\'nin günlerine dönmesi pencereyi baştan başlatır', () => {
+  test('danışanın eski katmanı yok sayılır (PT\'nin günleri); "PT\'nin günlerine dön" pencereyi baştan başlatır', () => {
+    // Faz 3 (Karar 3): katmanlı kayıtta da günler PT'nin; Pzt/Çar/Cum'da yapılanlar Sal/Per/Cmt'yi karşılamaz.
     const own = scheduled({ schedule: { weekdays: [2, 4, 6] }, clientSchedule: { weekdays: [1, 3, 5], at: '2026-08-01T10:00:00.000Z' } });
-    assert.deepEqual(missedOf({ program: own }), []);
+    assert.deepEqual(missedOf({ program: own }).map((item) => item.text), ['Son 7 günde 3 antrenman günü kaçtı: 19 Eyl Cmt, 22 Eyl Sal, 24 Eyl Per']);
     const reset = resetClientSchedule(own, new Date(YESTERDAY));
     assert.ok(reset);
     assert.deepEqual(missedOf({ program: reset.program }), []);
-    const back = applyClientSchedule(own, [2, 4, 6], new Date(YESTERDAY));
-    assert.ok(back);
-    assert.deepEqual(missedOf({ program: back.program }), []);
   });
 
   test('duraklatmadan dönüş: aradaki günler kaçan sayılmaz', () => {
