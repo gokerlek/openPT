@@ -151,7 +151,7 @@ export type WorkoutResponse = {
   problem?: string;
   day: WorkoutDay | null;
   week: WeekCount;
-  /** Antrenman günleri (Bugün'ün gün şeridi, "Günlerini değiştir"); program yoksa null. */
+  /** Antrenman günleri (Bugün'ün hafta şeridi, Ayarlar); program yoksa null. */
   schedule: WorkoutSchedule | null;
   /** Bugünkü su: `water.json` ve bitmiş antrenmanlar (etkin antrenmanın suyu belgesinde). */
   water: { file: number; sessions: number };
@@ -682,8 +682,6 @@ export function waterRoute(deps: SessionRouteDeps, headers: Headers, origin: str
     }
   });
 }
-
-export type ScheduleResponse = { schedule: WorkoutSchedule; unchanged?: true };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);

@@ -211,12 +211,15 @@ function finishCommitMessage(doc: SessionDoc, changes: readonly ProgramChange[],
  * atanmış program. Sunucu bitişte yeniden hesaplar; telefonda eskimiş plan (gece yarısını geçen antrenman, araya
  * giren PT kaydı) yanlış "başka program" bildirimi üretmesin. Atanmamış günde `plannedDayId` ve `plannedDayName`
  * düşer (danışan programı kendisi seçti, bildirim yok); atanmış programdan başkası yapıldıysa `plannedDayName`
- * programdaki ad. Belgenin programı yoksa belge aynen döner.
+ * programdaki ad. Seans başka evrede başladıysa (`doc.program.phaseId`; PT antrenman sürerken evre geçirdi) yeni
+ * evrenin ataması o antrenmanın planı değildir: planlanan da düşer. Belgenin programı yoksa belge aynen döner.
  */
 export function withPlannedDay(doc: SessionDoc, program: Pick<Program, 'phases' | 'current'>): SessionDoc {
   if (!doc.program) return doc;
   const current = currentPhaseOf(program)?.phase;
-  const planned = current ? todayAssigned(current.days, doc.date) : null;
+  // Evresiz eski belge (`phaseId` yok) şu anki evrede sayılır.
+  const samePhase = !doc.program.phaseId || doc.program.phaseId === current?.id;
+  const planned = current && samePhase ? todayAssigned(current.days, doc.date) : null;
   // Alan sırası şemanınki (revision, phaseId, dayId, dayName, plannedDayId, plannedDayName, programId, programName).
   const { plannedDayId: _id, plannedDayName: _name, programId, programName, ...head } = doc.program;
   return {

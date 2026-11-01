@@ -21,7 +21,6 @@ import {
   OWN_PROGRAM_LIMITS,
   OWN_PROGRAMS_DIR,
   applyOwnEdit,
-  applyOwnSchedule,
   createOwnProgram,
   isOwnProgramId,
   ownNameProblem,
@@ -325,7 +324,7 @@ export async function deleteOwnProgram(repo: SessionRepo, id: string, now: Date)
   });
 }
 
-/* --- paylaşım, seçim, günler --- */
+/* --- paylaşım ve seçim --- */
 
 export type OwnChangeResult = { status: 'saved' | 'unchanged'; program: OwnProgram } | { status: 'missing' } | { status: 'invalid' };
 
@@ -365,22 +364,5 @@ export async function selectOwnActive(repo: SessionRepo, programId: string | nul
       message: name ? `Bugün'ün programı: ${name}` : "Bugün'ün programı: antrenörün programı",
     });
     return { status: 'saved' };
-  });
-}
-
-/** Kendi programda "Günlerini değiştir" (§3.2): program ve index tek commit; revision artmaz. */
-export async function scheduleOwnProgram(repo: SessionRepo, id: string, weekdays: readonly number[], now: Date): Promise<OwnChangeResult> {
-  if (!isOwnProgramId(id)) return { status: 'missing' };
-  return withRetry(async (): Promise<OwnChangeResult> => {
-    const head = await repo.head();
-    const [state, stored] = await Promise.all([readOwnState(repo, head), readOwnProgram(repo, id, head.commit)]);
-    if (stored.status === 'missing') return { status: 'missing' };
-    if (stored.status === 'invalid') return { status: 'invalid' };
-    const applied = applyOwnSchedule(stored.program, weekdays, now);
-    if (!applied) return { status: 'unchanged', program: stored.program };
-    const previous = state.index.items.find((item) => item.id === id);
-    const index = upsertOwnItem(state.index, ownIndexItemOf(applied.program, shaOf(applied.program), previous));
-    await commitProgram(repo, head, applied.program, index, `Kendi programı (${applied.program.name}): ${applied.text}`);
-    return { status: 'saved', program: applied.program };
   });
 }

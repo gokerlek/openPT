@@ -502,7 +502,7 @@ export function WorkoutScreen({
 
   /**
    * Gösterilen hareket değişti (başka hareket ya da liste; dokunuşla ya da geri/ileri tuşuyla): süren set sayacı,
-   * devrenin istasyon geçişi ve paneldeki set düzeltmesi düşer (o hareketindi; düzeltme kaydedilmemişti). Geçerlilik
+   * devrenin istasyon geçişi ve paneldeki set düzenlemesi düşer (o hareketindi; düzenleme kaydedilmemişti). Geçerlilik
    * `listView`'ın kuralı (`validFocus`): geçersiz odak liste sayılır. Taslak zaten yalnız kendi setinde geçerli (`nextSet`). Listeye dönülüyorsa bırakılan hareket not
    * edilir (`leftUnit`) ve tam dinlenme küçülür (`mode: 'mini'`): dinlenme ekranı kilitlemez, listede alt çubuğun
    * üstündeki şeritte sürer ("‹ Liste", geri tuşu, geçersiz odak; odak zaten geçersizse de). Gösterilen bir hareketten
@@ -2281,7 +2281,7 @@ export function WorkoutScreen({
   const unitIndex = list.current ? openItems.findIndex((item) => item.key === list.current) + 1 : openItems.length;
   const unsent = unsentSets(local);
   const water = waterOf(doc);
-  // Süreli setin sayacı yalnız sıradaki setinse çalışıyor sayılır (set silindiyse, düzeltildiyse değil).
+  // Süreli setin sayacı yalnız sıradaki setinse çalışıyor sayılır (set silindiyse, düzenlendiyse değil).
   const timerRunning = Boolean(local.timer && next && local.timer.rowId === next.rowId && local.timer.setIndex === next.setIndex);
   // Odakta "Sıradaki: <ad>" (giriş panelinin altında; biten harekette birincil düğme): kendiliğinden geçişin açacağı birim.
   const followingItem = followingKey ? list.items.find((item) => item.key === followingKey) : undefined;
@@ -2452,7 +2452,7 @@ export function WorkoutScreen({
               onPointerDownCapture={swallow}
               onClickCapture={swallow}
               className="relative border-t bg-card px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
-              {/* Yapılan sete dokunulduysa panel o seti düzeltir (`SetEditPanel`); değilse sıradaki set. */}
+              {/* Yapılan sete dokunulduysa panel o seti düzenler (`SetEditPanel`); değilse sıradaki set. */}
               {edit ? (
                 <SetEditPanel key={edit.setId} edit={edit} onSave={onSaveEdit} onCancel={onCancelEdit} onDelete={() => onDeleteSet(edit.setId)} />
               ) : (

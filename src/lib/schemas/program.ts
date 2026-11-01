@@ -68,7 +68,10 @@ export const weekdaysSchema = v.pipe(
   v.maxLength(7),
   v.check((days) => new Set(days).size === days.length, 'Bir gün iki kez seçilmiş.'),
 );
-/** Danışanın seçimi: en az bir gün (hiç gün seçmemek "antrenman yok" olurdu). */
+/**
+ * Danışanın eski gün katmanı (`clientSchedule`): en az bir gün. Faz 3'te danışan günleri değiştirmez (Karar 3);
+ * şema yalnız eski dosyalar okunabilsin diye kalır.
+ */
 export const clientWeekdaysSchema = v.pipe(weekdaysSchema, v.minLength(1, 'En az bir gün seç.'));
 
 /** Evrede bir hafta günü en çok bir programa: Bugün o günün tek programını gösterir. */
@@ -151,12 +154,6 @@ export const programSaveSchema = v.pipe(
   v.forward(v.partialCheck([['currentPhaseId'], ['phases']], currentExists, CURRENT_MISSING), ['currentPhaseId']),
   v.forward(v.partialCheck([['phased'], ['phases']], unphasedOk, UNPHASED_PROBLEM), ['phases']),
 );
-
-/** Danışanın "Günlerini değiştir"i (Bugün ya da Ayarlar). */
-export const clientScheduleBodySchema = v.object({ weekdays: clientWeekdaysSchema });
-
-/** PT: "PT'nin günlerine dön" (danışanın katmanını siler; revision artmaz, düzenleyici 412 almaz). */
-export const programScheduleActionSchema = v.object({ action: v.literal('reset') });
 
 /** Evre geçişi (program sayfasındaki öneri): sürüm kayıttaki gibi (`baseRevision`, `baseCreatedAt`). */
 export const programPhaseSwitchSchema = v.object({ phaseId: phaseIdSchema, baseRevision: positive, baseCreatedAt: v.optional(timestamp) });

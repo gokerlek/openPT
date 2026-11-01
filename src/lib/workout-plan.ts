@@ -646,7 +646,7 @@ export type WeekCount = {
   start: string;
   /**
    * Bu haftanın bitmiş antrenmanları, `(date, startedAt)` sırasıyla (aynı gün ikisi de): şeridin gün adları
-   * (`weekPlan`). Bellekteki eski yanıtta yok; okuyan `week.sessions ?? []` der.
+   * (`assignedWeek`). Bellekteki eski yanıtta yok; okuyan `week.sessions ?? []` der.
    */
   sessions?: { date: string; dayName: string }[];
 };
@@ -766,7 +766,7 @@ export function programStamp(
   ].join('|');
 }
 
-/** Günlerin son yapıldığı tarih ("Başka gün seç": "son: 22 Eyl"): bitmiş antrenmanlardan. */
+/** Programların son yapıldığı tarih ("Değiştir" sheet'i ve Bugün'ün listesi: "son: 22 Eyl"): bitmiş antrenmanlardan. */
 export function lastDoneDates(index: SessionIndex): Record<string, string> {
   const last: Record<string, string> = {};
   for (const row of index.items) {

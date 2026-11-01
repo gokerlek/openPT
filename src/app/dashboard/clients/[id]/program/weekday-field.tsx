@@ -1,34 +1,5 @@
-'use client';
-
-import { useRouter } from 'next/navigation';
-import { ArrowCounterClockwise } from '@phosphor-icons/react';
-import { Button } from '@/components/ui/button';
-import { Spinner } from '@/components/ui/spinner';
 import { cleanWeekdays, type AssignableDay } from '@/lib/day-assignments';
-import { fetchJson } from '@/lib/query/errors';
-import { useServiceMutation } from '@/lib/query/use-service';
 import { assignmentsText } from '@/lib/training-days';
-import { cn } from '@/lib/utils';
-
-/**
- * [PT'nin günlerine dön]: danışanın günleri silinir, PT'nin günleri geçerli olur; hemen yazılır, revision
- * artmaz (aynı sayfadaki açık düzenleme 412 almaz). Program geçmişine yazılır. Faz 3'te hiçbir ekran çizmez
- * (Karar 3); ucuyla birlikte temizlik görevinde silinir.
- */
-export function ResetDaysButton({ clientId, className }: { clientId: string; className?: string }) {
-  const router = useRouter();
-  const reset = useServiceMutation({
-    fn: () => fetchJson<{ ok: true }>(`/api/clients/${clientId}/program/schedule`, { method: 'POST', body: JSON.stringify({ action: 'reset' }) }),
-    notify: { success: 'Danışanın günleri kaldırıldı; senin günlerin geçerli.' },
-    onSuccess: () => router.refresh(),
-  });
-  return (
-    <Button type="button" variant="ghost" size="sm" className={cn('touch:h-11', className)} disabled={reset.isPending} onClick={() => reset.mutate()}>
-      {reset.isPending ? <Spinner data-icon="inline-start" /> : <ArrowCounterClockwise data-icon="inline-start" />}
-      Programdaki günlere dön
-    </Button>
-  );
-}
 
 /**
  * Haftanın programı (Faz 3, Karar 8–9): şu anki evrenin atamaları, salt okunur ("Sal · Alt vücut, Per · Üst vücut").

@@ -12,7 +12,6 @@ import {
 } from '../program-plan.ts';
 import {
   DAY_CONFLICT,
-  clientWeekdaysSchema,
   dayBlocksSchema,
   dayIdSchema,
   daySourceSchema,
@@ -165,12 +164,6 @@ export const ownProgramShareSchema = v.object({ shared: v.boolean() });
 
 /** Bugün'ün programı (kalıcı seçim): kendi programın kimliği ya da null (PT'nin programı). */
 export const ownProgramActiveSchema = v.object({ programId: v.nullable(ownProgramIdSchema) });
-
-/** "Günlerini değiştir": günler ve (verilirse) gösterilen program; null ya da yoksa kalıcı seçim. */
-export const scheduleBodySchema = v.object({
-  weekdays: clientWeekdaysSchema,
-  programId: v.optional(v.nullable(ownProgramIdSchema)),
-});
 
 /* --- own-programs-index.json --- */
 

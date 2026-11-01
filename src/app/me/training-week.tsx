@@ -32,7 +32,7 @@ import { clearWorkoutCache, readWorkoutCache } from './workout-storage';
  * (`program-card.tsx`):
  * - 7 günlük şerit (pazartesi başlar, `assignedWeek`): yapılanlar dolu (altında oturumun adı), atanmış günler
  *   halkalı (altında o güne atanmış program; bugünün planlısı kalın), geçen atanmış gün antrenmansızsa soluk halka ve
- *   "kaçtı", öteki günler dinlenme. Dönüş tahmini, "Sırada" satırı ve "Günlerini değiştir" yok: günleri yalnız PT
+ *   "kaçtı", öteki günler dinlenme. Dönüş tahmini, "Sırada" satırı ve danışanın gün seçimi yok: günleri yalnız PT
  *   belirler (kendi programda programın formu), her günün adı o güne atanmış program;
  * - "Değiştir" (başka antrenman): bu evrenin programları; bugüne atanmış program varken başkası seçilirse antrenörüne
  *   bildirilir (kendi programda değil);
@@ -51,10 +51,14 @@ function stateText(day: WeekDay, today: string): string {
   return STATE_TEXT[day.state];
 }
 
-/** Ekran okuyucu: "Salı, bugün, antrenman günü: Alt vücut", "Pazartesi, yapıldı: Üst vücut", "Salı, kaçtı: Alt vücut", "Çarşamba, dinlenme". */
-function dayLabel(day: WeekDay, today: string): string {
-  const state = stateText(day, today);
-  return [WEEKDAY_NAMES[day.weekday], day.today ? 'bugün' : null, day.label ? `${state}: ${day.label}` : state].filter(Boolean).join(', ');
+/**
+ * Ekran okuyucu: "Salı, bugün, antrenman günü: Alt vücut", "Pazartesi, yapıldı: Üst vücut", "Salı, kaçtı: Alt vücut",
+ * "Çarşamba, dinlenme". `assigned` false ise (programda hiç atanmış gün yok) boş gün "dinlenme" demez: her gün
+ * dinlenme değil, danışan istediği gün yapar ("Çarşamba", "Perşembe, bugün").
+ */
+function dayLabel(day: WeekDay, today: string, assigned: boolean): string {
+  const state = day.state === 'rest' && !assigned ? null : stateText(day, today);
+  return [WEEKDAY_NAMES[day.weekday], day.today ? 'bugün' : null, day.label && state ? `${state}: ${day.label}` : state].filter(Boolean).join(', ');
 }
 
 /**
@@ -73,6 +77,7 @@ export function WeekStrip({ clientId }: { clientId: string }) {
   if (isPending) return <Skeleton className="h-[5.0625rem] w-full rounded-lg" />;
   if (!data?.schedule) return null;
   const schedule = data.schedule;
+  const assigned = schedule.weekdays.length > 0;
   const days = assignedWeek({
     today: data.today,
     weekdays: schedule.weekdays,
@@ -93,7 +98,7 @@ export function WeekStrip({ clientId }: { clientId: string }) {
         const short = day.state === 'missed' ? stateText(day, data.today) : day.label ? dayShortName(day.label) : null;
         return (
           <li key={day.date} className={cn('flex min-w-0 flex-col items-center gap-1.5 rounded-lg py-1.5', day.today && 'bg-muted')}>
-            <span className="sr-only">{dayLabel(day, data.today)}</span>
+            <span className="sr-only">{dayLabel(day, data.today, assigned)}</span>
             <span aria-hidden className={cn('text-xs', day.today ? 'font-semibold text-foreground' : 'text-muted-foreground')}>
               {WEEKDAY_SHORT[day.weekday]}
             </span>
@@ -116,7 +121,7 @@ export function WeekStrip({ clientId }: { clientId: string }) {
                 'block w-full truncate px-0.5 py-px text-center text-[0.6875rem] leading-none',
                 strong ? 'font-semibold text-foreground' : 'text-muted-foreground',
               )}>
-              {short ?? ' '}
+              {short ?? '\u00a0'}
             </span>
           </li>
         );
@@ -130,8 +135,11 @@ export function WeekStrip({ clientId }: { clientId: string }) {
  * hepsinde son yapıldığı gün. Seçilen program başlar (her zaman `?day=`); PT programında bugüne atanmış program
  * varken başkası seçilirse antrenörüne bildirilir (`other_day`, sunucu bitişte seansın tarihinden karar verir).
  * Düğmede "gün" yok: kullanıcının sözü, gün değil antrenman değişir. Evrede tek program varsa görünmez.
+ *
+ * Önceden seçili program bugünün programı (yoksa ilki). `initial` verilirse o: bugünün programı açılamıyorsa kart
+ * açılabilen ilk programı verir (null: hiçbiri), sheet açılmayan programla başlamasın.
  */
-export function OtherProgramButton({ clientId }: { clientId: string }) {
+export function OtherProgramButton({ clientId, initial }: { clientId: string; initial?: string | null }) {
   const router = useRouter();
   const { data } = useWorkoutOverview(clientId);
   const program = useWorkoutProgram();
@@ -142,7 +150,9 @@ export function OtherProgramButton({ clientId }: { clientId: string }) {
   // Bugün: yanıtın günü (uygulamanın saat diliminde), kartın başlığıyla aynı kural (`todayAssigned`).
   const todayDay = dayOnWeekday(days, isoWeekdayOf(data.today));
   const todayId = todayDay?.id ?? null;
-  const selected = picked ?? todayId ?? days[0]?.id ?? '';
+  // Kartın verdiği kimlik yanıtın programında yoksa (eski önbellek) hiçbiri seçili değil: danışan kendisi seçer.
+  const preset = initial !== undefined ? initial : (todayId ?? days[0]?.id ?? null);
+  const selected = picked ?? (preset && days.some((day) => day.id === preset) ? preset : '');
   const own = data.program?.source === 'own';
   return (
     <>

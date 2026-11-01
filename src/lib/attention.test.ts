@@ -20,7 +20,6 @@ import type { SessionIndexExercise, SessionIndexRow } from './schemas/session.ts
 import { ownIndexItemOf, type OwnIndex } from './own-program-index.ts';
 import { OWN_ID, ownProgram } from './testing/own-fixtures.ts';
 import { programFile, singleBlock } from './testing/session-fixtures.ts';
-import { resetClientSchedule } from './training-days.ts';
 
 // Cumartesi 26 Eylül 2026, İstanbul'da 19:00.
 const NOW = new Date('2026-09-26T16:00:00.000Z');
@@ -122,9 +121,9 @@ describe('dikkat: kaçan gün penceresi (günler ya da durum değişince baştan
     // izliyordu: PT'nin Sal/Per/Cmt'si o güne kadar kaçmış sayılmaz; katman kayıtta durdukça pencere bugünden.
     const own = scheduled({ schedule: { weekdays: [2, 4, 6] }, clientSchedule: { weekdays: [1, 3, 5], at: '2026-08-01T10:00:00.000Z' } });
     assert.deepEqual(missedOf({ program: own }), []);
-    const reset = resetClientSchedule(own, new Date(YESTERDAY));
-    assert.ok(reset);
-    assert.deepEqual(missedOf({ program: reset.program }), []);
+    // PT'nin ilk kaydı katmanı düşürür ve `schedule.at`'i o ana alır (`settleSchedule`): pencere oradan sürer.
+    const { clientSchedule: _layer, ...saved } = own;
+    assert.deepEqual(missedOf({ program: { ...saved, schedule: { weekdays: [2, 4, 6], at: YESTERDAY } } }), []);
     // Katman yokken aynı günler kaçar (karşılaştırma).
     assert.deepEqual(missedOf({ program: scheduled({ schedule: { weekdays: [2, 4, 6] } }) }).map((item) => item.text), [
       'Son 7 günde 3 antrenman günü kaçtı: 19 Eyl Cmt, 22 Eyl Sal, 24 Eyl Per',
@@ -400,7 +399,7 @@ describe('dikkat: kısıtlar ve tarama (kisit-tarama.md §3.6)', () => {
   );
   health = reportConstraint(health, { region: 'shoulder', side: 'right', type: 'injury', severity: 'moderate', triggers: [] }, { id: 'k_cccccc', now: at, today: '2026-09-20' });
 
-  test('yönlendirme en üstte (95); kauda ekinada acil metin; bildirim 80; sıradaki gündeki çelişki 85', () => {
+  test('yönlendirme en üstte (95); kauda ekinada acil metin; bildirim 80; sıradaki programdaki çelişki 85', () => {
     const constraints = constraintFactsOf(health, [
       { phaseId: 'p_a', dayId: 'd_a', dayName: 'Gün A', rowId: 'r_a', exerciseId: 'jump-squat', title: 'Jump Squat', message: 'x', next: true },
     ]);
@@ -428,7 +427,7 @@ describe('dikkat: kısıtlar ve tarama (kisit-tarama.md §3.6)', () => {
     assert.deepEqual(attentionItems(facts({ constraints: constraintFactsOf(cleared, []) }), ctx), []);
   });
 
-  test('şiddetli kötüleşme 92; sıradaki günde olmayan çelişki 66', () => {
+  test('şiddetli kötüleşme 92; sıradaki programda olmayan çelişki 66', () => {
     let record: HealthRecord = { version: 2, checkIns: [], measurements: [] };
     record = addConstraint(record, { region: 'knee', side: 'left', type: 'injury', severity: 'moderate', avoid: ['ballistic'] }, { id: 'k_dddddd', now: at });
     record = reportWorse(record, 'k_dddddd', 'severe', { now: at });

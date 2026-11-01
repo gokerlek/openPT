@@ -3,7 +3,6 @@ import assert from 'node:assert/strict';
 import * as v from 'valibot';
 import {
   applyOwnEdit,
-  applyOwnSchedule,
   copyPtDays,
   createOwnProgram,
   defaultOwnName,
@@ -239,7 +238,7 @@ describe('kayıt', () => {
   });
 });
 
-describe('paylaşım ve günler', () => {
+describe('paylaşım ve özet', () => {
   test('paylaşma ve kapatma revision artırmaz, geçmişe share; zaten öyleyse null', () => {
     const shared = setOwnShared(ownProgram(), true, NOW);
     assert.deepEqual(shared?.shared, { at: NOW.toISOString() });
@@ -249,18 +248,6 @@ describe('paylaşım ve günler', () => {
     const closed = setOwnShared(shared!, false, NOW);
     assert.equal(closed?.shared, undefined);
     assert.equal(closed?.log[0]?.changes[0]?.text, 'Paylaşım kapatıldı');
-  });
-
-  test('Günlerini değiştir: doğrudan, revision artmaz, client kaydı sessionId\'siz; aynıysa null', () => {
-    const program = ownProgram({ schedule: { weekdays: [2, 4], at: '2026-09-21T00:00:00.000Z' } });
-    const result = applyOwnSchedule(program, [5, 1], NOW);
-    assert.deepEqual(result?.program.schedule, { weekdays: [1, 5], at: NOW.toISOString() });
-    assert.equal(result?.program.revision, 1);
-    assert.equal(result?.program.log[0]?.kind, 'client');
-    assert.equal(result?.program.log[0]?.sessionId, undefined);
-    assert.equal(result?.text, 'Antrenman günleri: Sal, Per → Pzt, Cum');
-    assert.equal(applyOwnSchedule(program, [4, 2], NOW), null);
-    assert.equal(applyOwnSchedule(program, [], NOW), null);
   });
 
   test('özet: gün sayısı, günler; sıklık yalnız gün seçilmemişse', () => {

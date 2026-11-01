@@ -209,7 +209,7 @@ function refocus(key: string, direction: -1 | 1, from: 'button' | 'handle') {
 
 /**
  * Antrenmanın listesi (Faz 2: liste ana ekran; tasarım `antrenman-ekrani.md`): yapılış sırasında her birim bir satır,
- * satırın bütünü düğme (`min-h-14`) ve o hareketin odağını açar; biten hareket de açılır (setleri düzeltmek için),
+ * satırın bütünü düğme (`min-h-14`) ve o hareketin odağını açar; biten hareket de açılır (setleri düzenlemek için),
  * atlanan önce geri alınır. Satırda durum ikonu (✓ ▶ ○ ⤼, Bugün'ün "Devam et" kartıyla aynı; durum sözcüğü ekran
  * okuyucuya), numara ve ad (grupta tür rozeti, üyeler alt alta "3a/3b"), sağda "2/4 set" ve son ağırlık. Atlanan
  * satırda ayrıca "Geri al" (sıranın sonuna döner). Altta "Hareket ekle". Sıra burada kendiliğinden değişmez.

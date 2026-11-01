@@ -46,7 +46,7 @@ function PreviousButton({ previous, className }: { previous: FollowingView; clas
 /**
  * Giriş panelinin altında tek satır (8. görev, "Sıradaki her an görünür"): "Sıradaki: Goblet Squat ›" dokununca o hareketi
  * açar; sonra hareket kalmadıysa "Son hareket". Listede önceki hareket varsa solda kısa "‹ Önceki" (biten bir harekete
- * dönüp setini düzeltmek için), "Sıradaki" sağa yaslanır ve adı kırpılır; ilk harekette yalnız "Sıradaki", ortada. Ana
+ * dönüp setini düzenlemek için), "Sıradaki" sağa yaslanır ve adı kırpılır; ilk harekette yalnız "Sıradaki", ortada. Ana
  * düğmenin hemen altında tam genişlikte bir şerit değil: çizgiyle ayrılır ve düğmeler yazıları kadar geniş, "Set bitti"yi
  * ıskalayan başparmak onları açmasın. `hidden`: süreli set sayarken ve set kaydedilirken satır yok (yanlış dokunuş süren
  * seti bırakırdı); yeri boş kalır, panel kaymaz.
@@ -119,7 +119,7 @@ function TimerBox({ view, target }: { view: TimerView; target: NextSet['target']
  * - Odaktaki harekette set kalmadı (biten hareket açıldı): "Bu hareket bitti", birincil **Sıradaki: <ad>** (yoksa
  *   **Antrenmanı bitir**), ikincil **Set ekle** (grupta **Tur ekle**; fazladan set). "Sıradaki" satırı burada yok:
  *   birincil düğme odur; "‹ Önceki" başlığın sağında.
- * - Kaydedilmiş seti düzeltmek bu panelin işi değil: tablodaki satıra dokununca ekran paneli `SetEditPanel` ile değiştirir.
+ * - Kaydedilmiş seti düzenlemek bu panelin işi değil: tablodaki satıra dokununca ekran paneli `SetEditPanel` ile değiştirir.
  *
  * - Süreli set: "Başlat ▶" sayacı kurar (saniye kronometreyle sayılır, alt sınırda tek bip), "Bitir ■"
  *   geçen süreyi yazar; elle stepper ve "Set bitti" de var.

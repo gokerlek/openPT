@@ -20,7 +20,7 @@ export const metadata: Metadata = { title: 'Genel bakış' };
 
 /**
  * Genel bakış: önce "Dikkat gerektirenler" (danışana göre gruplu; kaçan gün, ilerlemeyen hareket, evre, öneri,
- * ölçüm, davet; §2.11, §8 satır 12) ve danışanların bildirimleri (başka gün, yarım antrenman, aşırı yük, program
+ * ölçüm, davet; §2.11, §8 satır 12) ve danışanların bildirimleri (başka program, yarım antrenman, aşırı yük, program
  * değişikliği; §4.6), sonra küçük sayılar (her sayı kartı kendi listesine götürür) ve şu an antrenmanda olanlar
  * (canlı, tasarım §4.6).
  */

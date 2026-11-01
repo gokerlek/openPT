@@ -23,7 +23,7 @@ import { dayBody, entryPlanOf, type WorkoutDay, type WorkoutRow } from './workou
 
 /**
  * Antrenman ekranının telefondaki işleri (tasarım §2.4, §2.5, §4.2) — saf: yeni belge, sıradaki set ve
- * önceden dolu değerleri, "Set bitti", setin düzeltilmesi, silinmesi ve "Geri al"la geri gelmesi, su, bitiş özeti, ekran metinleri.
+ * önceden dolu değerleri, "Set bitti", setin düzenlenmesi, silinmesi ve "Geri al"la geri gelmesi, su, bitiş özeti, ekran metinleri.
  * Belge değişiklikleri `session-merge.ts`'in kanonik biçimine döner; imleç `workout-cursor.ts`'ten.
  *
  * - Hareket kaydı (entry) ilk setle oluşur; set o günkü hedefi (`target`), planın üst ağırlığını ve set
@@ -422,7 +422,7 @@ export function findSet(doc: Pick<SessionDoc, 'entries'>, setId: string): { entr
   return null;
 }
 
-/** Setin düzeltmesi (alttaki panelin "Kaydet"i): değerler değişir, yapıldığı an (`at`) değişmez; birleştirme `editedAt`'le. */
+/** Setin düzenlenmesi (alttaki panelin "Kaydet"i): değerler değişir, yapıldığı an (`at`) değişmez; birleştirme `editedAt`'le. */
 export function editSet(doc: SessionDoc, setId: string, values: { kg?: number | undefined; value: number }, stamp: Stamp): SessionDoc {
   const found = findSet(doc, setId);
   if (!found) return doc;
@@ -438,7 +438,7 @@ export function editSet(doc: SessionDoc, setId: string, values: { kg?: number | 
   return normalizeSession({ ...doc, entries });
 }
 
-/** Setin zorluğu (setin düzeltmesi, "Kolaydı" kısayolu); `undefined` zorluğu kaldırır (motor `good` sayar). */
+/** Setin zorluğu (setin düzenlenmesi, "Kolaydı" kısayolu); `undefined` zorluğu kaldırır (motor `good` sayar). */
 export function setSetEffort(doc: SessionDoc, setId: string, effort: Effort | undefined, stamp: Stamp): SessionDoc {
   const found = findSet(doc, setId);
   if (!found || found.set.type !== 'working' || found.set.effort === effort) return doc;
@@ -649,7 +649,7 @@ export function effortQuestions(day: WorkoutDay, doc: Pick<SessionDoc, 'entries'
   });
 }
 
-/** Cevap hareketin AMRAP olmayan bütün çalışma setlerine yazılır (set başına ayrım setin düzeltmesinde). */
+/** Cevap hareketin AMRAP olmayan bütün çalışma setlerine yazılır (set başına ayrım setin düzenlenmesinde). */
 export function setEntryEffort(doc: SessionDoc, entryId: string, effort: Effort, stamp: Stamp): SessionDoc {
   const entry = doc.entries.find((item) => item.id === entryId);
   if (!entry) return doc;

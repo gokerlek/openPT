@@ -385,8 +385,8 @@ export async function ProgramCard({
               <OtherProgramButton clientId={clientId} />
             </div>
           ) : (
-            // Bugünün programı açılamıyorsa da başka bir program seçilebilir.
-            <OtherProgramButton clientId={clientId} />
+            // Bugünün programı açılamıyorsa da başka bir program seçilebilir; sheet açılabilen ilk programla başlar.
+            <OtherProgramButton clientId={clientId} initial={phase.days.find((day) => day.id !== todayDay.id && summaryOf(day).rows > 0)?.id ?? null} />
           )}
           {cares.lines.length > 0 ? (
             <ul className="flex flex-col gap-1.5">

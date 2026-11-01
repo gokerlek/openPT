@@ -5,7 +5,7 @@ import { HEALTH_CONSENT_VERSION, type Client } from './schemas/client.ts';
 import { emptySessionIndex, type FeedbackDecision, type SessionDoc, type SessionIndex } from './schemas/session.ts';
 import { allowedHealth, applyPatch, BROKEN_PROPOSALS, planFinish, planPut, sessionDateFor, withPlannedDay, type FinishInput } from './session-finish.ts';
 import { withDeletions } from './session-merge.ts';
-import { at, DAY_A, DAY_B, programFile, sessionDoc, sessionEntry, W1, W2, workingSet } from './testing/session-fixtures.ts';
+import { at, DAY_A, DAY_B, PHASE, programFile, sessionDoc, sessionEntry, W1, W2, workingSet } from './testing/session-fixtures.ts';
 import { OWN_DAY_A, OWN_DAY_B, OWN_ID, ownProgram } from './testing/own-fixtures.ts';
 
 const TZ = 'Europe/Istanbul';
@@ -130,6 +130,19 @@ describe('bitiş: tek commit', () => {
       dayName: 'Gün A',
       plannedDayId: DAY_A,
     });
+  });
+
+  // PT antrenman sürerken evre geçirdi: seans eski evrenin programıyla başladı, yeni evrenin bugünkü ataması onun
+  // planı değil; "başka program" bildirimi çıkmamalı.
+  test('seansın evresi şu anki evre değilse planlanan program yok', () => {
+    const stale = { revision: 7, phaseId: 'p_eskiev', dayId: DAY_B, dayName: 'Gün B', plannedDayId: DAY_A, plannedDayName: 'Gün A' };
+    const plan = planFinish(finishInput(dayB({ program: stale }), { program: assigned() }));
+    assert.deepEqual(plan.doc.program, { revision: 7, phaseId: 'p_eskiev', dayId: DAY_B, dayName: 'Gün B' });
+    assert.deepEqual(plan.doc.notices, []);
+    // Aynı evre: planlanan program yazılır, bildirim çıkar.
+    const same = planFinish(finishInput(dayB({ program: { ...stale, phaseId: PHASE } }), { program: assigned() }));
+    assert.equal(same.doc.program?.plannedDayId, DAY_A);
+    assert.deepEqual(same.doc.notices.map((notice) => notice.kind), ['other_day']);
   });
 
   test('withPlannedDay: kendi programın kimliği ve adı korunur; programsız belgeye dokunulmaz', () => {

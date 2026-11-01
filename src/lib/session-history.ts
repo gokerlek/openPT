@@ -12,7 +12,7 @@ import { clockOf, entriesInOrder, minutesText } from './workout-summary.ts';
  * Danışanın Geçmiş'i (tasarım §2.10, §4.5) — saf. Liste index'ten (tek okuma), detay antrenmanın dosyasından.
  *
  * - **Liste:** bitmiş antrenmanlar en yeniden eskiye, aylara bölünmüş ("EYLÜL 2026"); satırda gün, haftanın
- *   günü, gün adı ve süre, set · toplam ağırlık; rekor, "başka gün" ve "yarım" rozetleri. Üstte son 30 gün.
+ *   günü, programın adı ve süre, set · toplam ağırlık; rekor, "başka program" ve "yarım" rozetleri. Üstte son 30 gün.
  * - **Detay:** hareketler yapılış sırasıyla, setler zorluklarıyla; ısınma ayrı satır; geçilen hareketin nedeni,
  *   danışanın ayar notu. Düzenle kipinde set, hareket ve antrenmanın tamamı onaylı silinir; su ±1 (açık soru 6:
  *   geçmişte set düzeltme yok, yalnız silme ve su).

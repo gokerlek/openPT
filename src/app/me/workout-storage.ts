@@ -118,7 +118,7 @@ export function saveWorkoutCache(clientId: string, data: WorkoutResponse): void 
   write(workoutCacheKey(clientId), JSON.stringify({ at: Date.now(), data } satisfies CachedWorkout));
 }
 
-/** Bitişten sonra: sıradaki gün ve plan değişti, eski plan başlangıçta kullanılmasın. */
+/** Bitişten sonra (ya da program değişince): plan değişti, eski plan başlangıçta kullanılmasın. */
 export function clearWorkoutCache(clientId: string): void {
   remove(workoutCacheKey(clientId));
 }

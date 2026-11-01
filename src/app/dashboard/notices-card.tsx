@@ -50,7 +50,7 @@ export async function NoticesCard({ timeZone }: { timeZone: string }) {
               </EmptyMedia>
               <EmptyTitle>Bildirim yok</EmptyTitle>
               <EmptyDescription>
-                Danışan bugünün programı yerine başka birini yaptığında, antrenmanı yarım bıraktığında ya da günlerini değiştirdiğinde burada görünür.
+                Danışan bugünün programı yerine başka birini yaptığında ya da antrenmanı yarım bıraktığında burada görünür.
               </EmptyDescription>
             </EmptyHeader>
           </Empty>

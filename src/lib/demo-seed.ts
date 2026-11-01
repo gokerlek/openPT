@@ -38,8 +38,9 @@ export function isDemoClientName(name: string): boolean {
 export type GateResult = { ok: true } | { ok: false; status: 403 | 404; error: string };
 
 /**
- * Ucun kapısı: sıra önemli — üretimde (oturum ne olursa olsun) 404; oturum yoksa 403; danışan yoksa 404;
- * adı "Test " ile başlamıyorsa 403. `client` yalnız kayıt okunduktan sonra verilir (öncesinde `undefined`).
+ * Deneme uçlarının ortak kapısı (geçmiş ve program tohumu; metin ikisine de uysun diye "deneme verisi"): sıra
+ * önemli — üretimde (oturum ne olursa olsun) 404; oturum yoksa 403; danışan yoksa 404; adı "Test " ile başlamıyorsa
+ * 403. `client` yalnız kayıt okunduktan sonra verilir (öncesinde `undefined`).
  */
 export function demoSeedGate(input: {
   production: boolean;
@@ -51,7 +52,7 @@ export function demoSeedGate(input: {
   if (input.client === undefined) return { ok: true };
   if (input.client === null) return { ok: false, status: 404, error: 'Danışan bulunamadı.' };
   if (!isDemoClientName(input.client.name)) {
-    return { ok: false, status: 403, error: `Deneme geçmişi yalnız adı "${DEMO_CLIENT_PREFIX}" ile başlayan danışana yazılır.` };
+    return { ok: false, status: 403, error: `Deneme verisi yalnız adı "${DEMO_CLIENT_PREFIX}" ile başlayan danışana yazılır.` };
   }
   return { ok: true };
 }

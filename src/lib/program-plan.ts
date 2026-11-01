@@ -769,7 +769,7 @@ export function normalizeProgram(
   return { phases, errors, droppedDeviceRowIds };
 }
 
-/* --- rotasyon ve evreler --- */
+/* --- evreler --- */
 
 /** Şu anki evre; kimliği programda yoksa ilk evre. */
 export function currentPhaseOf(
@@ -779,52 +779,6 @@ export function currentPhaseOf(
   const at = index >= 0 ? index : 0;
   const phase = program.phases[at];
   return phase ? { phase, index: at } : null;
-}
-
-/**
- * Sıradaki gün: şu anki evrede son tamamlanan günün arkasındaki gün (sonda başa döner).
- * Hiç antrenman yoksa ya da son gün bu evrede değilse ilk gün.
- */
-export function nextDayId(program: Pick<ProgramState, 'phases' | 'current' | 'rotation'>): string | null {
-  const days = currentPhaseOf(program)?.phase.days ?? [];
-  if (days.length === 0) return null;
-  const index = days.findIndex((day) => day.id === program.rotation.lastDayId);
-  return (index < 0 ? days[0] : days[(index + 1) % days.length])?.id ?? null;
-}
-
-/**
- * Antrenman bitti (antrenman ekranı çağırır): rotasyon bu günden devam eder. Revision
- * ve geçmiş değişmez. Danışan başka bir gün seçtiyse de rotasyon o günden sürer; PT'ye
- * bildirim seans dosyasındadır. Gün şu anki evrede değilse program aynen döner.
- */
-export function completeDay<P extends Pick<ProgramState, 'phases' | 'current' | 'rotation'>>(program: P, dayId: string, at: Date): P {
-  const days = currentPhaseOf(program)?.phase.days ?? [];
-  if (!days.some((day) => day.id === dayId)) return program;
-  return { ...program, rotation: { lastDayId: dayId, lastCompletedAt: at.toISOString() } };
-}
-
-/**
- * Son tamamlanan gün silindiyse ya da başka evreye taşındıysa: eski sırada ondan önceki
- * (döngüsel) ve hâlâ aynı evrede kalan ilk gün yeni dayanak olur, böylece sıradaki gün
- * değişmez. Hiçbiri kalmadıysa ya da evrenin kendisi silindiyse dayanak düşer.
- */
-export function reconcileRotation(beforePhases: Phases, afterPhases: Phases, rotation: ProgramRotation): ProgramRotation {
-  const lastDayId = rotation.lastDayId;
-  if (lastDayId === undefined) return rotation;
-  const { lastDayId: _dropped, ...rest } = rotation;
-  const before = beforePhases.find((phase) => phase.days.some((day) => day.id === lastDayId));
-  if (!before) return afterPhases.some((phase) => phase.days.some((day) => day.id === lastDayId)) ? rotation : rest;
-  const after = afterPhases.find((phase) => phase.id === before.id);
-  if (!after) return rest;
-  const surviving = new Set(after.days.map((day) => day.id));
-  if (surviving.has(lastDayId)) return rotation;
-  const days = before.days;
-  const index = days.findIndex((day) => day.id === lastDayId);
-  for (let step = 1; step < days.length; step++) {
-    const candidate = days[(index - step + days.length) % days.length];
-    if (candidate && surviving.has(candidate.id)) return { ...rest, lastDayId: candidate.id };
-  }
-  return rest;
 }
 
 export type PhaseStatus =

@@ -3,7 +3,6 @@ import {
   capChanges,
   currentPhaseChange,
   keepHiddenPhase,
-  reconcileRotation,
   settleSchedule,
   type LogKind,
   type ProgramBody,
@@ -437,9 +436,9 @@ export function commitMessage(kind: LogKind, changes: readonly ProgramChange[]):
 /**
  * PT'nin kaydı: farkı çıkarır, değişiklik yoksa `null` (hiçbir şey yazılmaz). Varsa
  * revision +1, geçmişe kayıt (en fazla 60 değişiklik), şu anki evre değiştiyse yeni evre
- * şimdi başlar ve rotasyon onun ilk gününden; değişmediyse silinen ya da başka evreye
- * taşınan son gün uzlaştırılır. Evrelere bölme/kaldırma "Düzenlendi" kaydıdır. Evresiz program
- * evresiz kalırsa gizli evre kayıttakidir (`keepHiddenPhase`): fark gün düzeyinde, rotasyon sürer.
+ * şimdi başlar. Eski dosyanın rotasyonu (Faz 3'te okunmaz) olduğu gibi taşınır; evre geçişinde son
+ * gün düşer. Evrelere bölme/kaldırma "Düzenlendi" kaydıdır. Evresiz program evresiz kalırsa gizli
+ * evre kayıttakidir (`keepHiddenPhase`): fark gün düzeyinde.
  * Antrenman günleri (Faz 3) gövdenin şu anki evresinin atamalarından yeniden yazılır, kayıttaki danışan
  * katmanı düşer (`settleSchedule`; eski programın ilk kaydı başka değişiklik olmasa da katmanı siler);
  * gövdenin program düzeyindeki `weekdays`'i okunmaz (eski gövde daha önce atanmıştır: `upgradeProgramBody`,
@@ -491,6 +490,8 @@ export function applyProgramEdit(
   // Türü programın kendi farkı belirler: evre geçişi atamalı evreler arasında günlerin satırlarını da (birleşim,
   // danışanın katmanı) getirir; onlar "Evre geçişi"ni "Düzenlendi" yapmasın (`startPhase` de aynı kaydı yazar).
   const kind: LogKind = currentChanged && structural.length === 1 && !toggled ? 'phase' : 'edit';
+  // Dönüş (rotasyon) Faz 3'te okunmaz (Karar 5); eski dosyanın alanı olduğu gibi taşınır, evre geçişinde son gün
+  // `startPhase`'teki gibi düşer.
   const { lastDayId: _dropped, ...withoutDay } = stored.rotation;
   const { schedule: _schedule, clientSchedule: _clientSchedule, clientTargets: _clientTargets, ...rest } = stored;
 
@@ -504,7 +505,7 @@ export function applyProgramEdit(
       updatedAt: at,
       phases,
       current: currentChanged ? { phaseId: body.currentPhaseId, startedAt: at } : stored.current,
-      rotation: currentChanged ? withoutDay : reconcileRotation(stored.phases, phases, stored.rotation),
+      rotation: currentChanged ? withoutDay : stored.rotation,
       log: appendLog(stored.log, { at, revision, kind, changes: capChanges(changes) }),
     },
     changes,

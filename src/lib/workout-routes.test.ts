@@ -101,7 +101,7 @@ describe('GET /api/me/workout', () => {
     assert.deepEqual(data.program?.days.map((day) => day.id), [DAY_A, DAY_B]);
     assert.equal(data.program?.nextDayId, DAY_A);
     // Kaçan gün penceresi programın kurulduğu günden (danışan hiç katılmamış, durumu değişmemiş).
-    assert.deepEqual(data.schedule, { weekdays: [], pt: [], client: null, source: null, daysPerWeek: null, since: '2026-09-01' });
+    assert.deepEqual(data.schedule, { weekdays: [], pt: [], source: null, daysPerWeek: null, since: '2026-09-01' });
     // Dönüş yok (Faz 3): bitişteki "Sıradaki antrenman" satırı kalktı, evrenin günleri planda taşınmaz.
     assert.equal('rotationDays' in (data.day ?? {}), false);
   });
@@ -115,7 +115,6 @@ describe('GET /api/me/workout', () => {
     assert.deepEqual(data.schedule, {
       weekdays: [1, 3, 5],
       pt: [1, 3, 5],
-      client: null,
       source: 'pt',
       daysPerWeek: null,
       since: '2026-09-26',

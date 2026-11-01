@@ -18,13 +18,6 @@ export function sessionDayText(program: { dayName?: string | undefined; programN
   return program?.programName ? `${program.programName} · ${day}` : day;
 }
 
-/** "Sal, Per", yoksa "haftada 2", o da yoksa "gün seçilmedi". */
-export function scheduleText(input: { weekdays: readonly number[]; daysPerWeek?: number | undefined }): string {
-  const days = weekdaysText(input.weekdays);
-  if (days) return days;
-  return input.daysPerWeek !== undefined ? `haftada ${formatNumber(input.daysPerWeek)}` : 'gün seçilmedi';
-}
-
 /**
  * Programın satırı: "2 antrenman · haftada 2 · Sal, Per · son: 22 Eyl" (Faz 3: sayım "antrenman", "gün" yalnız hafta
  * günleri); gün atanmamışsa sıklık ("haftada 3"), o da yoksa "gün atanmadı". Haftalık sayı atanmış gün sayısıdır,

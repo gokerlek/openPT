@@ -92,12 +92,12 @@ export const ATTENTION_URGENCY = {
   redFlag: 95,
   /**
    * Danışan "şiddetli" dedi (onaylı kısıtta kötüleşti ya da şiddetli bildirim), PT bakmadı: günlük hayatı etkileyen
-   * bir değişiklik her antrenmanı ilgilendirir (sıradaki gündeki tek çelişkiden, 85, geniş); yönlendirme
+   * bir değişiklik her antrenmanı ilgilendirir (sıradaki programdaki tek çelişkiden, 85, geniş); yönlendirme
    * beklemeyen bir sağlık profesyoneli kararının (95) altında, kaçan günlerin (90) üstünde.
    */
   constraintSevere: 92,
   missedMany: 90,
-  /** Kısıtla çelişen satır danışanın sıradaki gününde. */
+  /** Kısıtla çelişen satır danışanın sıradaki programında (bugüne ya da haftada sıradaki güne atanmış, `upcomingAssigned`). */
   conflictNext: 85,
   /** Danışan kısıt bildirdi, karar bekliyor. */
   report: 80,
@@ -109,7 +109,7 @@ export const ATTENTION_URGENCY = {
   deload: 70,
   declining: 65,
   phase: 65,
-  /** Programda kısıtla çelişen hareket (sıradaki günde değil). */
+  /** Programda kısıtla çelişen hareket (sıradaki programda değil). */
   conflict: 66,
   missedOne: 60,
   inviteBlocked: 55,
@@ -156,7 +156,7 @@ export type ConstraintFacts = {
    * vardı (süzgeçteki dikkati PT'nin kararına kadar sürer).
    */
   changes: { id: string; label: string; kind: 'worse' | 'better'; from?: Severity; to?: Severity; wasSevere?: true }[];
-  /** İzinsiz yasaklar (şu anki evre); `next`: danışanın sıradaki gününde. */
+  /** İzinsiz yasaklar (şu anki evre); `next`: danışanın sıradaki programında. */
   conflicts: { dayName: string; title: string; next: boolean }[];
 };
 

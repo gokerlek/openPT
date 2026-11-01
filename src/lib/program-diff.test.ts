@@ -18,7 +18,6 @@ import {
   derivePhased,
   mergePhases,
   moveDayToPhase,
-  nextDayId,
   normalizeProgram,
   programIdSource,
   removePhase,
@@ -422,10 +421,11 @@ describe('kaydın uygulanması', () => {
     assert.deepEqual(result.program.rotation, { lastCompletedAt: '2026-09-20T10:00:00.000Z' });
   });
 
-  test('son gün silinince rotasyon uzlaşır', () => {
+  // Faz 3 (Karar 5): dönüş okunmaz; eski dosyanın alanı uzlaştırılmadan taşınır.
+  test('son gün silinse de rotasyon olduğu gibi kalır', () => {
     const phases = [{ ...uyum, days: uyum.days.filter((day) => day.id !== 'd_bbbbbb') }, guc];
     const result = applyProgramEdit(stored, { phased: true, currentPhaseId: uyum.id, phases }, ctx, simdi);
-    assert.deepEqual(result?.program.rotation, { lastDayId: 'd_aaaaaa', lastCompletedAt: '2026-09-20T10:00:00.000Z' });
+    assert.equal(result?.program.rotation, stored.rotation);
   });
 
   test('düzenleyici göndermediyse kayıttaki kaynak korunur', () => {
@@ -758,10 +758,9 @@ describe('evresiz program: gizli evre', () => {
       result.program.phases.map((phase) => [phase.id, phase.name, phase.days.map((day) => day.id)]),
       [['p_evre01', 'Evre 1', ['d_aaaaaa', 'd_bbbbbb']]],
     );
-    // Şu anki evre ve rotasyon aynı: sıradaki gün B kalır (A'ya dönmez).
+    // Şu anki evre ve (eski dosyanın) rotasyonu aynı kalır.
     assert.equal(result.program.current, stored.current);
     assert.deepEqual(result.program.rotation, stored.rotation);
-    assert.equal(nextDayId(result.program), 'd_bbbbbb');
   });
 
   test('gizli evrenin adı (eski dosyada "Uyum") böl → kaldır ile değişse de geçmişe evre cümlesi düşmez', () => {

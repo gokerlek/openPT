@@ -26,7 +26,7 @@ export function WorkoutSwitchSheet({ open, busy, onOpenChange, onSwitch }: {
     <DrawerContent className="mx-auto max-w-lg" showCloseButton={!busy} data-base-ui-swipe-ignore={busy || undefined}>
       <DrawerHeader>
         <DrawerTitle>Antrenmanı değiştir</DrawerTitle>
-        <DrawerDescription>Yaptığın setler mevcut antrenmanın kaydı olarak korunur. Seçtiğin program/gün ayrı bir antrenman olarak başlar; kayıtlar birbirine karışmaz.</DrawerDescription>
+        <DrawerDescription>Yaptığın setler mevcut antrenmanın kaydı olarak korunur. Seçtiğin antrenman ayrı bir antrenman olarak başlar; kayıtlar birbirine karışmaz.</DrawerDescription>
       </DrawerHeader>
       {open ? <WorkoutChoice busy={busy} onSwitch={onSwitch} onCancel={() => onOpenChange(false)} /> : null}
     </DrawerContent>
@@ -46,7 +46,7 @@ function WorkoutChoice({ busy, onSwitch, onCancel }: { busy: boolean; onSwitch: 
   });
   const day = selectedDay ?? preview.data?.day?.dayId ?? '';
   const choices = overview.data?.selection?.choices ?? (overview.data?.program ? [{ id: overview.data.program.id ?? null, name: overview.data.program.name ?? 'PT programı' }] : []);
-  const error = overview.error || preview.error ? 'Programlar açılamadı. Bağlantını kontrol edip yeniden aç.' : preview.data && !preview.data.day ? preview.data.problem ?? 'Bu programda uygulanabilecek gün yok.' : null;
+  const error = overview.error || preview.error ? 'Programlar açılamadı. Bağlantını kontrol edip yeniden aç.' : preview.data && !preview.data.day ? preview.data.problem ?? 'Bu programda uygulanabilecek antrenman yok.' : null;
   const id = useId();
   const programItems = choices.map(choice => ({ value: choice.id ?? 'pt', label: choice.name }));
   const dayItems = (preview.data?.program?.days ?? []).map(item => ({ value: item.id, label: item.name }));
@@ -63,7 +63,7 @@ function WorkoutChoice({ busy, onSwitch, onCancel }: { busy: boolean; onSwitch: 
         </Select>
       </Field>
       <Field>
-        <FieldLabel htmlFor={`${id}-day`}>Antrenman günü</FieldLabel>
+        <FieldLabel htmlFor={`${id}-day`}>Antrenman</FieldLabel>
         <Select items={dayItems} value={shown(dayItems, day)} disabled={busy || !preview.data?.day} onValueChange={next => { if (next !== null) setDay(next); }}>
           <SelectTrigger id={`${id}-day`} className="w-full"><SelectValue placeholder={!error && (preview.isPending || preview.isFetching) ? loading : undefined} /></SelectTrigger>
           <SelectContent>{dayItems.map(item => <SelectItem key={item.value} value={item.value}>{item.label}</SelectItem>)}</SelectContent>

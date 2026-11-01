@@ -23,24 +23,24 @@ import {
   type TemplateOption,
 } from './program-plan.ts';
 import { randomId } from './template-plan.ts';
-import { normalizeWeekdays, sameWeekdays, weekdaysChangeText } from './training-days.ts';
+import { normalizeWeekdays } from './training-days.ts';
 
 /**
  * Danışanın kendi programları (`docs/design/kendi-program.md`) — saf. Program danışanın repo'sunda
  * `own-programs/<id>.json`: `program.json` ile aynı gövde (tek, gizli, süresiz evre; bloklar şablonla aynı),
- * üstüne kimlik, ad, paylaşım ve günün kopyalandığı PT günü. Ortak saf işlevler (`nextDayId`, `completeDay`,
- * `applyProgramEdit`, `normalizeProgram`, `applyProposal`) olduğu gibi çalışır.
+ * üstüne kimlik, ad, paylaşım ve günün kopyalandığı PT günü. Ortak saf işlevler (`applyProgramEdit`,
+ * `normalizeProgram`, `applyProposal`) olduğu gibi çalışır.
  *
  * - **Sınırlar** (§3.1): en çok 5 program, ad 1–40 ve danışanın programları arasında benzersiz ("Antrenörünün
  *   programı" ayrılmış), 1–7 gün. Kimlik `op_` + 8; dosya yolu yalnız kalıba uyan kimlikten (`ownProgramPath`).
  * - **Oluşturma** (§2.4): boş, PT'nin günlerinden (danışanın geçerli hedefleriyle, yeni kimliklerle, `copiedFrom`)
  *   ya da danışanlara açık şablondan (`source`). Kimlikler danışanın bütün programlarında benzersiz: sunucu
  *   çakışanı yeniden üretir (`reIdCollisions`), kayıttaki kimliklere dokunmaz (seanslar onlara bağlı).
- * - **Kayıt** (§3.5, §3.6): PT programının yolu (`applyProgramEdit`: fark, revision +1, rotasyon uzlaştırması);
+ * - **Kayıt** (§3.5, §3.6): PT programının yolu (`applyProgramEdit`: fark, revision +1);
  *   Faz 3: programlar hafta günlerine atanır (atamayı danışan yapar, yazar o); `schedule` her yazımda atamaların
  *   birleşimi, atama varken sıklık kaydedilmez. PT'nin kaydında ad, paylaşım, kimlik ve geçmiş kayıttan; kayıt
  *   `by: 'pt'`.
- * - **Paylaşım ve günler** revision artırmaz; geçmişe `share` ve `client` kaydı.
+ * - **Paylaşım** revision artırmaz; geçmişe `share` kaydı. Günler programın formundadır (kayıt; Faz 3, Karar 3).
  *
  * Node'un test aracı doğrudan çalıştırdığı için içe aktarmalar göreli ve `.ts` uzantılıdır.
  */
@@ -366,22 +366,6 @@ export function setOwnShared(program: OwnProgram, shared: boolean, now: Date): O
     ...rest,
     ...(shared ? { shared: { at } } : {}),
     log: appendLog(program.log, { at, revision: program.revision, kind: 'share', changes: [{ text: shared ? 'Antrenörle paylaşıldı' : 'Paylaşım kapatıldı' }] }),
-  };
-}
-
-/**
- * Kendi programda "Günlerini değiştir" (§3.2): `schedule` doğrudan (katman yok), revision artmaz, geçmişe
- * `client` kaydı (bildirim üretmez: `sessionId`'siz). Geçerli günlerle aynıysa ya da boşsa null.
- */
-export function applyOwnSchedule(program: OwnProgram, weekdays: readonly number[], now: Date): { program: OwnProgram; text: string } | null {
-  const next = normalizeWeekdays(weekdays);
-  const current = normalizeWeekdays(program.schedule?.weekdays ?? []);
-  if (next.length === 0 || sameWeekdays(next, current)) return null;
-  const at = now.toISOString();
-  const text = weekdaysChangeText(current, next);
-  return {
-    program: { ...program, schedule: { weekdays: next, at }, log: appendLog(program.log, { at, revision: program.revision, kind: 'client', changes: [{ text }] }) },
-    text,
   };
 }
 

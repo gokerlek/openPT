@@ -12,7 +12,6 @@ import {
   canAddDay,
   canAddPhase,
   canMoveDay,
-  completeDay,
   copyDay,
   copyPhase,
   createProgramFromTemplate,
@@ -34,7 +33,6 @@ import {
   moveDay,
   moveDayToPhase,
   movePhase,
-  nextDayId,
   nextDayName,
   nextPhaseName,
   normalizeProgram,
@@ -44,7 +42,6 @@ import {
   phaseStatusLabel,
   prepareProgramForEditing,
   programIdSource,
-  reconcileRotation,
   reIdBlocks,
   removeDay,
   removePhase,
@@ -328,64 +325,6 @@ describe('şablondan program', () => {
   });
 });
 
-describe('rotasyon', () => {
-  test('sıradaki gün: son günün arkasındaki, sonda başa döner', () => {
-    assert.equal(nextDayId(program()), 'd_aaaaaa');
-    assert.equal(nextDayId(program({ rotation: { lastDayId: 'd_aaaaaa' } })), 'd_bbbbbb');
-    assert.equal(nextDayId(program({ rotation: { lastDayId: 'd_cccccc' } })), 'd_aaaaaa');
-  });
-
-  test('tek günlük evrede hep aynı gün; başka evrenin günü ilk günü verir', () => {
-    const gucte = program({ current: { phaseId: 'p_guc001', startedAt: simdi.toISOString() } });
-    assert.equal(nextDayId({ ...gucte, rotation: { lastDayId: 'd_dddddd' } }), 'd_dddddd');
-    assert.equal(nextDayId(program({ rotation: { lastDayId: 'd_dddddd' } })), 'd_aaaaaa');
-  });
-
-  test('şu anki evre programda yoksa ilk evre', () => {
-    assert.equal(nextDayId(program({ current: { phaseId: 'p_yok000', startedAt: simdi.toISOString() }, rotation: { lastDayId: 'd_aaaaaa' } })), 'd_bbbbbb');
-  });
-
-  test('gün tamamlanınca rotasyon ilerler; revision ve geçmiş değişmez', () => {
-    const before = program();
-    const after = completeDay(before, 'd_bbbbbb', simdi);
-    assert.deepEqual(after.rotation, { lastDayId: 'd_bbbbbb', lastCompletedAt: simdi.toISOString() });
-    assert.equal(after.revision, before.revision);
-    assert.equal(after.log, before.log);
-    assert.equal(nextDayId(after), 'd_cccccc');
-    assert.equal(completeDay(before, 'd_dddddd', simdi), before);
-  });
-
-  const once = [uyum];
-  const without = (...removed: string[]) => [{ ...uyum, days: uyum.days.filter((day) => !removed.includes(day.id)) }];
-
-  test('son gün silinince sıradaki gün değişmez', () => {
-    // B'den sonra C gelecekti; B silinince dayanak A olur, sıradaki yine C.
-    const b = reconcileRotation(once, without('d_bbbbbb'), { lastDayId: 'd_bbbbbb', lastCompletedAt: 'x' });
-    assert.deepEqual(b, { lastDayId: 'd_aaaaaa', lastCompletedAt: 'x' });
-    assert.equal(nextDayId({ phases: without('d_bbbbbb'), current: { phaseId: 'p_uyum01', startedAt: '' }, rotation: b }), 'd_cccccc');
-
-    const a = reconcileRotation(once, without('d_aaaaaa'), { lastDayId: 'd_aaaaaa' });
-    assert.deepEqual(a, { lastDayId: 'd_cccccc' });
-    assert.equal(nextDayId({ phases: without('d_aaaaaa'), current: { phaseId: 'p_uyum01', startedAt: '' }, rotation: a }), 'd_bbbbbb');
-
-    const c = reconcileRotation(once, without('d_cccccc'), { lastDayId: 'd_cccccc' });
-    assert.deepEqual(c, { lastDayId: 'd_bbbbbb' });
-    assert.equal(nextDayId({ phases: without('d_cccccc'), current: { phaseId: 'p_uyum01', startedAt: '' }, rotation: c }), 'd_aaaaaa');
-  });
-
-  test('bütün günler silinirse dayanak düşer, son antrenman tarihi kalır', () => {
-    const after = [{ ...uyum, days: [gun('d_eeeeee', 'Gün D')] }];
-    assert.deepEqual(reconcileRotation(once, after, { lastDayId: 'd_bbbbbb', lastCompletedAt: 'x' }), { lastCompletedAt: 'x' });
-  });
-
-  test('gün duruyorsa ya da dayanak yoksa aynı nesne', () => {
-    const rotation = { lastDayId: 'd_bbbbbb' };
-    assert.equal(reconcileRotation(once, without('d_aaaaaa'), rotation), rotation);
-    const empty = {};
-    assert.equal(reconcileRotation(once, without('d_aaaaaa'), empty), empty);
-  });
-});
-
 describe('evre durumu', () => {
   const start = '2026-09-01T00:00:00.000Z';
   const at = (ms: number) => new Date(new Date(start).getTime() + ms);
@@ -452,7 +391,6 @@ describe('evre geçişi', () => {
       changes: [{ text: "Şu anki evre: 'Uyum' → 'Güç'" }],
     });
     assert.equal(after.log[1], kayit);
-    assert.equal(nextDayId(after), 'd_dddddd');
   });
 
   test('aynı ya da bilinmeyen evre: null', () => {
@@ -787,24 +725,6 @@ describe('evresiz program ve evreleri kaldırma', () => {
     assert.equal(moveDayToPhase(withFull, 'd_aaaaaa', 'p_dolu01'), withFull);
     assert.equal(canMoveDay(phases, 'd_aaaaaa', 'p_uyum01'), false);
     assert.equal(canMoveDay(phases, 'd_aaaaaa', 'p_guc001'), true);
-  });
-
-  test('taşınan son gün: rotasyon eski evrede öncekinden sürer', () => {
-    const target: ProgramPhase = { id: 'p_hedef1', name: 'Hedef', days: [gun('d_ffffff', 'Gün F')] };
-    const after = moveDayToPhase([uyum, target], 'd_bbbbbb', 'p_hedef1');
-    const rotation = reconcileRotation([uyum, target], after, { lastDayId: 'd_bbbbbb' });
-    assert.deepEqual(rotation, { lastDayId: 'd_aaaaaa' });
-    assert.equal(nextDayId({ phases: after, current: { phaseId: 'p_uyum01', startedAt: '' }, rotation }), 'd_cccccc');
-  });
-
-  test('evresi silinen son gün: dayanak düşer', () => {
-    assert.deepEqual(reconcileRotation([uyum, guc], [guc], { lastDayId: 'd_bbbbbb', lastCompletedAt: 'x' }), { lastCompletedAt: 'x' });
-  });
-
-  test('evreler birleşince son gün aynı evrede kalır', () => {
-    const merged = mergePhases([uyum2, guc3], 'p_guc001').phases;
-    const rotation = { lastDayId: 'd_dddddd' };
-    assert.equal(reconcileRotation([uyum2, guc3], merged, rotation), rotation);
   });
 
   test('evresiz ↔ evresiz: gizli evre kayıttakinin kimliği ve adıyla; taraflardan biri evreliyse gövde aynen', () => {

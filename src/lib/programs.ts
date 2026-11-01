@@ -22,17 +22,17 @@ import {
 } from './program-plan';
 import { programSchema, type Program } from './schemas/program';
 import type { PlanExercise } from './template-plan';
-import { programWeekTarget, resetClientSchedule } from './training-days';
+import { programWeekTarget } from './training-days';
 
 /**
  * Danışana özel program (SPEC §3, §7.4): danışanın kendi repo'sunda `program.json`.
  *
  * Çakışma denetimi dosyanın sha'sıyla değil `revision` ve oluşturulma anıyla (`createdAt`): PT'nin
- * her içerik yazımı (oluşturma, kayıt, evre geçişi) revision'ı bir artırır; antrenman ekranının
- * rotasyon yazımı artırmaz. Düzenleyici yüklediği revision'ı ve oluşturulma anını gönderir; sunucu
- * dosyayı taze okur, tutmuyorsa kaydetmez (412), tutuyorsa taze sha ile yazar. Oluşturulma anı,
- * silinip yeniden oluşturulan programı (revision yine 1) ayırır; göndermeyen eski sekme yalnız
- * revision'la denetlenir (`sameProgramBase`). Arada rotasyon yazıldıysa GitHub 409 verir, sunucu bir
+ * her içerik yazımı (oluşturma, kayıt, evre geçişi) revision'ı bir artırır; antrenman bitişinin
+ * yazımı (danışanın hedefleri, geçmiş) artırmaz. Düzenleyici yüklediği revision'ı ve oluşturulma anını
+ * gönderir; sunucu dosyayı taze okur, tutmuyorsa kaydetmez (412), tutuyorsa taze sha ile yazar.
+ * Oluşturulma anı, silinip yeniden oluşturulan programı (revision yine 1) ayırır; göndermeyen eski sekme
+ * yalnız revision'la denetlenir (`sameProgramBase`). Arada bitiş yazıldıysa GitHub 409 verir, sunucu bir
  * kez yeniden okuyup dener — PT'nin açık düzenlemesi antrenman bitti diye boşa düşmez.
  *
  * Her kayıtta değişikliklerin özeti hem dosyadaki geçmişe hem commit mesajına girer.
@@ -179,29 +179,6 @@ export async function switchPhase(clientId: string, phaseId: string, base: Progr
     try {
       await writeProgramFile(clientId, next, { sha: stored.sha, message: commitMessage('phase', next.log[0]?.changes ?? []) });
       return { status: 'saved', revision: next.revision };
-    } catch (error) {
-      if (attempt === 0 && isConflict(error)) continue;
-      throw error;
-    }
-  }
-}
-
-export type ResetScheduleResult = { status: 'saved' | 'unchanged' } | { status: 'missing' | 'invalid' };
-
-/**
- * PT: "PT'nin günlerine dön" (tasarım §2.11): danışanın antrenman günleri silinir, PT'nin günleri geçerli
- * olur; geçmişe yazılır. Revision artmaz: PT'nin açık düzenleyicisi (aynı sayfadan) 412 almaz.
- */
-export async function resetSchedule(clientId: string): Promise<ResetScheduleResult> {
-  for (let attempt = 0; ; attempt += 1) {
-    const stored = await readProgramFile(clientId);
-    if (!stored) return { status: 'missing' };
-    if (!stored.program) return { status: 'invalid' };
-    const result = resetClientSchedule(stored.program, new Date());
-    if (!result) return { status: 'unchanged' };
-    try {
-      await writeProgramFile(clientId, result.program, { sha: stored.sha, message: `Program: ${result.text}` });
-      return { status: 'saved' };
     } catch (error) {
       if (attempt === 0 && isConflict(error)) continue;
       throw error;

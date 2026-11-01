@@ -1,7 +1,7 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { GithubError } from './github/errors.ts';
-import { deleteOwnProgram, readOwnState, saveOwnProgram, scheduleOwnProgram, selectOwnActive, shareOwnProgram, type OwnGuard } from './own-program-files.ts';
+import { deleteOwnProgram, readOwnState, saveOwnProgram, selectOwnActive, shareOwnProgram, type OwnGuard } from './own-program-files.ts';
 import type { OwnIndex } from './own-program-index.ts';
 import { OWN_INDEX_PATH, type OwnProgram } from './own-programs.ts';
 import type { DiffContext } from './program-diff.ts';
@@ -274,16 +274,6 @@ describe('silme, paylaşım, seçim, günler', () => {
     assert.equal(gh.commitCount(), count);
     assert.deepEqual(await selectOwnActive(gh.repo, null, NOW), { status: 'saved' });
     assert.equal((gh.get(OWN_INDEX_PATH) as OwnIndex).active?.programId, null);
-  });
-
-  test('Günlerini değiştir: program ve index (günler, anı) tek commit', async () => {
-    const gh = fakeSessionRepo({ 'program.json': programFile() });
-    await save(gh, createBody());
-    const result = await scheduleOwnProgram(gh.repo, OWN_ID, [2, 4], NOW);
-    assert.equal(result.status, 'saved');
-    assert.deepEqual(gh.lastChanged(), [OWN_INDEX_PATH, PATH].sort());
-    const item = (gh.get(OWN_INDEX_PATH) as OwnIndex).items[0];
-    assert.deepEqual([item?.weekdays, item?.weekdaysAt], [[2, 4], NOW.toISOString()]);
   });
 
   test('okuma: index bozuksa dosyalardan kurulur; satırın sha\'sı tutmayan dosya yeniden okunur', async () => {
