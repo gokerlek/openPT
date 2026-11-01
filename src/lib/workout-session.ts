@@ -11,6 +11,7 @@ import {
   entryStatusOf,
   prefillSet,
   remaining,
+  rowKeyOf,
   slotDone,
   workoutCursor,
   type PlanOverrides,
@@ -471,12 +472,14 @@ export function deleteSet(day: WorkoutDay, doc: SessionDoc, setId: string, stamp
  * Silinen setin toast'taki "Geri al"ı: set aynı kayda **yeni kimlikle** döner (eski kimlik kalıcı iz listesinde, `deleteSet`;
  * birleşim onu her kopyadan siler). Değerleri, zorluğu, yeri (`setIndex`) ve yapıldığı an (`at`) aynı: "şu an" ve sıralama
  * bozulmaz; hareketin durumu yeniden hesaplanır. Olmazsa null: kayıt yok ya da hareketi değişti (o arada muadil seçildi), ya
- * da o yerde yine bir set var (o arada yeniden yapıldı; iki set aynı yeri tutmaz).
+ * da o yerde yine bir set var (o arada yeniden yapıldı; iki set aynı yeri tutmaz), ya da fazladan set geri gelemez
+ * (`extraRestorable`). `removedAt`: silmenin anı (yoksa yalnız sayı denetlenir). `day`: geri getirmeden sonraki istenen
+ * turlarla (silmenin bıraktığı tur da geri gelecekse onunla).
  */
 export function restoreSet(
   day: WorkoutDay,
   doc: SessionDoc,
-  removed: { entry: Pick<SessionEntry, 'id' | 'exerciseId'>; set: SessionSet },
+  removed: { entry: Pick<SessionEntry, 'id' | 'exerciseId'>; set: SessionSet; removedAt?: string | undefined },
   stamp: Stamp,
   random?: Random,
 ): { doc: SessionDoc; setId: string } | null {
@@ -484,9 +487,27 @@ export function restoreSet(
   const { set } = removed;
   if (!entry || entry.exerciseId !== removed.entry.exerciseId) return null;
   if (entry.sets.some((item) => item.type === set.type && item.setIndex === set.setIndex && Boolean(item.extra) === Boolean(set.extra))) return null;
+  if (set.extra && !extraRestorable(day, entry, removed.removedAt)) return null;
   const setId = randomId('st', SESSION_ID_LENGTHS.st, takenIds(doc), random);
   const back: SessionSet = { ...set, id: setId, by: stamp.by };
   return { doc: putEntry(doc, withStatus({ ...entry, sets: [...entry.sets, back] }, plannedOf(day, entry), stamp)), setId };
+}
+
+/**
+ * Silinen fazladan set geri gelebilir mi. Fazladan setlerin yeri sabit değil (bekleyen set yapılanların arkasından
+ * sayılır): ✓'u kaldırılan setin bıraktığı bekleyen set başka bir yerde yeniden yapılabilir, aynı yer denetimi bunu
+ * görmez ve geri gelen set istenmeyen bir tur olurdu. Bu yüzden hayır: silmeden sonra aynı kayda fazladan set yapıldıysa
+ * ya da yapılan fazladan setler birimin istenen turunu (`day.extraRounds`) zaten dolduruyorsa. Bu telefonda istek yoksa
+ * (fazladan setler başka cihazda yapıldı, istek yalnız telefonda tutulur) sayı denetlenmez: geri almak bozulmasın.
+ */
+function extraRestorable(day: WorkoutDay, entry: SessionEntry, removedAt: string | undefined): boolean {
+  const extras = extrasOf(entry);
+  const since = removedAt ? Date.parse(removedAt) : Number.NaN;
+  if (!Number.isNaN(since) && extras.some((item) => Date.parse(item.at) > since)) return false;
+  const rowKey = rowKeyOf(entry);
+  const unitKey = rowKey ? unitKeyOfRow(day, rowKey) : undefined;
+  const requested = unitKey ? (day.extraRounds?.[unitKey] ?? 0) : 0;
+  return requested === 0 || extras.length < requested;
 }
 
 /** "Su içtim" (+1) ya da "Geri al" (−1 dokunuşu, kalıcı). */

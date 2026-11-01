@@ -670,6 +670,35 @@ describe('antrenman belgesi: "+ Set ekle"', () => {
     assert.equal(capped.extraRounds?.b_aaaaaa, 10);
   });
 
+  test('"Geri al" fazladan sette: silmeden sonra fazladan set yapıldıysa ya da istenen tur dolduysa geri gelmez', () => {
+    const base = workoutDay();
+    let doc = start(base);
+    for (const minute of [1, 3, 5]) doc = logAny(base, doc, minute);
+    // İki fazladan set istendi ve yapıldı (3. ve 4. yerler).
+    const two = withExtraRounds(base, addExtraRound(withExtraRounds(base, addExtraRound(base, doc, 'b_aaaaaa')), doc, 'b_aaaaaa'));
+    for (const minute of [7, 9]) doc = logAny(two, doc, minute);
+    const first = doc.entries[0]?.sets.find((set) => set.extra && set.setIndex === 3);
+    const found = first ? findSet(doc, first.id) : null;
+    assert.ok(first && found);
+    // ✓ kaldırıldı (istenen tur kalır): bekleyen fazladan set arkada, 5. yerde.
+    const removedAt = at(10);
+    const removed = deleteSet(two, doc, first.id, { at: removedAt, by: W1 });
+    assert.ok(restoreSet(two, removed, { ...found, removedAt }, stamp(11), sequence()), 'o arada bir şey yapılmadıysa geri gelir');
+    // Bekleyen set yapıldı (başka yerde): geri gelen set istenmeyen üçüncü fazladan set olurdu.
+    const relogged = logAny(two, removed, 11);
+    assert.equal(relogged.entries[0]?.sets.filter((set) => set.extra).length, 2);
+    assert.equal(restoreSet(two, relogged, { ...found, removedAt }, stamp(12)), null);
+    // Silmenin anı bilinmese de yapılan fazladan setler istenen turu dolduruyor.
+    assert.equal(restoreSet(two, relogged, found, stamp(12)), null);
+    // Tur artırıldıysa sayı dolmasa da silmeden sonra yapılan fazladan set geri getirmeyi engeller.
+    const three = withExtraRounds(base, addExtraRound(two, removed, 'b_aaaaaa'));
+    assert.equal(three.extraRounds?.b_aaaaaa, 3);
+    assert.equal(restoreSet(three, logAny(three, removed, 11), { ...found, removedAt }, stamp(12)), null);
+    // Bu telefonda istek yoksa (fazladan setler başka cihazda yapıldı) sayı denetlenmez.
+    const unrequested = deleteSet(base, doc, first.id, { at: removedAt, by: W1 });
+    assert.ok(restoreSet(base, unrequested, { ...found, removedAt }, stamp(11), sequence()));
+  });
+
   test('fazladan setler bitişte set sayısı önerisine girer: iki antrenmandır 4 set → "3 → 4 set" (antrenörüne)', () => {
     const previous = sessionDoc({
       id: 's_aaaaaaaa',

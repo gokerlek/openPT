@@ -30,8 +30,8 @@ export type SetEditView = {
 export type SetEditValues = { kg?: number | undefined; value: number; effort?: Effort | undefined };
 
 /**
- * Kaydedilmiş seti düzeltmek (tasarım §2.4): tablodaki satıra dokununca giriş panelinin yerinde, satır vurgulu kalır; ayrı
- * sheet yok, danışan neyi düzelttiğini üstte görür. "Set 2/3 · düzenleniyor", setin değerleriyle dolu stepper'lar, zorluk
+ * Kaydedilmiş seti düzenlemek (tasarım §2.4): tablodaki satıra dokununca giriş panelinin yerinde, satır vurgulu kalır; ayrı
+ * sheet yok, danışan neyi düzenlediğini üstte görür. "Set 2/3 · düzenleniyor", setin değerleriyle dolu stepper'lar, zorluk
  * (set başına ayrım burada; AMRAP'ta yok) ve en altta [Vazgeç] [Kaydet]. **Seti sil** üstte, stepper'lardan ve
  * Kaydet'ten uzakta, metin olarak (yıkıcı renk); onay sormaz, toast'taki "Geri al" geri getirir. Klavye ve ekran okuyucu
  * için kaydırmanın "Sil"inin karşılığı budur. Esc "Vazgeç"tir.

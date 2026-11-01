@@ -281,7 +281,7 @@ export function RestPanel({
             </span>
             <span className="min-w-0 flex-1 truncate">{saved.text}</span>
             <Button variant="ghost" className="-mr-2 h-11 px-3" onClick={() => onEditSaved(saved.setId)}>
-              Düzelt
+              Düzenle
             </Button>
           </div>
         ) : null}

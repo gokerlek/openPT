@@ -292,8 +292,8 @@ function addressMarked(): boolean {
  * der (Sıradaki ya da Antrenmanı bitir, Set ekle). Dinlenme ekranı kilitlemez: listeye dönülünce tam panel küçülür,
  * listede alt çubuğun üstündeki şeritte sürer.
  *
- * Yapılan set (§2.4): tablodaki satıra (ya da dinlenmenin "Düzelt"ine) dokunmak onu alttaki panelde düzeltmeye açar
- * (`SetEditPanel`, satır vurgulu; yazım eski "Seti düzelt" sheet'ininki). ✓'a dokunmak işareti kaldırır; sola kaydırıp
+ * Yapılan set (§2.4): tablodaki satıra (ya da dinlenmenin "Düzenle"sine) dokunmak onu alttaki panelde düzenlemeye açar
+ * (`SetEditPanel`, satır vurgulu; yazım eski set sheet'ininki). ✓'a dokunmak işareti kaldırır; sola kaydırıp
  * "Sil" ve panelin "Seti sil"i seti siler: onay yok, 5 sn toast'ta "Geri al" (`restoreSet`). Süreli set sayarken ikisi
  * de yapılmaz.
  *
@@ -1081,7 +1081,7 @@ export function WorkoutScreen({
     const unitKey = shown?.unitKey ?? shownFocus;
     const unit = unitKey ? cursor.units.find((item) => item.key === unitKey) : undefined;
     // Panelde düzenlenen set: kart onun satırının tablosunu gösterir (grupta şu anki üye başkası olabilir; dinlenmenin
-    // "Düzelt"i), şerit onun satırında.
+    // "Düzenle"si), şerit onun satırında.
     const edit = editing && shownFocus && !saving ? editOf(plan, doc, editing, shownFocus) : null;
     const rowId = edit?.row.rowId ?? shown?.rowId ?? (unit ? restingRowOf(unit, doc) : null);
     const row = rowId ? (plan.rows[rowId] ?? null) : null;
@@ -1382,10 +1382,10 @@ export function WorkoutScreen({
   }, [commit, announce]);
 
   /**
-   * Kaydedilmiş seti alttaki panelde düzeltmek (tasarım §2.4): tablodaki satıra (klavyede set numarasına) ya da dinlenmenin
-   * "Düzelt"ine dokunmak. Panel giriş panelinin yerinde (`SetEditPanel`), satır tabloda vurgulu. Set başka birimdeyse
-   * (hareket bitti, kart sıradakine geçti; dinlenmenin "Düzelt"i) önce o birimin odağı açılır: danışan düzelttiği satırı
-   * görür. Set kaydedilirken ve bitiş yoldayken açılmaz; süreli set sayarken de (düzeltme sayacı bırakırdı, süren set
+   * Kaydedilmiş seti alttaki panelde düzenlemek (tasarım §2.4): tablodaki satıra (klavyede set numarasına) ya da dinlenmenin
+   * "Düzenle"sine dokunmak. Panel giriş panelinin yerinde (`SetEditPanel`), satır tabloda vurgulu. Set başka birimdeyse
+   * (hareket bitti, kart sıradakine geçti; dinlenmenin "Düzenle"si) önce o birimin odağı açılır: danışan düzenlediği satırı
+   * görür. Set kaydedilirken ve bitiş yoldayken açılmaz; süreli set sayarken de (düzenleme sayacı bırakırdı, süren set
    * kaybolurdu): toast önce bitirmeyi ya da vazgeçmeyi söyler. Açıldıysa true.
    */
   const onEditSet = useCallback(
@@ -1393,7 +1393,7 @@ export function WorkoutScreen({
       const current = localRef.current;
       if (!current || saving || finishingRef.current) return false;
       if (timedSetRunning(current, focusRef.current)) {
-        toast('Süre sayıyor', { description: 'Seti düzeltmek için önce bitir ya da vazgeç.' });
+        toast('Süre sayıyor', { description: 'Seti düzenlemek için önce bitir ya da vazgeç.' });
         return false;
       }
       const plan = planOf(current);
@@ -1412,7 +1412,7 @@ export function WorkoutScreen({
     [saving, openFocus, guard, announce, focusLater],
   );
 
-  /** Dinlenmenin "Düzelt"i: set alttaki panelde düzeltilir, dinlenme küçülüp şeritte sürer (panel görünsün). */
+  /** Dinlenmenin "Düzenle"si: set alttaki panelde düzenlenir, dinlenme küçülüp şeritte sürer (panel görünsün). */
   const onEditFromRest = useCallback(
     (setId: string) => {
       if (onEditSet(setId)) updateRest((timer) => ({ ...acknowledgeRest(timer), mode: 'mini' }));
@@ -1435,7 +1435,7 @@ export function WorkoutScreen({
     [later],
   );
 
-  /** Panelin "Kaydet"i: eski "Seti düzelt" sheet'inin yazımı (`editSet`, zorluk `setSetEffort`), hemen gönderilir. */
+  /** Panelin "Kaydet"i: eski set sheet'inin yazımı (`editSet`, zorluk `setSetEffort`), hemen gönderilir. */
   const onSaveEdit = useCallback(
     (values: SetEditValues) => {
       const current = localRef.current;
@@ -1447,7 +1447,7 @@ export function WorkoutScreen({
       outbox.schedule();
       setEditing(null);
       guard();
-      toast.success('Set düzeltildi');
+      toast.success('Set düzenlendi');
       returnFocus(editing);
     },
     [commit, editing, outbox, guard, returnFocus],
@@ -1465,9 +1465,10 @@ export function WorkoutScreen({
    * Seti kaldırır: ✓'u kaldırmak (`untick`: set yapılmadı) ya da sola kaydırıp "Sil", panelin "Seti sil"i (`delete`). İkisi
    * de eski onaylı silmenin yazımı (`deleteSet`, hemen gönderilir), onay sormaz: 5 sn toast'taki "Geri al" seti geri getirir
    * (`restoreSet`: yeni kimlikle, aynı yerine). Fark fazladan sette: silmek tek harekette istenen turu da bırakır (yeniden
-   * beklemesin), ✓'u kaldırmak bırakmaz (satır bekleyen fazladan set olur). Setin dinlenmesi biter. Taslak kalır: yalnız
-   * kendi setinde geçerli, kaldırılan set panelde sıradaki olunca dokunulmaz, o yazılınca kendi setine yine döner. Set
-   * kaydedilirken, bitiş yoldayken ve süreli set sayarken yapılmaz (`onEditSet` gibi).
+   * beklemesin), ✓'u kaldırmak bırakmaz (satır bekleyen fazladan set olur). Setin dinlenmesi biter. Taslağa dokunulmaz
+   * (yalnız kendi setinde geçerli; kaldırılan set panelde sıradaki olunca görünmez) ama yalnız "Geri al"la kendi setine
+   * döner: kaldırılan set yeniden yazılırsa `onDone` taslağı düşürür (`draft: null`). Set kaydedilirken, bitiş yoldayken ve
+   * süreli set sayarken yapılmaz (`onEditSet` gibi); "Geri al" da süreli set sayarken geri getirmez.
    *
    * "Geri al" toast'ı ekranın dışında (genel Toaster): ara verilirken, bitiş yoldayken ya da ekran kapandıktan sonra hiçbir
    * şey yazmaz (`mountedRef`, `pausingRef`, `finishingRef`; atlamanın "Geri al"ı gibi).
@@ -1489,7 +1490,10 @@ export function WorkoutScreen({
       const unitKey = unitKeyOfRow(plan, rowKey);
       const single = unitKey ? plan.blocks.find((block) => block.id === unitKey)?.rows.length === 1 : false;
       const dropped = kind === 'delete' && found.set.extra === true && unitKey !== undefined && single && (plan.extraRounds?.[unitKey] ?? 0) > 0;
-      const doc = deleteSet(plan, current.doc, setId, stampOf(current));
+      const stamp = stampOf(current);
+      // Silmenin anı: "Geri al" o andan sonra yapılan fazladan sete rağmen seti geri getirmez (`restoreSet`).
+      const removedAt = stamp.at;
+      const doc = deleteSet(plan, current.doc, setId, stamp);
       const rest = current.rest?.setId === setId ? null : current.rest;
       const extraRounds = dropped && unitKey ? dropExtraRound(plan, unitKey) : current.extraRounds;
       const focused = document.activeElement;
@@ -1515,14 +1519,26 @@ export function WorkoutScreen({
           onClick: () => {
             const latest = localRef.current;
             if (!mountedRef.current || pausingRef.current || !latest || latest.doc.id !== sessionId || finishingRef.current) return;
-            const back = restoreSet(planOf(latest), latest.doc, found, stampOf(latest));
+            // Süreli set sayarken geri getirmek sıradaki seti değiştirip süren seti bırakırdı (`removeSet` gibi).
+            if (timedSetRunning(latest, focusRef.current)) {
+              toast('Süre sayıyor', { description: 'Seti geri getirmek için önce bitir ya da vazgeç.' });
+              return;
+            }
+            // Silmenin bıraktığı fazladan tur da geri gelir; fazladan setin denetimi de o turla (`restoreSet`).
+            const rounds = dropped && unitKey ? { ...latest.extraRounds, [unitKey]: (latest.extraRounds[unitKey] ?? 0) + 1 } : latest.extraRounds;
+            const next = { ...latest, extraRounds: rounds };
+            const back = restoreSet(planOf(next), latest.doc, { ...found, removedAt }, stampOf(latest));
             if (!back) {
               toast(`Set ${position + 1} geri getirilemedi`, { description: 'O arada yeniden yapıldı ya da hareket değişti.' });
               return;
             }
-            // Silmenin bıraktığı fazladan tur da geri gelir.
-            const rounds = dropped && unitKey ? { ...latest.extraRounds, [unitKey]: (latest.extraRounds[unitKey] ?? 0) + 1 } : latest.extraRounds;
-            commit(withChange({ ...latest, extraRounds: rounds }, back.doc, { send: true }));
+            // Geri gelen set sıradaki setin yerindeyse sıradaki set değişir (`onDropExtra` gibi): süreli setin sayacı düşer,
+            // taslak yalnız yeni sıradaki setinse kalır (silmeden önce yazılan taslak böylece kendi setine döner).
+            const before = nextSet(planOf(latest), latest.doc, null, focusRef.current);
+            const after = nextSet(localWorkoutDay(next, back.doc), back.doc, null, focusRef.current);
+            const moved = before?.rowId !== after?.rowId || before?.setIndex !== after?.setIndex;
+            const draft = latest.draft && after && latest.draft.rowId === after.rowId && latest.draft.setIndex === after.setIndex ? latest.draft : null;
+            commit(withChange(moved ? { ...next, draft, timer: null } : next, back.doc, { send: true }));
             outbox.schedule();
             announce(`Set ${position + 1} geri geldi`);
           },
@@ -2033,11 +2049,14 @@ export function WorkoutScreen({
     [saving, commit, guard, announce, focusLater],
   );
 
-  /** Bekleyen fazladan seti (grupta turu) bırakır; geriye bir şey kalmadıysa bitirme sorusu. */
+  /**
+   * Bekleyen fazladan seti (grupta turu) bırakır; geriye bir şey kalmadıysa bitirme sorusu. Dokunuş kilidi açıkken yok
+   * sayılır: fazladan setin ✓'u kaldırılınca aynı hücrede ✕ çıkar, çift dokunuşun ikincisi turu da bırakırdı.
+   */
   const onDropExtra = useCallback(
     (key: string) => {
       const current = localRef.current;
-      if (!current || saving) return;
+      if (!current || saving || performance.now() < guardUntil.current) return;
       const plan = planOf(current);
       const before = nextSet(plan, current.doc, null, focusRef.current);
       const next = { ...current, extraRounds: dropExtraRound(plan, key) };

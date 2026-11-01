@@ -261,6 +261,9 @@ export function ExerciseCard({
     setWarmOpen(false);
     setSwipeOpen(null);
   }
+  // Kart kilitlenince ya da açık satır düzenlemeye açılınca "Sil" kapanır (çizimde, `shownRow` gibi): kilit kalkınca ya
+  // da düzenleme bitince kendiliğinden yeniden açılmaz.
+  if (swipeOpen !== null && (locked || swipeOpen === editingSetId)) setSwipeOpen(null);
   const reduced = useReducedMotion();
   // Hareket değişirken çıkan kart başlığın kimliğini bırakır: odak yeni kartın başlığına gider.
   const present = useIsPresent();
@@ -284,9 +287,9 @@ export function ExerciseCard({
     currentRef.current?.scrollIntoView({ block: 'nearest', behavior: reduced ? 'auto' : 'smooth' });
   }, [currentSetIndex, editingSetId, row.rowId, reduced]);
 
-  // Açık "Sil" yalnız kaydırılabilen, hâlâ yapılmış bir satırda geçerli: set silindiyse, kilitlendiyse ya da düzenlemeye
-  // açıldıysa kapanmış sayılır (yoksa aşağıdaki dinleyici tablodaki sonraki dokunuşu boşuna yutardı).
-  const openRow = !locked && swipeOpen !== null && swipeOpen !== editingSetId && sets.some((set) => set.logged?.id === swipeOpen) ? swipeOpen : null;
+  // Açık "Sil" yalnız hâlâ yapılmış bir satırda geçerli: set silindiyse kapanmış sayılır (yoksa aşağıdaki dinleyici
+  // tablodaki sonraki dokunuşu boşuna yutardı). Kilit ve düzenleme durumu yukarıda sıfırlar.
+  const openRow = swipeOpen !== null && sets.some((set) => set.logged?.id === swipeOpen) ? swipeOpen : null;
   // Açık "Sil"i dışarı dokunmak ve Esc kapatır (`SwipeGroup` gibi). Tablodaki dokunuş yalnız kapatır: o satırı düzenlemeye
   // açmaz, ✓'unu kaldırmaz. Açık satırın kendisine dokunmak satırın işi (yalnız kapatır; "Sil"e basmak siler).
   useEffect(() => {

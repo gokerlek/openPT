@@ -58,12 +58,12 @@ function NextUp({ previous, following, hidden }: { previous: FollowingView | nul
         <>
           {previous ? <PreviousButton previous={previous} className="-ml-2 shrink-0" /> : null}
           {following ? (
+            // Erişilebilir ad görünen metnin kendisi ("Sıradaki: Goblet Squat"; WCAG 2.5.3): sesle komut verilebilsin.
             <Button
               variant="ghost"
-              aria-label={`Sıradaki hareket: ${following.name}`}
               className={cn('h-11 w-auto max-w-full min-w-0 gap-1 px-3 text-sm font-normal text-muted-foreground', previous && '-mr-2 shrink')}
               onClick={following.onOpen}>
-              <span className="shrink-0">Sıradaki:</span>
+              <span className="shrink-0">Sıradaki:</span>{' '}
               <span className="min-w-0 truncate font-medium text-foreground">{following.name}</span>
               <CaretRight data-icon="inline-end" weight="bold" />
             </Button>

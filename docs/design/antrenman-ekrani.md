@@ -13,7 +13,7 @@
 - **Dinlenme:** zorluk hareket başına bir kez (Kolay · İyi · Zor), "Başaramadım" yok; 208 px sayaç; −10 sn bip, bitişte yinelenen alarm, kilit uyarısı ilk dinlenmede (§2.5).
 - **Atlama tek dokunuş:** odakta ⋯ "Bu hareketi atla"; hareket atlananlara gider (listenin sonunda ⤼), 5 sn toast [Geri al]; neden yalnız bitişte (§2.6). (Rev. 2'de panelde "Hareketi geç ›" idi: hareket sona alınırdı, toast [Bugün yapma] [Geri al].)
 - **Bitiş:** "Programını güncelleyelim mi?" tek soru, hazır seçimle; erken bitişte "Sıradaki antrenman: Gün B · Değiştir"; "Antrenmanı sil" bitiş sheet'inden kalktı (§2.7).
-- **Silme:** onay düğmeleri telefonda üst üste, Vazgeç en altta; metin "kalır" der ve neyin silinmediğini söyler (§2.10, §4.5).
+- **Silme:** onay düğmeleri telefonda üst üste, Vazgeç en altta; metin "kalır" der ve neyin silinmediğini söyler (§2.10, §4.5). Etkin antrenmanda set silme (✓'u kaldırmak, sola kaydırıp "Sil", paneldeki "Seti sil") onay sormaz: 5 sn toast'ta [Geri al] seti geri getirir (§2.4).
 - **Karusel 4 kart;** ilk kart PT'nin istediği dört sayıyı birlikte gösterir; birincil düğme "Sonraki ›" (§2.8).
 - **Veri:** bitiş tek commit (Git Data API); silme izleri kalıcı; alan başına, sıradan bağımsız birleştirme; su bir dokunuş listesi; dosya yolu yalnız kimlikten; seans yazımları için ayrı Octokit ayarı; index onarımı; sağlık ayrıntısı yalnız `health.json`'da (§4).
 - **Program:** danışanın tekrar hedefi `clientTargets`'e yazılır, `revision` artmaz; PT'nin açık düzenleyicisi 412 almaz (§6.2).
@@ -229,7 +229,7 @@ Seçilen gün seansa `program.plannedDayId` ≠ `dayId` olarak yazılır → bil
   - Sonuç: dokunup geçmek "geçen seferle aynı" demektir; motor `hold` verir, `increase` vermez. Artış bilinçli bir "+" dokunuşu ister. Yorgun ya da acelesi olan danışan 10·10·10'u tek dokunuşla yazamaz. "Hedef 8–10" stepper'ın hemen üstünde durduğu için yukarı düzeltmek görünür bir seçimdir.
 - **Stepper:** ağırlık adımı cihazın bir sonraki/önceki ayarı (`loadSpecFor` → ızgara; `gridOf`'un dışa açılması gerekir). Basılı tutunca tekrarlar; kutuya dokununca `inputMode="decimal"`.
 - **Yumuşak uyarılar** (engellemez): "Hedefin çok altında — doğru mu?"; `isOverload` → "Hedefin çok üzerindesin" [Onayla] [Düzelt]. Onaylanan set `overload: true` işaretlenir, PT'ye bildirim gider; hareket başına bir kez sorulur, sonra satırda gösterilir.
-- **Kaydedilmiş sete dokunmak:** set alttaki panelde düzeltilir (sheet yok; dinlenmenin "Düzelt"i de buraya getirir, dinlenme şeritte sürer). Satır tabloda vurgulu kalır; panel "Set 2/3 · düzenleniyor", setin kg ve tekrarıyla dolu stepper'lar, tek satır zorluk (Kolay · İyi · Zor; AMRAP'ta yok), en altta [Vazgeç] [Kaydet]. En üstte, stepper'lardan ve Kaydet'ten uzakta, metin olarak **"Seti sil"** (yıkıcı renk). Süreli set sayarken açılmaz (önce Bitir ya da Vazgeç).
+- **Kaydedilmiş sete dokunmak:** set alttaki panelde düzenlenir (sheet yok; dinlenmenin "Düzenle"si de buraya getirir, dinlenme şeritte sürer). Satır tabloda vurgulu kalır; panel "Set 2/3 · düzenleniyor", setin kg ve tekrarıyla dolu stepper'lar, tek satır zorluk (Kolay · İyi · Zor; AMRAP'ta yok), en altta [Vazgeç] [Kaydet]. En üstte, stepper'lardan ve Kaydet'ten uzakta, metin olarak **"Seti sil"** (yıkıcı renk). Süreli set sayarken açılmaz (önce Bitir ya da Vazgeç).
 - **✓ ve kaydırma:** satırdaki ✓ bir anahtardır: dokunmak işareti kaldırır (set silinir, panelde yeniden sıradaki olur). Dokunmatikte satırı sola kaydırmak sağda **Sil**'i açar (aynı anda tek satır; dışarı dokunmak kapatır). İkisi de, panelin "Seti sil"i de onay sormaz: 5 sn toast "Set 2 geri alındı" / "Set 2 silindi" · [Geri al] seti yerine geri getirir.
 - **"‹ Önceki · Sıradaki: <ad> ›"** panelin altında tek satır: "Sıradaki" kendiliğinden geçişin açacağı hareket, "‹ Önceki" listede önceki hareket (biten de; atlanan atlanır), biten bir hareketin setini düzeltmeye dönmek için. İlk harekette yalnız "Sıradaki", ortada.
 - **Başlık ve düğmeler** 44 px. Üst çubuğun solunda **"‹ Liste"** (geri tuşuyla aynı yer: listeye döner, §2.6); sağda **Bitir** ve **⋯** menüsü. ⋯ odakta önce hareketin öğelerini verir: **Muadil seç** ve **Bu hareketi atla** (§2.6; yapılamıyorsa öğe devre dışı, nedeni altında: "Set kaydedildi, muadil seçilemez", "Bu hareket bitti"); her zaman **Antrenmanı değiştir** ve **Ara ver** (Bugün'e; antrenman telefonda kalır). Başlığın yanında düğme yok; kısıt notundaki "Değiştir" kalır.
@@ -262,7 +262,7 @@ Seçilen gün seansa `program.plannedDayId` ≠ `dayId` olarak yazılır → bil
 │ Bench Press · 2/3 set ✓                 │ kart tek satır
 ├─────────────────────────────────────────┤
 │ Dinlenme            Küçült   Atla ›     │ 44 px; atla sağ üstte
-│ ✓ Set 2 kaydedildi · 62,5 × 9   Düzelt  │
+│ ✓ Set 2 kaydedildi · 62,5 × 9  Düzenle  │
 │ Bench Press nasıldı?                    │ yalnız hareketin son setinden sonra
 │ [ Kolay ]    [  İyi  ]    [  Zor  ]     │ 3 × ~110 px, 56 px
 │            ╭─────────────╮              │
@@ -274,7 +274,7 @@ Seçilen gün seansa `program.plannedDayId` ≠ `dayId` olarak yazılır → bil
 ```
 - **Yerleşim çift dokunuşa göre:** "Set bitti"nin yerinde düğme olmayan "Sıradaki" satırı durur; "Dinlenmeyi atla" sağ üstte. İkinci ve üçüncü dokunuş boşa düşer (ayrıca 400 ms kilit).
 - Süre bloğun `restSeconds` değeri; 0 ise panel açılmaz. ±15 yalnız bu dinlenmeyi değiştirir.
-- **Zorluk hareket başına bir kez:** hareketin son çalışma setinden sonra "Bench Press nasıldı?" Kolay · İyi · Zor (tek satır). Cevap o hareketin bütün çalışma setlerine yazılır; set başına ayrım setin düzeltmesinde (§2.4). Seçilmezse alan boş kalır, motor `good` sayar. Başlık hareketin adını taşır: soru sıradaki hareketin kartının üstünde çıksa da neyi sorduğu bellidir.
+- **Zorluk hareket başına bir kez:** hareketin son çalışma setinden sonra "Bench Press nasıldı?" Kolay · İyi · Zor (tek satır). Cevap o hareketin bütün çalışma setlerine yazılır; set başına ayrım setin düzenlenmesinde (§2.4). Seçilmezse alan boş kalır, motor `good` sayar. Başlık hareketin adını taşır: soru sıradaki hareketin kartının üstünde çıksa da neyi sorduğu bellidir.
 - **"Başaramadım" yok:** tekrar alt sınırın altındaysa bu zaten kaçırmadır (`progression.ts`: `effort === 'fail' || value < min`); düğme aynı şeyi ikinci kez sorup tekrarı yeniden istiyordu. `fail` eski kayıtlar için şemada kalır. §5.3'ün "bütün setler Kolay/İyi" ve "bütün setler Kolay → ×2" kuralları aynen çalışır.
 - **Ara setlerde tek kısayol:** tekrar aralığın tepesindeyse ve sonraki set aynı ağırlıktaysa panelde isteğe bağlı çip: **"Kolaydı · sonraki set 65 kg"**. Dokunmak o sete `easy` yazar ve sonraki seti bir adım artırır (`nextSetInPlan`'in "kolay ve tepede" kuralı). Soru değildir; dokunulmazsa hiçbir şey olmaz. Bu olmadan aynı seans içi artış hiç tetiklenmezdi.
 - **Sayaç** `restEndsAt` zaman damgasından; telefon uyusa da doğru (v1). Halka ≥ 200 px (208), rakam ≥ 56 px, `tabular-nums`.
