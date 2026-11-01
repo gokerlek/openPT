@@ -8,10 +8,12 @@ import {
   blankDay,
   blankPhase,
   blankProgramBody,
+  bodyWithAssignments,
   canAddDay,
   canAddPhase,
   canMoveDay,
   completeDay,
+  copyDay,
   copyPhase,
   createProgramFromTemplate,
   createProgramRecord,
@@ -845,7 +847,7 @@ describe('sıklık ve haftalık yük', () => {
   test('tek gün, iki 10 setlik göğüs hareketi, haftada 3: bir tur 20, haftada 60', () => {
     const day: ProgramDay = { id: 'd_aaaaaa', name: 'Gün A', blocks: [ten('aaaaa1', 'bench'), ten('aaaaa2', 'bench')] };
     const load = phaseMuscleLoad({ daysPerWeek: 3, days: [day] }, library, weightsOf);
-    assert.deepEqual(load, { cycle: { chest_lower: 20 }, weekly: { chest_lower: 60 }, factor: 3 });
+    assert.deepEqual(load, { cycle: { chest_lower: 20 }, weekly: { chest_lower: 60 }, factor: 3, assigned: [] });
   });
 
   test('beş günlük döngü, haftada 3: bir turdaki 10 set haftada 6', () => {
@@ -918,5 +920,114 @@ describe('eski program dosyası', () => {
     assert.deepEqual(upgradeProgram(once), once);
     assert.equal(upgradeProgram('x'), 'x');
     assert.equal(upgradeProgram(null), null);
+  });
+});
+
+describe('Faz 3: atamalar', () => {
+  const exercise = (id: string, primaryMuscles: string[] = []): PlanExercise => ({
+    id,
+    title: id,
+    category: 'compound',
+    trackingType: 'weight_reps',
+    equipment: 'barbell',
+    primaryMuscles,
+    secondaryMuscles: [],
+  });
+
+  test('bodyWithAssignments: eski gövde atanır, yeni gövdeye dokunulmaz', () => {
+    const old = { phased: true, currentPhaseId: 'p_uyum01', phases: [uyum, guc], weekdays: [4, 2] };
+    assert.deepEqual(
+      bodyWithAssignments(old).phases.map((phase) => phase.days.map((day) => day.weekdays)),
+      [[[2], [4], undefined], [[2, 4]]],
+    );
+    const assigned = { ...old, phases: [{ ...uyum, days: [{ ...A, weekdays: [5] }, B, C] }, guc] };
+    assert.equal(bodyWithAssignments(assigned), assigned);
+    const plain = { phased: true, currentPhaseId: 'p_uyum01', phases: [uyum, guc] };
+    assert.equal(bodyWithAssignments(plain), plain);
+  });
+
+  test('normalizeProgram: atama sıralı kalır, boşu yazılmaz; atamalı evrede sıklık düşer', () => {
+    const library = { exercises: new Map([['goblet-squat', exercise('goblet-squat')]]), deviceIds: new Set<string>() };
+    const phase = (days: ProgramDay[]): ProgramPhase => ({ id: 'p_evre01', name: 'Evre 1', daysPerWeek: 3, days });
+    const [assigned] = normalizeProgram({ phased: false, phases: [phase([{ ...A, weekdays: [4, 2] }, { ...B, weekdays: [] }])] }, library, null).phases;
+    assert.deepEqual(
+      assigned?.days.map((day) => Object.keys(day)),
+      [
+        ['id', 'name', 'weekdays', 'blocks'],
+        ['id', 'name', 'blocks'],
+      ],
+    );
+    assert.deepEqual(assigned?.days[0]?.weekdays, [2, 4]);
+    assert.equal('daysPerWeek' in (assigned ?? {}), false);
+    // Atamasız evrede sıklık kalır.
+    assert.equal(normalizeProgram({ phased: false, phases: [phase([A, B])] }, library, null).phases[0]?.daysPerWeek, 3);
+  });
+
+  test('kopya, taşıma, birleştirme', () => {
+    const next = ids();
+    const atanmis: ProgramPhase = { ...uyum, days: [{ ...A, weekdays: [1, 3] }, { ...B, weekdays: [5] }, C] };
+    // Günün kopyası atamasız: aynı gün iki programa atanmasın.
+    assert.equal('weekdays' in copyDay(atanmis, { ...A, weekdays: [1, 3] }, next), false);
+    // Evrenin kopyası atamaları korur.
+    assert.deepEqual(
+      copyPhase([atanmis, guc], atanmis, next).days.map((day) => day.weekdays),
+      [[1, 3], [5], undefined],
+    );
+    // Başka evreye taşınan gün atamasız gelir; kaynakta kalanlar aynen.
+    const moved = moveDayToPhase([atanmis, guc], 'd_aaaaaa', 'p_guc001');
+    assert.deepEqual(
+      moved[1]?.days.map((day) => [day.id, 'weekdays' in day]),
+      [
+        ['d_dddddd', false],
+        ['d_aaaaaa', false],
+      ],
+    );
+    assert.deepEqual(
+      moved[0]?.days.map((day) => day.weekdays),
+      [[5], undefined],
+    );
+    // Evreler kaldırılınca yalnız şu anki evrenin günleri atamalı kalır.
+    const gucAtanmis: ProgramPhase = { ...guc, days: [gun('d_dddddd', 'Gün A', { weekdays: [2] })] };
+    const merged = mergePhases([atanmis, gucAtanmis], 'p_guc001').phases[0];
+    assert.deepEqual(
+      merged?.days.map((day) => [day.id, 'weekdays' in day, day.weekdays]),
+      [
+        ['d_aaaaaa', false, undefined],
+        ['d_bbbbbb', false, undefined],
+        ['d_cccccc', false, undefined],
+        ['d_dddddd', true, [2]],
+      ],
+    );
+    assert.equal(merged?.days[2], C);
+  });
+
+  test('haftalık kas yükü atamalardan: yük × atanan gün sayısı', () => {
+    const library = new Map([
+      ['bench', exercise('bench', ['chest_lower'])],
+      ['squat', exercise('squat', ['quadriceps'])],
+    ]);
+    const weightsOf = (item: PlanExercise) => Object.fromEntries(item.primaryMuscles.map((muscle) => [muscle, 1]));
+    const ten = (tail: string, exerciseId: string) => single(`b_${tail}`, `r_${tail}`, exerciseId, { sets: uniformSets({ min: 8, max: 12 }, 10) });
+    const alt = (weekdays?: number[]): ProgramDay => ({ id: 'd_aaaaaa', name: 'Alt vücut', ...(weekdays ? { weekdays } : {}), blocks: [ten('aaaaa1', 'squat')] });
+    const ust = (weekdays?: number[]): ProgramDay => ({
+      id: 'd_bbbbbb',
+      name: 'Üst vücut',
+      ...(weekdays ? { weekdays } : {}),
+      blocks: [ten('bbbbb1', 'bench'), ten('bbbbb2', 'squat')],
+    });
+    // Alt vücut iki güne, Üst vücut bir güne: haftalık = 2 × Alt + 1 × Üst; atamalı evrede sıklık sayılmaz.
+    assert.deepEqual(phaseMuscleLoad({ daysPerWeek: 5, days: [alt([1, 4]), ust([2])] }, library, weightsOf), {
+      cycle: { quadriceps: 20, chest_lower: 10 },
+      weekly: { quadriceps: 30, chest_lower: 10 },
+      factor: null,
+      assigned: [1, 2, 4],
+    });
+    // Atamasız evre bugünkü gibi: bir tur × sıklık ÷ gün sayısı.
+    assert.deepEqual(phaseMuscleLoad({ daysPerWeek: 3, days: [alt(), ust()] }, library, weightsOf), {
+      cycle: { quadriceps: 20, chest_lower: 10 },
+      weekly: { quadriceps: 30, chest_lower: 15 },
+      factor: 1.5,
+      assigned: [],
+    });
   });
 });

@@ -1,4 +1,5 @@
 import * as v from 'valibot';
+import { weekdayConflicts } from '../day-assignments.ts';
 import {
   DAY_ID_PATTERN,
   OWN_PROGRAM_ID_PATTERN,
@@ -10,6 +11,7 @@ import {
   upgradeProgramBody,
 } from '../program-plan.ts';
 import {
+  DAY_CONFLICT,
   clientWeekdaysSchema,
   dayBlocksSchema,
   dayIdSchema,
@@ -24,7 +26,8 @@ import {
  *
  * Dosya `own-programs/<id>.json`: `program.json` ile aynı gövde (sürüm 2, tek gizli evre), üstüne kimlik,
  * ad, paylaşım ve günün kopyalandığı PT günü (`copiedFrom`). Evre yok (`phased: false`, tek evre, süresiz);
- * `clientSchedule` ve `clientTargets` yazılmaz, gelirse atılır (`v.object`). Günler 1–7.
+ * `clientSchedule` ve `clientTargets` yazılmaz, gelirse atılır (`v.object`). Programlar 1–7, hafta günlerine atanır
+ * (Faz 3; atamayı danışan yapar, yazar o).
  *
  * Index (`own-programs-index.json`) türetilmiş veridir: satır satır hoşgörüyle okunur (`own-program-index.ts`),
  * burada yalnız satırın, seçimin ve olayın şeması. Node'un test aracı doğrudan çalıştırdığı için içe aktarmalar
@@ -53,13 +56,18 @@ export const dayCopySchema = v.object({
 
 export const ownProgramDaySchema = v.object({
   id: dayIdSchema,
-  name: v.pipe(v.string('Gün adı gir.'), v.trim(), v.minLength(1, 'Gün adı gir.'), v.maxLength(L.dayName, `En fazla ${L.dayName} karakter.`)),
+  name: v.pipe(v.string('Program adı gir.'), v.trim(), v.minLength(1, 'Program adı gir.'), v.maxLength(L.dayName, `En fazla ${L.dayName} karakter.`)),
+  /** Programın atandığı hafta günleri (PT programındaki gibi); yoksa atanmamış. */
+  weekdays: v.optional(weekdaysSchema),
   blocks: dayBlocksSchema,
   source: v.optional(daySourceSchema),
   copiedFrom: v.optional(dayCopySchema),
 });
 
-/** Tek, gizli, süresiz evre: 1–7 gün, gün adları benzersiz; sıklık yalnız gün seçilmemişse anlamlı. */
+/**
+ * Tek, gizli, süresiz evre: 1–7 program, adları benzersiz, bir hafta günü en çok bir programa; sıklık yalnız hiç
+ * atama yokken anlamlı.
+ */
 export const ownProgramPhaseSchema = v.object({
   id: phaseIdSchema,
   name: v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(L.phaseName)),
@@ -68,9 +76,10 @@ export const ownProgramPhaseSchema = v.object({
   ),
   days: v.pipe(
     v.array(ownProgramDaySchema),
-    v.minLength(1, 'Programda en az bir gün olmalı.'),
-    v.maxLength(L.daysPerPhase, `Programda en fazla ${L.daysPerPhase} gün olur.`),
-    v.check((days) => duplicateNames(days).length === 0, 'Aynı adda iki gün var.'),
+    v.minLength(1, 'Programda en az bir antrenman olmalı.'),
+    v.maxLength(L.daysPerPhase, `Programda en fazla ${L.daysPerPhase} antrenman olur.`),
+    v.check((days) => duplicateNames(days).length === 0, 'Aynı adda iki program var.'),
+    v.check((days) => weekdayConflicts(days).length === 0, DAY_CONFLICT),
   ),
 });
 
@@ -102,7 +111,10 @@ export const ownProgramSchema = v.pipe(
     phases: ownProgramPhasesSchema,
     current: v.object({ phaseId: phaseIdSchema, startedAt: timestamp }),
     rotation: v.object({ lastDayId: v.optional(dayIdSchema), lastCompletedAt: v.optional(timestamp) }),
-    /** Danışanın antrenman günleri (katman yok): doğrudan yazılır. */
+    /**
+     * Antrenman günleri: programların atamalarının birleşimi (katman yok). Gün başına ataması olmayan eski dosyada
+     * okunurken atamalar buradan türetilir.
+     */
     schedule: v.optional(v.object({ weekdays: weekdaysSchema, at: v.optional(timestamp) })),
     log: v.pipe(v.array(programLogEntrySchema), v.maxLength(L.log)),
   }),

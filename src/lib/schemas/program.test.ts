@@ -1,9 +1,11 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as v from 'valibot';
-import type { ProgramDay, ProgramLogEntry, ProgramPhase, ProgramState } from '../program-plan.ts';
+import { hasAssignmentField } from '../day-assignments.ts';
+import { upgradeProgramBody, type ProgramBody, type ProgramDay, type ProgramLogEntry, type ProgramPhase, type ProgramState } from '../program-plan.ts';
 import { uniformSets } from '../set-plan.ts';
 import type { TemplateBlock } from '../template-plan.ts';
+import { programFile } from '../testing/session-fixtures.ts';
 import { programFormSchema, programPhaseSwitchSchema, programSaveSchema, programSchema } from './program.ts';
 
 const at = '2026-09-24T09:00:00.000Z';
@@ -74,7 +76,7 @@ describe('program şeması', () => {
     const empty = { ...base, phases: [{ ...base.phases[0], days: [{ id: 'd_aaaaaa', name: 'Gün A', blocks: [] }] }, base.phases[1]] };
     const parsed = v.safeParse(programSchema, empty);
     assert.equal(parsed.success, false);
-    const issue = parsed.issues?.find((item) => item.message === 'Güne en az bir hareket ekle.');
+    const issue = parsed.issues?.find((item) => item.message === 'Programa en az bir hareket ekle.');
     assert.ok(issue);
     assert.equal(issue.path?.map((segment) => String(segment.key)).join('.'), 'phases.0.days.0.blocks');
   });
@@ -257,5 +259,39 @@ describe('evresiz program, sıklık ve eski dosyalar', () => {
     assert.equal(v.safeParse(programFormSchema, rest).success, false);
     assert.equal(v.safeParse(programFormSchema, { ...rest, phased: 'evet' }).success, false);
     assert.equal(v.safeParse(programFormSchema, { ...rest, phased: true }).success, true);
+  });
+});
+
+/** Dosyadan düzenleyicinin gövdesi (eski sekmenin gönderdiği gibi). */
+function bodyOf(file: ReturnType<typeof programFile>) {
+  return { phased: file.phased, currentPhaseId: file.current.phaseId, phases: file.phases };
+}
+
+describe('Faz 3: atamalar', () => {
+  test('eski dosya okunurken atanır (başa sararak); ikinci okuma aynı; schedule aynen', () => {
+    const parsed = v.parse(programSchema, programFile({}, { schedule: { weekdays: [1, 3, 5] } }));
+    assert.deepEqual(parsed.phases[0]?.days.map((day) => day.weekdays), [[1, 5], [3]]);
+    assert.deepEqual(v.parse(programSchema, parsed), parsed);
+    assert.deepEqual(parsed.schedule?.weekdays, [1, 3, 5]);
+  });
+
+  test('gün seçilmemiş eski dosya atanmaz', () => {
+    const parsed = v.parse(programSchema, programFile());
+    assert.equal(parsed.phases[0]?.days.some((day) => 'weekdays' in day), false);
+  });
+
+  test('aynı gün iki programda: dosya okunmaz', () => {
+    const raw = programFile();
+    const phases = raw.phases.map((phase) => ({ ...phase, days: phase.days.map((day, index) => ({ ...day, weekdays: index === 0 ? [2] : [2, 4] })) }));
+    const result = v.safeParse(programSchema, { ...raw, phases });
+    assert.equal(result.success, false);
+    assert.equal(result.issues?.[0]?.message, 'Aynı gün iki programa atanmış.');
+  });
+
+  test('eski sekmenin gövdesi: program düzeyindeki günler atanır; kendi programda açılıştaki günler türetilmez', () => {
+    const body = v.parse(programSaveSchema, { ...bodyOf(programFile()), weekdays: [2, 4], baseRevision: 7 });
+    assert.deepEqual(body.phases[0]?.days.map((day) => day.weekdays), [[2], [4]]);
+    const untouched = upgradeProgramBody({ ...bodyOf(programFile()), weekdays: [4, 2], baseWeekdays: [2, 4] }) as ProgramBody;
+    assert.equal(hasAssignmentField(untouched.phases), false);
   });
 });

@@ -1,3 +1,11 @@
+import {
+  cleanWeekdays,
+  deriveAssignments,
+  hasAssignmentField,
+  hasAssignments,
+  phaseWeekdays,
+  upgradeAssignments,
+} from './day-assignments.ts';
 import { todayIn } from './format.ts';
 import type { SetSpec } from './set-plan.ts';
 import { prepareForEditing, type IdSource } from './template-edit.ts';
@@ -13,15 +21,18 @@ import {
 } from './template-plan.ts';
 
 /**
- * Danışana özel program — yapı, rotasyon ve evreler (SPEC §7.4).
+ * Danışana özel program — yapı, hafta günü atamaları ve evreler (SPEC §7.4).
  *
  * Şablon yalnız başlangıç noktasıdır: program danışanın kendi repo'sunda `program.json`
  * olarak durur, şablondan ya da boş oluşturulur ve yalnız o danışan için düzenlenir.
- * Program günlerden oluşur, gün şablonla aynı bloklardan. Günler sırayla döner (A → B → C).
- * Evreler isteğe bağlıdır (`phased`): evresiz program tek, süresiz, gizli bir evrede
- * durur (kimlikler, şu anki evre ve rotasyon aynı kalsın diye); PT "Evrelere böl" derse
- * günler evrelere dağılır, şu anki evrenin günleri döner, evre geçişini PT onaylar.
- * Haftada kaç gün (`daysPerWeek`) evrededir; evresizde programın sıklığıdır.
+ * Program günlerden (programlardan: "Alt vücut", "Üst vücut") oluşur, gün şablonla aynı
+ * bloklardan. Faz 3: günler sırayla dönmez; her program evresinde hafta günlerine atanır
+ * (`weekdays`, `day-assignments.ts`), danışan o gün Bugün'de onu görür. `rotation` yalnız eski
+ * dosyalar için okunur. Evreler isteğe bağlıdır (`phased`): evresiz program tek, süresiz,
+ * gizli bir evrede durur (kimlikler ve şu anki evre aynı kalsın diye); PT "Evrelere böl" derse
+ * günler evrelere dağılır, şu anki evrenin atamaları geçerlidir, evre geçişini PT onaylar.
+ * Haftada kaç gün (`daysPerWeek`) yalnız atamasız evrede anlamlıdır (evresizde programın
+ * sıklığı); atamalı evrede sıklık atanmış gün sayısıdır.
  *
  * Kimlikler (evre, gün, blok, satır) bütün programda benzersizdir: antrenman kayıtları
  * satıra kimlikle bağlanır. Şablondan gelen bloklar yeni kimlik alır.
@@ -74,7 +85,8 @@ export const DEFAULT_PHASE_NAME = 'Evre 1';
 // Yapısal tipler: Valibot şemasının çıktısı (`schemas/program.ts`) bunlara atanabilir.
 /** Günün geldiği şablon: o anki adıyla; şablon sonra değişse ya da silinse de program değişmez. */
 export type DaySource = { templateId: string; templateName: string; at: string };
-export type ProgramDay = { id: string; name: string; blocks: TemplateBlock[]; source?: DaySource };
+/** Gün (program). `weekdays`: atandığı hafta günleri (ISO; evresinde geçerli); yoksa atanmamış. */
+export type ProgramDay = { id: string; name: string; weekdays?: number[]; blocks: TemplateBlock[]; source?: DaySource };
 export type ProgramPhase = {
   id: string;
   name: string;
@@ -91,8 +103,8 @@ export type ProgramBody = {
   currentPhaseId: string;
   phases: ProgramPhase[];
   /**
-   * PT'nin seçtiği antrenman günleri (ISO hafta günü, 1 = Pazartesi; boş = seçilmedi). Göndermeyen
-   * (eski sekme, eski taslak) kayıttakini değiştirmez (`training-days.ts`).
+   * Eski gövde (eski sekme, eski taslak, AI taslağı): gün başına atama yoksa buradan türetilir
+   * (`upgradeProgramBody`, `bodyWithAssignments`). ISO hafta günü, 1 = Pazartesi.
    */
   weekdays?: number[];
 };
@@ -305,7 +317,7 @@ export function dayFromTemplateForEditing(
   return { day: { ...day, blocks: prepared.blocks }, droppedDeviceRowIds: prepared.droppedDeviceRowIds };
 }
 
-/** Günün kopyası aynı evreye: yeni kimlikler, sıradaki ad, kaynak aynı. */
+/** Günün kopyası aynı evreye: yeni kimlikler, sıradaki ad, kaynak aynı; atamasız (aynı gün iki programa atanmasın). */
 export function copyDay(phase: Pick<ProgramPhase, 'days'>, day: ProgramDay, ids: ProgramIdSource): ProgramDay {
   return {
     id: ids('d'),
@@ -315,16 +327,18 @@ export function copyDay(phase: Pick<ProgramPhase, 'days'>, day: ProgramDay, ids:
   };
 }
 
-/** Evrenin kopyası: "… kopyası" adıyla, aynı süre ve sıklık; günler yeni kimlikle, adları ve kaynakları aynı. */
+/** Evrenin kopyası: "… kopyası" adıyla, aynı süre ve sıklık; günler yeni kimlikle, adları, atamaları ve kaynakları aynı. */
 export function copyPhase(phases: Phases, phase: ProgramPhase, ids: ProgramIdSource): ProgramPhase {
   return {
     id: ids('p'),
     name: uniqueName(`${phase.name} kopyası`, phases.map((item) => item.name)),
     ...(phase.weeks !== undefined ? { weeks: phase.weeks } : {}),
     ...(phase.daysPerWeek !== undefined ? { daysPerWeek: phase.daysPerWeek } : {}),
+    // Atamalar da kopyalanır: kopya evre ayrı bir evre, günleri öteki evrenin günleriyle çakışmaz.
     days: phase.days.map((day) => ({
       id: ids('d'),
       name: day.name,
+      ...(day.weekdays !== undefined ? { weekdays: [...day.weekdays] } : {}),
       blocks: reIdBlocks(day.blocks, ids),
       ...(day.source ? { source: { ...day.source } } : {}),
     })),
@@ -519,10 +533,18 @@ export function mergePhasesCheck(phases: Phases): { ok: boolean; days: number } 
   return { ok: days <= PROGRAM_LIMITS.daysPerPhase, days };
 }
 
+/** Atamasız gün: alan yoksa aynı gün (başvuru korunur). */
+function unassigned(day: ProgramDay): ProgramDay {
+  if (day.weekdays === undefined) return day;
+  const { weekdays: _dropped, ...rest } = day;
+  return rest;
+}
+
 /**
  * Evreleri kaldırır: bütün günler program sırasıyla şu anki evrenin kimliğinde birleşir
  * (rotasyon ve şu anki evre değişmez); aynı adlı gün "Gün A 2" olur. Süre düşer, ad
- * 'Evre 1', sıklık şu anki evreninki. Kimlikler ve günlerin içi aynen kalır.
+ * 'Evre 1', sıklık şu anki evreninki. Kimlikler ve günlerin içi aynen kalır. Yalnız şu anki
+ * evrenin atamaları kalır: öteki evrelerin günleri onlarla çakışabilir, atamasız gelir.
  */
 export function mergePhases(
   phases: Phases,
@@ -532,10 +554,13 @@ export function mergePhases(
   if (!current) return { phases: [], renamed: [] };
   const renamed: { dayId: string; from: string; to: string }[] = [];
   const days: ProgramDay[] = [];
-  for (const day of phases.flatMap((phase) => phase.days)) {
-    const name = uniqueName(day.name, days.map((item) => item.name));
-    if (name !== day.name) renamed.push({ dayId: day.id, from: day.name, to: name });
-    days.push(name === day.name ? day : { ...day, name });
+  for (const phase of phases) {
+    for (const source of phase.days) {
+      const day = phase.id === current.id ? source : unassigned(source);
+      const name = uniqueName(day.name, days.map((item) => item.name));
+      if (name !== day.name) renamed.push({ dayId: day.id, from: day.name, to: name });
+      days.push(name === day.name ? day : { ...day, name });
+    }
   }
   return {
     phases: [
@@ -579,12 +604,13 @@ function blankReplaceable(phase: ProgramPhase): ProgramDay | null {
 
 /**
  * Günü başka evreye taşır (sona); adı hedefte varsa "… 2" olur. Hedefte yalnız tek,
- * hareketsiz, kaynaksız bir gün varsa (yeni evrenin boş günü) onun yerine geçer.
+ * hareketsiz, kaynaksız bir gün varsa (yeni evrenin boş günü) onun yerine geçer. Taşınan
+ * gün atamasız gelir: atamaları kendi evresindeydi, hedefin günleriyle çakışabilir.
  * Taşınamıyorsa (`canMoveDay`) aynı dizi döner.
  */
 export function moveDayToPhase(phases: Phases, dayId: string, targetPhaseId: string): ProgramPhase[] {
   if (!canMoveDay(phases, dayId, targetPhaseId)) return phases as ProgramPhase[];
-  const day = phases.flatMap((phase) => phase.days).find((item) => item.id === dayId) as ProgramDay;
+  const day = unassigned(phases.flatMap((phase) => phase.days).find((item) => item.id === dayId) as ProgramDay);
   const target = phases.find((phase) => phase.id === targetPhaseId) as ProgramPhase;
   const blank = blankReplaceable(target);
   const kept = blank ? [] : target.days;
@@ -676,7 +702,8 @@ export function missingExerciseDays(
 /**
  * Kayıttan önce sunucuda: her gün `normalizeTemplate`'ten geçer (kütüphane denetimi,
  * sadeleştirme). Hata anahtarları Formisch yollarıdır (`phases.1.days.0.blocks.0.rows.0.exerciseId`).
- * Adlar kırpılır; sıklık ve kaynak aynen kalır, süre yalnız evreli programda. Silinen cihaza
+ * Adlar kırpılır; kaynak aynen kalır, süre yalnız evreli programda, sıklık yalnız atamasız evrede;
+ * atamalar sıralanır, boşu yazılmaz. Silinen cihaza
  * yazılmış satır, düzenleyicinin açılışındaki gibi egzersizin cihazına döner (SPEC §7.4): şablondan
  * eklenen gün, geri yüklenen taslak ya da eski sekme yüzünden kayıt reddedilmez; düşen satırlar
  * (`droppedDeviceRowIds`) PT'ye bildirilir, sessiz kalmaz. Egzersizinkine eşit
@@ -700,15 +727,19 @@ export function normalizeProgram(
     id: phase.id,
     name: phase.name.trim(),
     ...(body.phased && phase.weeks !== undefined ? { weeks: phase.weeks } : {}),
-    ...(phase.daysPerWeek !== undefined ? { daysPerWeek: phase.daysPerWeek } : {}),
+    // Atamalı evrede sıklık atanmış gün sayısıdır; ayrıca yazılan sıklık onunla çelişirdi.
+    ...(phase.daysPerWeek !== undefined && !hasAssignments(phase.days) ? { daysPerWeek: phase.daysPerWeek } : {}),
     days: phase.days.map((day, j): ProgramDay => {
       const prepared = prepareForEditing(day, ctx.deviceIds);
       droppedDeviceRowIds.push(...prepared.droppedDeviceRowIds);
       const normalized = normalizeTemplate(prepared, ctx, { storedRows });
       for (const [key, message] of Object.entries(normalized.errors)) errors[`phases.${i}.days.${j}.${key}`] = message;
+      // Atama sıralı yazılır; boşu (düzenleyicide bütün günleri kaldırılmış) dosyaya yazılmaz: alan yok = atanmamış.
+      const weekdays = cleanWeekdays(day.weekdays);
       return {
         id: day.id,
         name: day.name.trim(),
+        ...(weekdays.length > 0 ? { weekdays } : {}),
         blocks: normalized.blocks,
         ...(day.source ? { source: day.source } : {}),
       };
@@ -833,17 +864,30 @@ export function cycleFactor(phase: Pick<ProgramPhase, 'daysPerWeek' | 'days'>): 
 }
 
 /**
- * Evrenin planlanan kas yükü: bir tur (bütün günler birer kez) ve sıklık varsa haftalık
- * (bir tur × sıklık ÷ gün sayısı). Programdan hesaplanır, set kayıtlarından değil.
+ * Evrenin planlanan kas yükü: bir tur (bütün günler birer kez) ve haftalık. Atamalı evrede haftalık,
+ * her programın yükü × atandığı gün sayısı (`factor` yok; `assigned`: atanmış günler, birleşim);
+ * atamasızda sıklık varsa bir tur × sıklık ÷ gün sayısı (`assigned` boş). Programdan hesaplanır, set
+ * kayıtlarından değil.
  */
 export function phaseMuscleLoad<E extends PlanExercise>(
   phase: Pick<ProgramPhase, 'daysPerWeek' | 'days'>,
   exercises: ReadonlyMap<string, E>,
   setWeightsOf: (exercise: E) => Partial<Record<string, number>>,
-): { cycle: Record<string, number>; weekly: Record<string, number> | null; factor: number | null } {
+): { cycle: Record<string, number>; weekly: Record<string, number> | null; factor: number | null; assigned: number[] } {
   const cycle = templateMuscleLoad({ blocks: phase.days.flatMap((day) => day.blocks) }, exercises, setWeightsOf).load;
+  const assigned = phaseWeekdays(phase.days);
+  if (assigned.length > 0) {
+    const weekly: Record<string, number> = {};
+    for (const day of phase.days) {
+      const times = cleanWeekdays(day.weekdays).length;
+      if (times === 0) continue;
+      const load = scaleLoad(templateMuscleLoad({ blocks: day.blocks }, exercises, setWeightsOf).load, times);
+      for (const [muscle, value] of Object.entries(load)) weekly[muscle] = (weekly[muscle] ?? 0) + value;
+    }
+    return { cycle, weekly, factor: null, assigned };
+  }
   const factor = cycleFactor(phase);
-  return { cycle, weekly: factor === null ? null : scaleLoad(cycle, factor), factor };
+  return { cycle, weekly: factor === null ? null : scaleLoad(cycle, factor), factor, assigned };
 }
 
 const DAY_MS = 86_400_000;
@@ -906,20 +950,49 @@ function upgradePhases(phases: unknown): unknown {
 
 /**
  * Dosya: sürüm 1 → 2 (`phased` evrelerden çıkarılır), bloklar yeni biçime. Sürüm 2'de
- * `phased` olduğu gibi kalır (yoksa ya da bozuksa şema düşürür). Yalnız yapıyı çevirir.
+ * `phased` olduğu gibi kalır (yoksa ya da bozuksa şema düşürür). Hiçbir günde atama yoksa
+ * (Faz 3'ten önceki dosya) programlar `schedule.weekdays`'e sırayla atanır (`upgradeAssignments`):
+ * birleşim kayıttakinin aynısı kalır, ondan okuyan her yer aynı sonucu verir. Yalnız yapıyı
+ * çevirir; okuma hiçbir şey yazmaz.
  */
 export function upgradeProgram(raw: unknown): unknown {
   if (!isRecord(raw) || !Array.isArray(raw.phases)) return raw;
-  const phases = upgradePhases(raw.phases) as unknown[];
+  const phases = upgradeAssignments(upgradePhases(raw.phases), isRecord(raw.schedule) ? raw.schedule.weekdays : undefined) as unknown[];
   if (raw.version !== 1) return { ...raw, phases };
   return { ...raw, version: 2, phased: typeof raw.phased === 'boolean' ? raw.phased : derivePhased(phases), phases };
 }
 
-/** Kayıt gövdesi: `phased` yoksa (eski sekme) evrelerden çıkarılır; bloklar yeni biçime. */
+/** İki gün listesi aynı küme mi (sıra ve tekrar fark etmez). */
+function sameWeekdaySet(a: readonly unknown[], b: readonly unknown[]): boolean {
+  const left = cleanWeekdays(a);
+  const right = cleanWeekdays(b);
+  return left.length === right.length && left.every((weekday, index) => weekday === right[index]);
+}
+
+/**
+ * Kayıt gövdesi: `phased` yoksa (eski sekme) evrelerden çıkarılır; bloklar yeni biçime. Eski sekme
+ * ve eski taslak gün başına atama göndermez: programlar gövdenin `weekdays`'ine sırayla atanır
+ * (`upgradeProgram`'ın kuralı). Kendi programın eski sekmesi günleri açılıştaki gibi gönderdiyse
+ * (`baseWeekdays` aynı küme) türetilmez: danışan günlere dokunmadı, kayıttaki atamalar gün kimliğiyle
+ * korunur (`keepAssignments`, kayıtta).
+ */
 export function upgradeProgramBody(raw: unknown): unknown {
   if (!isRecord(raw) || !Array.isArray(raw.phases)) return raw;
-  const phases = upgradePhases(raw.phases) as unknown[];
+  const untouched = Array.isArray(raw.baseWeekdays) && Array.isArray(raw.weekdays) && sameWeekdaySet(raw.baseWeekdays, raw.weekdays);
+  const upgraded = upgradePhases(raw.phases);
+  const phases = (untouched ? upgraded : upgradeAssignments(upgraded, raw.weekdays)) as unknown[];
   return { ...raw, phased: raw.phased === undefined ? derivePhased(phases) : raw.phased, phases };
+}
+
+/**
+ * Şemadan geçmeyen gövde (AI taslağının yayını): `upgradeProgramBody`'nin kuralı tipli gövdede. Hiçbir
+ * günde atama alanı yoksa programlar `weekdays`'e sırayla atanır; atama varsa ya da gün seçilmemişse
+ * gövde aynen döner (aynı başvuru).
+ */
+export function bodyWithAssignments(body: ProgramBody): ProgramBody {
+  if (hasAssignmentField(body.phases) || cleanWeekdays(body.weekdays).length === 0) return body;
+  const weekdays = body.weekdays ?? [];
+  return { ...body, phases: body.phases.map((phase) => ({ ...phase, days: deriveAssignments(phase.days, weekdays) })) };
 }
 
 /** Evre geçişinin cümlesi (hem fark hem geçiş kaydı). */
