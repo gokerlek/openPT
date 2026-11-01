@@ -1,14 +1,20 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { NumberField } from '@base-ui/react/number-field';
 import { animate, motion, useMotionValue, useReducedMotion, useTransform } from 'motion/react';
 import { ArrowUp, Trash } from '@phosphor-icons/react';
 import { Check, X } from '@/components/line-icons';
+import { NUMBER_FORMAT, WHOLE_FORMAT } from '@/components/ui/stepper';
 import { formatNumber } from '@/lib/format';
 import { DURATION, INSTANT, SWIPE, tween } from '@/lib/motion';
 import type { TrackingType } from '@/lib/progression';
+import { SESSION_LIMITS } from '@/lib/schemas/session';
 import { cn } from '@/lib/utils';
 import { previousText, setValueText, targetCell, type SetView } from '@/lib/workout-session';
+
+/** Şu anki satırın ✓'u: panel kapalıyken "Set bitti"nin yerine klavye odağının gideceği yer. */
+export const ROW_DONE_ID = 'set-done-row';
 
 /** Satırın düzenleme düğmesinin kimliği: panel kapanınca klavye odağı ona döner. */
 export function setEditButtonId(setId: string): string {
@@ -25,6 +31,84 @@ function dragged(value: number): number {
 }
 
 const CELL = 'p-2 align-middle whitespace-nowrap';
+/** Şu anki satırın kutulu hücresi: kutu sütunu doldursun diye yatay boşluk dar. */
+const INPUT_CELL = 'px-1 py-1.5 align-middle whitespace-nowrap';
+
+/**
+ * Şu anki (sıradaki) setin satırdan girişi: kg ve tekrar/süre kutuları alttaki panelin stepper'larıyla aynı taslağı yazar,
+ * ✓ "Set bitti" ile aynı işi yapar. Panel kapalıyken set yalnız buradan girilir.
+ */
+export type RowEntry = {
+  kg: number | undefined;
+  value: number;
+  /** Aşırı yük soruluyor: kg kutusu kırmızı çizgili. */
+  invalid: boolean;
+  /** Kaydedilirken ya da süreli set sayarken kutular ve ✓ kapalı. */
+  disabled: boolean;
+  onChange: (values: { kg?: number | undefined; value?: number | undefined }) => void;
+  onDone: () => void;
+};
+
+/**
+ * Hücredeki sayı kutusu (Base UI NumberField, stepper'sız): dokununca klavye açılır, virgül de nokta da ondalık
+ * (`NUMBER_FORMAT`). Yazarken her geçerli değer taslağa gider; boş bırakılıp çıkılırsa kutu taslağın değerine döner. Enter
+ * klavyeyi kapatır. Dokunmatikte yazı 16 px (iOS daha küçük yazılı kutuya odaklanınca sayfayı yakınlaştırır).
+ */
+function CellNumber({
+  value,
+  max,
+  decimal,
+  invalid,
+  disabled,
+  label,
+  onChange,
+}: {
+  value: number | undefined;
+  max: number;
+  decimal: boolean;
+  invalid: boolean;
+  disabled: boolean;
+  label: string;
+  onChange: (value: number) => void;
+}) {
+  // Boşaltılıp bırakılan kutu değere dönsün diye kutu yeniden kurulur (`Stepper` gibi).
+  const [resetKey, setResetKey] = useState(0);
+  const latest = useRef(value);
+  useEffect(() => {
+    latest.current = value;
+  });
+  return (
+    <NumberField.Root
+      key={resetKey}
+      value={value ?? null}
+      min={0}
+      max={max}
+      step={decimal ? 0.5 : 1}
+      locale="tr-TR"
+      format={decimal ? NUMBER_FORMAT : WHOLE_FORMAT}
+      disabled={disabled}
+      onValueChange={(next) => {
+        if (next !== null && Number.isFinite(next)) onChange(Math.min(max, Math.max(0, decimal ? next : Math.round(next))));
+      }}>
+      <NumberField.Input
+        inputMode={decimal ? 'decimal' : 'numeric'}
+        enterKeyHint="done"
+        aria-label={label}
+        aria-invalid={invalid || undefined}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') event.currentTarget.blur();
+        }}
+        onBlur={(event) => {
+          const box = event.currentTarget;
+          window.setTimeout(() => {
+            if (box.value.trim() === '' && latest.current !== undefined) setResetKey((key) => key + 1);
+          }, 0);
+        }}
+        className="h-9 w-full min-w-0 rounded-md border border-input bg-background/60 px-1 text-sm font-semibold tabular-nums outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 touch:text-base"
+      />
+    </NumberField.Root>
+  );
+}
 
 /**
  * Bu basışın `click`'ini yutar (`SwipeRow`'daki gibi, iOS: açık "Sil" varken tablodaki ilk dokunuş yalnız kapatır, dokunulan
@@ -67,6 +151,8 @@ type Track = { id: number; x: number; y: number; base: number; dragging: boolean
  *   `touch-action: pan-y`); dikey hareket kaydırmayı başlatmaz.
  * - Hareket azaltma tercihinde "Sil" yaysız, anında açılıp kapanır (parmağı izlemek doğrudan işlemdir, kalır).
  * - `locked` (set kaydedilirken, süreli set sayarken, düzenlenen satırda): kaydırma yok; dokunuşlar ekrana gider, o karar verir.
+ * - Şu anki (sıradaki) set `entry` alır: kg ve tekrar/süre hücreleri yazılabilir kutu, son hücrede boş ✓ ("yapıldı" işaretle;
+ *   "Set bitti" ile aynı). Diğer bekleyen satırlar yalnız okunur: setler sırayla girilir.
  */
 export function SetRow({
   set,
@@ -75,6 +161,7 @@ export function SetRow({
   group,
   highlight,
   currentKg,
+  entry,
   fresh,
   rowRef,
   open,
@@ -94,6 +181,8 @@ export function SetRow({
   highlight: 'current' | 'editing' | null;
   /** Şu anki setin önceden dolu (ya da değiştirilmiş) ağırlığı. */
   currentKg: number | undefined;
+  /** Şu anki (bekleyen) setin satırdan girişi; diğer satırlarda null. */
+  entry: RowEntry | null;
   /** Az önce kaydedildi: ✓ belirerek gelir. */
   fresh: boolean;
   rowRef?: React.Ref<HTMLTableRowElement> | undefined;
@@ -119,6 +208,8 @@ export function SetRow({
   const value = logged ? (logged.reps ?? logged.seconds) : undefined;
   const label = `Set ${set.position + 1}`;
   const amrap = Boolean(set.target.amrap);
+  const input = logged ? null : entry;
+  const duration = trackingType === 'duration';
 
   const settle = (to: 'open' | 'closed') => {
     if (to === 'open') setActive(true);
@@ -234,7 +325,19 @@ export function SetRow({
           {targetCell(set.target, trackingType)}
         </motion.td>
       ) : null}
-      {weighted ? (
+      {weighted && input ? (
+        <td data-slot="table-cell" className={INPUT_CELL}>
+          <CellNumber
+            value={input.kg}
+            max={SESSION_LIMITS.kg}
+            decimal
+            invalid={input.invalid}
+            disabled={input.disabled}
+            label={`${label}, ağırlık (kg)`}
+            onChange={(kg) => input.onChange({ kg })}
+          />
+        </td>
+      ) : weighted ? (
         <motion.td data-slot="table-cell" style={cellStyle} className={cn(CELL, logged ? 'font-semibold' : 'text-muted-foreground')}>
           <span className="inline-flex items-center gap-0.5">
             {kg !== undefined ? formatNumber(kg) : '—'}
@@ -247,9 +350,23 @@ export function SetRow({
           </span>
         </motion.td>
       ) : null}
-      <motion.td data-slot="table-cell" style={cellStyle} className={cn(CELL, logged ? 'font-semibold' : 'text-muted-foreground')}>
-        {value !== undefined ? (trackingType === 'duration' ? `${value} sn` : value) : amrap && !showTarget ? targetCell(set.target, trackingType) : '—'}
-      </motion.td>
+      {input ? (
+        <td data-slot="table-cell" className={INPUT_CELL}>
+          <CellNumber
+            value={input.value}
+            max={duration ? SESSION_LIMITS.seconds : SESSION_LIMITS.reps}
+            decimal={false}
+            invalid={false}
+            disabled={input.disabled}
+            label={`${label}, ${duration ? 'süre (sn)' : amrap ? 'yaptığın tekrar' : 'tekrar'}`}
+            onChange={(changed) => input.onChange({ value: changed })}
+          />
+        </td>
+      ) : (
+        <motion.td data-slot="table-cell" style={cellStyle} className={cn(CELL, logged ? 'font-semibold' : 'text-muted-foreground')}>
+          {value !== undefined ? (duration ? `${value} sn` : value) : amrap && !showTarget ? targetCell(set.target, trackingType) : '—'}
+        </motion.td>
+      )}
       {/* Son hücre yerinde durur, içeriği kayar: "Sil" onun içinde satırın sağ kenarına tutunur. */}
       <td data-slot="table-cell" style={logged ? { touchAction: 'pan-y pinch-zoom' } : undefined} className={cn(CELL, 'relative p-0 text-center')}>
         <motion.div style={{ x }}>
@@ -269,6 +386,21 @@ export function SetRow({
                 className="inline-flex size-7 items-center justify-center rounded-full bg-primary/20 text-primary [&_svg]:size-4">
                 <Check weight="bold" />
               </motion.span>
+            </button>
+          ) : input ? (
+            <button
+              type="button"
+              id={ROW_DONE_ID}
+              disabled={input.disabled}
+              aria-label={`${label}, ${weighted && input.kg !== undefined ? `${formatNumber(input.kg)} kg × ${input.value}` : duration ? `${input.value} sn` : `${input.value} tekrar`}: yapıldı olarak işaretle`}
+              onClick={(event) => {
+                event.stopPropagation();
+                input.onDone();
+              }}
+              className="inline-flex size-11 items-center justify-center rounded-full align-middle outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50">
+              <span className="inline-flex size-7 items-center justify-center rounded-full border-2 border-muted-foreground/50 text-muted-foreground transition-colors active:border-primary active:text-primary [&_svg]:size-4">
+                <Check weight="bold" />
+              </span>
             </button>
           ) : set.extra ? (
             <button

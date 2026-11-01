@@ -86,12 +86,13 @@ import { checkAsked } from '../check-in-storage';
 import { WORKOUT_KEY, WORKOUT_OVERVIEW_KEY } from '../workout-overview';
 import { clearLocalWorkout, clearWorkoutCache, readLocalWorkout, readWorkoutCache, saveLocalWorkout, saveWorkoutCache, writerId } from '../workout-storage';
 import { AddExerciseSheet } from './add-exercise-sheet';
-import { EntryPanel, type TimerView, type TransitionView } from './entry-panel';
+import { ENTRY_PANEL_TOGGLE_ID, EntryPanel, type TimerView, type TransitionView } from './entry-panel';
 import { ExerciseCard } from './exercise-card';
 import { ProgramUpdateSheet, type ProgramAnswer } from './program-update-sheet';
 import { RestPanel, RestStrip, type EffortPromptView, type RestView } from './rest-panel';
 import { SetEditPanel, type SetEditValues, type SetEditView } from './set-edit-panel';
-import { setEditButtonId } from './set-row';
+import { useEntryPanelClosed } from './panel-pref';
+import { ROW_DONE_ID, setEditButtonId, type RowEntry } from './set-row';
 import { StartCheck, type StartCheckHandle } from './start-check';
 import { SwapSheet, type SwapTarget } from './swap-sheet';
 import { useWorkoutOutbox } from './use-workout-outbox';
@@ -442,6 +443,12 @@ export function WorkoutScreen({
     setAnnouncement('');
     window.requestAnimationFrame(() => setAnnouncement(text));
   }, []);
+
+  // Set giriş paneli kapalı mı (danışanın bu cihazdaki tercihi): kapalıyken set tablodaki satırdan girilir.
+  const [panelClosed, setPanelClosed] = useEntryPanelClosed();
+  // Aşırı yük soruluyorken satırın ✓'u kapalı paneli o set için açar ("rowId:setIndex"): uyarı ve "Düzelt" orada. Tercih
+  // değişmez; set kaydedilince (ya da başka sete geçilince) panel yine kapalı.
+  const [forcedOpen, setForcedOpen] = useState<string | null>(null);
 
   const focusLater = useCallback((id: string, ms: number) => later(ms, () => document.getElementById(id)?.focus({ preventScroll: true })), [later]);
 
@@ -1044,7 +1051,7 @@ export function WorkoutScreen({
   const focusAfterRest = useCallback(
     (ms: number) =>
       later(ms, () => {
-        const ids = focusRef.current === null ? [LIST_TITLE_ID] : ['set-done', 'exercise-title', LIST_TITLE_ID];
+        const ids = focusRef.current === null ? [LIST_TITLE_ID] : ['set-done', ROW_DONE_ID, 'exercise-title', LIST_TITLE_ID];
         for (const id of ids) {
           const element = document.getElementById(id);
           if (element) {
@@ -1424,7 +1431,7 @@ export function WorkoutScreen({
   const returnFocus = useCallback(
     (setId: string) =>
       later(DURATION.fast, () => {
-        for (const id of [setEditButtonId(setId), 'set-done', 'exercise-title']) {
+        for (const id of [setEditButtonId(setId), 'set-done', ROW_DONE_ID, 'exercise-title']) {
           const element = document.getElementById(id);
           if (element) {
             element.focus({ preventScroll: true });
@@ -1506,7 +1513,7 @@ export function WorkoutScreen({
       // Klavye odağı kalkan düğmedeyse (✓, "Seti sil") "Set bitti"ye, o yoksa başlığa.
       later(DURATION.fast, () => {
         if (!(focused instanceof HTMLElement) || focused.isConnected) return;
-        (document.getElementById('set-done') ?? document.getElementById('exercise-title'))?.focus({ preventScroll: true });
+        (document.getElementById('set-done') ?? document.getElementById(ROW_DONE_ID) ?? document.getElementById('exercise-title'))?.focus({ preventScroll: true });
       });
       const sessionId = current.doc.id;
       toast(text, {
@@ -2283,6 +2290,37 @@ export function WorkoutScreen({
   const water = waterOf(doc);
   // Süreli setin sayacı yalnız sıradaki setinse çalışıyor sayılır (set silindiyse, düzenlendiyse değil).
   const timerRunning = Boolean(local.timer && next && local.timer.rowId === next.rowId && local.timer.setIndex === next.setIndex);
+  const overload = next && !saving ? overloadState(plan, doc, next, next.kg) : 'none';
+  const nextKey = next ? `${next.rowId}:${next.setIndex}` : null;
+  const collapsed = panelClosed && (forcedOpen === null || forcedOpen !== nextKey);
+  // Şu anki setin satırdan girişi (kg/tekrar kutuları ve ✓, paneldekiyle aynı taslak). Düzenleme açıkken yok: aynı anda
+  // iki düzenleyici olmasın. Aşırı yük soruluyorken panel kapalıysa ✓ önce paneli bu set için açar (uyarı panelde okunur).
+  const rowEntry: RowEntry | null =
+    next && !edit
+      ? {
+          kg: next.kg,
+          value: next.value,
+          invalid: overload === 'ask',
+          disabled: saving !== null || timerRunning,
+          onChange: onDraft,
+          onDone: () => {
+            if (overload === 'ask' && collapsed) {
+              setForcedOpen(nextKey);
+              return;
+            }
+            onDone();
+          },
+        }
+      : null;
+  // Paneli aç/kapat: düğme yer değiştirir (⌄ üst satırda, ⌃ alt satırda), odak yenisine geçer.
+  const togglePanel = () => {
+    if (collapsed) setPanelClosed(false);
+    else {
+      setForcedOpen(null);
+      setPanelClosed(true);
+    }
+    window.requestAnimationFrame(() => document.getElementById(ENTRY_PANEL_TOGGLE_ID)?.focus({ preventScroll: true }));
+  };
   // Odakta "Sıradaki: <ad>" (giriş panelinin altında; biten harekette birincil düğme): kendiliğinden geçişin açacağı birim.
   const followingItem = followingKey ? list.items.find((item) => item.key === followingKey) : undefined;
   const following = followingItem ? { name: itemName(followingItem), onOpen: () => onOpenUnit(followingItem.key) } : null;
@@ -2397,7 +2435,11 @@ export function WorkoutScreen({
                   key={unitKey}
                   initial={{ opacity: 0, x: WORKOUT.slidePx }}
                   animate={{ opacity: 1, x: 0, transition: tween(DURATION.base) }}
-                  exit={{ opacity: 0, x: -WORKOUT.slidePx, transition: tween(DURATION.fast, EASE.exit) }}>
+                  exit={{ opacity: 0, x: -WORKOUT.slidePx, transition: tween(DURATION.fast, EASE.exit) }}
+                  // Satırın ✓'u da "Set bitti" gibi kilitli: kayıttan hemen sonraki ikinci dokunuş aynı yerdeki ✓'u kaldırmaz,
+                  // grupta sıradaki üyenin setini kaydetmez.
+                  onPointerDownCapture={swallow}
+                  onClickCapture={swallow}>
                   <ExerciseCard
                     row={row}
                     group={group}
@@ -2410,6 +2452,7 @@ export function WorkoutScreen({
                     }
                     editingSetId={edit?.setId ?? null}
                     currentKg={next?.kg}
+                    entry={rowEntry}
                     freshSetId={fresh}
                     locked={saving !== null || timerRunning}
                     onEditSet={onEditSet}
@@ -2460,7 +2503,7 @@ export function WorkoutScreen({
                   row={shownRow}
                   next={shown}
                   frozen={saving !== null}
-                  overload={next && !saving ? overloadState(plan, doc, next, next.kg) : 'none'}
+                  overload={overload}
                   nextLetter={saving ? null : nextMemberLetter(plan, doc, shownFocus)}
                   transition={transition}
                   timer={timerRunning ? timerView : null}
@@ -2476,6 +2519,8 @@ export function WorkoutScreen({
                   previous={previous}
                   following={following}
                   addSet={!saving && unitKey && addable(unitKey) ? { label: group ? 'Tur ekle' : 'Set ekle', onAdd: () => onAddSet(unitKey) } : null}
+                  collapsed={collapsed}
+                  onToggleCollapsed={togglePanel}
                 />
               )}
             </section>

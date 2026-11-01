@@ -20,7 +20,7 @@ import { cn } from '@/lib/utils';
 import type { GroupMemberStatus, GroupView } from '@/lib/workout-groups';
 import type { WorkoutRow } from '@/lib/workout-plan';
 import type { SetView, WarmupView } from '@/lib/workout-session';
-import { SetRow, swallowClick } from './set-row';
+import { SetRow, swallowClick, type RowEntry } from './set-row';
 
 const UP = new Set<string>(['increase', 'range_increase']);
 const DOWN = new Set<string>(['decrease', 'deload', 'calibrate', 'pain_reduce']);
@@ -181,7 +181,7 @@ function SetupNoteForm({ note, onSave }: { note: string | undefined; onSave: (te
  * ayar notu, PT'nin notu), gerekiyorsa ısınma satırı ve set tablosu. Tablo gerçek `<table>`: Set ·
  * Önceki · (setlerin hedefi farklıysa Hedef) · kg · Tekrar/Süre · durum. Planın değerleri bir kez
  * görünür: düz setlerde hedef paneldedir; AMRAP set "8+". Şu anki satır vurgulu (şerit sonraki sete
- * kayar). Yapılan sete dokunmak onu alttaki panelde düzenlemeye açar (şerit o satıra geçer); ✓'a dokunmak
+ * kayar); onun kg ve tekrar hücreleri yazılabilir, boş ✓ seti kaydeder ("Set bitti" ile aynı, `entry`). Yapılan sete dokunmak onu alttaki panelde düzenlemeye açar (şerit o satıra geçer); ✓'a dokunmak
  * işareti kaldırır, sola kaydırmak "Sil"i açar (`SetRow`). Yeni kaydın ✓'u satıra, panel değişmeden önce düşer
  * (iOS'ta titreşim yok; kaydedildiğini bu gösterir). Onaylanmış aşırı yük satırda ↑ ile görünür.
  *
@@ -204,6 +204,7 @@ export function ExerciseCard({
   currentSetIndex,
   editingSetId,
   currentKg,
+  entry,
   freshSetId,
   locked,
   onEditSet,
@@ -227,6 +228,8 @@ export function ExerciseCard({
   editingSetId: string | null;
   /** Şu anki setin önceden dolu (ya da değiştirilmiş) ağırlığı. */
   currentKg: number | undefined;
+  /** Şu anki setin satırdan girişi (kg/tekrar kutuları ve ✓); düzenleme açıkken null. */
+  entry: RowEntry | null;
   /** Az önce kaydedilen set: ✓'u belirerek gelir. */
   freshSetId: string | null;
   /** Set kaydedilirken ya da süreli set sayarken satırlar kaydırılmaz (dokunuşlara ekran karar verir). */
@@ -392,12 +395,12 @@ export function ExerciseCard({
             {warmups.length > 0 && (!warmDone || warmOpen) ? <WarmupRow warmups={warmups} onToggle={onToggleWarmup} /> : null}
 
             <Table ref={tableRef} aria-label={`${row.title} setleri`} className="table-fixed tabular-nums">
-              {/* 375 px'te: 40 + Önceki + (48) + 56 + 56 + 44; "Önceki" en az ~100 px kalır. */}
+              {/* 375 px'te: 40 + Önceki + (48) + 64 + 56 + 44; "Önceki" en az ~90 px kalır. kg kutusu "102,5"i sığdırır. */}
               <colgroup>
                 <col className="w-10" />
                 <col />
                 {showTarget ? <col className="w-12" /> : null}
-                {weighted ? <col className="w-14" /> : null}
+                {weighted ? <col className="w-16" /> : null}
                 <col className="w-14" />
                 <col className="w-11" />
               </colgroup>
@@ -426,6 +429,7 @@ export function ExerciseCard({
                       group={group !== null}
                       highlight={highlight}
                       currentKg={currentKg}
+                      entry={highlight === 'current' ? entry : null}
                       fresh={logged !== undefined && logged.id === freshSetId}
                       rowRef={highlight ? currentRef : undefined}
                       open={logged !== undefined && logged.id === openRow}

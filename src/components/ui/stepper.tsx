@@ -53,8 +53,16 @@ const CENTER: Record<Size, { plain: string; unit: string }> = {
   auto: { plain: 'w-10 touch:w-12', unit: 'w-14 touch:w-16' },
 };
 
+/**
+ * Binlik ayracı yok: `tr-TR`'de nokta binlik ayracıdır, "57.5" 575 okunurdu. Gruplama kapalıyken hem virgül hem nokta
+ * ondalık sayılır (İngilizce klavyeli telefonun ondalık tuşu nokta yazar); kutu "57,5" gösterir.
+ */
+export const NUMBER_FORMAT = { useGrouping: false } as const satisfies Intl.NumberFormatOptions;
+/** Tam sayı alanı (tekrar, saniye, set): yazılan "8,5" kutudan çıkınca 9 olur, kutu da 9 gösterir. */
+export const WHOLE_FORMAT = { useGrouping: false, maximumFractionDigits: 0 } as const satisfies Intl.NumberFormatOptions;
+
 /** `xl`'de kutu yazının genişliğinde (birim hemen yanında): "62,5" → 4,5 karakter. */
-const WIDE_TEXT = new Intl.NumberFormat('tr-TR', { maximumFractionDigits: 3 });
+const WIDE_TEXT = new Intl.NumberFormat('tr-TR', { maximumFractionDigits: 3, useGrouping: false });
 
 const REPEAT = { delay: 400, interval: 100 } as const;
 /** Parmak bu kadar kayarsa basılı tutma iptal (sayfa kaydırılıyordur). */
@@ -309,6 +317,7 @@ export function Stepper({
       max={max}
       step={step}
       locale="tr-TR"
+      format={inputMode === 'decimal' ? NUMBER_FORMAT : WHOLE_FORMAT}
       disabled={disabled}
       onValueChange={(next, details) => {
         const source: StepperSource = details.reason === 'keyboard' || details.reason === 'wheel' ? 'step' : 'type';

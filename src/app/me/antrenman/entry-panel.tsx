@@ -1,7 +1,7 @@
 'use client';
 
 import { motion } from 'motion/react';
-import { ArrowRight, CaretLeft, CaretRight, CheckCircle, FlagCheckered, Play, Stop, WarningCircle } from '@phosphor-icons/react';
+import { ArrowRight, CaretDown, CaretLeft, CaretRight, CaretUp, CheckCircle, FlagCheckered, Play, Stop, WarningCircle } from '@phosphor-icons/react';
 import { Check, Plus } from '@/components/line-icons';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -76,6 +76,47 @@ function NextUp({ previous, following, hidden }: { previous: FollowingView | nul
   );
 }
 
+/** Paneli açıp kapatan düğmenin kimliği: düğme yer değiştirince odak yenisine taşınır. */
+export const ENTRY_PANEL_TOGGLE_ID = 'entry-panel-toggle';
+
+/** Paneli kapatan (açıkken üst satırın sağında) ya da açan (kapalıyken gezinme satırının sağında) küçük düğme. */
+function PanelToggle({ collapsed, onToggle, className }: { collapsed: boolean; onToggle: () => void; className?: string }) {
+  return (
+    <Button
+      id={ENTRY_PANEL_TOGGLE_ID}
+      variant="ghost"
+      aria-label={collapsed ? 'Set panelini aç' : 'Set panelini gizle'}
+      aria-expanded={!collapsed}
+      className={cn('size-11 shrink-0 p-0 text-muted-foreground [&_svg]:size-5', className)}
+      onClick={onToggle}>
+      {collapsed ? <CaretUp weight="bold" /> : <CaretDown weight="bold" />}
+    </Button>
+  );
+}
+
+/**
+ * Kapalı panel: yalnız "‹ Önceki · Sıradaki: <ad> ›" satırı ve sağda paneli açan ⌃. Set tablodaki satırdan girilir (kg ve
+ * tekrar kutuları, ✓). `hidden` (set kaydedilirken): gezinme düğmeleri yok, yeri boş kalır.
+ */
+function CollapsedBar({ previous, following, hidden, onToggle }: { previous: FollowingView | null; following: FollowingView | null; hidden: boolean; onToggle: () => void }) {
+  return (
+    <div className="flex min-h-14 items-center gap-1 pt-1">
+      {!hidden && previous ? <PreviousButton previous={previous} className="-ml-2 shrink-0" /> : null}
+      <div className="flex min-w-0 flex-1 justify-center">
+        {hidden ? null : following ? (
+          <Button variant="ghost" className="h-11 w-auto max-w-full min-w-0 gap-1 px-3 text-sm font-normal text-muted-foreground" onClick={following.onOpen}>
+            <span className="shrink-0">Sıradaki:</span> <span className="min-w-0 truncate font-medium text-foreground">{following.name}</span>
+            <CaretRight data-icon="inline-end" weight="bold" />
+          </Button>
+        ) : (
+          <p className="text-sm text-muted-foreground">Son hareket</p>
+        )}
+      </div>
+      <PanelToggle collapsed onToggle={onToggle} className="-mr-2" />
+    </div>
+  );
+}
+
 function TransitionBar({ transition, now }: { transition: TransitionView; now: number }) {
   const remaining = Math.max(0, transition.endsAt - now);
   const fraction = Math.min(1, remaining / Math.max(1, transition.total * 1000));
@@ -128,6 +169,8 @@ function TimerBox({ view, target }: { view: TimerView; target: NextSet['target']
  * - Devrede istasyon geçişi panelin üst kenarında ince çubuk olarak sayar.
  * - Hareketi atlamak ve muadil seçmek üst çubuğun ⋯ menüsünde (8. görev; "Hareketi geç ›" kalktı).
  * - "+ Set ekle" ile istenen fazladan sette üst satırda "Fazladan" rozeti ve sağda "Kaldır" (fazladan set bırakılır).
+ * - Üst satırın sağındaki ⌄ paneli kapatır (`collapsed`, danışanın bu cihazdaki tercihi): altta yalnız gezinme satırı ve ⌃
+ *   kalır, set tablodaki satırdan girilir. Süreli set sayarken panel açık görünür (sayaç burada).
  */
 export function EntryPanel({
   row,
@@ -149,6 +192,8 @@ export function EntryPanel({
   previous,
   following,
   addSet,
+  collapsed,
+  onToggleCollapsed,
 }: {
   row: WorkoutRow | null;
   /** Gösterilen set: sıradaki ya da (kaydedilirken) az önce kaydedilen. */
@@ -177,7 +222,12 @@ export function EntryPanel({
   following: FollowingView | null;
   /** Biten harekette "Set ekle" (grupta "Tur ekle"); sınırdaysa ya da kaydedilirken null. */
   addSet: { label: string; onAdd: () => void } | null;
+  /** Panel kapalı (danışanın tercihi): yalnız gezinme satırı; süreli set sayarken panel yine açık görünür. */
+  collapsed: boolean;
+  onToggleCollapsed: () => void;
 }) {
+  const counting = next !== null && row?.trackingType === 'duration' && timer !== null && !frozen;
+  if (collapsed && !counting) return <CollapsedBar previous={previous} following={following} hidden={frozen} onToggle={onToggleCollapsed} />;
   if (!next || !row) {
     return (
       <div className="flex flex-col gap-2 pt-2">
@@ -186,7 +236,8 @@ export function EntryPanel({
             <CheckCircle weight="fill" className="size-5 shrink-0 text-primary" aria-hidden />
             Bu hareket bitti
           </p>
-          {previous ? <PreviousButton previous={previous} className="-mr-2 shrink-0" /> : null}
+          {previous ? <PreviousButton previous={previous} className="shrink-0" /> : null}
+          <PanelToggle collapsed={false} onToggle={onToggleCollapsed} className="-mr-2" />
         </div>
         {following ? (
           <Button size="lg" className="h-14 w-full text-base" onClick={following.onOpen}>
@@ -273,10 +324,11 @@ export function EntryPanel({
             Vazgeç
           </Button>
         ) : next.extra && !frozen ? (
-          <Button variant="ghost" className="-mr-2 h-11 shrink-0 px-3 text-muted-foreground" aria-label="Fazladan seti kaldır" onClick={onDropExtra}>
+          <Button variant="ghost" className="h-11 shrink-0 px-3 text-muted-foreground" aria-label="Fazladan seti kaldır" onClick={onDropExtra}>
             Kaldır
           </Button>
         ) : null}
+        {running ? null : <PanelToggle collapsed={false} onToggle={onToggleCollapsed} className="-mr-2" />}
       </div>
       {weighted ? (
         <Stepper
