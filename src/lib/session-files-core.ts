@@ -228,7 +228,7 @@ export async function putSession(repo: SessionRepo, ctx: SessionContext, incomin
 /* --- bitiş --- */
 
 export type FinishResult =
-  | { status: 'finished'; doc: SessionDoc; plan: Pick<FinishPlan, 'rotation' | 'health' | 'feedback'>; remaining: number | null }
+  | { status: 'finished'; doc: SessionDoc; plan: Pick<FinishPlan, 'health' | 'feedback'>; remaining: number | null }
   /** Zaten bitmiş: aynı commit'te öteki dosyalar da yazılmıştı (200, no-op). */
   | { status: 'already'; doc: SessionDoc }
   | { status: 'deleted' }
@@ -246,7 +246,7 @@ export async function finishSession(
   const ownId = body.doc.program?.programId;
   return withRetry(async (): Promise<FinishResult> => {
     const head = await repo.head();
-    // Okunamayan program rotasyonu durdurur ama bitişi durdurmaz (seans yine kaydedilir).
+    // Okunamayan program bitişi durdurmaz (seans yine kaydedilir; planlanan program telefondaki kalır, güncelleme yazılmaz).
     const [file, program, ownFile, ownIndex] = await Promise.all([
       repo.read(path, head.commit),
       ownId ? Promise.resolve(null) : readOrNull(repo, 'program.json', head.commit),
@@ -286,7 +286,7 @@ export async function finishSession(
     const plan = planFinish({
       stored,
       incoming: body.doc,
-      rotation: body.rotation,
+      // Eski telefonun `rotation`'ı iletilmez (Faz 3, Karar 5: bitiş dönüşü ilerletmez).
       health: body.health,
       feedback: body.feedback,
       index,
@@ -303,7 +303,7 @@ export async function finishSession(
     if (plan.proposalsBroken) repo.log(`[seans] ${id}: proposals.json okunamadı; öneriler yazılmadı.`);
     assertWritable(plan.doc);
     const written = await repo.commit({ head, files: plan.files, message: plan.message });
-    return { status: 'finished', doc: plan.doc, plan: { rotation: plan.rotation, health: plan.health, feedback: plan.feedback }, remaining: written.remaining };
+    return { status: 'finished', doc: plan.doc, plan: { health: plan.health, feedback: plan.feedback }, remaining: written.remaining };
   });
 }
 

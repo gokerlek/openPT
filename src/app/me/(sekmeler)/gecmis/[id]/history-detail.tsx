@@ -141,7 +141,7 @@ export function HistoryDetail({ initialDoc, changes, timeZone }: { initialDoc: S
         </p>
         {view.otherDay || view.unfinished || view.effort ? (
           <div className="flex flex-wrap items-center gap-1.5">
-            {view.otherDay ? <Badge variant="secondary">başka gün</Badge> : null}
+            {view.otherDay ? <Badge variant="secondary">başka program</Badge> : null}
             {view.unfinished ? <Badge variant="outline">yarım</Badge> : null}
             {view.effort ? <Badge variant="outline">{view.effort}</Badge> : null}
           </div>

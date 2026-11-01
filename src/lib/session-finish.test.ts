@@ -3,9 +3,10 @@ import assert from 'node:assert/strict';
 import { gitBlobSha, jsonText } from './github/blob.ts';
 import { HEALTH_CONSENT_VERSION, type Client } from './schemas/client.ts';
 import { emptySessionIndex, type FeedbackDecision, type SessionDoc, type SessionIndex } from './schemas/session.ts';
-import { allowedHealth, applyPatch, BROKEN_PROPOSALS, defaultRotation, planFinish, planPut, sessionDateFor, type FinishInput } from './session-finish.ts';
+import { allowedHealth, applyPatch, BROKEN_PROPOSALS, planFinish, planPut, sessionDateFor, withPlannedDay, type FinishInput } from './session-finish.ts';
 import { withDeletions } from './session-merge.ts';
 import { at, DAY_A, DAY_B, programFile, sessionDoc, sessionEntry, W1, W2, workingSet } from './testing/session-fixtures.ts';
+import { OWN_DAY_A, OWN_DAY_B, OWN_ID, ownProgram } from './testing/own-fixtures.ts';
 
 const TZ = 'Europe/Istanbul';
 const NOW = new Date(at(60));
@@ -50,7 +51,7 @@ function finishInput(incoming: SessionDoc, overrides: Partial<FinishInput> = {})
 const fileOf = (plan: { files: { path: string; content: unknown }[] }, path: string) => plan.files.find((file) => file.path === path)?.content;
 
 describe('bitiş: tek commit', () => {
-  test('tamamlanan gün: seans bitti, index satırı (sha dosyanınki), rotasyon ilerler; program ham korunur, revision artmaz', () => {
+  test('tamamlanan gün: seans bitti, index satırı (sha dosyanınki); program dosyası yazılmaz', () => {
     // Sunucuda 3 set var; telefon kalan 2 seti ve bitişi gönderir.
     const full = dayA({ bench: 3, leg: 2 });
     const stored = { ...full, entries: full.entries.map((entry) => (entry.id === 'e_bbbbbb' ? { ...entry, sets: [] } : entry)) };
@@ -58,28 +59,21 @@ describe('bitiş: tek commit', () => {
     const raw = programFile({ lastDayId: DAY_B, lastCompletedAt: '2026-09-24T18:00:00.000Z' }, { clientTargets: { r_aaaaaa: { at: 'x' } } });
     const plan = planFinish(finishInput(incoming, { stored, program: raw }));
 
-    assert.deepEqual(plan.files.map((file) => file.path), ['sessions/s_k2m9x4qa.json', 'sessions-index.json', 'program.json']);
+    assert.deepEqual(plan.files.map((file) => file.path), ['sessions/s_k2m9x4qa.json', 'sessions-index.json']);
     assert.equal(plan.doc.status, 'finished');
     assert.equal(plan.doc.finishedAt, at(55));
     assert.equal(plan.doc.writer, W2);
-    assert.equal(plan.doc.rotation?.value, 'advance');
-    assert.deepEqual(plan.rotation, { choice: 'advance', applied: true });
+    assert.equal(plan.doc.rotation, undefined);
     assert.equal(plan.message, 'Antrenman bitti · Gün A · 5 set');
     assert.equal(plan.doc.notices.length, 0);
 
     const index = fileOf(plan, 'sessions-index.json') as SessionIndex;
     assert.equal(index.items[0]?.sha, gitBlobSha(jsonText(fileOf(plan, 'sessions/s_k2m9x4qa.json'))));
     assert.equal(index.items[0]?.sets, 5);
-
-    const program = fileOf(plan, 'program.json') as ReturnType<typeof programFile>;
-    assert.deepEqual(program.rotation, { lastDayId: DAY_A, lastCompletedAt: at(55) });
-    assert.equal(program.revision, 7);
-    assert.deepEqual((program as Record<string, unknown>).clientTargets, { r_aaaaaa: { at: 'x' } });
   });
 
-  test('hazır seçim: yarıdan azı yapıldıysa aynı gün sırada kalır, "yarım" bildirimi', () => {
+  test('yarıdan azı yapıldıysa "yarım" bildirimi', () => {
     const plan = planFinish(finishInput(dayA({ bench: 2, leg: 0 })));
-    assert.deepEqual(plan.rotation, { choice: 'keep', applied: false });
     assert.equal(fileOf(plan, 'program.json'), undefined);
     assert.deepEqual(plan.doc.notices.map((notice) => notice.kind), ['unfinished']);
     // PT'nin bildirimi yapılan ve planlanan seti söyler: "Gün A yarım bırakıldı (2/5 set)".
@@ -87,44 +81,88 @@ describe('bitiş: tek commit', () => {
     const row = (fileOf(plan, 'sessions-index.json') as SessionIndex).items[0];
     assert.equal(row?.unfinished, true);
     assert.deepEqual(row?.progress, { done: 2, planned: 5 });
-    assert.equal(defaultRotation(3, 5), 'advance');
-    assert.equal(defaultRotation(2, 5), 'keep');
   });
 
-  test('danışanın seçimi hazır seçimi geçer', () => {
-    const kept = planFinish(finishInput(dayA({ bench: 3, leg: 2 }), { rotation: 'keep' }));
-    assert.deepEqual(kept.rotation, { choice: 'keep', applied: false });
-    assert.equal(kept.doc.rotation?.value, 'keep');
-    const advanced = planFinish(finishInput(dayA({ bench: 1, leg: 0 }), { rotation: 'advance' }));
-    assert.equal(advanced.rotation.applied, true);
+  // Faz 3 (Karar 5): dönüş yok. Eski telefon "Sıradaki antrenman" seçimini gönderebilir; okunmaz.
+  test('bitiş dönüşü ilerletmez: program.json yazılmaz, seansa rotation yok', () => {
+    for (const rotation of ['advance', 'keep'] as const) {
+      const plan = planFinish(finishInput(dayA({ bench: 3, leg: 2 }), { rotation, program: programFile({ lastDayId: DAY_B }) }));
+      assert.equal(plan.files.some((file) => file.path === 'program.json'), false, rotation);
+      assert.equal(plan.doc.rotation, undefined, rotation);
+      assert.equal('rotation' in plan, false);
+    }
   });
 
-  test('rotasyon zamanla korunur: sonraki antrenmandan sonra gelen eski bitiş sırayı geri almaz', () => {
-    const late = planFinish(finishInput(dayA({ bench: 3, leg: 2 }), { program: programFile({ lastDayId: DAY_B, lastCompletedAt: at(120) }) }));
-    assert.deepEqual(late.rotation, { choice: 'advance', applied: false });
-    assert.equal(fileOf(late, 'program.json'), undefined);
-    // Seans yine bitmiş olarak yazılır.
-    assert.equal(late.doc.status, 'finished');
-  });
+  // Gün A cumartesiye atanmış (fikstürün günü 26 Eylül 2026 cumartesi).
+  const assigned = () => programFile({}, { schedule: { weekdays: [6] } });
+  const dayB = (overrides: Partial<SessionDoc> = {}) =>
+    sessionDoc({ entries: [sessionEntry('e_cccccc', { rowId: 'r_cccccc', sets: sets(3, 1) })], ...overrides, program: { revision: 7, dayId: DAY_B, dayName: 'Gün B', ...overrides.program } });
 
-  test('başka gün seçildi: bildirim; sıra seçilen günden sürer', () => {
-    const doc = sessionDoc({
-      program: { revision: 7, dayId: DAY_B, dayName: 'Gün B', plannedDayId: DAY_A, plannedDayName: 'Gün A' },
-      entries: [sessionEntry('e_cccccc', { rowId: 'r_cccccc', sets: sets(3, 1) })],
-    });
-    const plan = planFinish(finishInput(doc));
+  test('başka program seçildi: bildirim ve planlanan programın adı (PT: "Gün A yerine Gün B yapıldı")', () => {
+    const plan = planFinish(finishInput(dayB({ program: { revision: 7, dayId: DAY_B, dayName: 'Gün B', plannedDayId: DAY_A, plannedDayName: 'Gün A' } }), { program: assigned() }));
     assert.deepEqual(plan.doc.notices.map((notice) => notice.kind), ['other_day']);
-    assert.equal((fileOf(plan, 'program.json') as ReturnType<typeof programFile>).rotation.lastDayId, DAY_B);
+    assert.equal(fileOf(plan, 'program.json'), undefined);
     const row = (fileOf(plan, 'sessions-index.json') as SessionIndex).items[0];
     assert.equal(row?.otherDay, true);
-    // PT'nin bildirimi: "Gün A yerine Gün B yapıldı".
     assert.equal(row?.plannedDayName, 'Gün A');
   });
 
-  test('okunamayan ya da olmayan program: rotasyon yok, bitiş sürer', () => {
+  // Faz 3 (Karar 6): telefonda eskimiş plan (gece yarısı, PT'nin araya giren kaydı) yanlış bildirim üretmesin.
+  test('plannedDayId sunucuda seansın tarihinden; bildirim yalnız o gün atanmış program varken', () => {
+    // Cumartesi (Gün A'nın günü): telefon planlananı göndermese de sunucu yazar, bildirim çıkar.
+    const saturday = planFinish(finishInput(dayB(), { program: assigned() }));
+    assert.deepEqual(saturday.doc.program, { revision: 7, dayId: DAY_B, dayName: 'Gün B', plannedDayId: DAY_A, plannedDayName: 'Gün A' });
+    assert.deepEqual(saturday.doc.notices.map((notice) => notice.kind), ['other_day']);
+    // Pazar (atanmamış gün; kayıttaki tarih): telefondan gelen planlanan düşer, bildirim yok.
+    const stale = { revision: 7, dayId: DAY_B, dayName: 'Gün B', plannedDayId: DAY_A, plannedDayName: 'Gün A' };
+    const sunday = dayB({ date: '2026-09-27', program: stale });
+    const plan = planFinish(finishInput(sunday, { stored: sunday, program: assigned() }));
+    assert.equal(plan.doc.date, '2026-09-27');
+    assert.deepEqual(plan.doc.program, { revision: 7, dayId: DAY_B, dayName: 'Gün B' });
+    assert.deepEqual(plan.doc.notices, []);
+    assert.equal((fileOf(plan, 'sessions-index.json') as SessionIndex).items[0]?.otherDay, false);
+    // Atamasız programda planlanan yok: bildirim yok.
+    assert.deepEqual(planFinish(finishInput(dayB({ program: stale }))).doc.notices, []);
+    // Planlanan program yapıldıysa ad yazılmaz.
+    assert.deepEqual(planFinish(finishInput(dayA({ bench: 3, leg: 2 }), { program: assigned() })).doc.program, {
+      revision: 1,
+      dayId: DAY_A,
+      dayName: 'Gün A',
+      plannedDayId: DAY_A,
+    });
+  });
+
+  test('withPlannedDay: kendi programın kimliği ve adı korunur; programsız belgeye dokunulmaz', () => {
+    const program = ownProgram();
+    const phase = program.phases[0]!;
+    const own = { ...program, phases: [{ ...phase, days: phase.days.map((day, index) => ({ ...day, ...(index === 0 ? { weekdays: [6] } : {}) })) }] };
+    const doc = sessionDoc({ program: { revision: 1, dayId: OWN_DAY_B, dayName: 'Gün B', programId: OWN_ID, programName: 'Evde' } });
+    assert.deepEqual(withPlannedDay(doc, own).program, {
+      revision: 1,
+      dayId: OWN_DAY_B,
+      dayName: 'Gün B',
+      plannedDayId: OWN_DAY_A,
+      plannedDayName: own.phases[0]?.days[0]?.name,
+      programId: OWN_ID,
+      programName: 'Evde',
+    });
+    const bare = sessionDoc({ program: undefined });
+    assert.equal(withPlannedDay(bare, own), bare);
+  });
+
+  test('kendi programda planlanan ve bildirim sunucuda değişmez', () => {
+    const doc = sessionDoc({
+      program: { revision: 1, dayId: OWN_DAY_B, dayName: 'Gün B', plannedDayId: OWN_DAY_A, programId: OWN_ID, programName: 'Evde' },
+      entries: [sessionEntry('e_cccccc', { rowId: 'r_cccccc', sets: sets(3, 1) })],
+    });
+    const plan = planFinish(finishInput(doc, { program: assigned(), own: { program: ownProgram(), index: null } }));
+    assert.equal(plan.doc.program?.plannedDayId, OWN_DAY_A);
+    assert.deepEqual(plan.doc.notices.filter((notice) => notice.kind === 'other_day'), []);
+  });
+
+  test('okunamayan ya da olmayan program: bitiş sürer', () => {
     for (const program of [null, { bozuk: true }]) {
       const plan = planFinish(finishInput(dayA({ bench: 3, leg: 2 }), { program }));
-      assert.equal(plan.rotation.applied, false);
       assert.deepEqual(plan.files.map((file) => file.path), ['sessions/s_k2m9x4qa.json', 'sessions-index.json']);
     }
   });
@@ -211,12 +249,14 @@ describe('bitiş: program güncelleme (§6)', () => {
   const leg = () => sessionEntry('e_bbbbbb', { rowId: 'r_bbbbbb', exerciseId: 'leg-press', title: 'Leg Press', sets: sets(2, 10) });
   const incoming = (kg: number) => sessionDoc({ entries: [bench(kg), leg()], status: 'finished', finishedAt: at(55) });
 
-  test('"Evet": danışan kaydı ve rotasyon aynı program yazımında; öneri proposals.json\'a; seansa bildirimler', () => {
-    const plan = planFinish(finishInput(incoming(62.5), { feedback: { answer: 'yes', items: [weight(true), legPress] } }));
+  test('"Evet": danışan kaydı program yazımında (dönüş yok, ham alanlar korunur); öneri proposals.json\'a; seansa bildirimler', () => {
+    const raw = programFile({ lastDayId: DAY_B, lastCompletedAt: '2026-09-24T18:00:00.000Z' }, { extra: { kept: true } });
+    const plan = planFinish(finishInput(incoming(62.5), { program: raw, feedback: { answer: 'yes', items: [weight(true), legPress] } }));
     assert.deepEqual(plan.files.map((file) => file.path), ['sessions/s_k2m9x4qa.json', 'sessions-index.json', 'program.json', 'proposals.json']);
-    const program = fileOf(plan, 'program.json') as { revision: number; rotation: unknown; log: { kind: string; sessionId: string; changes: { text: string }[] }[] };
+    const program = fileOf(plan, 'program.json') as { revision: number; rotation: unknown; extra: unknown; log: { kind: string; sessionId: string; changes: { text: string }[] }[] };
     assert.equal(program.revision, 7);
-    assert.deepEqual(program.rotation, { lastDayId: DAY_A, lastCompletedAt: at(55) });
+    assert.deepEqual(program.rotation, { lastDayId: DAY_B, lastCompletedAt: '2026-09-24T18:00:00.000Z' }, 'dönüş ilerlemez');
+    assert.deepEqual(program.extra, { kept: true }, 'bilinmeyen alan düşmez');
     assert.equal(program.log[0]?.kind, 'client');
     assert.equal(program.log[0]?.sessionId, 's_k2m9x4qa');
     assert.equal(program.log[0]?.changes[0]?.text, 'Bench Press: çalışma ağırlığı 60 → 62,5 kg');
@@ -229,18 +269,17 @@ describe('bitiş: program güncelleme (§6)', () => {
     assert.match(plan.message, /^Antrenman bitti · Gün A · 5 set · Program \(danışan\) · 1 öneri\n\n- Gün A: Bench Press: çalışma ağırlığı 60 → 62,5 kg$/);
   });
 
-  test('"Hayır": programa bir şey yazılmaz (rotasyon yine), öneri gitmez; yukarı ağırlık seansa oneOff', () => {
+  test('"Hayır": program dosyası yazılmaz, öneri gitmez; yukarı ağırlık seansa oneOff', () => {
     const plan = planFinish(finishInput(incoming(62.5), { feedback: { answer: 'no', items: [weight(false), { ...legPress, apply: false }] } }));
-    assert.deepEqual(plan.files.map((file) => file.path), ['sessions/s_k2m9x4qa.json', 'sessions-index.json', 'program.json']);
-    assert.deepEqual((fileOf(plan, 'program.json') as { log: unknown[] }).log, []);
+    assert.deepEqual(plan.files.map((file) => file.path), ['sessions/s_k2m9x4qa.json', 'sessions-index.json']);
     assert.equal(plan.doc.entries[0]?.oneOff, true);
     const index = fileOf(plan, 'sessions-index.json') as SessionIndex;
     assert.equal(index.items[0]?.exercises[0]?.oneOff, true);
     assert.deepEqual(plan.feedback, { direct: 0, proposals: 0, converted: 0 });
   });
 
-  test('rotasyon ilerlemese de danışanın güncellemesi program dosyasına yazılır', () => {
-    const plan = planFinish(finishInput(incoming(62.5), { rotation: 'keep', feedback: { answer: 'yes', items: [weight(true)] } }));
+  test('eski telefonun dönüş seçimi okunmaz: danışanın güncellemesi yine yazılır', () => {
+    const plan = planFinish(finishInput(incoming(62.5), { rotation: 'advance', feedback: { answer: 'yes', items: [weight(true)] } }));
     const program = fileOf(plan, 'program.json') as { rotation: unknown; log: unknown[] };
     assert.deepEqual(program.rotation, {});
     assert.equal(program.log.length, 1);

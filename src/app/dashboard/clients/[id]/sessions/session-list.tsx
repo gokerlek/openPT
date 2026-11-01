@@ -11,7 +11,7 @@ import { firstHistoryRows, HISTORY_PAGE, type HistoryMonth, type HistoryRow } fr
 
 /**
  * PT'nin Antrenmanlar sekmesindeki liste: danışanın Geçmiş'iyle aynı satırlar (`historyList`: gün, süre, set,
- * toplam ağırlık; rekor, "başka gün", "yarım" rozetleri), aylara bölünmüş; masaüstünde iki sütun. İlk 20
+ * toplam ağırlık; rekor, "başka program", "yarım" rozetleri), aylara bölünmüş; masaüstünde iki sütun. İlk 20
  * antrenman, altında "Daha fazla göster (n)". Satır antrenmanın detayını açar (yalnız okuma).
  */
 export function SessionList({ clientId, months }: { clientId: string; months: HistoryMonth[] }) {
@@ -66,7 +66,7 @@ export function SessionRow({ clientId, row }: { clientId: string; row: HistoryRo
           ) : null}
           {/* Danışanın kendi programından (adı başlıkta, "Evde · Gün A"). */}
           {row.program ? <Badge variant="outline">Kendi programı</Badge> : null}
-          {row.otherDay ? <Badge variant="secondary">başka gün</Badge> : null}
+          {row.otherDay ? <Badge variant="secondary">başka program</Badge> : null}
           {row.unfinished ? <Badge variant="outline">yarım</Badge> : null}
         </ItemTitle>
         <ItemDescription className="tabular-nums">{row.meta}</ItemDescription>

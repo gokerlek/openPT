@@ -45,7 +45,7 @@ const index = (...items: SessionIndexRow[]): SessionIndex => ({ version: 1, item
 const texts = (notices: readonly PtNotice[]) => notices.map((notice) => `${notice.kind}: ${notice.text}`);
 
 describe('PT bildirimleri: antrenmanlardan', () => {
-  test('başka gün, yarım (12/17 set), aşırı yük (hareket başına), hafifletildi', () => {
+  test('başka program, yarım (12/17 set), aşırı yük (hareket başına), hafifletildi', () => {
     const notices = sessionNotices(
       index(
         row('s_aaaaaaaa', 1, { otherDay: true, plannedDayName: 'Gün B', notices: ['other_day'] }),
@@ -81,7 +81,7 @@ describe('PT bildirimleri: antrenmanlardan', () => {
       NOW.getTime() - 14 * DAY,
     );
     assert.deepEqual(texts(notices), [
-      'other_day: Başka gün seçildi: Gün C',
+      'other_day: Başka program seçildi: Gün C',
       'unfinished: Gün C yarım bırakıldı',
       'overload: Gün C: hedefin çok üzerinde set onaylandı',
     ]);

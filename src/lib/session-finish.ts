@@ -3,7 +3,7 @@ import { canRecordHealth } from './client-status.ts';
 import { todayIn } from './format.ts';
 import { gitBlobSha, jsonText } from './github/blob.ts';
 import { planProgramFeedback, withFeedbackFlags, type FeedbackOutcome } from './program-feedback.ts';
-import { completeDay, type ProgramChange } from './program-plan.ts';
+import { currentPhaseOf, type ProgramChange } from './program-plan.ts';
 import { PROPOSALS_PATH } from './proposals.ts';
 import type { Client } from './schemas/client.ts';
 import { healthRecordSchema, type HealthRecord } from './schemas/health.ts';
@@ -28,7 +28,8 @@ import { mergeAll, normalizeSession, sameSessionData, withDeletions } from './se
 import { finishMessage, patchMessage, putMessage } from './session-messages.ts';
 import { verifyAlgoSets } from './set-suggestions.ts';
 import type { TemplateBody } from './template-plan.ts';
-import { completionOf, defaultRotation, workoutUnits } from './workout-cursor.ts';
+import { todayAssigned } from './training-days.ts';
+import { completionOf, workoutUnits } from './workout-cursor.ts';
 
 /**
  * Antrenman yazımlarının saf hesapları (tasarım §4.3–§4.7): sunucunun gelen belgeyi nasıl kabul ettiği,
@@ -36,8 +37,8 @@ import { completionOf, defaultRotation, workoutUnits } from './workout-cursor.ts
  * düzeltme. Okuma ve yazma `sessions-core.ts`'te.
  *
  * Sunucu telefona güvenmez: tarih ilk yazımda sunucunun saat diliminden (`todayIn`), PUT belgeyi hep
- * etkin sayar (bitiş yalnız bitiş ucundan), bitiş anı akla yatkın değilse sunucunun anı, sağlık ayrıntısı
- * yalnız onay varsa ve yalnız `health.json`'a.
+ * etkin sayar (bitiş yalnız bitiş ucundan), bitiş anı akla yatkın değilse sunucunun anı, planlanan program
+ * bitişte seansın tarihinden (`withPlannedDay`), sağlık ayrıntısı yalnız onay varsa ve yalnız `health.json`'a.
  */
 
 const PROGRAM_PATH = 'program.json';
@@ -110,9 +111,6 @@ export function completion(doc: Pick<SessionDoc, 'entries' | 'order'>, day: Temp
   return completionOf(workoutUnits(day ?? { blocks: [] }, doc));
 }
 
-/** Hazır seçim (§2.7): planın yarısı yapıldıysa sıradaki gün, değilse aynı gün sırada kalır (telefonla ortak). */
-export { defaultRotation };
-
 /** Onayın izin verdiği sağlık ayrıntısı; hiçbiri yoksa null. Ağrı `check_in`, hazır oluşluk `readiness` parçası. */
 export function allowedHealth(client: Pick<Client, 'modules' | 'consents'>, health: FinishHealth | undefined): FinishHealth | null {
   if (!health) return null;
@@ -148,6 +146,7 @@ export type FinishInput = {
   /** Kayıttaki etkin belge; dosya yoksa null (çevrimdışı bitiş: ilk yazma bitiş). */
   stored: SessionDoc | null;
   incoming: SessionDoc;
+  /** Eski telefonun bitişteki "Sıradaki antrenman" seçimi: okunmaz (Faz 3, Karar 5: dönüş yok). */
   rotation?: RotationChoice | undefined;
   health?: FinishHealth | undefined;
   /** "Programını güncelleyelim mi?"nin kararları (§6); yoksa programa bir şey yazılmaz. */
@@ -179,7 +178,6 @@ export type FinishPlan = {
   doc: SessionDoc;
   files: { path: string; content: unknown }[];
   message: string;
-  rotation: { choice: RotationChoice; applied: boolean };
   /** Sağlık ayrıntısı: yazıldı, onay olmadığı için atıldı, yoktu, `health.json` okunamadığı için yazılamadı. */
   health: 'written' | 'dropped' | 'none' | 'broken';
   /** Program güncelleme (§6): doğrudan yazılan, öneriye giden, öneriye dönen madde sayıları. */
@@ -209,15 +207,41 @@ function finishCommitMessage(doc: SessionDoc, changes: readonly ProgramChange[],
 }
 
 /**
- * Bitişin tek commit'i (§4.7): seans `finished` + index satırı + (rotasyon ilerlediyse ya da danışan
- * programını güncellediyse) `program.json` + (öneri varsa) `proposals.json` + (onaylı sağlık ayrıntısı
+ * Seansın planlanan programı (Faz 3, Karar 6): seansın tarihine (`doc.date`, sunucunun koyduğu gün) şu anki evrede
+ * atanmış program. Sunucu bitişte yeniden hesaplar; telefonda eskimiş plan (gece yarısını geçen antrenman, araya
+ * giren PT kaydı) yanlış "başka program" bildirimi üretmesin. Atanmamış günde `plannedDayId` ve `plannedDayName`
+ * düşer (danışan programı kendisi seçti, bildirim yok); atanmış programdan başkası yapıldıysa `plannedDayName`
+ * programdaki ad. Belgenin programı yoksa belge aynen döner.
+ */
+export function withPlannedDay(doc: SessionDoc, program: Pick<Program, 'phases' | 'current'>): SessionDoc {
+  if (!doc.program) return doc;
+  const current = currentPhaseOf(program)?.phase;
+  const planned = current ? todayAssigned(current.days, doc.date) : null;
+  // Alan sırası şemanınki (revision, phaseId, dayId, dayName, plannedDayId, plannedDayName, programId, programName).
+  const { plannedDayId: _id, plannedDayName: _name, programId, programName, ...head } = doc.program;
+  return {
+    ...doc,
+    program: {
+      ...head,
+      ...(planned ? { plannedDayId: planned.id } : {}),
+      ...(planned && planned.id !== head.dayId ? { plannedDayName: planned.name } : {}),
+      ...(programId ? { programId } : {}),
+      ...(programName ? { programName } : {}),
+    },
+  };
+}
+
+/**
+ * Bitişin tek commit'i (§4.7): seans `finished` + index satırı + (danışan programını güncellediyse)
+ * `program.json` ya da kendi programın dosyası + (öneri varsa) `proposals.json` + (onaylı sağlık ayrıntısı
  * varsa) `health.json`. Dosyalar ya birlikte yazılır ya hiçbiri.
  *
- * Rotasyon zamanla korunur: `completeDay` yalnız seansın başlangıcı programdaki son tamamlanmadan
- * sonraysa uygulanır; çevrimdışı kuyrukta bekleyip sonraki antrenmandan sonra gelen bitiş sırayı geri
- * almaz. Program dosyası ham hâliyle korunur, yalnız `rotation`, danışanın hedefleri (`clientTargets`) ve
- * geçmiş değişir (revision artmaz; bilinmeyen alanlar düşmez). "Programını güncelleyelim mi?"nin kararları
- * `program-feedback.ts`'te (`planProgramFeedback`): uygulanmayan ağırlık seansa `oneOff`/`lighter` izi bırakır.
+ * Bitiş dönüşü ilerletmez (Faz 3, Karar 5): seansa `rotation` yazılmaz, eski telefonun seçimi okunmaz. PT
+ * programında planlanan program seansın tarihinden yeniden hesaplanır (`withPlannedDay`); "başka program"
+ * bildirimi (`other_day`) yalnız o gün atanmış program varken başkası yapılınca. Program dosyası ham hâliyle
+ * korunur, yalnız danışanın hedefleri (`clientTargets`) ve geçmiş değişir (revision artmaz; bilinmeyen alanlar
+ * düşmez). "Programını güncelleyelim mi?"nin kararları `program-feedback.ts`'te (`planProgramFeedback`):
+ * uygulanmayan ağırlık seansa `oneOff`/`lighter` izi bırakır.
  */
 export function planFinish(input: FinishInput): FinishPlan {
   const { now } = input;
@@ -233,10 +257,9 @@ export function planFinish(input: FinishInput): FinishPlan {
   const programParsed = ownId || input.program === null ? null : v.safeParse(programSchema, input.program);
   const program = programParsed?.success ? programParsed.output : null;
   const rawProgram = program ? (isRecord(input.program) && input.program.version === 2 ? input.program : (program as unknown as Record<string, unknown>)) : null;
+  // PT programında planlanan program sunucuda, seansın tarihinden; kendi programda bildirim yok, dokunulmaz.
+  if (program && !ownId) doc = withPlannedDay(doc, program);
   const { done, planned } = completion(doc, dayOf(own ?? program, doc.program?.dayId));
-
-  const choice = input.rotation ?? doc.rotation?.value ?? defaultRotation(done, planned);
-  if (input.rotation || !doc.rotation) doc = { ...doc, rotation: { value: choice, updatedAt: now.toISOString(), by: doc.writer } };
 
   // Program güncelleme (§6): uygulanmayan ağırlığın izi seansa, kararlar programa ve önerilere. Algoritmik
   // set önerisi sunucuda yeniden denetlenir (+1 set, hazır oluşluk).
@@ -255,7 +278,7 @@ export function planFinish(input: FinishInput): FinishPlan {
   const ownFeedback = own ? planOwnFeedback({ doc, feedback: verified, program: own, now }) : null;
 
   let notices = doc.notices;
-  // Kendi programda yarım ve başka gün bildirimi yok: plan danışanın (§3.4).
+  // Kendi programda yarım ve başka program bildirimi yok: plan danışanın (§3.4).
   if (!ownId) {
     // Yarım antrenman: PT'nin bildirimi yapılan ve planlanan seti söyler ("12/17 set").
     if (done < planned) notices = withNotice(notices, { kind: 'unfinished', at: doc.finishedAt as string, done, planned });
@@ -273,42 +296,20 @@ export function planFinish(input: FinishInput): FinishPlan {
   const sha = gitBlobSha(jsonText(doc));
   files.push({ path: SESSIONS_INDEX_PATH, content: upsertIndexRow(input.index, indexRowOf(doc, sha)) });
 
-  // Program dosyası: danışanın güncellemesi (varsa) ve üstüne rotasyon.
-  let programContent: Record<string, unknown> | null = feedback.program;
-  let applied = false;
-  if (choice === 'advance' && program && rawProgram && doc.program) {
-    const last = program.rotation.lastCompletedAt;
-    if (!last || time(doc.startedAt) > time(last)) {
-      const next = completeDay(program, doc.program.dayId, new Date(doc.finishedAt as string));
-      if (next !== program) {
-        programContent = { ...(programContent ?? rawProgram), rotation: next.rotation };
-        applied = true;
-      }
-    }
-  }
-  if (programContent) files.push({ path: PROGRAM_PATH, content: programContent });
+  // Program dosyası yalnız danışanın güncellemesi varsa (dönüş yazılmaz).
+  if (feedback.program) files.push({ path: PROGRAM_PATH, content: feedback.program });
   if (feedback.proposals && !proposalsBroken) files.push({ path: PROPOSALS_PATH, content: feedback.proposals });
 
-  // Kendi program: güncelleme ve rotasyon aynı dosyaya; her program yazımı index satırını da yazar (`sha`, §5.3).
-  if (own && doc.program) {
-    let ownContent: OwnProgram = ownFeedback?.program ?? own;
-    const last = own.rotation.lastCompletedAt;
-    if (choice === 'advance' && (!last || time(doc.startedAt) > time(last))) {
-      const next = completeDay(ownContent, doc.program.dayId, new Date(doc.finishedAt as string));
-      if (next !== ownContent) {
-        ownContent = next;
-        applied = true;
-      }
-    }
-    if (ownContent !== own) {
-      const { index } = parseOwnIndex(input.own?.index ?? null);
-      const previous = index.items.find((item) => item.id === own.id);
-      let item = ownIndexItemOf(ownContent, gitBlobSha(jsonText(ownContent)), previous);
-      // Paylaşılmış programda danışanın kaydı PT'ye bildirilir (§7.1).
-      if (ownContent.shared && ownFeedback?.program) item = { ...item, clientEditedAt: doc.finishedAt as string };
-      files.push({ path: ownProgramPath(own.id), content: ownContent });
-      files.push({ path: OWN_INDEX_PATH, content: upsertOwnItem(index, item) });
-    }
+  // Kendi program yalnız danışanın güncellemesi varsa; her program yazımı index satırını da yazar (`sha`, §5.3).
+  const ownContent: OwnProgram | null = own && ownFeedback?.program ? ownFeedback.program : null;
+  if (own && ownContent) {
+    const { index } = parseOwnIndex(input.own?.index ?? null);
+    const previous = index.items.find((item) => item.id === own.id);
+    let item = ownIndexItemOf(ownContent, gitBlobSha(jsonText(ownContent)), previous);
+    // Paylaşılmış programda danışanın kaydı PT'ye bildirilir (§7.1).
+    if (ownContent.shared) item = { ...item, clientEditedAt: doc.finishedAt as string };
+    files.push({ path: ownProgramPath(own.id), content: ownContent });
+    files.push({ path: OWN_INDEX_PATH, content: upsertOwnItem(index, item) });
   }
 
   let health: FinishPlan['health'] = input.health ? 'dropped' : 'none';
@@ -330,7 +331,6 @@ export function planFinish(input: FinishInput): FinishPlan {
     doc,
     files,
     message: finishCommitMessage(doc, changes, outcome.proposals, Boolean(ownFeedback)),
-    rotation: { choice, applied },
     health,
     feedback: outcome,
     proposalsBroken: proposalsBroken && feedback.outcome.proposals > 0,

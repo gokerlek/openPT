@@ -201,9 +201,12 @@ export const sessionProgramSchema = v.object({
   phaseId: v.optional(id(PHASE_ID_PATTERN, 'Evre kimliği geçersiz.')),
   dayId: id(DAY_ID_PATTERN, 'Gün kimliği geçersiz.'),
   dayName: v.pipe(v.string(), v.minLength(1), v.maxLength(SESSION_LIMITS.dayName)),
-  /** Sıradaki gündü; `dayId`'den farklıysa danışan başka gün seçti (`other_day`). */
+  /**
+   * Antrenmanın gününe atanmış program (Faz 3; bitişte sunucu seansın tarihinden yeniden yazar); `dayId`'den farklıysa
+   * danışan başka program seçti (`other_day`). Eski kayıtlarda dönüşte sıradaki gündü.
+   */
   plannedDayId: v.optional(id(DAY_ID_PATTERN, 'Gün kimliği geçersiz.')),
-  /** Sıradaki günün o günkü adı: PT'nin bildirimi ("Gün B yerine Gün C yapıldı"). */
+  /** Planlanan programın o günkü adı, yalnız başkası yapıldıysa: PT'nin bildirimi ("Alt vücut yerine Üst vücut yapıldı"). */
   plannedDayName: v.optional(v.pipe(v.string(), v.minLength(1), v.maxLength(SESSION_LIMITS.dayName))),
   /**
    * Danışanın kendi programı (`docs/design/kendi-program.md` §5.4): yoksa PT'nin programı. Başlangıçta yazılır,
@@ -241,7 +244,7 @@ export const sessionDocSchema = v.pipe(
     /** Yalnız bitmişte. */
     finishedAt: v.optional(timestamp),
     program: v.optional(sessionProgramSchema),
-    /** Bitişte rotasyon: sıradaki güne geç ya da aynı gün sırada kalsın. */
+    /** Eski kayıtlarda bitişteki dönüş seçimi; Faz 3'te yazılmaz (dönüş yok), okunur kalır. */
     rotation: v.optional(register(v.picklist(ROTATION_CHOICES))),
     /** Nötr hafifletme işareti; nedeni `health.json`'da. */
     adjust: v.optional(v.literal('lighter')),
@@ -337,7 +340,7 @@ export const sessionIndexRowSchema = v.object({
   water: int(0, SESSION_LIMITS.waterTaps),
   exercises: v.array(sessionIndexExerciseSchema),
   notices: v.array(v.picklist(NOTICE_KINDS)),
-  /** Başka gün seçildiyse sıradaki günün adı (bildirim metni). */
+  /** Başka program seçildiyse o gün planlanan programın adı (bildirim metni; eski satırlarda dönüşte sıradaki gün). */
   plannedDayName: v.optional(v.pipe(v.string(), v.maxLength(SESSION_LIMITS.dayName))),
   /** Yarım antrenmanda yapılan ve planlanan çalışma seti (bildirim metni). */
   progress: v.optional(
@@ -451,7 +454,7 @@ export type FinishFeedback = v.InferOutput<typeof finishFeedbackSchema>;
 
 export const finishBodySchema = v.object({
   doc: sessionDocSchema,
-  /** Hazır seçilen "Sıradaki antrenman" satırı; yoksa planın yarısı yapıldıysa `advance`. */
+  /** Eski telefonun "Sıradaki antrenman" seçimi: şemada kalır, sunucu okumaz (Faz 3: dönüş yok). */
   rotation: v.optional(v.picklist(ROTATION_CHOICES)),
   health: v.optional(finishHealthSchema),
   /** "Programını güncelleyelim mi?"nin maddeleri ve kararlar; yoksa programa bir şey yazılmaz. */

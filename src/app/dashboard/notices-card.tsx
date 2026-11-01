@@ -12,7 +12,7 @@ import { MarkSeenButton } from './mark-seen-button';
 
 /**
  * Genel bakış'ın "Bildirimler"i (tasarım §4.6): bütün danışanların son 14 gündeki bildirimleri tek
- * listede, en yeniden eskiye: başka gün seçildi, yarım bırakıldı, aşırı yük, hafifletildi, danışanın
+ * listede, en yeniden eskiye: başka program seçildi, yarım bırakıldı, aşırı yük, hafifletildi, danışanın
  * program değişikliği (antrenman günleri), bekleyen öneriler, onay sürdükçe ağrı ayrıntısı. Satır
  * danışana ya da programına götürür. Okunmamışlar noktalı; "Tümünü okundu say" danışanların
  * `inbox.seenAt`'ini yazar (açık soru 7). Arşivdeki danışan listede yok.
@@ -50,7 +50,7 @@ export async function NoticesCard({ timeZone }: { timeZone: string }) {
               </EmptyMedia>
               <EmptyTitle>Bildirim yok</EmptyTitle>
               <EmptyDescription>
-                Danışan başka gün seçtiğinde, antrenmanı yarım bıraktığında ya da günlerini değiştirdiğinde burada görünür.
+                Danışan bugünün programı yerine başka birini yaptığında, antrenmanı yarım bıraktığında ya da günlerini değiştirdiğinde burada görünür.
               </EmptyDescription>
             </EmptyHeader>
           </Empty>
