@@ -172,10 +172,15 @@ test('drafts older than three days cannot be applied; invalid changed catalog ro
 });
 test('editing an AI draft updates saved preview and attention to the actual weekdays', async () => {
   const f = setup(), draft = await generate(f);
-  const body = { ...draft.body, name: 'Düzenlediğim program', weekdays: [1, 2], baseRevision: null };
+  // Faz 3: form program düzeyinde gün göndermez; danışan programların günlerini değiştirir (Pzt, Per → Pzt, Sal).
+  const { weekdays: _program, ...rest } = draft.body;
+  const phases = rest.phases.map((phase) => ({ ...phase, days: phase.days.map((day, index) => ({ ...day, weekdays: [index + 1] })) }));
+  const body = { ...rest, phases, name: 'Düzenlediğim program', baseRevision: null };
   assert.equal((await saveAssistantDraft(f.deps, headers, ORIGIN, f.client().id, draft.id, body, 'client')).status, 201);
   const saved = view(await getAssistant(f.deps, f.client().id)).drafts[0]!;
-  assert.equal(saved.name, body.name); assert.deepEqual(saved.body.weekdays, [1, 2]); assert.ok(saved.attention.some(t => /Ardışık/.test(t)));
+  assert.equal(saved.name, body.name);
+  assert.deepEqual(saved.body.phases[0]?.days.map((day) => day.weekdays), [[1], [2]]);
+  assert.ok(saved.attention.some(t => /Ardışık/.test(t)));
   const own = f.gh.get(OWN_INDEX_PATH) as OwnIndex;
   const edited = { ...own, items: own.items.map(i => ({ ...i, clientEditedAt: '2026-10-06T12:00:00.000Z' })) };
   assert.deepEqual(assistantNotices(f.gh.get(ASSISTANT_PATH), permissionHash(f.deps, f.client()), edited, new Date('2026-10-06T12:00:00.000Z')), []);
@@ -196,6 +201,23 @@ test('taslak programları "Program A…" adlandırır ve her birini kendi günü
   const { weekdays: _program, ...bare } = result.body;
   const consecutive = { ...bare, phases: [{ ...phase!, days: phase!.days.slice(0, 2).map((day, index) => ({ ...day, weekdays: [index + 1] })) }] };
   assert.ok(assistantAttention(f.context, picked, consecutive).some((text) => /Ardışık/.test(text)));
+});
+test('dikkat notları şu anki evrenin atamalarından; program düzeyindeki eski günler yalnız atama yokken', () => {
+  const f = setup();
+  const result = assistantProgram(f.context, selection, 'program', f.deps.id, 'client');
+  assert.ok('body' in result && result.body);
+  // Form artık program düzeyinde gün göndermez: kalan eski `weekdays` (Pzt, Sal) atamaları (Pzt, Per) ezmez.
+  const stale = { ...result.body, weekdays: [1, 2] };
+  assert.equal(assistantAttention(f.context, selection, stale).some((text) => /Ardışık/.test(text)), false);
+  // Atamasız gövdede eski günler okunur.
+  const bare = { ...stale, phases: stale.phases.map((phase) => ({ ...phase, days: phase.days.map(({ weekdays: _days, ...day }) => day) })) };
+  assert.ok(assistantAttention(f.context, selection, bare).some((text) => /Ardışık/.test(text)));
+  // Şu anki evre ilk evre değilse onun atamaları: öteki evrenin ardışık günleri sayılmaz.
+  const [phase] = result.body.phases;
+  assert.ok(phase);
+  const other = { ...phase, id: 'p_zzzzzz', name: 'Evre 2', days: phase.days.map((day, index) => ({ ...day, id: `d_zzzzz${index}`, weekdays: [index + 1] })) };
+  const phased = { ...result.body, phased: true, currentPhaseId: phase.id, phases: [other, phase] };
+  assert.equal(assistantAttention(f.context, selection, phased).some((text) => /Ardışık/.test(text)), false);
 });
 test('ordinary fitness goal wording tanımla is not classified as a diagnosis', async () => {
   const f = setup(); f.deps.connection = async () => 'client';

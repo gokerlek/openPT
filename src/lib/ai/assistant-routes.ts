@@ -134,7 +134,7 @@ export async function saveAssistantDraft(deps: AssistantDeps, headers: Headers, 
   }
   const fresh = await readAssistant(deps, id), found = fresh.store.drafts.find(d => d.id === draft.id);
   if (found) {
-    if (result.status < 300) { found.status = 'saved'; found.savedAt = deps.now().toISOString(); if (body) { found.name = body.name!; found.body = v.parse(programFormSchema, { ...body, phased: false }); found.attention = assistantAttention(data.context, found.selection, found.body); found.rationale = [`Düzenleyicide incelenip kaydedilen kendi programı: ${found.body.phases.flatMap(p => p.days).length} gün.`, ...found.rationale.slice(1)]; }
+    if (result.status < 300) { found.status = 'saved'; found.savedAt = deps.now().toISOString(); if (body) { found.name = body.name!; found.body = v.parse(programFormSchema, { ...body, phased: false }); found.attention = assistantAttention(data.context, found.selection, found.body); found.rationale = [`Düzenleyicide incelenip kaydedilen kendi programı: ${found.body.phases.flatMap(p => p.days).length} antrenman.`, ...found.rationale.slice(1)]; }
       if ('revision' in (result.body as object) && typeof (result.body as { revision?: unknown }).revision === 'number') found.savedRevision = (result.body as { revision: number }).revision; }
     else { found.status = 'draft'; delete found.savedHash; delete found.savedBy; }
     await write(deps, id, fresh.store, fresh.sha);

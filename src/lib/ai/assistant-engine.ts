@@ -3,7 +3,7 @@ import { eligibleExercises, type CoachContext } from './coach-engine.ts';
 import { GOAL_LABELS, type AssistantSelection } from './assistant-contract.ts';
 import { MUSCLE_LABELS } from '../schemas/exercise.ts';
 import { defaultSets, DEFAULT_REST_SECONDS } from '../template-plan.ts';
-import { phaseWeekdays } from '../day-assignments.ts';
+import { hasAssignments, phaseWeekdays } from '../day-assignments.ts';
 import { nextDayName, type ProgramBody } from '../program-plan.ts';
 import { programFormSchema } from '../schemas/program.ts';
 
@@ -71,13 +71,15 @@ export function assistantAttention(context: CoachContext, selection: AssistantSe
   const ids = new Set(body.phases.flatMap(p => p.days.flatMap(d => d.blocks.flatMap(b => b.rows.map(r => r.exerciseId)))));
   const covered = new Set(context.exercises.filter(e => ids.has(e.id)).flatMap(e => e.primaryMuscles));
   const missing = selection.muscles.filter(m => !covered.has(m));
-  // Eski gövdede program düzeyindeki günler; yoksa programların atamaları.
-  const days = body.weekdays ?? phaseWeekdays(body.phases[0]?.days ?? []);
+  // Gerçek günler şu anki evrenin atamaları: düzenleyici program düzeyinde gün göndermez, gövdede kalan eski
+  // `weekdays` danışanın değiştirdiği atamaları ezmesin. Yalnız atamasız (eski) gövdede program düzeyindeki günler.
+  const current = (body.phases.find(p => p.id === body.currentPhaseId) ?? body.phases[0])?.days ?? [];
+  const days = hasAssignments(current) ? phaseWeekdays(current) : (body.weekdays ?? []);
   const short = body.phases.some(p => p.days.some(d => d.blocks.flatMap(b => b.rows).length < 4));
   return [
     ...(!context.existingExerciseIds.length ? ['Önceki hareket geçmişi yok; başlangıç yükünü ve tekniği birlikte belirleyin.'] : []),
     ...(missing.length ? [`Seçilen kaslardan programda karşılanamayanlar: ${missing.map(m => MUSCLE_LABELS[m]).join(', ')}.`] : []),
     ...(days.some(d => days.includes(d % 7 + 1)) ? ['Ardışık antrenman günleri var; ortak kasların yükünü ve toparlanmayı gözden geçirin.'] : []),
-    ...(selection.fullBody && short ? ['Bazı günlerde tüm beden kapsamı sınırlı; günleri ve hareketleri düzenleyicide kontrol et.'] : []),
+    ...(selection.fullBody && short ? ['Bazı programlarda tüm beden kapsamı sınırlı; programları ve hareketleri düzenleyicide kontrol et.'] : []),
   ];
 }
