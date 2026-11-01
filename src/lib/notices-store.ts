@@ -157,10 +157,12 @@ async function buildDigest(id: string): Promise<ClientOverview | null> {
   let constraints: ConstraintFacts | null = null;
   if (consent.conditions && record) {
     // Çelişkiler için kütüphanenin etiketleri: yalnız etkin kısıt ve program varken okunur.
-    const input = careInputOf(record, { today: todayIn((await readAppConfig()).timeZone, now), painConsent: consent.pain });
+    const today = todayIn((await readAppConfig()).timeZone, now);
+    const input = careInputOf(record, { today, painConsent: consent.pain });
+    // "Sıradaki" bugünkü ya da sıradaki atanmış program (Faz 3).
     const conflicts =
       programOk && input.active.length > 0
-        ? programConflicts(programOk, new Map((await listExercises()).map((exercise) => [exercise.id, exercise])), input)
+        ? programConflicts(programOk, new Map((await listExercises()).map((exercise) => [exercise.id, exercise])), input, today)
         : [];
     constraints = constraintFactsOf(record, conflicts);
   }

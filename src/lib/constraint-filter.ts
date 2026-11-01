@@ -19,10 +19,11 @@ import {
   type ConstraintSide,
 } from './constraints.ts';
 import { evaluateExercise, isTagged, type Decision, type FilterContext, type FilterGroup, type FilterSummary } from './exercise-filter.ts';
-import { currentPhaseOf, nextDayId } from './program-plan.ts';
+import { currentPhaseOf } from './program-plan.ts';
 import type { ScreeningMark } from './screening-care.ts';
 import type { Constraint, HealthRecord, Override } from './schemas/health.ts';
 import type { Program } from './schemas/program.ts';
+import { upcomingAssigned } from './training-days.ts';
 
 /**
  * Kısıt süzgeci (tasarım `docs/design/kisit-tarama.md` §3) — saf. Danışanın kısıtları + hareketin medikal
@@ -504,20 +505,27 @@ export type Conflict = {
   title: string;
   /** "Sol diz: sıçrama / balistik". */
   message: string;
-  /** Çelişen satır danışanın sıradaki gününde mi (Dikkat maddesi 85). */
+  /**
+   * Çelişen satır danışanın bugünkü ya da sıradaki atanmış programında mı (Dikkat maddesi 85; Faz 3:
+   * `upcomingAssigned`). Atama yoksa hep false.
+   */
   next: boolean;
 };
 
-/** Şu anki evredeki izinsiz yasaklar (program sayfası, düzenleyici, Genel bakış). */
+/**
+ * Şu anki evredeki izinsiz yasaklar (program sayfası, düzenleyici, Genel bakış). `today`: uygulamanın saat
+ * dilimindeki bugün; "sıradaki" ona göre (dönüş sırası okunmaz).
+ */
 export function programConflicts(
-  program: Pick<Program, 'phases' | 'current' | 'rotation'>,
+  program: Pick<Program, 'phases' | 'current'>,
   exercises: ReadonlyMap<string, CareTags & { id: string; title: string }>,
   input: CareInput,
+  today: string,
 ): Conflict[] {
   if (input.active.length === 0) return [];
   const current = currentPhaseOf(program);
   if (!current) return [];
-  const next = nextDayId(program);
+  const next = upcomingAssigned(program, today)?.dayId ?? null;
   const conflicts: Conflict[] = [];
   for (const day of current.phase.days) {
     for (const block of day.blocks) {

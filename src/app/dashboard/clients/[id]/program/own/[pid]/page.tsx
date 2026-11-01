@@ -74,8 +74,9 @@ export default async function OwnProgramViewPage({ params }: { params: Promise<{
   const load = phase ? phaseMuscleLoad(phase, byId, exerciseSetWeights) : null;
   const missingRows = missingExerciseDays(program.phases, new Set(byId.keys())).reduce((sum, item) => sum + item.rowIds.length, 0);
   const description = [programLine(ownSummaryOf(program)), `${formatDate(program.createdAt, timeZone)} tarihinde oluşturuldu`].join(' · ');
-  const careInput = await loadCareInput(loaded.client, todayIn(timeZone));
-  const conflicts = careInput ? programConflicts(program, byId, careInput) : [];
+  const today = todayIn(timeZone);
+  const careInput = await loadCareInput(loaded.client, today);
+  const conflicts = careInput ? programConflicts(program, byId, careInput, today) : [];
   const editHref = `/dashboard/clients/${id}/program/own/${pid}/edit`;
 
   return (

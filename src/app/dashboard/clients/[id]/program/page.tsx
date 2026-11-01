@@ -284,8 +284,10 @@ export default async function ProgramPage({ params }: { params: Promise<{ id: st
    * yanında, günler tam genişlikte, kas yükü evrelerin yanında (`lg:order-*`).
    */
   // Kısıtlarla çelişen satırlar (tasarım `kisit-tarama.md` §3.3): yalnız kısıtların onayı sürdükçe.
-  const careInput = await loadCareInput(client, todayIn(config.timeZone));
-  const conflicts = careInput ? programConflicts(program, new Map(exercises.map((exercise) => [exercise.id, exercise])), careInput) : [];
+  // Bugün kısıtların günü ve çelişkinin "sıradaki"si için (Faz 3: bugünkü ya da sıradaki atanmış program).
+  const today = todayIn(config.timeZone);
+  const careInput = await loadCareInput(client, today);
+  const conflicts = careInput ? programConflicts(program, new Map(exercises.map((exercise) => [exercise.id, exercise])), careInput, today) : [];
 
   return (
     <div className="flex flex-col gap-6">

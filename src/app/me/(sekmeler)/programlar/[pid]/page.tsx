@@ -61,8 +61,9 @@ export default async function OwnProgramPage({ params }: { params: Promise<{ pid
   const item = overview?.state.index.items.find((row) => row.id === pid);
   const byId = new Map(exercises.map((exercise) => [exercise.id, exercise]));
   const lastByDay = overview ? lastDateByDay(overview.sessions) : new Map<string, string>();
-  const careInput = await loadCareInput(client, todayIn(config.timeZone));
-  const conflicts = careInput ? programConflicts(program, byId, careInput) : [];
+  const today = todayIn(config.timeZone);
+  const careInput = await loadCareInput(client, today);
+  const conflicts = careInput ? programConflicts(program, byId, careInput, today) : [];
 
   return (
     <main className="flex flex-col gap-6">
