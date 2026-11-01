@@ -119,6 +119,7 @@ function TimerBox({ view, target }: { view: TimerView; target: NextSet['target']
  * - Odaktaki harekette set kalmadı (biten hareket açıldı): "Bu hareket bitti", birincil **Sıradaki: <ad>** (yoksa
  *   **Antrenmanı bitir**), ikincil **Set ekle** (grupta **Tur ekle**; fazladan set). "Sıradaki" satırı burada yok:
  *   birincil düğme odur; "‹ Önceki" başlığın sağında.
+ * - Kaydedilmiş seti düzeltmek bu panelin işi değil: tablodaki satıra dokununca ekran paneli `SetEditPanel` ile değiştirir.
  *
  * - Süreli set: "Başlat ▶" sayacı kurar (saniye kronometreyle sayılır, alt sınırda tek bip), "Bitir ■"
  *   geçen süreyi yazar; elle stepper ve "Set bitti" de var.
