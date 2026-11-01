@@ -80,6 +80,7 @@ import {
   type EffortChoice,
   type EffortQuestion,
   type NextSet,
+  type SetView,
 } from '@/lib/workout-session';
 import { startSetTimer, stopSetTimer, tickSetTimer } from '@/lib/workout-timer';
 import { checkAsked } from '../check-in-storage';
@@ -92,7 +93,7 @@ import { ProgramUpdateSheet, type ProgramAnswer } from './program-update-sheet';
 import { RestPanel, RestStrip, type EffortPromptView, type RestView } from './rest-panel';
 import { SetEditPanel, type SetEditValues, type SetEditView } from './set-edit-panel';
 import { useEntryPanelClosed } from './panel-pref';
-import { ROW_DONE_ID, setEditButtonId, type RowEntry } from './set-row';
+import { ROW_DONE_ID, setEditButtonId, type FixSet, type RowEntry } from './set-row';
 import { StartCheck, type StartCheckHandle } from './start-check';
 import { SwapSheet, type SwapTarget } from './swap-sheet';
 import { useWorkoutOutbox } from './use-workout-outbox';
@@ -1175,7 +1176,7 @@ export function WorkoutScreen({
         stamp: stampOf(current),
       });
       const achievement = row?achievementNotice(current.doc,doc,row,row.achievements,current.achievementSeen):null;
-      const after = afterLog(plan, current.doc, doc, focused);
+      const after = afterLog(plan, current.doc, doc, focused, next);
       // Birim bitti: açılacak sıradaki birim sırada planı bitmemiş ilk birim (`nextUnitAfter`); başka birimde bekleyen
       // "+ Set ekle" seti sayılmaz (önceki bir hareketin fazladan setine geri dönülmez). Yoksa planın bütün setleri
       // yapıldı (kalan yalnız fazladan set olabilir): bitiş sorusu; fazladan set için hareket listeden açılır.
@@ -1366,6 +1367,54 @@ export function WorkoutScreen({
     [commit, saving],
   );
 
+  /**
+   * Tablodan bekleyen bir seti seçmek (kutusuna ya da satırına dokunmak, kutusuna yazmak): taslak o setin olur, sıradaki set
+   * odur (panel ve şerit ona geçer; `nextSet`'in seçimi). Setler istenen sırayla yapılır. Taslak tek: başka sete geçince
+   * önceki setin yazılanı bırakılır. Seçilemeyen sette (yapıldı, üye geçildi), kaydedilirken ve süreli set sayarken bir şey
+   * olmaz. Seçildiyse seçilen set.
+   */
+  const onPick = useCallback(
+    (rowId: string, setIndex: number, values: { kg?: number | undefined; value?: number | undefined } = {}): NextSet | null => {
+      const current = localRef.current;
+      if (!current || saving || finishingRef.current || timedSetRunning(current, focusRef.current)) return null;
+      const own = current.draft?.rowId === rowId && current.draft.setIndex === setIndex ? current.draft : { rowId, setIndex };
+      const picked = nextSet(planOf(current), current.doc, own, focusRef.current);
+      // Bekleyen fazladan setler birbirinin aynısı: hangisine dokunulursa ilki seçilir.
+      if (!picked || picked.rowId !== rowId || (picked.setIndex !== setIndex && !picked.extra)) return null;
+      const draft = { rowId, setIndex: picked.setIndex, kg: values.kg ?? picked.kg, value: values.value ?? picked.value };
+      const was = current.draft;
+      const same = was?.rowId === draft.rowId && was.setIndex === draft.setIndex && was.kg === draft.kg && was.value === draft.value;
+      // İmlecin kendi setine taslaksız dokunmak bir şey değiştirmez.
+      const already = !was && !picked.chosen && values.kg === undefined && values.value === undefined;
+      if (!same && !already) commit({ ...current, draft });
+      return picked;
+    },
+    [commit, saving],
+  );
+
+  /**
+   * Yapılan setin değerini tablodan yerinde düzeltmek (kutudan çıkınca): panelin "Kaydet"inin yazımı (`editSet`), hemen
+   * gönderilir; değişmediyse yazılmaz. Kaydedilirken ve bitiş yoldayken yazılmaz (kutular o arada kapalı).
+   */
+  const onFixSet: FixSet = useCallback(
+    (setId, values) => {
+      const current = localRef.current;
+      const found = current ? findSet(current.doc, setId) : null;
+      if (!current || !found || saving || finishingRef.current) return;
+      const { set } = found;
+      const old = set.reps ?? set.seconds ?? 0;
+      const kg = values.kg ?? set.kg;
+      const value = values.value ?? old;
+      if (kg === set.kg && value === old) return;
+      const doc = editSet(current.doc, setId, { kg, value }, stampOf(current));
+      commit(withChange(current, doc, { send: true }));
+      outbox.schedule();
+      const fixed = findSet(doc, setId)?.set;
+      announce(`Set düzeltildi${fixed ? `: ${setValueText(fixed)}` : ''}`);
+    },
+    [saving, commit, outbox, announce],
+  );
+
   const onWater = useCallback(() => {
     const current = localRef.current;
     if (!current) return;
@@ -1472,9 +1521,8 @@ export function WorkoutScreen({
    * Seti kaldırır: ✓'u kaldırmak (`untick`: set yapılmadı) ya da sola kaydırıp "Sil", panelin "Seti sil"i (`delete`). İkisi
    * de eski onaylı silmenin yazımı (`deleteSet`, hemen gönderilir), onay sormaz: 5 sn toast'taki "Geri al" seti geri getirir
    * (`restoreSet`: yeni kimlikle, aynı yerine). Fark fazladan sette: silmek tek harekette istenen turu da bırakır (yeniden
-   * beklemesin), ✓'u kaldırmak bırakmaz (satır bekleyen fazladan set olur). Setin dinlenmesi biter. Taslağa dokunulmaz
-   * (yalnız kendi setinde geçerli; kaldırılan set panelde sıradaki olunca görünmez) ama yalnız "Geri al"la kendi setine
-   * döner: kaldırılan set yeniden yazılırsa `onDone` taslağı düşürür (`draft: null`). Set kaydedilirken, bitiş yoldayken ve
+   * beklemesin), ✓'u kaldırmak bırakmaz (satır bekleyen fazladan set olur). Setin dinlenmesi biter. Taslağa dokunulmaz:
+   * tablodan seçilen set (taslağın seti) seçili kalır; kaldırılan set yeniden yazılırsa `onDone` taslağı düşürür (`draft: null`). Set kaydedilirken, bitiş yoldayken ve
    * süreli set sayarken yapılmaz (`onEditSet` gibi); "Geri al" da süreli set sayarken geri getirmez.
    *
    * "Geri al" toast'ı ekranın dışında (genel Toaster): ara verilirken, bitiş yoldayken ya da ekran kapandıktan sonra hiçbir
@@ -1541,8 +1589,8 @@ export function WorkoutScreen({
             }
             // Geri gelen set sıradaki setin yerindeyse sıradaki set değişir (`onDropExtra` gibi): süreli setin sayacı düşer,
             // taslak yalnız yeni sıradaki setinse kalır (silmeden önce yazılan taslak böylece kendi setine döner).
-            const before = nextSet(planOf(latest), latest.doc, null, focusRef.current);
-            const after = nextSet(localWorkoutDay(next, back.doc), back.doc, null, focusRef.current);
+            const before = nextSet(planOf(latest), latest.doc, latest.draft, focusRef.current);
+            const after = nextSet(localWorkoutDay(next, back.doc), back.doc, latest.draft, focusRef.current);
             const moved = before?.rowId !== after?.rowId || before?.setIndex !== after?.setIndex;
             const draft = latest.draft && after && latest.draft.rowId === after.rowId && latest.draft.setIndex === after.setIndex ? latest.draft : null;
             commit(withChange(moved ? { ...next, draft, timer: null } : next, back.doc, { send: true }));
@@ -1743,9 +1791,9 @@ export function WorkoutScreen({
    */
   const commitFlow = useCallback(
     (current: LocalWorkout, doc: SessionDoc, extra: Partial<LocalWorkout> = {}, focusAfter: string | null = focusRef.current) => {
-      const before = nextSet(planOf(current), current.doc, null, focusRef.current);
+      const before = nextSet(planOf(current), current.doc, current.draft, focusRef.current);
       const next = { ...current, ...extra };
-      const after = nextSet(localWorkoutDay(next, doc), doc, null, focusAfter);
+      const after = nextSet(localWorkoutDay(next, doc), doc, next.draft, focusAfter);
       const shownSomething = focusRef.current !== null || focusAfter !== null;
       const moved = shownSomething && (before?.rowId !== after?.rowId || before?.setIndex !== after?.setIndex);
       commit(withChange(moved ? { ...next, draft: null, timer: null } : next, doc, { send: false }));
@@ -2043,9 +2091,9 @@ export function WorkoutScreen({
       const extraRounds = addExtraRound(plan, current.doc, key);
       if ((extraRounds[key] ?? 0) <= (plan.extraRounds?.[key] ?? 0)) return;
       const group = (plan.blocks.find((block) => block.id === key)?.rows.length ?? 1) > 1;
-      const before = nextSet(plan, current.doc, null, focusRef.current);
+      const before = nextSet(plan, current.doc, current.draft, focusRef.current);
       const next = { ...current, extraRounds };
-      const after = nextSet(planOf(next), current.doc, null, focusRef.current);
+      const after = nextSet(planOf(next), current.doc, current.draft, focusRef.current);
       const moved = before?.rowId !== after?.rowId || before?.setIndex !== after?.setIndex;
       commit(moved ? { ...next, draft: null, timer: null } : next);
       guard();
@@ -2065,9 +2113,9 @@ export function WorkoutScreen({
       const current = localRef.current;
       if (!current || saving || performance.now() < guardUntil.current) return;
       const plan = planOf(current);
-      const before = nextSet(plan, current.doc, null, focusRef.current);
+      const before = nextSet(plan, current.doc, current.draft, focusRef.current);
       const next = { ...current, extraRounds: dropExtraRound(plan, key) };
-      const after = nextSet(planOf(next), current.doc, null, focusRef.current);
+      const after = nextSet(planOf(next), current.doc, current.draft, focusRef.current);
       const moved = before?.rowId !== after?.rowId || before?.setIndex !== after?.setIndex;
       commit(moved ? { ...next, draft: null, timer: null } : next);
       guard();
@@ -2293,25 +2341,35 @@ export function WorkoutScreen({
   const overload = next && !saving ? overloadState(plan, doc, next, next.kg) : 'none';
   const nextKey = next ? `${next.rowId}:${next.setIndex}` : null;
   const collapsed = panelClosed && (forcedOpen === null || forcedOpen !== nextKey);
-  // Şu anki setin satırdan girişi (kg/tekrar kutuları ve ✓, paneldekiyle aynı taslak). Düzenleme açıkken yok: aynı anda
-  // iki düzenleyici olmasın. Aşırı yük soruluyorken panel kapalıysa ✓ önce paneli bu set için açar (uyarı panelde okunur).
-  const rowEntry: RowEntry | null =
-    next && !edit
-      ? {
-          kg: next.kg,
-          value: next.value,
-          invalid: overload === 'ask',
-          disabled: saving !== null || timerRunning,
-          onChange: onDraft,
-          onDone: () => {
-            if (overload === 'ask' && collapsed) {
-              setForcedOpen(nextKey);
-              return;
-            }
-            onDone();
-          },
+  // Bekleyen her setin satırdan girişi (kg/tekrar kutuları ve ✓): şu anki setinki paneldekiyle aynı taslak, diğerlerinde o
+  // setin önceden dolu değerleri; dokunulan set seçilir (`onPick`). Düzenleme açıkken yok: aynı anda iki düzenleyici olmasın.
+  // Aşırı yük soruluyorsa ✓ önce seti seçip uyarıyı panelde gösterir (panel kapalıysa bu set için açılır); uyarı panelde
+  // görünürken ✓ onaylar ("Onayla · Set bitti" gibi).
+  const entryOf = (set: SetView): RowEntry | null => {
+    if (!row || edit || shownFocus === null) return null;
+    const current = next && next.rowId === row.rowId && (next.setIndex === set.setIndex || (next.extra && set.extra)) ? next : null;
+    const values = current ?? nextSet(plan, doc, { rowId: row.rowId, setIndex: set.setIndex }, shownFocus);
+    if (!values || values.rowId !== row.rowId || (values.setIndex !== set.setIndex && !(values.extra && set.extra))) return null;
+    const asks = overloadState(plan, doc, values, values.kg) === 'ask';
+    return {
+      kg: values.kg,
+      value: values.value,
+      invalid: asks,
+      disabled: saving !== null || timerRunning,
+      onSelect: () => {
+        if (!current) onPick(row.rowId, set.setIndex);
+      },
+      onChange: (changed) => (current ? onDraft(changed) : onPick(row.rowId, set.setIndex, changed)),
+      onDone: () => {
+        if (asks && (!current || collapsed)) {
+          const picked = current ?? onPick(row.rowId, set.setIndex);
+          if (picked) setForcedOpen(`${picked.rowId}:${picked.setIndex}`);
+          return;
         }
-      : null;
+        if (current || onPick(row.rowId, set.setIndex)) onDone();
+      },
+    };
+  };
   // Paneli aç/kapat: düğme yer değiştirir (⌄ üst satırda, ⌃ alt satırda), odak yenisine geçer.
   const togglePanel = () => {
     if (collapsed) setPanelClosed(false);
@@ -2452,7 +2510,8 @@ export function WorkoutScreen({
                     }
                     editingSetId={edit?.setId ?? null}
                     currentKg={next?.kg}
-                    entry={rowEntry}
+                    entryOf={entryOf}
+                    onFixSet={edit ? null : onFixSet}
                     freshSetId={fresh}
                     locked={saving !== null || timerRunning}
                     onEditSet={onEditSet}
@@ -2504,7 +2563,7 @@ export function WorkoutScreen({
                   next={shown}
                   frozen={saving !== null}
                   overload={overload}
-                  nextLetter={saving ? null : nextMemberLetter(plan, doc, shownFocus)}
+                  nextLetter={saving ? null : nextMemberLetter(plan, doc, shownFocus, next)}
                   transition={transition}
                   timer={timerRunning ? timerView : null}
                   now={now}

@@ -79,6 +79,25 @@ describe('gruplar: tur düzeni', () => {
       '{"kind":"member","transitionSeconds":20}',
     ]);
   });
+
+  test('devrede tablodan seçilen set: harf ve geçiş onun yerinden; turun son istasyonunda dinlenme', () => {
+    const day = circuitDay();
+    let doc = start(day);
+    // İmleç A'da; danışan B'nin ilk setini seçer: aynı turda ardından C gelir.
+    const b = nextSet(day, doc, { rowId: 'r_bbbbbb', setIndex: 0 }, 'b_tttttt');
+    assert.deepEqual(b && { row: b.rowId, chosen: b.chosen, rest: b.restAfterSeconds }, { row: 'r_bbbbbb', chosen: true, rest: 20 });
+    assert.equal(nextMemberLetter(day, doc, 'b_tttttt', b), 'C');
+    let after = logSet(day, doc, { rowId: 'r_bbbbbb', setIndex: 0, kg: b?.kg, value: b?.value ?? 10, stamp: { at: at(1), by: W1 }, random: sequence() }).doc;
+    assert.deepEqual(afterLog(day, doc, after, 'b_tttttt', b), { kind: 'member', transitionSeconds: 20 });
+    doc = after;
+    // C turun son istasyonu: harf yok, tur sonu dinlenmesi (A bu turda hâlâ bekliyor).
+    const c = nextSet(day, doc, { rowId: 'r_pppppp', setIndex: 0 }, 'b_tttttt');
+    assert.equal(nextMemberLetter(day, doc, 'b_tttttt', c), null);
+    after = logSet(day, doc, { rowId: 'r_pppppp', setIndex: 0, value: c?.value ?? 30, stamp: { at: at(2), by: W1 }, random: sequence() }).doc;
+    assert.deepEqual(afterLog(day, doc, after, 'b_tttttt', c), { kind: 'same', restSeconds: 120 });
+    // İmlecin kendi setinde harf eskisi gibi: A'nın ardından aynı turda kalan üye yok.
+    assert.equal(nextMemberLetter(day, after, 'b_tttttt', nextSet(day, after, null, 'b_tttttt')), null);
+  });
 });
 
 describe('gruplar: kart', () => {

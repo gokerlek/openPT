@@ -14,6 +14,7 @@ import {
   rowKeyOf,
   slotDone,
   workoutCursor,
+  type CursorUnit,
   type PlanOverrides,
   type PreviousSet,
   type Stamp,
@@ -241,27 +242,68 @@ export type NextSet = {
   round: number;
   /** "+ Set ekle" ile istenen fazladan set. */
   extra?: true;
+  /** Danışan tablodan seçti (imlecin sırası dışında): dinlenme bu setin ardındaki, grupta üye geçişi sayılmaz (`afterLog`). */
+  chosen?: true;
 };
 
 /**
  * Sıradaki set ve önceden dolu değerleri; hepsi yapıldıysa null. `focus`: yalnız o birimin sıradaki seti
- * (birimde set kalmadıysa null).
+ * (birimde set kalmadıysa null). Odakta taslak aynı zamanda seçimdir: danışan tablodan bekleyen başka bir seti seçtiyse
+ * (kutusuna dokundu, yazdı) sıradaki set odur; setler istenen sırayla yapılabilir (`chosenSet`).
  */
 export function nextSet(day: WorkoutDay, doc: Pick<SessionDoc, 'entries' | 'order'>, draft?: SetDraft | null, focus?: string | null): NextSet | null {
   const cursor = cursorOf(day, doc, focus);
+  const chosen = draft && focus != null ? chosenSet(day, doc, cursor, draft, focus) : null;
+  if (chosen) return chosen;
   const position = cursor.next;
   if (!position?.rowId) return null;
-  const row = day.rows[position.rowId];
-  const template = templateRowOf(day, position.rowId);
   const unit = cursor.units[position.unit];
   const all = setViews(day, doc, position.rowId);
-  const views = all.filter((item) => !item.extra);
-  const view = position.extra === undefined ? views.find((item) => !item.logged) : all.find((item) => item.extra && !item.logged);
-  if (!row || !template || !unit || !view) return null;
+  const view = all.find((item) => (position.extra === undefined ? !item.extra : item.extra) && !item.logged);
+  if (!unit || !view) return null;
+  return setAt(day, doc, { unit, rowId: position.rowId, all, view, round: position.round, restAfterSeconds: position.restAfterSeconds }, draft);
+}
 
-  const entry = entryForRow(doc.entries, position.rowId);
-  const own = draft && draft.rowId === position.rowId && draft.setIndex === view.setIndex ? draft : null;
-  const common = { unitKey: unit.key, rowId: position.rowId, position: view.position, total: all.length, setIndex: view.setIndex, target: view.target, plannedKg: view.plannedKg, restAfterSeconds: position.restAfterSeconds, round: position.round };
+/**
+ * Taslağın seti odaktaki birimde henüz yapılmadıysa sıradaki set odur. İmlecin kendi seti seçiliyse ya da seçim geçersizse
+ * (set yapıldı, üye geçildi, başka birimin seti) null: imleç karar verir. Bekleyen fazladan setler birbirinin aynısı: hangisi
+ * seçilirse seçilsin ilki yapılır. Dinlenme o setin ardındaki; antrenmanda başka set kalmadıysa yok.
+ */
+function chosenSet(day: WorkoutDay, doc: Pick<SessionDoc, 'entries' | 'order'>, cursor: WorkoutCursor, draft: SetDraft, focus: string): NextSet | null {
+  const unitIndex = cursor.units.findIndex((item) => item.key === focus);
+  const unit = cursor.units[unitIndex];
+  const member = unit ? unit.members.findIndex((item) => item.rowId === draft.rowId) : -1;
+  if (!unit || member < 0) return null;
+  const all = setViews(day, doc, draft.rowId);
+  const picked = all.find((item) => item.setIndex === draft.setIndex && !item.logged);
+  const view = picked?.extra ? all.find((item) => item.extra && !item.logged) : picked;
+  if (!view) return null;
+  const extra = view.extra === true;
+  const slot = unit.slots.find((item) => item.member === member && (item.extra !== undefined) === extra && !slotDone(unit, item));
+  if (!slot) return null;
+  const first = all.find((item) => Boolean(item.extra) === extra && !item.logged);
+  const next = cursor.next;
+  if (next && next.unit === unitIndex && next.member === member && (next.extra !== undefined) === extra && first === view) return null;
+  const left = cursor.units.reduce((sum, item) => sum + item.slots.filter((candidate) => !slotDone(item, candidate)).length, 0);
+  const set = setAt(day, doc, { unit, rowId: draft.rowId, all, view, round: slot.round, restAfterSeconds: left > 1 ? slot.restAfterSeconds : 0 }, draft);
+  return set && { ...set, chosen: true };
+}
+
+/** Satırın bekleyen bir seti (`view`) ve önceden dolu değerleri. */
+function setAt(
+  day: WorkoutDay,
+  doc: Pick<SessionDoc, 'entries'>,
+  at: { unit: CursorUnit; rowId: string; all: SetView[]; view: SetView; round: number; restAfterSeconds: number },
+  draft: SetDraft | null | undefined,
+): NextSet | null {
+  const { view, all } = at;
+  const row = day.rows[at.rowId];
+  const template = templateRowOf(day, at.rowId);
+  if (!row || !template) return null;
+
+  const entry = entryForRow(doc.entries, at.rowId);
+  const own = draft && draft.rowId === at.rowId && draft.setIndex === view.setIndex ? draft : null;
+  const common = { unitKey: at.unit.key, rowId: at.rowId, position: view.position, total: all.length, setIndex: view.setIndex, target: view.target, plannedKg: view.plannedKg, restAfterSeconds: at.restAfterSeconds, round: at.round };
   if (view.extra) {
     // Fazladan set: ağırlık bu hareketin son setinden (danışanın bugünkü ağırlığı), tekrar aralığın altı.
     const lastKg = entry?.sets.filter((set) => set.type === 'working' && set.kg !== undefined).at(-1)?.kg;
@@ -271,11 +313,14 @@ export function nextSet(day: WorkoutDay, doc: Pick<SessionDoc, 'entries' | 'orde
     return { ...common, kg, value, extra: true };
   }
 
+  const views = all.filter((item) => !item.extra);
   const before = views.slice(0, view.position).flatMap((item) => (item.logged ? [item.logged] : []));
   // Bugünün setleri hafifletilen günde de sayılır: planın gerekçesi (`lighten`) yalnız sonraki antrenmanın
   // süzgecidir (`toSetResults`); burada kalsa önceki setin ağırlığı ve inişi sıradaki sete geçmezdi.
   const done = entry ? toSetResults({ ...entry, plan: undefined, sets: before }) : [];
-  const suggestion = nextSetInPlan({ spec: row.spec, rule: row.rule, sets: template.sets, plan: row.plan, done, raise: !row.adjusted });
+  // Önündeki bir set yapılmadıysa (sırası dışında seçildi) motorun önerisi bu setin değil: planın ağırlığı.
+  const suggestion =
+    before.length === view.position ? nextSetInPlan({ spec: row.spec, rule: row.rule, sets: template.sets, plan: row.plan, done, raise: !row.adjusted }) : { weightKg: view.plannedKg };
   // Basamak değişirken (piramit, back-off) motor planın üst ağırlığından hesaplar; danışan önceki seti
   // plandan farklı yaptıysa onun ağırlığı kalır (aynı yüzdede motor zaten önceki setin ağırlığını verir).
   const previous = views[view.position - 1];
@@ -518,6 +563,18 @@ export function addWaterTap(doc: SessionDoc, d: 1 | -1, stamp: Stamp, random?: R
 
 /* --- "Set bitti"den sonra ne olur --- */
 
+/**
+ * Grupta üyenin o turdaki setinin ardından aynı turda gelen (yapılmamış) başka üye: "Set bitti → B" ve dinlenmesiz geçiş.
+ * Tur bitiyorsa ya da grup değilse null.
+ */
+export function memberAfter(unit: CursorUnit, member: number, round: number): number | null {
+  if (unit.kind === 'single') return null;
+  const at = unit.slots.findIndex((slot) => slot.member === member && slot.round === round);
+  if (at < 0) return null;
+  const following = unit.slots.slice(at + 1).find((slot) => !slotDone(unit, slot));
+  return following && following.round === round && following.member !== member ? following.member : null;
+}
+
 export type AfterLog =
   /** Aynı harekette sıradaki set: dinlenme (0 ise doğrudan giriş paneli). */
   | { kind: 'same'; restSeconds: number }
@@ -533,21 +590,30 @@ export type AfterLog =
  * tur sürerken (aynı birim, aynı tur, başka üye) dinlenme yok: süperset ve komplekste 0, devrede
  * istasyon geçişi; tur sonunda blok dinlenmesi. `focus`: setin seçildiği odak (`nextSet(…, focus)` ile
  * aynı); set o birimde sayılır (liste + odak). Birim bitince başka bir yerde set kaldıysa `next`, kalmadıysa `done`.
+ * `logged`: kaydedilen set; tablodan sırası dışında seçildiyse (`chosen`) dinlenme onun ardındaki, üye geçişi yok.
  */
 export function afterLog(
   day: WorkoutDay,
   before: Pick<SessionDoc, 'entries' | 'order'>,
   after: Pick<SessionDoc, 'entries' | 'order'>,
   focus?: string | null,
+  logged?: Pick<NextSet, 'rowId' | 'round' | 'restAfterSeconds' | 'chosen'> | null,
 ): AfterLog {
   const was = cursorOf(day, before, focus);
   const now = cursorOf(day, after, focus);
   const overall = focus == null ? now : cursorOf(day, after);
   if (!overall.next) return { kind: 'done' };
-  const restSeconds = was.next?.restAfterSeconds ?? 0;
+  const chosen = logged?.chosen === true;
+  const restSeconds = chosen ? logged.restAfterSeconds : (was.next?.restAfterSeconds ?? 0);
   const oldUnit = was.next ? was.units[was.next.unit]?.key : undefined;
   const newUnit = now.next ? now.units[now.next.unit]?.key : undefined;
   if (!now.next || oldUnit !== newUnit) return { kind: 'next', restSeconds };
+  if (chosen) {
+    // Seçilen setin ardından aynı turda başka üye geliyorsa (grupta tur sürüyor) dinlenme yok, devrede istasyon geçişi.
+    const unit = was.units.find((item) => item.members.some((member) => member.rowId === logged.rowId));
+    const member = unit ? unit.members.findIndex((item) => item.rowId === logged.rowId) : -1;
+    return unit && memberAfter(unit, member, logged.round) !== null ? { kind: 'member', transitionSeconds: restSeconds } : { kind: 'same', restSeconds };
+  }
   if (was.next && now.next.round === was.next.round && now.next.member !== was.next.member) return { kind: 'member', transitionSeconds: restSeconds };
   return { kind: 'same', restSeconds };
 }

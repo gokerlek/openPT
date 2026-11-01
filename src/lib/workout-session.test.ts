@@ -117,6 +117,34 @@ describe('antrenman belgesi: başlangıç ve sıradaki set', () => {
     assert.equal(nextSet(day, doc, { rowId: 'r_aaaaaa', setIndex: 1, kg: 25 })?.kg, 20);
   });
 
+  test('odakta taslak seçimdir: tablodan seçilen bekleyen set sıradaki olur, setler istenen sırayla yapılır', () => {
+    const day = workoutDay();
+    let doc = start(day);
+    const chosen = nextSet(day, doc, { rowId: 'r_aaaaaa', setIndex: 2 }, 'b_aaaaaa');
+    assert.deepEqual(
+      chosen && { setIndex: chosen.setIndex, position: chosen.position, kg: chosen.kg, value: chosen.value, rest: chosen.restAfterSeconds, chosen: chosen.chosen },
+      { setIndex: 2, position: 2, kg: 20, value: 8, rest: 90, chosen: true },
+    );
+    assert.equal(nextSet(day, doc, { rowId: 'r_aaaaaa', setIndex: 2, kg: 25 }, 'b_aaaaaa')?.kg, 25);
+    // Odaksız (liste) seçim yok; imlecin kendi seti "seçilmiş" sayılmaz; başka birimin seti seçilemez.
+    assert.equal(nextSet(day, doc, { rowId: 'r_aaaaaa', setIndex: 2 })?.setIndex, 0);
+    assert.equal(nextSet(day, doc, { rowId: 'r_aaaaaa', setIndex: 0 }, 'b_aaaaaa')?.chosen, undefined);
+    assert.equal(nextSet(day, doc, { rowId: 'r_bbbbbb', setIndex: 0 }, 'b_aaaaaa')?.rowId, 'r_aaaaaa');
+
+    const before = doc;
+    doc = logSet(day, doc, { rowId: 'r_aaaaaa', setIndex: 2, kg: 25, value: 8, stamp: stamp(1), random: sequence() }).doc;
+    assert.deepEqual(afterLog(day, before, doc, 'b_aaaaaa', chosen), { kind: 'same', restSeconds: 90 });
+    assert.deepEqual(setViews(day, doc, 'r_aaaaaa').map((view) => view.logged?.kg), [undefined, undefined, 25]);
+    // Sıradaki yine ilk boş set; yapılmış set seçilemez (imleç karar verir).
+    assert.deepEqual(nextSet(day, doc, null, 'b_aaaaaa') && { setIndex: nextSet(day, doc, null, 'b_aaaaaa')?.setIndex }, { setIndex: 0 });
+    assert.equal(nextSet(day, doc, { rowId: 'r_aaaaaa', setIndex: 2 }, 'b_aaaaaa')?.setIndex, 0);
+    doc = logNext(day, doc, 3);
+    doc = logNext(day, doc, 5);
+    assert.deepEqual(doc.entries[0]?.sets.map((set) => set.setIndex), [2, 0, 1]);
+    assert.equal(doc.entries[0]?.status, 'done');
+    assert.equal(nextSet(day, doc, null, 'b_aaaaaa'), null);
+  });
+
   test('kendi programın belgesi programın kimliğini ve adını taşır; sunucu günü o programda bulur', async () => {
     const owner = { programId: OWN_ID, name: 'Evde' };
     const day = buildWorkoutDay({ program: ownProgram(), dayId: OWN_DAY_B, exercises: EXERCISES, devices: DEVICES, history: [], owner, today: '2026-09-26' });

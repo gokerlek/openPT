@@ -16,6 +16,9 @@ import { previousText, setValueText, targetCell, type SetView } from '@/lib/work
 /** Şu anki satırın ✓'u: panel kapalıyken "Set bitti"nin yerine klavye odağının gideceği yer. */
 export const ROW_DONE_ID = 'set-done-row';
 
+/** Hücredeki kutuya dokunmak satırın tıklaması değil (yapılmış satırı panelde açmaz, bekleyeni yeniden seçmez). */
+const stop = (event: React.MouseEvent) => event.stopPropagation();
+
 /** Satırın düzenleme düğmesinin kimliği: panel kapanınca klavye odağı ona döner. */
 export function setEditButtonId(setId: string): string {
   return `set-edit-${setId}`;
@@ -35,8 +38,9 @@ const CELL = 'p-2 align-middle whitespace-nowrap';
 const INPUT_CELL = 'px-1 py-1.5 align-middle whitespace-nowrap';
 
 /**
- * Şu anki (sıradaki) setin satırdan girişi: kg ve tekrar/süre kutuları alttaki panelin stepper'larıyla aynı taslağı yazar,
- * ✓ "Set bitti" ile aynı işi yapar. Panel kapalıyken set yalnız buradan girilir.
+ * Bekleyen bir setin satırdan girişi: kg ve tekrar/süre kutuları alttaki panelin stepper'larıyla aynı taslağı yazar, ✓ "Set
+ * bitti" ile aynı işi yapar. Setler istenen sırayla yapılır: kutusuna ya da satıra dokunmak seti seçer (sıradaki set o olur,
+ * panel ve şerit ona geçer). Panel kapalıyken set yalnız buradan girilir.
  */
 export type RowEntry = {
   kg: number | undefined;
@@ -45,14 +49,20 @@ export type RowEntry = {
   invalid: boolean;
   /** Kaydedilirken ya da süreli set sayarken kutular ve ✓ kapalı. */
   disabled: boolean;
+  /** Seti seçer; zaten seçiliyse bir şey yapmaz. */
+  onSelect: () => void;
   onChange: (values: { kg?: number | undefined; value?: number | undefined }) => void;
   onDone: () => void;
 };
 
+/** Yapılmış setin yerinde düzeltilmesi: kutudan çıkınca (Enter) yazılır. */
+export type FixSet = (setId: string, values: { kg?: number | undefined; value?: number | undefined }) => void;
+
 /**
  * Hücredeki sayı kutusu (Base UI NumberField, stepper'sız): dokununca klavye açılır, virgül de nokta da ondalık
- * (`NUMBER_FORMAT`). Yazarken her geçerli değer taslağa gider; boş bırakılıp çıkılırsa kutu taslağın değerine döner. Enter
- * klavyeyi kapatır. Dokunmatikte yazı 16 px (iOS daha küçük yazılı kutuya odaklanınca sayfayı yakınlaştırır).
+ * (`NUMBER_FORMAT`). Bekleyen sette yazarken her geçerli değer taslağa gider; yapılmış sette (`settled`) değer kutudan
+ * çıkınca yazılır, kutu çerçevesizdir (değer yazı gibi durur, dokununca çerçevelenir). Boş bırakılıp çıkılırsa kutu değere
+ * döner. Enter klavyeyi kapatır. Dokunmatikte yazı 16 px (iOS daha küçük yazılı kutuya odaklanınca sayfayı yakınlaştırır).
  */
 function CellNumber({
   value,
@@ -61,6 +71,8 @@ function CellNumber({
   invalid,
   disabled,
   label,
+  settled = false,
+  onFocus,
   onChange,
 }: {
   value: number | undefined;
@@ -69,6 +81,8 @@ function CellNumber({
   invalid: boolean;
   disabled: boolean;
   label: string;
+  settled?: boolean;
+  onFocus?: (() => void) | undefined;
   onChange: (value: number) => void;
 }) {
   // Boşaltılıp bırakılan kutu değere dönsün diye kutu yeniden kurulur (`Stepper` gibi).
@@ -77,6 +91,9 @@ function CellNumber({
   useEffect(() => {
     latest.current = value;
   });
+  const accept = (next: number | null) => {
+    if (next !== null && Number.isFinite(next)) onChange(Math.min(max, Math.max(0, decimal ? next : Math.round(next))));
+  };
   return (
     <NumberField.Root
       key={resetKey}
@@ -87,14 +104,14 @@ function CellNumber({
       locale="tr-TR"
       format={decimal ? NUMBER_FORMAT : WHOLE_FORMAT}
       disabled={disabled}
-      onValueChange={(next) => {
-        if (next !== null && Number.isFinite(next)) onChange(Math.min(max, Math.max(0, decimal ? next : Math.round(next))));
-      }}>
+      onValueChange={settled ? undefined : accept}
+      onValueCommitted={settled ? accept : undefined}>
       <NumberField.Input
         inputMode={decimal ? 'decimal' : 'numeric'}
         enterKeyHint="done"
         aria-label={label}
         aria-invalid={invalid || undefined}
+        onFocus={onFocus}
         onKeyDown={(event) => {
           if (event.key === 'Enter') event.currentTarget.blur();
         }}
@@ -104,7 +121,10 @@ function CellNumber({
             if (box.value.trim() === '' && latest.current !== undefined) setResetKey((key) => key + 1);
           }, 0);
         }}
-        className="h-9 w-full min-w-0 rounded-md border border-input bg-background/60 px-1 text-sm font-semibold tabular-nums outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 touch:text-base"
+        className={cn(
+          'h-9 w-full min-w-0 rounded-md border px-1 text-sm font-semibold tabular-nums outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 touch:text-base',
+          settled ? 'border-transparent bg-transparent' : 'border-input bg-background/60',
+        )}
       />
     </NumberField.Root>
   );
@@ -151,8 +171,10 @@ type Track = { id: number; x: number; y: number; base: number; dragging: boolean
  *   `touch-action: pan-y`); dikey hareket kaydırmayı başlatmaz.
  * - Hareket azaltma tercihinde "Sil" yaysız, anında açılıp kapanır (parmağı izlemek doğrudan işlemdir, kalır).
  * - `locked` (set kaydedilirken, süreli set sayarken, düzenlenen satırda): kaydırma yok; dokunuşlar ekrana gider, o karar verir.
- * - Şu anki (sıradaki) set `entry` alır: kg ve tekrar/süre hücreleri yazılabilir kutu, son hücrede boş ✓ ("yapıldı" işaretle;
- *   "Set bitti" ile aynı). Diğer bekleyen satırlar yalnız okunur: setler sırayla girilir.
+ * - Her bekleyen set `entry` alır: kg ve tekrar/süre hücreleri yazılabilir kutu, son hücrede boş ✓ ("yapıldı" işaretle;
+ *   "Set bitti" ile aynı). Setler istenen sırayla yapılır: kutuya ya da satıra dokunmak seti seçer. Bekleyen fazladan setin
+ *   ✕'u (bırak) o zaman "Önceki" hücresinde ("fazladan ✕").
+ * - Yapılmış setin kg ve tekrar/süresi de yerinde düzeltilir (`onFix`): çerçevesiz kutu, kutudan çıkınca yazılır.
  */
 export function SetRow({
   set,
@@ -168,6 +190,7 @@ export function SetRow({
   locked,
   onOpenChange,
   onEdit,
+  onFix,
   onUntick,
   onDelete,
   onDropExtra,
@@ -181,7 +204,7 @@ export function SetRow({
   highlight: 'current' | 'editing' | null;
   /** Şu anki setin önceden dolu (ya da değiştirilmiş) ağırlığı. */
   currentKg: number | undefined;
-  /** Şu anki (bekleyen) setin satırdan girişi; diğer satırlarda null. */
+  /** Bekleyen setin satırdan girişi; yapılmış satırda ve düzenleme açıkken null. */
   entry: RowEntry | null;
   /** Az önce kaydedildi: ✓ belirerek gelir. */
   fresh: boolean;
@@ -190,6 +213,8 @@ export function SetRow({
   locked: boolean;
   onOpenChange: (open: boolean) => void;
   onEdit: (setId: string) => void;
+  /** Yapılmış setin yerinde düzeltilmesi; düzenleme açıkken null. */
+  onFix: FixSet | null;
   onUntick: (setId: string) => void;
   onDelete: (setId: string) => void;
   onDropExtra: () => void;
@@ -209,7 +234,9 @@ export function SetRow({
   const label = `Set ${set.position + 1}`;
   const amrap = Boolean(set.target.amrap);
   const input = logged ? null : entry;
+  const fix = logged && onFix ? onFix : null;
   const duration = trackingType === 'duration';
+  const valueLabel = `${label}, ${duration ? 'süre (sn)' : amrap ? 'yaptığın tekrar' : 'tekrar'}`;
 
   const settle = (to: 'open' | 'closed') => {
     if (to === 'open') setActive(true);
@@ -290,11 +317,11 @@ export function SetRow({
           swiped.current = false;
         }
       }}
-      onClick={logged ? () => onEdit(logged.id) : undefined}
+      onClick={logged ? () => onEdit(logged.id) : input && !input.disabled ? input.onSelect : undefined}
       className={cn(
         'h-12 scroll-mb-3 border-b transition-colors',
         highlight && 'bg-primary/10',
-        logged && 'cursor-pointer',
+        (logged || input) && 'cursor-pointer',
       )}>
       <motion.td data-slot="table-cell" style={cellStyle} className={cn(CELL, 'relative pl-3 font-medium')}>
         {highlight ? (
@@ -318,25 +345,53 @@ export function SetRow({
         {amrap ? <span className="sr-only">, AMRAP</span> : null}
       </motion.td>
       <motion.td data-slot="table-cell" style={cellStyle} className={cn(CELL, 'truncate text-muted-foreground')}>
-        {set.extra ? 'fazladan' : previousText(set.previous, trackingType)}
+        {set.extra && input ? (
+          // Yalnız ✕ bırakır (onaysız, geri alınmaz): yazıya dokunmak satırı seçer.
+          <span className="inline-flex max-w-full items-center">
+            <span className="truncate">fazladan</span>
+            <button
+              type="button"
+              disabled={input.disabled}
+              aria-label={`${label}, fazladan: ${group ? 'turu' : 'seti'} kaldır`}
+              onClick={(event) => {
+                event.stopPropagation();
+                onDropExtra();
+              }}
+              className="-my-2 inline-flex size-9 shrink-0 items-center justify-center rounded-full outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50 [&_svg]:size-3.5">
+              <X weight="bold" />
+            </button>
+          </span>
+        ) : set.extra ? (
+          'fazladan'
+        ) : (
+          previousText(set.previous, trackingType)
+        )}
       </motion.td>
       {showTarget ? (
         <motion.td data-slot="table-cell" style={cellStyle} className={cn(CELL, 'text-muted-foreground')}>
           {targetCell(set.target, trackingType)}
         </motion.td>
       ) : null}
-      {weighted && input ? (
-        <td data-slot="table-cell" className={INPUT_CELL}>
+      {weighted && (input || fix) ? (
+        <motion.td data-slot="table-cell" style={cellStyle} onClick={stop} className={cn(INPUT_CELL, 'relative')}>
           <CellNumber
-            value={input.kg}
+            value={input ? input.kg : kg}
             max={SESSION_LIMITS.kg}
             decimal
-            invalid={input.invalid}
-            disabled={input.disabled}
+            invalid={input?.invalid ?? false}
+            disabled={input ? input.disabled : locked}
             label={`${label}, ağırlık (kg)`}
-            onChange={(kg) => input.onChange({ kg })}
+            settled={!input}
+            onFocus={input?.onSelect}
+            onChange={(next) => (input ? input.onChange({ kg: next }) : logged && fix?.(logged.id, { kg: next }))}
           />
-        </td>
+          {logged?.overload ? (
+            <>
+              <ArrowUp weight="bold" className="pointer-events-none absolute top-1/2 right-2 size-3 -translate-y-1/2 text-destructive-text" aria-hidden />
+              <span className="sr-only">, hedefin çok üzerinde</span>
+            </>
+          ) : null}
+        </motion.td>
       ) : weighted ? (
         <motion.td data-slot="table-cell" style={cellStyle} className={cn(CELL, logged ? 'font-semibold' : 'text-muted-foreground')}>
           <span className="inline-flex items-center gap-0.5">
@@ -350,18 +405,20 @@ export function SetRow({
           </span>
         </motion.td>
       ) : null}
-      {input ? (
-        <td data-slot="table-cell" className={INPUT_CELL}>
+      {input || fix ? (
+        <motion.td data-slot="table-cell" style={cellStyle} onClick={stop} className={INPUT_CELL}>
           <CellNumber
-            value={input.value}
+            value={input ? input.value : value}
             max={duration ? SESSION_LIMITS.seconds : SESSION_LIMITS.reps}
             decimal={false}
             invalid={false}
-            disabled={input.disabled}
-            label={`${label}, ${duration ? 'süre (sn)' : amrap ? 'yaptığın tekrar' : 'tekrar'}`}
-            onChange={(changed) => input.onChange({ value: changed })}
+            disabled={input ? input.disabled : locked}
+            label={valueLabel}
+            settled={!input}
+            onFocus={input?.onSelect}
+            onChange={(changed) => (input ? input.onChange({ value: changed }) : logged && fix?.(logged.id, { value: changed }))}
           />
-        </td>
+        </motion.td>
       ) : (
         <motion.td data-slot="table-cell" style={cellStyle} className={cn(CELL, logged ? 'font-semibold' : 'text-muted-foreground')}>
           {value !== undefined ? (duration ? `${value} sn` : value) : amrap && !showTarget ? targetCell(set.target, trackingType) : '—'}
@@ -390,7 +447,7 @@ export function SetRow({
           ) : input ? (
             <button
               type="button"
-              id={ROW_DONE_ID}
+              id={highlight === 'current' ? ROW_DONE_ID : undefined}
               disabled={input.disabled}
               aria-label={`${label}, ${weighted && input.kg !== undefined ? `${formatNumber(input.kg)} kg × ${input.value}` : duration ? `${input.value} sn` : `${input.value} tekrar`}: yapıldı olarak işaretle`}
               onClick={(event) => {
