@@ -7,8 +7,9 @@ import { currentClient } from '@/lib/guards';
 import { lastDateByDay, programLine } from '@/lib/own-program-text';
 import { OWN_PROGRAM_LIMITS, PT_PROGRAM_NAME } from '@/lib/own-programs';
 import { readOwnOverview } from '@/lib/own-programs-store';
-import { currentPhaseOf, nextDayId, phaseStatus } from '@/lib/program-plan';
-import { effectiveSchedule } from '@/lib/training-days';
+import { todayIn } from '@/lib/format';
+import { currentPhaseOf, phaseStatus } from '@/lib/program-plan';
+import { effectiveSchedule, todayAssigned } from '@/lib/training-days';
 import { ClientHeader } from '../../../client-header';
 import { CopyDaySheet } from '../copy-day-sheet';
 import { MakeActiveButton } from '../program-actions';
@@ -17,9 +18,9 @@ import { ProgramDays } from '../program-days';
 export const metadata: Metadata = { title: PT_PROGRAM_NAME };
 
 /**
- * Antrenörünün programı, salt okuma (`docs/design/kendi-program.md` §2.2): şu anki evrenin günleri danışanın dilinde
- * ve danışanın hedefleriyle (Bugün'deki gibi), öteki evreler altta kapalı. Her günün altında "Kendi programına
- * kopyala". Kalıcı seçim kendi programsa "Bugün'ün programı yap". Programın değişiklik geçmişi danışana gösterilmez.
+ * Antrenörünün programı, salt okuma (`docs/design/kendi-program.md` §2.2): şu anki evrenin programları atandıkları
+ * günlerle, danışanın dilinde ve danışanın hedefleriyle (Bugün'deki gibi), öteki evreler altta kapalı. Her programın
+ * altında "Kendi programına kopyala". Kalıcı seçim kendi programsa "Bugün'ün programı yap". Programın değişiklik geçmişi danışana gösterilmez.
  */
 export default async function PtProgramPage() {
   const [client, config, exercises] = await Promise.all([currentClient(), readAppConfig(), listExercises()]);
@@ -48,6 +49,8 @@ export default async function PtProgramPage() {
   const own = overview.state.index.items.map((item) => ({ id: item.id, name: item.name, days: item.days }));
   const canCreate = overview.state.index.items.length + overview.state.unreadable.length < OWN_PROGRAM_LIMITS.programs;
   const active = overview.state.index.active?.programId ?? null;
+  // Bugüne atanmış program, uygulamanın saat diliminde (Bugün kartıyla aynı kural).
+  const todayId = todayAssigned(phase.days, todayIn(config.timeZone))?.id ?? null;
   const copy = (day: { id: string; name: string }) => <CopyDaySheet dayId={day.id} dayName={day.name} programs={own} canCreate={canCreate} />;
 
   return (
@@ -66,7 +69,7 @@ export default async function PtProgramPage() {
         {active ? <MakeActiveButton programId={null} name={PT_PROGRAM_NAME} className="h-11 self-start" /> : null}
       </div>
 
-      <ProgramDays days={withTargets(phase.days)} exercises={byId} nextId={nextDayId(program)} lastByDay={lastByDay} action={copy} />
+      <ProgramDays days={withTargets(phase.days)} exercises={byId} todayId={todayId} lastByDay={lastByDay} action={copy} />
 
       {others.map((other) => (
         <details key={other.id} className="group flex flex-col gap-3">
@@ -74,7 +77,7 @@ export default async function PtProgramPage() {
             {program.phases.indexOf(other) > program.phases.indexOf(phase) ? 'Sonraki evre' : 'Önceki evre'}: {other.name}
             {other.weeks !== undefined ? ` · ${other.weeks} hafta` : ''}
           </summary>
-          <ProgramDays days={withTargets(other.days)} exercises={byId} nextId={null} lastByDay={lastByDay} action={copy} />
+          <ProgramDays days={withTargets(other.days)} exercises={byId} todayId={null} lastByDay={lastByDay} action={copy} />
         </details>
       ))}
     </main>

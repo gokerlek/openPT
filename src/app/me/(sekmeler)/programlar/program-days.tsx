@@ -1,25 +1,28 @@
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { formatDayShort } from '@/lib/format';
+import { weekdayNamesText } from '@/lib/training-days';
 import { templateSummary, type PlanExercise, type TemplateBlock } from '@/lib/template-plan';
 import { ClientDayPlan } from '../../client-day-plan';
 
-type Day = { id: string; name: string; blocks: readonly TemplateBlock[] };
+type Day = { id: string; name: string; weekdays?: readonly number[] | undefined; blocks: readonly TemplateBlock[] };
 
 /**
- * Programın günleri, salt okuma (`docs/design/kendi-program.md` §2.2, §2.3): her gün bir kart, başlıkta "sıradaki"
- * ya da "son: 22 Eyl", setler danışanın dilinde (`ClientDayPlan`). `action` günün altına (PT programında
+ * Programın antrenmanları, salt okuma (`docs/design/kendi-program.md` §2.2, §2.3; Faz 3): her program bir kart,
+ * başlıkta atandığı hafta günleri, bugüne atanmışsa "bugün" ve "son: 22 Eyl" ("Salı · bugün · son: 21 Eki"); dönüş
+ * yok, "sıradaki" de yok. Setler danışanın dilinde (`ClientDayPlan`). `action` programın altına (PT programında
  * "Kendi programına kopyala"). Kütüphanede olmayan hareket çizilmez (Bugün'deki gibi).
  */
 export function ProgramDays({
   days,
   exercises,
-  nextId,
+  todayId,
   lastByDay,
   action,
 }: {
   days: readonly Day[];
   exercises: ReadonlyMap<string, PlanExercise>;
-  nextId: string | null;
+  /** Bugüne atanmış program (`todayAssigned`); öteki evrelerde null. */
+  todayId: string | null;
   lastByDay: ReadonlyMap<string, string>;
   action?: (day: Day) => React.ReactNode;
 }) {
@@ -28,7 +31,9 @@ export function ProgramDays({
       {days.map((day) => {
         const summary = templateSummary({ blocks: day.blocks }, exercises);
         const last = lastByDay.get(day.id);
-        const status = [day.id === nextId ? 'sıradaki' : null, last ? `son: ${formatDayShort(last)}` : null].filter(Boolean).join(' · ');
+        const status = [weekdayNamesText(day.weekdays ?? []) || null, day.id === todayId ? 'bugün' : null, last ? `son: ${formatDayShort(last)}` : null]
+          .filter(Boolean)
+          .join(' · ');
         return (
           <li key={day.id}>
             <Card size="sm">
@@ -45,7 +50,7 @@ export function ProgramDays({
                 {summary.rows > 0 ? (
                   <ClientDayPlan blocks={day.blocks} exercises={exercises} />
                 ) : (
-                  <p className="text-sm text-muted-foreground">Bu günde hareket yok.</p>
+                  <p className="text-sm text-muted-foreground">Bu programda hareket yok.</p>
                 )}
               </CardContent>
               {action ? <CardFooter>{action(day)}</CardFooter> : null}

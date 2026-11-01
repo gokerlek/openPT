@@ -10,9 +10,9 @@ import { Drawer, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle } f
 import { OWN_PROGRAM_LIMITS } from '@/lib/own-programs';
 
 /**
- * Antrenörünün programında günün altındaki "Kendi programına kopyala" (`docs/design/kendi-program.md` §2.2): sheet
- * "Yeni programa" ya da var olan programlar (7 günü dolu olan pasif). Kopya anlık görüntüdür; var olan programa
- * kopyalamak o programın düzenleyicisini günü eklenmiş olarak açar (kaydetmek danışanın işi).
+ * Antrenörünün programında her programın (günün) altındaki "Kendi programına kopyala" (`docs/design/kendi-program.md`
+ * §2.2): sheet "Yeni programa" ya da var olan programlar (7 antrenmanı dolu olan pasif). Kopya anlık görüntüdür; var
+ * olan programa kopyalamak o programın düzenleyicisini program eklenmiş olarak açar (kaydetmek danışanın işi).
  */
 export function CopyDaySheet({
   dayId,
@@ -37,7 +37,7 @@ export function CopyDaySheet({
         <DrawerContent className="gap-0">
           <DrawerHeader className="gap-1.5 pt-5">
             <DrawerTitle className="text-lg font-semibold">{dayName} nereye kopyalansın?</DrawerTitle>
-            <DrawerDescription>Kopya o anki hâliyle alınır; antrenörün günü sonra değiştirse de kopyan değişmez.</DrawerDescription>
+            <DrawerDescription>Kopya o anki hâliyle alınır; antrenörün bu programı sonra değiştirse de kopyan değişmez.</DrawerDescription>
           </DrawerHeader>
           <div className="flex flex-col gap-2 overflow-y-auto px-4 pb-4">
             {canCreate ? (
@@ -58,7 +58,7 @@ export function CopyDaySheet({
                 <Item key={program.id} variant="outline" className="opacity-60" aria-disabled>
                   <ItemContent>
                     <ItemTitle className="break-words">{program.name}</ItemTitle>
-                    <ItemDescription>{OWN_PROGRAM_LIMITS.days} gün dolu</ItemDescription>
+                    <ItemDescription>{OWN_PROGRAM_LIMITS.days} antrenman dolu</ItemDescription>
                   </ItemContent>
                 </Item>
               ) : (
@@ -69,7 +69,7 @@ export function CopyDaySheet({
                   render={<Link href={`/me/programlar/${program.id}/duzenle?${query}`} onClick={() => setOpen(false)} />}>
                   <ItemContent>
                     <ItemTitle className="break-words">{program.name}</ItemTitle>
-                    <ItemDescription className="tabular-nums">{program.days} gün</ItemDescription>
+                    <ItemDescription className="tabular-nums">{program.days} antrenman</ItemDescription>
                   </ItemContent>
                 </Item>
               );

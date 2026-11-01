@@ -11,13 +11,14 @@ import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTi
 import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from '@/components/ui/item';
 import { coachAccess } from '@/lib/ai/coach-contract';
 import { readAppConfig } from '@/lib/config';
+import { todayIn } from '@/lib/format';
 import { currentClient } from '@/lib/guards';
 import { activeProgramId, ptEdits } from '@/lib/own-program-index';
 import { lastDateByProgram, programLine, ptUpdatedSince } from '@/lib/own-program-text';
 import { OWN_PROGRAM_LIMITS, PT_PROGRAM_NAME } from '@/lib/own-programs';
 import { readOwnOverview } from '@/lib/own-programs-store';
-import { currentPhaseOf, nextDayId } from '@/lib/program-plan';
-import { effectiveSchedule } from '@/lib/training-days';
+import { currentPhaseOf } from '@/lib/program-plan';
+import { effectiveSchedule, isoWeekdayOf, upcomingAssigned, WEEKDAY_NAMES } from '@/lib/training-days';
 import { ClientHeader } from '../../client-header';
 import { DeleteOwnProgram, PtEditBadge } from './program-actions';
 
@@ -60,7 +61,16 @@ export default async function ProgramsPage() {
 
   const ptProgram = pt?.program ?? null;
   const ptPhase = ptProgram ? currentPhaseOf(ptProgram)?.phase : undefined;
-  const ptNext = ptProgram && ptPhase ? ptPhase.days.find((day) => day.id === nextDayId(ptProgram)) : undefined;
+  // Bugünün ya da haftada sıradaki atanmış program (Faz 3; dönüş yok): "Bugün: Alt vücut" / "Sıradaki: Perşembe ·
+  // Üst vücut". Atama yoksa satır yok.
+  const today = todayIn(config.timeZone);
+  const upcoming = ptProgram && ptPhase ? upcomingAssigned(ptProgram, today) : null;
+  const upcomingDay = upcoming ? ptPhase?.days.find((day) => day.id === upcoming.dayId) : undefined;
+  const ptNext = upcoming && upcomingDay
+    ? upcoming.date === today
+      ? `Bugün: ${upcomingDay.name}`
+      : `Sıradaki: ${WEEKDAY_NAMES[isoWeekdayOf(upcoming.date)]} · ${upcomingDay.name}`
+    : null;
 
   return (
     <main className="flex flex-col gap-6">
@@ -93,7 +103,7 @@ export default async function ProgramsPage() {
               <ItemDescription className="tabular-nums">
                 {programLine({ days: ptPhase.days.length, weekdays: effectiveSchedule(ptProgram).weekdays, daysPerWeek: ptPhase.daysPerWeek }, last.get('pt'))}
               </ItemDescription>
-              {ptNext ? <ItemDescription>Sıradaki: {ptNext.name}</ItemDescription> : null}
+              {ptNext ? <ItemDescription>{ptNext}</ItemDescription> : null}
             </ItemContent>
             <ItemActions>
               <CaretRight className="size-4 text-muted-foreground" />
