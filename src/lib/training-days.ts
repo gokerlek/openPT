@@ -1,3 +1,4 @@
+import { cleanWeekdays, WEEKDAY_NAMES, WEEKDAYS, weekdaysChangeText, weekdaysText, type Weekday } from './day-assignments.ts';
 import { appendLog, mondayOf, type ClientSchedule, type ProgramLogEntry, type ProgramSchedule } from './program-plan.ts';
 
 /**
@@ -17,42 +18,29 @@ import { appendLog, mondayOf, type ClientSchedule, type ProgramLogEntry, type Pr
  * Tarihler takvim günüdür ("2026-09-26"): UTC'de hesaplanır, saat dilimine çevrilmez.
  */
 
-export const WEEKDAYS = [1, 2, 3, 4, 5, 6, 7] as const;
-export type Weekday = (typeof WEEKDAYS)[number];
-
-export const WEEKDAY_SHORT: Record<Weekday, string> = { 1: 'Pzt', 2: 'Sal', 3: 'Çar', 4: 'Per', 5: 'Cum', 6: 'Cmt', 7: 'Paz' };
-export const WEEKDAY_NAMES: Record<Weekday, string> = {
-  1: 'Pazartesi',
-  2: 'Salı',
-  3: 'Çarşamba',
-  4: 'Perşembe',
-  5: 'Cuma',
-  6: 'Cumartesi',
-  7: 'Pazar',
-};
+// Hafta günü sabitleri ve metinleri `day-assignments.ts`'te: `program-plan.ts` de okur, bu dosyayı içe aktarsa
+// döngü olurdu. Çağıranların importları değişmesin diye buradan da dışa aktarılır.
+export {
+  isWeekday,
+  WEEKDAY_NAMES,
+  WEEKDAY_SHORT,
+  WEEKDAYS,
+  weekdaysChangeText,
+  weekdaysText,
+  type Weekday,
+} from './day-assignments.ts';
 
 const DAY_MS = 86_400_000;
 
-export function isWeekday(value: unknown): value is Weekday {
-  return typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= 7;
-}
-
-/** Geçerli günler, her biri bir kez, pazartesiden pazara. */
+/** Geçerli günler, her biri bir kez, pazartesiden pazara (`cleanWeekdays` yalnız 1–7 bırakır). */
 export function normalizeWeekdays(list: readonly unknown[]): Weekday[] {
-  return [...new Set(list.filter(isWeekday))].sort((a, b) => a - b);
+  return cleanWeekdays(list) as Weekday[];
 }
 
 export function sameWeekdays(a: readonly number[], b: readonly number[]): boolean {
   const left = normalizeWeekdays(a);
   const right = normalizeWeekdays(b);
   return left.length === right.length && left.every((day, index) => day === right[index]);
-}
-
-/** "Pzt, Çar, Cum"; boşsa boş metin. */
-export function weekdaysText(list: readonly number[]): string {
-  return normalizeWeekdays(list)
-    .map((day) => WEEKDAY_SHORT[day])
-    .join(', ');
 }
 
 type Scheduled = { schedule?: ProgramSchedule | undefined; clientSchedule?: ClientSchedule | undefined };
@@ -315,15 +303,6 @@ export function todayCardTitle(input: { today: string; weekdays: readonly number
 }
 
 /* --- değişiklikler --- */
-
-/** Program geçmişinin cümlesi: "Antrenman günleri: Pzt, Çar, Cum → Sal, Per, Cmt". */
-export function weekdaysChangeText(before: readonly number[], after: readonly number[]): string {
-  const from = weekdaysText(before);
-  const to = weekdaysText(after);
-  if (!from) return `Antrenman günleri: ${to}`;
-  if (!to) return `Antrenman günleri kaldırıldı (önce ${from})`;
-  return `Antrenman günleri: ${from} → ${to}`;
-}
 
 type SchedulableProgram = Scheduled & { revision: number; log: ProgramLogEntry[] };
 
