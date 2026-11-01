@@ -22,6 +22,7 @@ import {
   dayFromTemplateForEditing,
   dayToTemplate,
   derivePhased,
+  keepStoredAssignments,
   droppedDeviceNotice,
   duplicateNames,
   duplicateProgramIds,
@@ -49,6 +50,7 @@ import {
   removePhase,
   sameProgramBase,
   savedTemplateOption,
+  settleSchedule,
   sourceNames,
   startPhase,
   upgradeProgram,
@@ -1029,5 +1031,93 @@ describe('Faz 3: atamalar', () => {
       factor: 1.5,
       assigned: [],
     });
+  });
+});
+
+describe('Faz 3: yazımlar', () => {
+  const AT = simdi.toISOString();
+  const layer = { weekdays: [2, 4, 6], at: '2026-09-23T10:00:00.000Z' };
+  const assigned = (weekdays: number[][]): ProgramDay[] => [A, B, C].map((day, index) => (weekdays[index]?.length ? { ...day, weekdays: weekdays[index] } : day));
+
+  test('settleSchedule: birleşim değişmedi, katman yok → aynı schedule, cümle yok', () => {
+    const schedule = { weekdays: [1, 3, 5], at: '2026-09-05T10:00:00.000Z' };
+    const settled = settleSchedule({ schedule }, assigned([[1, 5], [3]]), AT);
+    assert.equal(settled.schedule, schedule);
+    assert.deepEqual(settled.changes, []);
+    assert.deepEqual(settleSchedule({}, assigned([]), AT), { schedule: undefined, changes: [] });
+  });
+
+  test('settleSchedule: birleşim değişince yazılır (anı şimdi), katman düşer; cümleler', () => {
+    assert.deepEqual(settleSchedule({ schedule: { weekdays: [1, 3, 5] }, clientSchedule: layer }, assigned([[1], [4]]), AT), {
+      schedule: { weekdays: [1, 4], at: AT },
+      changes: ['Antrenman günleri: Pzt, Çar, Cum → Pzt, Per', 'Danışanın günleri kaldırıldı (Sal, Per, Cmt)'],
+    });
+    assert.deepEqual(settleSchedule({}, assigned([[2]]), AT), { schedule: { weekdays: [2], at: AT }, changes: ['Antrenman günleri: Sal'] });
+    assert.deepEqual(settleSchedule({ schedule: { weekdays: [2] } }, assigned([]), AT), {
+      schedule: undefined,
+      changes: ['Antrenman günleri kaldırıldı (önce Sal)'],
+    });
+  });
+
+  test('settleSchedule: yalnız katman düşünce birleşim aynı, anı şimdi (kaçan gün penceresi)', () => {
+    assert.deepEqual(settleSchedule({ schedule: { weekdays: [1, 3], at: '2026-09-05T10:00:00.000Z' }, clientSchedule: layer }, assigned([[1], [3]]), AT), {
+      schedule: { weekdays: [1, 3], at: AT },
+      changes: ['Danışanın günleri kaldırıldı (Sal, Per, Cmt)'],
+    });
+  });
+
+  test('createProgramRecord: schedule şu anki evrenin birleşimi; gövdenin günleri okunmaz', () => {
+    const body = { phased: true, currentPhaseId: 'p_uyum01', phases: [{ ...uyum, days: assigned([[4], [2]]) }, { ...guc, days: [gun('d_dddddd', 'Gün A', { weekdays: [6] })] }] };
+    assert.deepEqual(createProgramRecord(body, simdi).schedule, { weekdays: [2, 4] });
+    assert.equal('schedule' in createProgramRecord({ ...body, currentPhaseId: 'p_guc001', phases: [uyum, guc], weekdays: [1, 3] }, simdi), false);
+  });
+
+  test('evre geçişi: yeni evrenin birleşimi ve cümleleri; katman düşer', () => {
+    const before = program({
+      phases: [{ ...uyum, days: assigned([[1, 3]]) }, { ...guc, days: [gun('d_dddddd', 'Gün X', { weekdays: [2] }), gun('d_eeeeee', 'Gün Y', { weekdays: [4] })] }],
+      schedule: { weekdays: [1, 3] },
+      clientSchedule: layer,
+    });
+    const after = startPhase(before, 'p_guc001', simdi);
+    assert.ok(after);
+    assert.deepEqual(after.schedule, { weekdays: [2, 4], at: AT });
+    assert.equal('clientSchedule' in after, false);
+    assert.deepEqual(after.log[0]?.changes.map((change) => change.text), [
+      "Şu anki evre: 'Uyum' → 'Güç'",
+      'Antrenman günleri: Pzt, Çar → Sal, Per',
+      'Danışanın günleri kaldırıldı (Sal, Per, Cmt)',
+    ]);
+    // Atamasız evreye geçiş: schedule yok.
+    const back = startPhase({ ...after, phases: [uyum, after.phases[1]!] }, 'p_uyum01', simdi);
+    assert.equal(back && 'schedule' in back, false);
+    assert.deepEqual(back?.log[0]?.changes.map((change) => change.text).slice(1), ['Antrenman günleri kaldırıldı (önce Sal, Per)']);
+  });
+
+  test('keepStoredAssignments: alansız ve günsüz gövde (çok eski sekme) kayıttaki atamaları gün kimliğiyle korur', () => {
+    const stored = { phased: true, phases: [{ ...uyum, days: assigned([[2], [4]]) }, { ...guc, days: [gun('d_dddddd', 'Gün A', { weekdays: [6] })] }] };
+    const sent = { phased: true, currentPhaseId: 'p_uyum01', phases: [uyum, guc] };
+    const kept = keepStoredAssignments(sent, stored);
+    assert.deepEqual(kept.phases.map((phase) => phase.days.map((day) => day.weekdays)), [[[2], [4], undefined], [[6]]]);
+    assert.equal(kept.currentPhaseId, 'p_uyum01');
+    // Başka evreye taşınan gün atamasını oraya götürmez (hedefin günleriyle çakışabilirdi).
+    const moved = keepStoredAssignments({ ...sent, phases: [{ ...uyum, days: [B, C] }, { ...guc, days: [...guc.days, A] }] }, stored);
+    assert.deepEqual(moved.phases.map((phase) => phase.days.map((day) => day.weekdays)), [[[4], undefined], [[6], undefined]]);
+  });
+
+  test('keepStoredAssignments: alanı olan, boş ya da değişen günler gönderen gövde aynen; kendi programın açılıştaki günleri korunur', () => {
+    const stored = { phased: false, phases: [{ ...uyum, weeks: undefined, days: assigned([[2], [4]]) }] };
+    const sent = { phased: false, currentPhaseId: 'p_uyum01', phases: [{ ...uyum, weeks: undefined }] };
+    const withField = { ...sent, phases: [{ ...sent.phases[0]!, days: [{ ...A, weekdays: [] }, B, C] }] };
+    assert.equal(keepStoredAssignments(withField, stored), withField);
+    const cleared = { ...sent, weekdays: [] };
+    assert.equal(keepStoredAssignments(cleared, stored), cleared, 'eski sekmede bütün günler kaldırıldı');
+    assert.equal(keepStoredAssignments({ ...sent, weekdays: [3] }, stored).phases[0]?.days[0]?.weekdays, undefined);
+    const own = keepStoredAssignments({ ...sent, weekdays: [4, 2], baseWeekdays: [2, 4] }, stored);
+    assert.deepEqual(own.phases[0]?.days.map((day) => day.weekdays), [[2], [4], undefined]);
+    // Evresiz programın gizli evresi farklı kimlikle gelse de (düzenleyicide evreler açılıp kapandı) aynı evredir.
+    const renamed = keepStoredAssignments({ ...sent, currentPhaseId: 'p_yeni01', phases: [{ ...sent.phases[0]!, id: 'p_yeni01' }] }, stored);
+    assert.deepEqual(renamed.phases[0]?.days.map((day) => day.weekdays), [[2], [4], undefined]);
+    // Kayıt yoksa (oluşturma) dokunulmaz.
+    assert.equal(keepStoredAssignments(sent, null), sent);
   });
 });

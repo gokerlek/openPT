@@ -3,7 +3,8 @@ import type { CoachInsight } from './coach-review.ts';
 import { defaultSets, DEFAULT_REST_SECONDS } from '../template-plan.ts';
 import type { PlanExercise } from '../template-plan.ts';
 import { programFormSchema } from '../schemas/program.ts';
-import type { ProgramBody, ProgramState } from '../program-plan.ts';
+import { cleanWeekdays, hasAssignments } from '../day-assignments.ts';
+import { bodyWithAssignments, type ProgramBody, type ProgramState } from '../program-plan.ts';
 import { evaluateCare, hasCare, type CareInput } from '../constraint-filter.ts';
 import type { CoachConditions, CoachIntent } from './coach-contract.ts';
 
@@ -78,10 +79,29 @@ export function draftCoachProgram(context: CoachContext, conditions: CoachCondit
   ] };
 }
 
-/** Stored programs have `current.phaseId`; form payloads have `currentPhaseId`. */
+/**
+ * Yayın kurtarma: kayıttaki program bu taslak mı? Kayıt `current.phaseId`, gövde `currentPhaseId` taşır. İki taraf
+ * aynı biçime getirilir (Faz 3): taslak yayında olduğu gibi atanır (`bodyWithAssignments`); atamalar günlerde
+ * karşılaştırılır (sıralı, boşu yok sayılarak), program düzeyindeki `weekdays` karşılaştırılmaz; atamalı evrede
+ * `daysPerWeek` iki tarafta da yok sayılır (`normalizeProgram` yayında düşürür).
+ */
 export function coachProgramMatches(current: ProgramState, body: ProgramBody): boolean {
-  const parsed = v.safeParse(programFormSchema, { ...current, currentPhaseId: current.current.phaseId, ...(current.schedule ? { weekdays: current.schedule.weekdays } : {}) });
-  return parsed.success && JSON.stringify({ ...parsed.output, weekdays: parsed.output.weekdays ? [...parsed.output.weekdays].sort() : undefined }) === JSON.stringify({ ...v.parse(programFormSchema, body), weekdays: body.weekdays ? [...body.weekdays].sort() : undefined });
+  const shape = (input: unknown): string | null => {
+    const parsed = v.safeParse(programFormSchema, input);
+    if (!parsed.success) return null;
+    const { weekdays: _program, ...rest } = parsed.output;
+    const phases = rest.phases.map(({ daysPerWeek, days, ...phase }) => ({
+      ...phase,
+      ...(daysPerWeek !== undefined && !hasAssignments(days) ? { daysPerWeek } : {}),
+      days: days.map(({ weekdays: list, ...day }) => {
+        const weekdays = cleanWeekdays(list);
+        return { ...day, ...(weekdays.length > 0 ? { weekdays } : {}) };
+      }),
+    }));
+    return JSON.stringify({ ...rest, phases });
+  };
+  const stored = shape({ phased: current.phased, currentPhaseId: current.current.phaseId, phases: current.phases });
+  return stored !== null && stored === shape(bodyWithAssignments(body));
 }
 
 /** Known high-risk wording has a local gate as well as the provider classifier. */

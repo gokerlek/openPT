@@ -294,4 +294,34 @@ describe('Faz 3: atamalar', () => {
     const untouched = upgradeProgramBody({ ...bodyOf(programFile()), weekdays: [4, 2], baseWeekdays: [2, 4] }) as ProgramBody;
     assert.equal(hasAssignmentField(untouched.phases), false);
   });
+
+  test('sürüm 1 dosya da schedule\'dan atanır', () => {
+    const v1 = { ...programFile({}, { schedule: { weekdays: [2, 4] } }), version: 1, phased: undefined };
+    const parsed = v.parse(programSchema, v1);
+    assert.equal(parsed.version, 2);
+    assert.deepEqual(parsed.phases[0]?.days.map((day) => day.weekdays), [[2], [4]]);
+  });
+
+  test('aynı hafta günü iki ayrı evrede olabilir', () => {
+    const [uyum, guc] = phases([2, 1]);
+    const result = v.safeParse(programSchema, program({
+      phases: [
+        { ...uyum!, days: uyum!.days.map((item, index) => ({ ...item, weekdays: index === 0 ? [2] : [4] })) },
+        { ...guc!, days: guc!.days.map((item) => ({ ...item, weekdays: [2, 4] })) },
+      ],
+      current: { phaseId: uyum!.id, startedAt: at },
+    }));
+    assert.equal(result.success, true, result.issues?.[0]?.message ?? '');
+  });
+
+  test('okuma girdiyi değiştirmez', () => {
+    const raw = programFile({}, { schedule: { weekdays: [1, 3, 5] } });
+    const before = structuredClone(raw);
+    v.parse(programSchema, raw);
+    assert.deepEqual(raw, before);
+    const body = { ...bodyOf(programFile()), weekdays: [2, 4], baseRevision: 7 };
+    const bodyBefore = structuredClone(body);
+    v.parse(programSaveSchema, body);
+    assert.deepEqual(body, bodyBefore);
+  });
 });

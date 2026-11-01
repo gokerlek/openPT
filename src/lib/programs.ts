@@ -1,7 +1,6 @@
 import {freezeWeeklyGoals} from './weekly-goals';
 import {readIndex} from './session-files-core';
 import {sessionRepo} from './session-files';
-import {currentPhaseOf} from './program-plan';
 import 'server-only';
 import * as v from 'valibot';
 import type { DeviceWithSource } from './devices';
@@ -11,7 +10,9 @@ import { deleteFile, getFileSha, readJson, writeJson } from './github/files';
 import { dropNotices } from './notices-store';
 import { applyProgramEdit, commitMessage, type DiffContext } from './program-diff';
 import {
+  bodyWithAssignments,
   createProgramRecord,
+  keepStoredAssignments,
   normalizeProgram,
   sameProgramBase,
   startPhase,
@@ -21,7 +22,7 @@ import {
 } from './program-plan';
 import { programSchema, type Program } from './schemas/program';
 import type { PlanExercise } from './template-plan';
-import { resetClientSchedule } from './training-days';
+import { programWeekTarget, resetClientSchedule } from './training-days';
 
 /**
  * Danışana özel program (SPEC §3, §7.4): danışanın kendi repo'sunda `program.json`.
@@ -81,7 +82,9 @@ export async function writeProgramFile(
     throw new GithubError(`Program kaydı geçersiz: ${v.getDotPath(issue) ?? 'dosya'}: ${issue.message}`, 500);
   }
   const prior=await readProgramFile(clientId);
-  if(prior?.program){const repo=sessionRepo(clientId);await freezeWeeklyGoals(repo,(await readIndex(repo)).index,currentPhaseOf(prior.program)?.phase.daysPerWeek??1);}
+  // Hedef Bugün'deki "Bu hafta x/y" ile aynı kuraldan: eski programın ilk PT kaydı atamalı evrede sıklığı düşürür,
+  // yalnız sıklığa bakmak dondurulmamış haftalara kalıcı olarak 1 yazardı.
+  if(prior?.program){const repo=sessionRepo(clientId);await freezeWeeklyGoals(repo,(await readIndex(repo)).index,programWeekTarget(prior.program)??1);}
   const written = await writeJson(clientRepoName(clientId), PROGRAM_PATH, parsed.output, { sha: options.sha, message: options.message });
   // Genel bakış'ın özeti (antrenman günleri, evre, bildirimler) programdan: yeniden türetilsin.
   dropNotices(clientId);
@@ -111,15 +114,18 @@ function isConflict(error: unknown): boolean {
 /**
  * Oluşturma (`base` null) ya da kayıt. Gövde taze okunan kayda göre kütüphaneyle
  * denetlenir ve sadeleştirilir (`normalizeProgram`): egzersizinkine eşit kural ya da cihaz yalnız
- * kayıttaki aynı satırda duruyorsa kalır. Değişiklik yoksa hiçbir şey yazılmaz.
+ * kayıttaki aynı satırda duruyorsa kalır. Değişiklik yoksa hiçbir şey yazılmaz. Gün başına ataması
+ * olmayan eski gövde önce atanır: AI yayını şemadan geçmez (`bodyWithAssignments`); günleri hiç
+ * göndermeyen eski sekme kayıttaki atamaları korur (`keepStoredAssignments`).
  */
 export async function saveProgram(
   clientId: string,
-  body: ProgramBody,
+  input: ProgramBody,
   base: ProgramBase | null,
   library: { exercises: ReadonlyMap<string, PlanExercise>; deviceIds: ReadonlySet<string> },
   ctx: DiffContext,
 ): Promise<SaveProgramResult> {
+  const body = bodyWithAssignments(input);
   for (let attempt = 0; ; attempt += 1) {
     const stored = await readProgramFile(clientId);
     const now = new Date();
@@ -134,10 +140,11 @@ export async function saveProgram(
       }
       if (!stored) return { status: 'missing' };
       if (!stored.program || !sameProgramBase(stored.program, base)) return { status: 'stale' };
-      const normalized = normalizeProgram(body, library, stored.program);
+      const kept = keepStoredAssignments(body, stored.program);
+      const normalized = normalizeProgram(kept, library, stored.program);
       if (Object.keys(normalized.errors).length > 0) return { status: 'invalid', errors: normalized.errors };
       const droppedDevices = normalized.droppedDeviceRowIds.length;
-      const result = applyProgramEdit(stored.program, { ...body, phases: normalized.phases }, ctx, now);
+      const result = applyProgramEdit(stored.program, { ...kept, phases: normalized.phases }, ctx, now);
       if (!result) return { status: 'unchanged', revision: stored.program.revision, droppedDevices };
       await writeProgramFile(clientId, result.program, {
         sha: stored.sha,

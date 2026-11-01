@@ -1,4 +1,4 @@
-import { cleanWeekdays, WEEKDAY_NAMES, WEEKDAYS, weekdaysChangeText, weekdaysText, type Weekday } from './day-assignments.ts';
+import { cleanWeekdays, sameWeekdays, WEEKDAY_NAMES, WEEKDAYS, weekdaysChangeText, weekdaysText, type Weekday } from './day-assignments.ts';
 import { appendLog, mondayOf, type ClientSchedule, type ProgramLogEntry, type ProgramSchedule } from './program-plan.ts';
 
 /**
@@ -22,6 +22,7 @@ import { appendLog, mondayOf, type ClientSchedule, type ProgramLogEntry, type Pr
 // döngü olurdu. Çağıranların importları değişmesin diye buradan da dışa aktarılır.
 export {
   isWeekday,
+  sameWeekdays,
   WEEKDAY_NAMES,
   WEEKDAY_SHORT,
   WEEKDAYS,
@@ -35,12 +36,6 @@ const DAY_MS = 86_400_000;
 /** Geçerli günler, her biri bir kez, pazartesiden pazara (`cleanWeekdays` yalnız 1–7 bırakır). */
 export function normalizeWeekdays(list: readonly unknown[]): Weekday[] {
   return cleanWeekdays(list) as Weekday[];
-}
-
-export function sameWeekdays(a: readonly number[], b: readonly number[]): boolean {
-  const left = normalizeWeekdays(a);
-  const right = normalizeWeekdays(b);
-  return left.length === right.length && left.every((day, index) => day === right[index]);
 }
 
 type Scheduled = { schedule?: ProgramSchedule | undefined; clientSchedule?: ClientSchedule | undefined };
@@ -97,6 +92,19 @@ export function scheduleSince(
 export function weekTarget(weekdays: readonly number[], daysPerWeek?: number): number | null {
   const count = normalizeWeekdays(weekdays).length;
   return count > 0 ? count : (daysPerWeek ?? null);
+}
+
+/**
+ * "Bu hafta x/y"nin y'si programdan: geçerli günlerin sayısı, yoksa şu anki evrenin sıklığı (İlerleme'nin
+ * `plannedDays`'iyle aynı kural). Haftalık hedeflerin dondurulması (`writeProgramFile`) bunu kullanır: eski
+ * programın ilk PT kaydı atamalı evrede `daysPerWeek`'i düşürür, yalnız sıklığa bakan dondurma sonraki yazımda
+ * hedefi kalıcı olarak 1 yapardı. Yoksa undefined.
+ */
+export function programWeekTarget(
+  program: Scheduled & { phases: readonly { id: string; daysPerWeek?: number | undefined }[]; current: { phaseId: string } },
+): number | undefined {
+  const phase = program.phases.find((item) => item.id === program.current.phaseId) ?? program.phases[0];
+  return weekTarget(effectiveSchedule(program).weekdays, phase?.daysPerWeek) ?? undefined;
 }
 
 /** Seçilen gün sayısı haftalık sıklıktan farklı mı (iki tarafta küçük uyarı; engel değil). */
@@ -355,27 +363,5 @@ export function resetClientSchedule<P extends SchedulableProgram>(program: P, no
       log: appendLog(program.log, { at, revision: program.revision, kind: 'edit', changes: [{ text }] }),
     },
     text,
-  };
-}
-
-/**
- * PT'nin kaydında günler (`applyProgramEdit`): gövde günleri göndermediyse (eski sekme) kayıttaki kalır.
- * Değiştiyse PT'nin günleri `at` anıyla yazılır, danışanın katmanı silinir (son söz PT'nin); cümleler geçmişe.
- */
-export function ptScheduleEdit(
-  stored: Scheduled,
-  weekdays: readonly number[] | undefined,
-  at: string,
-): { schedule: ProgramSchedule | undefined; clientSchedule: ClientSchedule | undefined; changes: string[] } {
-  const before = normalizeWeekdays(stored.schedule?.weekdays ?? []);
-  const keep = { schedule: stored.schedule, clientSchedule: stored.clientSchedule, changes: [] };
-  if (weekdays === undefined) return keep;
-  const after = normalizeWeekdays(weekdays);
-  if (sameWeekdays(before, after)) return keep;
-  const client = effectiveSchedule(stored).client;
-  return {
-    schedule: after.length > 0 ? { weekdays: after, at } : undefined,
-    clientSchedule: undefined,
-    changes: [weekdaysChangeText(before, after), ...(client ? [`Danışanın günleri kaldırıldı (${weekdaysText(client.weekdays)})`] : [])],
   };
 }

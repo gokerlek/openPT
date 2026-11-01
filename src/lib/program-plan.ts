@@ -3,8 +3,13 @@ import {
   deriveAssignments,
   hasAssignmentField,
   hasAssignments,
+  keepAssignments,
   phaseWeekdays,
+  sameWeekdays,
   upgradeAssignments,
+  weekdaysChangeText,
+  weekdaysText,
+  type AssignableDay,
 } from './day-assignments.ts';
 import { todayIn } from './format.ts';
 import type { SetSpec } from './set-plan.ts';
@@ -92,7 +97,10 @@ export type ProgramPhase = {
   name: string;
   /** Süre (hafta); yoksa süresiz. Evresiz programda yok. */
   weeks?: number;
-  /** Haftada kaç gün (1–7); evresiz programda programın sıklığı. */
+  /**
+   * Haftada kaç gün (1–7); evresiz programda programın sıklığı. Yalnız evrede hiç atama yokken geçerli: atamalı
+   * evrede sıklık atanmış gün sayısıdır, kayıtta bu alan düşer (`normalizeProgram`).
+   */
   daysPerWeek?: number;
   days: ProgramDay[];
 };
@@ -117,11 +125,12 @@ export type ProgramChange = { scope?: string; text: string };
  */
 export type ProgramLogEntry = { at: string; revision: number; kind: LogKind; sessionId?: string; by?: 'pt'; changes: ProgramChange[] };
 /**
- * PT'nin antrenman günleri (tasarım §2.11). `at`: geçerli günlerin son değiştiği an (PT'nin değişikliği, "PT'nin
- * günlerine dön", danışanın PT'nin günlerine dönmesi); kaçan gün penceresi bundan önce sayılmaz (`attention.ts`).
+ * Antrenman günleri (tasarım §2.11; Faz 3): şu anki evrenin atamalarının birleşimi, her PT yazımında yeniden yazılır
+ * (`settleSchedule`). `at`: birleşimin son değiştiği ya da danışanın katmanının düştüğü an; kaçan gün penceresi bundan
+ * önce sayılmaz (`attention.ts`).
  */
 export type ProgramSchedule = { weekdays: number[]; at?: string };
-/** Danışanın kendi günleri: PT'nin düzenleyicisi 412 almasın diye ayrı katman; revision artmaz, PT'nin değişikliği temizler. */
+/** Danışanın eski gün katmanı: Faz 3'te okunur ama yok sayılır; PT'nin ilk kaydı ya da evre geçişi siler. */
 export type ClientSchedule = { weekdays: number[]; at: string };
 /**
  * Danışanın tekrar/süre hedefi (tasarım §6.2, `client-targets.ts`): satırın setleri hâlâ `baseSets`'e
@@ -140,9 +149,9 @@ export type ProgramState = {
   phases: ProgramPhase[];
   current: { phaseId: string; startedAt: string };
   rotation: ProgramRotation;
-  /** PT'nin seçtiği antrenman günleri; yoksa seçilmemiş. */
+  /** Antrenman günleri: şu anki evrenin atamalarının birleşimi (`settleSchedule`); yoksa atama yok. */
   schedule?: ProgramSchedule;
-  /** Danışanın değiştirdiği günler; varsa geçerli olan bu (`effectiveSchedule`). */
+  /** Danışanın eski gün katmanı; PT'nin ilk kaydı ya da evre geçişi siler (`settleSchedule`). */
   clientSchedule?: ClientSchedule;
   /** Danışanın satır başına tekrar/süre hedefi (satır kimliğiyle); PT'nin setleri değişince geçersiz. */
   clientTargets?: ClientTargets;
@@ -374,9 +383,15 @@ export function creationChange(body: Pick<ProgramBody, 'phases'>): ProgramChange
   return { text: text(shown) };
 }
 
-/** Yeni program kaydı: sürüm 2, şu anki evre şimdi başlar, geçmişte tek "oluşturuldu"; seçildiyse antrenman günleri. */
+/**
+ * Yeni program kaydı: sürüm 2, şu anki evre şimdi başlar, geçmişte tek "oluşturuldu". Antrenman günleri şu anki
+ * evrenin atamalarının birleşimi (yoksa alan yok); gövdenin program düzeyindeki `weekdays`'i okunmaz (eski gövde
+ * daha önce atanmıştır: `upgradeProgramBody`, `bodyWithAssignments`).
+ */
 export function createProgramRecord(body: ProgramBody, now: Date): ProgramState {
   const at = now.toISOString();
+  const current = body.phases.find((phase) => phase.id === body.currentPhaseId) ?? body.phases[0];
+  const weekdays = phaseWeekdays(current?.days ?? []);
   return {
     version: 2,
     phased: body.phased,
@@ -386,7 +401,7 @@ export function createProgramRecord(body: ProgramBody, now: Date): ProgramState 
     phases: body.phases,
     current: { phaseId: body.currentPhaseId, startedAt: at },
     rotation: {},
-    ...(body.weekdays?.length ? { schedule: { weekdays: [...new Set(body.weekdays)].sort((a, b) => a - b) } } : {}),
+    ...(weekdays.length > 0 ? { schedule: { weekdays } } : {}),
     log: appendLog([], { at, revision: 1, kind: 'create', changes: [creationChange(body)] }),
   };
 }
@@ -533,7 +548,11 @@ export function mergePhasesCheck(phases: Phases): { ok: boolean; days: number } 
   return { ok: days <= PROGRAM_LIMITS.daysPerPhase, days };
 }
 
-/** Atamasız gün: alan yoksa aynı gün (başvuru korunur). */
+/**
+ * Atamasız gün: alan yoksa aynı gün (başvuru korunur). Anahtarı silmek (`assignWeekdays(…, [])` gibi boş dizi
+ * bırakmamak) güvenli: yeniden türetme yalnız program düzeyinde `weekdays` gönderen eski gövdede olur, düzenleyici
+ * onu sonraki görevlerde göndermez; kayıttaki atama da yalnız aynı evredeki güne döner (`keepStoredAssignments`).
+ */
 function unassigned(day: ProgramDay): ProgramDay {
   if (day.weekdays === undefined) return day;
   const { weekdays: _dropped, ...rest } = day;
@@ -703,13 +722,12 @@ export function missingExerciseDays(
  * Kayıttan önce sunucuda: her gün `normalizeTemplate`'ten geçer (kütüphane denetimi,
  * sadeleştirme). Hata anahtarları Formisch yollarıdır (`phases.1.days.0.blocks.0.rows.0.exerciseId`).
  * Adlar kırpılır; kaynak aynen kalır, süre yalnız evreli programda, sıklık yalnız atamasız evrede;
- * atamalar sıralanır, boşu yazılmaz. Silinen cihaza
- * yazılmış satır, düzenleyicinin açılışındaki gibi egzersizin cihazına döner (SPEC §7.4): şablondan
- * eklenen gün, geri yüklenen taslak ya da eski sekme yüzünden kayıt reddedilmez; düşen satırlar
- * (`droppedDeviceRowIds`) PT'ye bildirilir, sessiz kalmaz. Egzersizinkine eşit
- * kural ya da cihaz yalnız kayıttaki (`stored`; oluştururken yok) aynı satırda aynen duruyorsa kalır:
- * danışana özel seçim egzersiz sonradan ona eşitlense de kaybolmaz; yeni gelen eşit değer şablondaki
- * gibi düşer (seçicide gösterilen varsayılanı yeniden seçmek değişiklik üretmez).
+ * atamalar sıralanır, boşu yazılmaz. Silinen cihaza yazılmış satır, düzenleyicinin açılışındaki gibi
+ * egzersizin cihazına döner (SPEC §7.4): şablondan eklenen gün, geri yüklenen taslak ya da eski sekme
+ * yüzünden kayıt reddedilmez; düşen satırlar (`droppedDeviceRowIds`) PT'ye bildirilir, sessiz kalmaz.
+ * Egzersizinkine eşit kural ya da cihaz yalnız kayıttaki (`stored`; oluştururken yok) aynı satırda
+ * aynen duruyorsa kalır: danışana özel seçim egzersiz sonradan ona eşitlense de kaybolmaz; yeni gelen
+ * eşit değer şablondaki gibi düşer (seçicide gösterilen varsayılanı yeniden seçmek değişiklik üretmez).
  */
 export function normalizeProgram(
   body: Pick<ProgramBody, 'phased' | 'phases'>,
@@ -962,37 +980,57 @@ export function upgradeProgram(raw: unknown): unknown {
   return { ...raw, version: 2, phased: typeof raw.phased === 'boolean' ? raw.phased : derivePhased(phases), phases };
 }
 
-/** İki gün listesi aynı küme mi (sıra ve tekrar fark etmez). */
-function sameWeekdaySet(a: readonly unknown[], b: readonly unknown[]): boolean {
-  const left = cleanWeekdays(a);
-  const right = cleanWeekdays(b);
-  return left.length === right.length && left.every((weekday, index) => weekday === right[index]);
-}
-
 /**
  * Kayıt gövdesi: `phased` yoksa (eski sekme) evrelerden çıkarılır; bloklar yeni biçime. Eski sekme
  * ve eski taslak gün başına atama göndermez: programlar gövdenin `weekdays`'ine sırayla atanır
  * (`upgradeProgram`'ın kuralı). Kendi programın eski sekmesi günleri açılıştaki gibi gönderdiyse
  * (`baseWeekdays` aynı küme) türetilmez: danışan günlere dokunmadı, kayıttaki atamalar gün kimliğiyle
- * korunur (`keepAssignments`, kayıtta).
+ * korunur (`keepStoredAssignments`, kayıtta).
  */
 export function upgradeProgramBody(raw: unknown): unknown {
   if (!isRecord(raw) || !Array.isArray(raw.phases)) return raw;
-  const untouched = Array.isArray(raw.baseWeekdays) && Array.isArray(raw.weekdays) && sameWeekdaySet(raw.baseWeekdays, raw.weekdays);
+  const untouched = Array.isArray(raw.baseWeekdays) && Array.isArray(raw.weekdays) && sameWeekdays(raw.baseWeekdays, raw.weekdays);
   const upgraded = upgradePhases(raw.phases);
   const phases = (untouched ? upgraded : upgradeAssignments(upgraded, raw.weekdays)) as unknown[];
   return { ...raw, phased: raw.phased === undefined ? derivePhased(phases) : raw.phased, phases };
 }
 
+/** Atanabilir günleri olan gövde (PT programı ya da kendi program); eski gövdenin program düzeyindeki günleriyle. */
+type AssignableBody = {
+  phased?: boolean;
+  phases: readonly { id: string; days: readonly AssignableDay[] }[];
+  weekdays?: readonly number[] | undefined;
+  baseWeekdays?: readonly number[] | undefined;
+};
+
 /**
- * Şemadan geçmeyen gövde (AI taslağının yayını): `upgradeProgramBody`'nin kuralı tipli gövdede. Hiçbir
- * günde atama alanı yoksa programlar `weekdays`'e sırayla atanır; atama varsa ya da gün seçilmemişse
- * gövde aynen döner (aynı başvuru).
+ * Şemadan geçmeyen gövde (AI taslağının yayını) ve kendi programın oluşturulması: `upgradeProgramBody`'nin kuralı
+ * tipli gövdede, açılıştaki günlere (`baseWeekdays`) bakmadan (oluştururken korunacak kayıt yok). Hiçbir günde
+ * atama alanı yoksa programlar `weekdays`'e sırayla atanır; atama varsa ya da gün seçilmemişse gövde aynen döner
+ * (aynı başvuru).
  */
-export function bodyWithAssignments(body: ProgramBody): ProgramBody {
+export function bodyWithAssignments<B extends AssignableBody>(body: B): B {
   if (hasAssignmentField(body.phases) || cleanWeekdays(body.weekdays).length === 0) return body;
   const weekdays = body.weekdays ?? [];
-  return { ...body, phases: body.phases.map((phase) => ({ ...phase, days: deriveAssignments(phase.days, weekdays) })) };
+  return { ...body, phases: body.phases.map((phase) => ({ ...phase, days: deriveAssignments(phase.days, weekdays) })) } as B;
+}
+
+/**
+ * Kayıtta, gün başına alanı hiç olmayan gövde (Faz 3'ten önce açılmış sekme ya da taslak): günleri hiç göndermiyorsa
+ * (`weekdays` yok) ya da açılıştaki gibi gönderiyorsa (kendi programın eski sekmesi, `baseWeekdays` aynı küme)
+ * kayıttaki atamalar gün kimliğiyle korunur (`keepAssignments`). Eski sözleşme "günleri göndermeyen kayıt kayıttakine
+ * dokunmaz"dı: alansız gövde `schedule`'ı düşürmesin. Atama yalnız aynı evredeki güne döner (başka evreye taşınan gün
+ * oradaki günlerle çakışabilirdi); evresiz programın gizli evresi kimliği değişse de aynı evredir (`keepHiddenPhase`).
+ * Alanı olan gövde (boş dizi de: düzenleyicide bütün günleri kaldırılmış), değişen günler gönderen gövde (okunurken
+ * türetilmiştir; boşsa bütün günler kaldırılmıştır) ve oluşturma (`stored` yok) aynen döner (aynı başvuru).
+ */
+export function keepStoredAssignments<B extends AssignableBody>(body: B, stored: Pick<AssignableBody, 'phased' | 'phases'> | null): B {
+  if (!stored || hasAssignmentField(body.phases)) return body;
+  const untouched = body.weekdays === undefined || (body.baseWeekdays !== undefined && sameWeekdays(body.weekdays, body.baseWeekdays));
+  if (!untouched) return body;
+  const hidden = !body.phased && !stored.phased && body.phases.length === 1 && stored.phases.length === 1;
+  const storedPhase = (phaseId: string) => stored.phases.find((phase) => phase.id === phaseId) ?? (hidden ? stored.phases[0] : undefined);
+  return { ...body, phases: body.phases.map((phase) => ({ ...phase, days: keepAssignments(phase.days, storedPhase(phase.id)?.days ?? []) })) } as B;
 }
 
 /** Evre geçişinin cümlesi (hem fark hem geçiş kaydı). */
@@ -1022,9 +1060,33 @@ export function capChanges(changes: readonly ProgramChange[], max: number = PROG
 }
 
 /**
- * PT onaylı evre geçişi: yeni evre şimdi başlar, rotasyon onun ilk gününden başlar (son
- * gün düşer, son antrenman tarihi kalır), geçmişe "Evre geçişi" yazılır. Evre yoksa ya da
- * zaten şu anki evreyse `null`.
+ * PT yazımında antrenman günleri (Faz 3; kayıt ve evre geçişi): `schedule.weekdays` = şu anki evrenin atamalarının
+ * birleşimi (boşsa alan yok). Kayıttaki danışan katmanı (ham `clientSchedule`) her PT yazımında düşer. Birleşim
+ * değişince ya da katman düşünce `schedule.at` şimdi olur (kaçan gün penceresi). Cümleler geçmişe. Değişiklik yoksa
+ * kayıttaki `schedule` aynen döner (anı korunur), cümle yok.
+ */
+export function settleSchedule(
+  stored: Pick<ProgramState, 'schedule' | 'clientSchedule'>,
+  days: readonly ProgramDay[],
+  at: string,
+): { schedule: ProgramSchedule | undefined; changes: string[] } {
+  const before = cleanWeekdays(stored.schedule?.weekdays);
+  const after = phaseWeekdays(days);
+  const unionChanged = !sameWeekdays(before, after);
+  const layer = stored.clientSchedule;
+  const changes = [
+    ...(unionChanged ? [weekdaysChangeText(before, after)] : []),
+    ...(layer ? [`Danışanın günleri kaldırıldı (${weekdaysText(layer.weekdays)})`] : []),
+  ];
+  if (after.length === 0) return { schedule: undefined, changes };
+  if (changes.length === 0) return { schedule: stored.schedule, changes };
+  return { schedule: { weekdays: after, at }, changes };
+}
+
+/**
+ * PT onaylı evre geçişi: yeni evre şimdi başlar (son gün düşer, son antrenman tarihi kalır), antrenman
+ * günleri yeni evrenin atamalarından (`settleSchedule`; danışanın eski katmanı düşer), geçmişe "Evre
+ * geçişi" yazılır. Evre yoksa ya da zaten şu anki evreyse `null`.
  */
 export function startPhase(program: ProgramState, phaseId: string, now: Date): ProgramState | null {
   const target = program.phases.find((phase) => phase.id === phaseId);
@@ -1033,12 +1095,16 @@ export function startPhase(program: ProgramState, phaseId: string, now: Date): P
   const revision = program.revision + 1;
   const from = currentPhaseOf(program)?.phase.name ?? '';
   const { lastDayId: _dropped, ...rotation } = program.rotation;
+  const settled = settleSchedule(program, target.days, at);
+  const { schedule: _schedule, clientSchedule: _layer, ...rest } = program;
+  const changes = [currentPhaseChange(from, target.name), ...settled.changes.map((text): ProgramChange => ({ text }))];
   return {
-    ...program,
+    ...rest,
+    ...(settled.schedule ? { schedule: settled.schedule } : {}),
     revision,
     updatedAt: at,
     current: { phaseId, startedAt: at },
     rotation,
-    log: appendLog(program.log, { at, revision, kind: 'phase', changes: [currentPhaseChange(from, target.name)] }),
+    log: appendLog(program.log, { at, revision, kind: 'phase', changes }),
   };
 }

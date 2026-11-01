@@ -1,6 +1,7 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as v from 'valibot';
+import { applyProgramEdit } from './program-diff.ts';
 import type { ProgramLogEntry } from './program-plan.ts';
 import { programSchema } from './schemas/program.ts';
 import { programFile } from './testing/session-fixtures.ts';
@@ -13,7 +14,7 @@ import {
   isoWeekdayOf,
   nextTrainingDate,
   normalizeWeekdays,
-  ptScheduleEdit,
+  programWeekTarget,
   relativeDayText,
   resetClientSchedule,
   scheduleSince,
@@ -130,6 +131,22 @@ describe('antrenman günleri: Bugün kartının satırı', () => {
     assert.equal(frequencyMismatch([1, 3, 5], 3), false);
     assert.equal(frequencyMismatch([1, 3], undefined), false);
     assert.equal(frequencyMismatch([], 3), false);
+  });
+
+  test('programın haftalık hedefi (dondurma): geçerli gün sayısı, yoksa şu anki evrenin sıklığı', () => {
+    const raw = programFile({}, { schedule: { weekdays: [2, 4] } });
+    const stored = v.parse(programSchema, { ...raw, phases: raw.phases.map((phase) => ({ ...phase, daysPerWeek: 3 })) });
+    assert.equal(programWeekTarget(stored), 2);
+    // Eski programın ilk PT kaydı atamalı evrede sıklığı düşürür: sonraki yazımın dondurduğu hedef yine 2 (1 değil).
+    const { daysPerWeek: _dropped, ...phase } = stored.phases[0]!;
+    const saved = applyProgramEdit(stored, { phased: false, currentPhaseId: stored.current.phaseId, phases: [phase] }, { exercises: new Map(), devices: new Map() }, NOW);
+    assert.ok(saved);
+    assert.equal(saved.program.phases[0]?.daysPerWeek, undefined);
+    assert.equal(programWeekTarget(saved.program), 2);
+    // Gün yoksa sıklık; o da yoksa hedef yok.
+    const plain = programFile();
+    assert.equal(programWeekTarget(v.parse(programSchema, { ...plain, phases: plain.phases.map((item) => ({ ...item, daysPerWeek: 3 })) })), 3);
+    assert.equal(programWeekTarget(program()), undefined);
   });
 });
 
@@ -340,29 +357,8 @@ describe('antrenman günleri: danışanın katmanı', () => {
   });
 });
 
-describe('antrenman günleri: PT\'nin kaydı', () => {
-  const stored = { schedule: { weekdays: [1, 3, 5] }, clientSchedule: { weekdays: [2, 4, 6], at: '2026-09-25T10:00:00.000Z' } };
-  const AT = NOW.toISOString();
-
-  test('günleri göndermeyen (eski sekme) ya da aynı günleri gönderen kayıt katmana dokunmaz', () => {
-    assert.deepEqual(ptScheduleEdit(stored, undefined, AT), { ...stored, changes: [] });
-    assert.deepEqual(ptScheduleEdit(stored, [5, 3, 1], AT), { ...stored, changes: [] });
-  });
-
-  test('PT günleri değiştirince danışanın katmanı silinir (son söz PT\'nin); günlerin anı yazılır', () => {
-    assert.deepEqual(ptScheduleEdit(stored, [1, 4], AT), {
-      schedule: { weekdays: [1, 4], at: AT },
-      clientSchedule: undefined,
-      changes: ['Antrenman günleri: Pzt, Çar, Cum → Pzt, Per', 'Danışanın günleri kaldırıldı (Sal, Per, Cmt)'],
-    });
-    assert.deepEqual(ptScheduleEdit({}, [2], AT), { schedule: { weekdays: [2], at: AT }, clientSchedule: undefined, changes: ['Antrenman günleri: Sal'] });
-    assert.deepEqual(ptScheduleEdit({ schedule: { weekdays: [2] } }, [], AT), {
-      schedule: undefined,
-      clientSchedule: undefined,
-      changes: ['Antrenman günleri kaldırıldı (önce Sal)'],
-    });
-  });
-
+// PT'nin kaydındaki günlerin testleri (`ptScheduleEdit`) Faz 3'te `settleSchedule`'a taşındı (`program-plan.test.ts`).
+describe('antrenman günleri: geçmiş', () => {
   test('geçmişin cümlesi', () => {
     assert.equal(weekdaysChangeText([1, 3, 5], [2, 4, 6]), 'Antrenman günleri: Pzt, Çar, Cum → Sal, Per, Cmt');
   });

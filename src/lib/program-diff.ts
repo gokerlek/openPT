@@ -4,6 +4,7 @@ import {
   currentPhaseChange,
   keepHiddenPhase,
   reconcileRotation,
+  settleSchedule,
   type LogKind,
   type ProgramBody,
   type ProgramChange,
@@ -13,7 +14,7 @@ import {
 } from './program-plan.ts';
 import { ptTargetsEdit } from './client-targets.ts';
 import { PROGRESSION_LABELS, RIR_LABELS, type TrackingType } from './progression.ts';
-import { ptScheduleEdit } from './training-days.ts';
+import { sameWeekdays, weekdaysText } from './day-assignments.ts';
 import { amrapIndexes, resizeSets, setShape, setsText, type SetSpec } from './set-plan.ts';
 import {
   BLOCK_KIND_LABELS,
@@ -304,13 +305,17 @@ export function diffProgram(before: ProgramBody, after: ProgramBody, ctx: DiffCo
     }
   }
 
-  // 2. Günler: ad (programın her yerinde); her iki sürümde de olan evrelerde ekleme, silme,
-  // sıra (yeni evrenin günleri evreyle birlikte yazılır); evresi değişen gün.
+  // 2. Günler: ad ve atandığı günler (programın her yerinde); her iki sürümde de olan evrelerde ekleme,
+  // silme, sıra (yeni evrenin günleri evreyle birlikte yazılır); evresi değişen gün. Yeni eklenen günün
+  // atandığı günler yazılmaz ("… eklendi" yeter; birleşim değiştiyse antrenman günleri cümlesi söyler).
   for (const phase of after.phases) {
     const scope = phaseScope(phase);
     for (const day of phase.days) {
       const previous = beforeDays.get(day.id)?.day;
       if (previous && previous.name !== day.name) push(`Gün adı: '${previous.name}' → '${day.name}'`, scope);
+      if (previous && !sameWeekdays(previous.weekdays, day.weekdays)) {
+        push(`Günleri: ${weekdaysText(previous.weekdays ?? []) || 'yok'} → ${weekdaysText(day.weekdays ?? []) || 'yok'}`, dayScope(phase, day));
+      }
     }
     const old = beforePhases.get(phase.id);
     if (!old) continue;
@@ -435,8 +440,10 @@ export function commitMessage(kind: LogKind, changes: readonly ProgramChange[]):
  * şimdi başlar ve rotasyon onun ilk gününden; değişmediyse silinen ya da başka evreye
  * taşınan son gün uzlaştırılır. Evrelere bölme/kaldırma "Düzenlendi" kaydıdır. Evresiz program
  * evresiz kalırsa gizli evre kayıttakidir (`keepHiddenPhase`): fark gün düzeyinde, rotasyon sürer.
- * Antrenman günleri değiştiyse PT'nin günleri yazılır ve danışanın katmanı silinir (`ptScheduleEdit`);
- * göndermeyen eski sekme kayıttakine dokunmaz. Danışanın satır hedefleri (`clientTargets`) rotasyon gibi
+ * Antrenman günleri (Faz 3) gövdenin şu anki evresinin atamalarından yeniden yazılır, kayıttaki danışan
+ * katmanı düşer (`settleSchedule`; eski programın ilk kaydı başka değişiklik olmasa da katmanı siler);
+ * gövdenin program düzeyindeki `weekdays`'i okunmaz (eski gövde daha önce atanmıştır: `upgradeProgramBody`,
+ * `bodyWithAssignments`, `keepStoredAssignments`). Danışanın satır hedefleri (`clientTargets`) rotasyon gibi
  * korunur; PT satırın setlerini ya da hareketini değiştirdiyse o satırın hedefi düşer ve kayda yazılır
  * (`ptTargetsEdit`: PT kazanır). `note`: kaydın sonuna eklenen cümleler (onaylanan danışan önerisi); fark
  * yoksa kayıt yine yazılmaz. Dönen `changes` kırpılmamıştır (commit mesajı için).
@@ -460,8 +467,9 @@ export function applyProgramEdit(
   }));
 
   const at = now.toISOString();
-  // Antrenman günleri: göndermeyen eski sekme kayıttakini değiştirmez; değişince danışanın katmanı silinir.
-  const schedule = ptScheduleEdit(stored, input.weekdays, at);
+  // Antrenman günleri: gövdenin şu anki evresinin atamalarının birleşimi; danışanın eski katmanı düşer.
+  const current = phases.find((phase) => phase.id === body.currentPhaseId) ?? phases[0];
+  const schedule = settleSchedule(stored, current?.days ?? [], at);
   const diff = [
     ...diffProgram(
       { phased: stored.phased, currentPhaseId: stored.current.phaseId, phases: stored.phases },
@@ -490,7 +498,6 @@ export function applyProgramEdit(
     program: {
       ...rest,
       ...(schedule.schedule ? { schedule: schedule.schedule } : {}),
-      ...(schedule.clientSchedule ? { clientSchedule: schedule.clientSchedule } : {}),
       ...(targets.clientTargets ? { clientTargets: targets.clientTargets } : {}),
       phased: body.phased,
       revision,

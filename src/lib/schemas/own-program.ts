@@ -125,7 +125,11 @@ export type OwnProgramFile = v.InferOutput<typeof ownProgramSchema>;
 const bodyFields = {
   currentPhaseId: phaseIdSchema,
   phases: ownProgramPhasesSchema,
-  /** Seçili günler; göndermeyen (eski taslak) kayıttakine dokunmaz. */
+  /**
+   * Eski sekme ve taslak (gün başına atama yok): programlar buradan türetilir (`upgradeProgramBody`; oluştururken
+   * açılıştakiyle aynı olsa da, `bodyWithAssignments`). Kayıtta hiç gönderilmezse ya da açılıştakiyle
+   * (`baseWeekdays`) aynıysa kayıttaki atamalar korunur (`keepStoredAssignments`).
+   */
   weekdays: v.optional(weekdaysSchema),
 };
 
@@ -139,8 +143,8 @@ export type OwnProgramFormValues = v.InferOutput<typeof ownProgramFormSchema>;
 
 /**
  * Kayıt uçları (danışan `PUT /api/me/programs/[pid]`, PT `PUT /api/clients/[id]/programs/[pid]`). `baseRevision`
- * null = oluşturma (yalnız danışan); `baseWeekdays` düzenleyicinin açılıştaki günleri: gönderilen günler onunla
- * aynıysa kayıttakine dokunulmaz (arada Bugün'den değişen günler ezilmesin, §3.6). Ad PT'nin kaydında yok sayılır.
+ * null = oluşturma (yalnız danışan); `baseWeekdays` eski düzenleyicinin açılıştaki günleri: gün başına alan yokken
+ * gönderilen günler onunla aynıysa kayıttaki atamalara dokunulmaz (§3.6). Ad PT'nin kaydında yok sayılır.
  */
 export const ownProgramSaveSchema = v.pipe(
   v.unknown(),

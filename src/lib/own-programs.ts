@@ -1,4 +1,5 @@
 import { withClientTargets } from './client-targets.ts';
+import { cleanWeekdays, phaseWeekdays } from './day-assignments.ts';
 import { applyProgramEdit, type DiffContext } from './program-diff.ts';
 import {
   DEFAULT_PHASE_NAME,
@@ -35,8 +36,9 @@ import { normalizeWeekdays, sameWeekdays, weekdaysChangeText } from './training-
  *   ya da danışanlara açık şablondan (`source`). Kimlikler danışanın bütün programlarında benzersiz: sunucu
  *   çakışanı yeniden üretir (`reIdCollisions`), kayıttaki kimliklere dokunmaz (seanslar onlara bağlı).
  * - **Kayıt** (§3.5, §3.6): PT programının yolu (`applyProgramEdit`: fark, revision +1, rotasyon uzlaştırması);
- *   günler açılıştakiyle aynıysa kayıttakine dokunulmaz, gün seçilince sıklık kaydedilmez. PT'nin kaydında ad,
- *   paylaşım, kimlik ve geçmiş kayıttan; kayıt `by: 'pt'`.
+ *   Faz 3: programlar hafta günlerine atanır (atamayı danışan yapar, yazar o); `schedule` her yazımda atamaların
+ *   birleşimi, atama varken sıklık kaydedilmez. PT'nin kaydında ad, paylaşım, kimlik ve geçmiş kayıttan; kayıt
+ *   `by: 'pt'`.
  * - **Paylaşım ve günler** revision artırmaz; geçmişe `share` ve `client` kaydı.
  *
  * Node'un test aracı doğrudan çalıştırdığı için içe aktarmalar göreli ve `.ts` uzantılıdır.
@@ -72,13 +74,14 @@ export type OwnProgram = {
   log: ProgramLogEntry[];
 };
 
-/** Kayıt gövdesi: tek evre, şu anki evre, günler (verilirse); danışanın kaydında ad ve açılıştaki günler. */
+/**
+ * Kayıt gövdesi: tek evre, şu anki evre, programlar (atamaları içlerinde); danışanın kaydında ad. Eski sekmenin
+ * program düzeyindeki günleri buraya gelmeden çözülür (`upgradeProgramBody`, `keepStoredAssignments`).
+ */
 export type OwnProgramBody = {
   name?: string | undefined;
   currentPhaseId: string;
   phases: OwnProgramPhase[];
-  weekdays?: readonly number[] | undefined;
-  baseWeekdays?: readonly number[] | undefined;
 };
 
 export function isOwnProgramId(value: unknown): value is string {
@@ -132,7 +135,8 @@ export type OwnStart =
 /**
  * PT'nin günlerinin kopyası (program sırasıyla, seçilenler): hareketler danışanın geçerli hedefleriyle
  * (`withClientTargets`), blok ve satırlar yeni kimlikle; ad hedefte varsa "Gün A 2". Gün `copiedFrom` taşır.
- * Hedefteki günlerle birlikte 7'yi aşmaz.
+ * Kopyalar atamasız gelir (PT'nin hafta günleri kopyalanmaz; danışan formda atar). Hedefteki günlerle birlikte
+ * 7'yi aşmaz.
  */
 export function copyPtDays(
   program: { phases: readonly ProgramPhase[]; clientTargets?: ClientTargets | undefined },
@@ -233,7 +237,7 @@ export function reIdCollisions<B extends { currentPhaseId: string; phases: OwnPr
   return changed ? { ...body, currentPhaseId, phases } : body;
 }
 
-/** Gün seçildiyse sıklık kaydedilmez (y = seçili gün sayısı, `weekTarget`; §2.5). */
+/** Gün atandıysa sıklık kaydedilmez (y = atanmış gün sayısı, `weekTarget`; §2.5). `weekdays`: atamaların birleşimi. */
 export function settleFrequency(phases: readonly OwnProgramPhase[], weekdays: readonly number[]): OwnProgramPhase[] {
   if (normalizeWeekdays(weekdays).length === 0) return phases as OwnProgramPhase[];
   return phases.map((phase) => {
@@ -254,17 +258,13 @@ export function ownCreationChange(phases: readonly OwnProgramPhase[]): ProgramCh
   return { text: parts.length > 0 ? `Program oluşturuldu: ${parts.join(', ')}` : 'Program oluşturuldu' };
 }
 
-/** Yeni program kaydı: revision 1, şu anki evre şimdi başlar, seçildiyse günler, geçmişte tek "oluşturuldu". */
-export function createOwnProgram(input: {
-  id: string;
-  name: string;
-  currentPhaseId: string;
-  phases: OwnProgramPhase[];
-  weekdays?: readonly number[] | undefined;
-  now: Date;
-}): OwnProgram {
+/**
+ * Yeni program kaydı: revision 1, şu anki evre şimdi başlar, geçmişte tek "oluşturuldu". Antrenman günleri
+ * programların atamalarının birleşimi (an ile; yoksa alan yok); atama varken sıklık kaydedilmez.
+ */
+export function createOwnProgram(input: { id: string; name: string; currentPhaseId: string; phases: OwnProgramPhase[]; now: Date }): OwnProgram {
   const at = input.now.toISOString();
-  const weekdays = normalizeWeekdays(input.weekdays ?? []);
+  const weekdays = phaseWeekdays(input.phases[0]?.days ?? []);
   const phases = settleFrequency(input.phases, weekdays);
   return {
     version: 2,
@@ -282,14 +282,24 @@ export function createOwnProgram(input: {
   };
 }
 
-/** Aynı gövde mi (oluşturmanın yeniden denenmesi `unchanged`, §3.6): ad, günler ve seçili günler. */
-export function sameOwnBody(program: OwnProgram, body: Pick<OwnProgramBody, 'name' | 'phases' | 'weekdays'>): boolean {
+/**
+ * Aynı gövde mi (oluşturmanın yeniden denenmesi `unchanged`, §3.6): ad ve programlar. Atamalar programların içinde
+ * karşılaştırılır (kayıttaki gibi sıralı, boşu yok sayılarak); ayrı gün karşılaştırması yok.
+ */
+export function sameOwnBody(program: OwnProgram, body: Pick<OwnProgramBody, 'name' | 'phases'>): boolean {
   const strip = (phases: readonly OwnProgramPhase[]) =>
-    JSON.stringify(phases.map((phase) => ({ ...phase, days: phase.days.map(({ copiedFrom: _copied, ...day }) => day) })));
+    JSON.stringify(
+      phases.map((phase) => ({
+        ...phase,
+        days: phase.days.map(({ copiedFrom: _copied, weekdays: list, ...day }) => {
+          const weekdays = cleanWeekdays(list);
+          return { ...day, ...(weekdays.length > 0 ? { weekdays } : {}) };
+        }),
+      })),
+    );
   return (
     (body.name === undefined || body.name.trim() === program.name) &&
-    strip(settleFrequency(body.phases, body.weekdays ?? [])) === strip(program.phases) &&
-    sameWeekdays(body.weekdays ?? [], program.schedule?.weekdays ?? [])
+    strip(settleFrequency(body.phases, phaseWeekdays(body.phases[0]?.days ?? []))) === strip(program.phases)
   );
 }
 
@@ -297,9 +307,9 @@ export function sameOwnBody(program: OwnProgram, body: Pick<OwnProgramBody, 'nam
 
 /**
  * Düzenleyicinin kaydı (danışan `by: 'client'` ya da PT `by: 'pt'`): fark, revision +1, rotasyon uzlaştırması
- * (`applyProgramEdit`). Günler gövdede yoksa ya da açılıştaki günlerle (`baseWeekdays`) aynıysa kayıttakine
- * dokunulmaz; gün seçiliyse sıklık düşer. `copiedFrom` kayıttaki günden (yeni günde gövdeden). Ad yalnız
- * danışanın kaydında değişir. Değişiklik yoksa null.
+ * (`applyProgramEdit`; `schedule` atamaların birleşiminden). Atama varken sıklık düşer. Eski sekmenin alansız
+ * gövdesi buraya gelmeden kayıttaki atamaları alır (`keepStoredAssignments`, `saveOwnProgram`). `copiedFrom`
+ * kayıttaki günden (yeni günde gövdeden). Ad yalnız danışanın kaydında değişir. Değişiklik yoksa null.
  */
 export function applyOwnEdit(
   stored: OwnProgram,
@@ -308,24 +318,20 @@ export function applyOwnEdit(
   now: Date,
   by: 'client' | 'pt',
 ): { program: OwnProgram; changes: ProgramChange[] } | null {
-  const sent = body.weekdays === undefined ? undefined : normalizeWeekdays(body.weekdays);
-  const weekdays = sent === undefined || (body.baseWeekdays !== undefined && sameWeekdays(sent, body.baseWeekdays)) ? undefined : sent;
-  const effective = weekdays ?? normalizeWeekdays(stored.schedule?.weekdays ?? []);
   const storedDays = new Map(stored.phases.flatMap((phase) => phase.days.map((day) => [day.id, day] as const)));
-  const phases = settleFrequency(
-    body.phases.map((phase) => ({
-      ...phase,
-      days: phase.days.map((day) => {
-        const { copiedFrom: sentCopy, ...rest } = day;
-        const copied = storedDays.has(day.id) ? storedDays.get(day.id)?.copiedFrom : sentCopy;
-        return copied ? { ...rest, copiedFrom: copied } : rest;
-      }),
-    })),
-    effective,
-  );
+  const sent = body.phases.map((phase) => ({
+    ...phase,
+    days: phase.days.map((day) => {
+      const { copiedFrom: sentCopy, ...rest } = day;
+      const copied = storedDays.has(day.id) ? storedDays.get(day.id)?.copiedFrom : sentCopy;
+      return copied ? { ...rest, copiedFrom: copied } : rest;
+    }),
+  }));
+  const current = sent.find((phase) => phase.id === body.currentPhaseId) ?? sent[0];
+  const phases = settleFrequency(sent, phaseWeekdays(current?.days ?? []));
   const result = applyProgramEdit(
     stored as unknown as ProgramState,
-    { phased: false, currentPhaseId: body.currentPhaseId, phases: phases as ProgramPhase[], ...(weekdays !== undefined ? { weekdays } : {}) },
+    { phased: false, currentPhaseId: body.currentPhaseId, phases: phases as ProgramPhase[] },
     ctx,
     now,
   );

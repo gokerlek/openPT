@@ -38,6 +38,14 @@ const ctx: DiffContext = {
   devices: new Map(),
 };
 
+/** Tek evrenin günlerine sırayla atama (boş dizi alanı boş bırakır; verilmeyen günde alan yok). */
+function assign(phases: readonly OwnProgramPhase[], weekdays: number[][]): OwnProgramPhase[] {
+  return phases.map((phase) => ({
+    ...phase,
+    days: phase.days.map((day, index) => (weekdays[index] === undefined ? day : { ...day, weekdays: weekdays[index] })),
+  }));
+}
+
 /** Sıralı sahte rastgelelik: kimlikler tekrarlanabilir. */
 function counter() {
   let n = 0;
@@ -116,25 +124,46 @@ describe('oluşturma', () => {
     assert.equal(reIdCollisions(body, new Set()), body);
   });
 
-  test('yeni kayıt: gün seçilince sıklık düşer, günler an ile; şemadan geçer', () => {
-    const phases = ownProgram().phases.map((phase) => ({ ...phase, daysPerWeek: 2 }));
-    const created = createOwnProgram({ id: OWN_ID, name: ' Evde ', currentPhaseId: phases[0]?.id ?? '', phases, weekdays: [4, 2, 2], now: NOW });
+  test('yeni kayıt: schedule atamaların birleşimi (an ile), atamada sıklık düşer; şemadan geçer', () => {
+    const phases = assign(ownProgram().phases.map((phase) => ({ ...phase, daysPerWeek: 3 })), [[1], [5]]);
+    const created = createOwnProgram({ id: OWN_ID, name: ' Evde ', currentPhaseId: phases[0]?.id ?? '', phases, now: NOW });
     assert.equal(created.name, 'Evde');
     assert.equal(created.phases[0]?.daysPerWeek, undefined);
-    assert.deepEqual(created.schedule, { weekdays: [2, 4], at: NOW.toISOString() });
+    assert.deepEqual(created.schedule, { weekdays: [1, 5], at: NOW.toISOString() });
     assert.equal(created.revision, 1);
     assert.equal(created.log[0]?.kind, 'create');
     assert.equal(v.safeParse(ownProgramSchema, created).success, true);
-    const noDays = createOwnProgram({ id: OWN_ID, name: 'Evde', currentPhaseId: phases[0]?.id ?? '', phases, now: NOW });
+    const bare = ownProgram().phases.map((phase) => ({ ...phase, daysPerWeek: 2 }));
+    const noDays = createOwnProgram({ id: OWN_ID, name: 'Evde', currentPhaseId: bare[0]?.id ?? '', phases: bare, now: NOW });
     assert.equal(noDays.phases[0]?.daysPerWeek, 2);
     assert.equal(noDays.schedule, undefined);
   });
 
-  test('aynı gövde: oluşturmanın yeniden denenmesi', () => {
+  test('aynı gövde: oluşturmanın yeniden denenmesi (atamalar günlerde, sırası ve boşu fark etmez)', () => {
     const program = ownProgram();
     assert.equal(sameOwnBody(program, { name: 'Evde', phases: program.phases }), true);
     assert.equal(sameOwnBody(program, { name: 'Ev', phases: program.phases }), false);
-    assert.equal(sameOwnBody(program, { name: 'Evde', phases: program.phases, weekdays: [1] }), false);
+    assert.equal(sameOwnBody(program, { name: 'Evde', phases: assign(program.phases, [[1]]) }), false);
+    const assigned = { ...program, phases: assign(program.phases, [[2, 4]]) };
+    assert.equal(sameOwnBody(assigned, { name: 'Evde', phases: assign(program.phases, [[4, 2], []]) }), true);
+  });
+
+  test('PT günlerinin kopyası atamasız gelir', () => {
+    const program = parsedProgram(programFile({}, { schedule: { weekdays: [2, 4] } }));
+    assert.deepEqual(program.phases[0]?.days.map((day) => day.weekdays), [[2], [4]]);
+    const days = copyPtDays(program, [DAY_A, DAY_B], [], programIdSource(program.phases), NOW);
+    assert.equal(days.some((day) => 'weekdays' in day), false);
+  });
+
+  test('şema: gün başına atama kalır; eski dosya schedule\'dan atanır; aynı gün iki programda okunmaz', () => {
+    const assigned = { ...ownProgram(), phases: assign(ownProgram().phases, [[4, 2], [6]]), schedule: { weekdays: [2, 4, 6] } };
+    assert.deepEqual(v.parse(ownProgramSchema, assigned).phases[0]?.days.map((day) => day.weekdays), [[4, 2], [6]]);
+    const old = v.parse(ownProgramSchema, ownProgram({ schedule: { weekdays: [1, 3, 5], at: NOW.toISOString() } }));
+    assert.deepEqual(old.phases[0]?.days.map((day) => day.weekdays), [[1, 5], [3]]);
+    assert.deepEqual(old.schedule?.weekdays, [1, 3, 5]);
+    const clash = v.safeParse(ownProgramSchema, { ...ownProgram(), phases: assign(ownProgram().phases, [[2], [2, 4]]) });
+    assert.equal(clash.success, false);
+    assert.equal(clash.issues?.[0]?.message, 'Aynı gün iki programa atanmış.');
   });
 
   test('şema: evreli ya da çok evreli program, 8 gün, kalıba uymayan kimlik reddedilir', () => {
@@ -185,14 +214,17 @@ describe('kayıt', () => {
     assert.deepEqual(result?.changes, [{ text: "Ad: 'Evde' → 'Ev'" }]);
   });
 
-  test('günler: açılıştakiyle aynıysa kayıttakine dokunulmaz (arada Bugün\'den değişen kalır); değiştiyse yazılır', () => {
-    const stored = ownProgram({ schedule: { weekdays: [2, 4], at: NOW.toISOString() } });
-    const phases = structuredClone(stored.phases);
-    phases[0]!.days[1]!.name = 'Karın';
-    const kept = applyOwnEdit(stored, { ...body(stored), phases, weekdays: [1, 3], baseWeekdays: [1, 3] }, ctx, NOW, 'client');
-    assert.deepEqual(kept?.program.schedule?.weekdays, [2, 4]);
-    const changed = applyOwnEdit(stored, { ...body(stored), weekdays: [6], baseWeekdays: [2, 4] }, ctx, NOW, 'client');
-    assert.deepEqual(changed?.program.schedule?.weekdays, [6]);
+  test('kayıt birleşimi yazar: atama değişince schedule ve geçmiş; atamada sıklık düşer', () => {
+    const stored = ownProgram({ phases: assign(ownProgram().phases, [[1], [5]]), schedule: { weekdays: [1, 5], at: '2026-09-21T00:00:00.000Z' } });
+    const result = applyOwnEdit(stored, { ...body(stored), phases: assign(stored.phases, [[1], [6]]) }, ctx, NOW, 'client');
+    assert.deepEqual(result?.program.schedule, { weekdays: [1, 6], at: NOW.toISOString() });
+    assert.deepEqual(result?.changes, [
+      { scope: 'Gün B', text: 'Günleri: Cum → Cmt' },
+      { text: 'Antrenman günleri: Pzt, Cum → Pzt, Cmt' },
+    ]);
+    // Sıklık yalnız hiç atama yokken: atamalı gövdedeki sıklık kaydedilmez.
+    const frequency = applyOwnEdit(stored, { ...body(stored), phases: stored.phases.map((phase) => ({ ...phase, daysPerWeek: 4 })) }, ctx, NOW, 'client');
+    assert.equal(frequency, null);
   });
 
   test('copiedFrom kayıttaki günden; gövde silse de kalır', () => {

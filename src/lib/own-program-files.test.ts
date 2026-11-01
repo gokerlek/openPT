@@ -36,6 +36,11 @@ function guardOf(blocked: string[], templates: Record<string, string[]> = {}): O
   return { blocked: new Set(blocked), templateExercises: async (id) => templates[id] ?? null };
 }
 
+/** Tek evrenin günlerine sırayla atama (boş dizi: düzenleyicide bütün günleri kaldırılmış). */
+function assign(phases: OwnProgramSaveBody['phases'], weekdays: number[][]): OwnProgramSaveBody['phases'] {
+  return phases.map((phase) => ({ ...phase, days: phase.days.map((day, index) => (weekdays[index] === undefined ? day : { ...day, weekdays: weekdays[index] })) }));
+}
+
 /** Günün sonuna tek hareketlik blok. */
 function withRow(phases: OwnProgramSaveBody['phases'], dayIndex: number, exerciseId: string, suffix = 'x'): OwnProgramSaveBody['phases'] {
   const next = structuredClone(phases);
@@ -147,6 +152,36 @@ describe('kayıt', () => {
     assert.equal((await save(gh, body, 'pt')).status, 'forbidden');
     assert.equal((gh.get(PATH) as OwnProgram).phases[0]?.days[1]?.name, 'Gün B');
   });
+
+  test('eski sekme (gün başına alan yok; günler açılıştaki gibi ya da hiç yok): kayıttaki atamalar ve schedule kalır', async () => {
+    const gh = fakeSessionRepo({ 'program.json': programFile() });
+    await save(gh, createBody({ phases: assign(createBody().phases, [[2], [4]]) }));
+    const program = gh.get(PATH) as OwnProgram;
+    assert.deepEqual(program.schedule?.weekdays, [2, 4]);
+    const bare = (from: OwnProgram, name: string) =>
+      structuredClone(from.phases).map((phase) => ({ ...phase, days: phase.days.map(({ weekdays: _old, ...day }, index) => (index === 1 ? { ...day, name } : day)) }));
+    assert.equal((await save(gh, saveBody(program, { phases: bare(program, 'Karın'), weekdays: [2, 4], baseWeekdays: [2, 4] }))).status, 'saved');
+    const kept = gh.get(PATH) as OwnProgram;
+    assert.deepEqual(kept.phases[0]?.days.map((day) => day.weekdays), [[2], [4]]);
+    assert.deepEqual(kept.schedule, program.schedule, 'birleşim aynı: anı da aynı');
+    assert.equal((await save(gh, saveBody(kept, { phases: bare(kept, 'Sırt') }))).status, 'saved');
+    assert.deepEqual((gh.get(PATH) as OwnProgram).schedule?.weekdays, [2, 4]);
+    // Yeni düzenleyicide bütün günleri kaldırılan programlar boş dizi gönderir: atama gerçekten kalkar.
+    const latest = gh.get(PATH) as OwnProgram;
+    assert.equal((await save(gh, saveBody(latest, { phases: assign(latest.phases, [[], []]) }))).status, 'saved');
+    const cleared = gh.get(PATH) as OwnProgram;
+    assert.equal(cleared.phases[0]?.days.some((day) => 'weekdays' in day), false);
+    assert.equal(cleared.schedule, undefined);
+  });
+});
+
+test('oluşturma: alansız gövdenin günleri açılıştakiyle aynı olsa da (AI taslağı) programlara atanır', async () => {
+  const gh = fakeSessionRepo({ 'program.json': programFile() });
+  assert.equal((await save(gh, createBody({ weekdays: [4, 1], baseWeekdays: [1, 4] }))).status, 'created');
+  const program = gh.get(PATH) as OwnProgram;
+  assert.deepEqual(program.phases[0]?.days.map((day) => day.weekdays), [[1], [4]]);
+  assert.deepEqual(program.schedule, { weekdays: [1, 4], at: NOW.toISOString() });
+  assert.equal((await save(gh, createBody({ weekdays: [4, 1], baseWeekdays: [1, 4] }))).status, 'unchanged');
 });
 
 describe('kısıt: kütüphaneden eklenen yasak', () => {

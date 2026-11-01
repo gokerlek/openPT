@@ -39,8 +39,14 @@ export function cleanWeekdays(list: readonly unknown[] | undefined): number[] {
   return sortedWeekdays(list);
 }
 
-function sameNumbers(a: readonly number[], b: readonly number[]): boolean {
-  return a.length === b.length && a.every((value, index) => value === b[index]);
+/**
+ * İki gün listesi aynı küme mi (sıra, tekrar ve geçersiz değer fark etmez). Bütün karşılaştırmalar bundan: atama,
+ * eski gövdenin "açılıştaki günler" denetimi, danışanın gün seçimi.
+ */
+export function sameWeekdays(a: readonly unknown[] | undefined, b: readonly unknown[] | undefined): boolean {
+  const left = cleanWeekdays(a);
+  const right = cleanWeekdays(b);
+  return left.length === right.length && left.every((value, index) => value === right[index]);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -124,7 +130,7 @@ export function assignWeekdays<D extends AssignableDay>(days: readonly D[], dayI
   if (!target) return days as D[];
   const taken = takenWeekdays(days, dayId);
   const next = cleanWeekdays(weekdays).filter((weekday) => !taken.has(weekday));
-  if (sameNumbers(next, cleanWeekdays(target.weekdays))) return days as D[];
+  if (sameWeekdays(next, target.weekdays)) return days as D[];
   return days.map((day) => (day.id === dayId ? { ...day, weekdays: next } : day));
 }
 

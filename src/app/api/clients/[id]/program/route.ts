@@ -29,8 +29,8 @@ function failed(error: unknown, fallback: string) {
  * anını gönderir: program o arada başka yerde kaydedildiyse (ya da silinip yeniden oluşturulduysa)
  * 412 döner ve kayıt yapılmaz. Değişiklik yoksa hiçbir şey yazılmaz; varsa geçmişe ve commit
  * mesajına otomatik özet girer. Cihazı o arada silinmiş satırlar egzersizin cihazına döner; sayısı
- * yanıtta (`droppedDevices`), düzenleyici PT'ye söyler. Antrenman günleri değişince danışanın kendi
- * günleri silinir (son söz PT'nin, tasarım §2.11).
+ * yanıtta (`droppedDevices`), düzenleyici PT'ye söyler. Antrenman günleri şu anki evrenin atamalarından
+ * yazılır; danışanın eski gün katmanı ilk kayıtta silinir (Faz 3, `settleSchedule`).
  */
 export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
   if ((await readPtSession())?.role !== 'pt') return forbidden();
@@ -53,7 +53,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
     const [exercises, devices] = await Promise.all([listExercises(), listDevices()]);
     const result = await saveProgram(
       id,
-      // Günleri göndermeyen eski sekme kayıttakine dokunmaz (`ptScheduleEdit`).
+      // Günleri hiç göndermeyen eski sekme kayıttaki atamalara dokunmaz (`keepStoredAssignments`).
       { phased, currentPhaseId, phases, ...(weekdays !== undefined ? { weekdays } : {}) },
       baseRevision === null ? null : { revision: baseRevision, createdAt: baseCreatedAt },
       { exercises: new Map(exercises.map((exercise) => [exercise.id, exercise])), deviceIds: new Set(devices.map((device) => device.id)) },

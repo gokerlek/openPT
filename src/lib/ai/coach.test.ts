@@ -6,7 +6,9 @@ import { AI_CONSENT_VERSION, type Client } from '../schemas/client.ts';
 import { fakeSessionRepo } from '../testing/fake-session-repo.ts';
 import { EXERCISES } from '../testing/workout-fixtures.ts';
 import { askCoach, decideCoach, getCoach, type CoachDeps } from './coach-routes.ts';
-import { createProgramRecord } from '../program-plan.ts';
+import * as v from 'valibot';
+import { bodyWithAssignments, createProgramRecord } from '../program-plan.ts';
+import { programSchema } from '../schemas/program.ts';
 import { answerCoach, coachProgramMatches, draftCoachProgram, eligibleExercises, type CoachContext } from './coach-engine.ts';
 import { coachAccess, coachView, COACH_PATH, emptyCoach, type CoachData, type CoachStore } from './coach-contract.ts';
 import { classifyCoachQuestion } from './coach-gemini.ts';
@@ -164,9 +166,15 @@ test('published-program recovery compares the real stored shape with the form dr
   const f = setup();
   const draft = draftCoachProgram(f.context, conditions, [], f.deps.id);
   assert.ok('body' in draft);
-  const stored = createProgramRecord(draft.body, new Date(NOW));
+  // Yayın gövdeyi atar (`saveProgram`); kayıt `readProgramFile` gibi şemadan geçmiş hâliyle okunur.
+  const stored = v.parse(programSchema, createProgramRecord(bodyWithAssignments(draft.body), new Date(NOW)));
+  assert.deepEqual(stored.phases[0]?.days.map((day) => day.weekdays), [[1], [4]]);
   assert.equal(coachProgramMatches(stored, draft.body), true);
-  assert.equal(coachProgramMatches({ ...stored, schedule: { weekdays: [2] } }, draft.body), false);
+  // Yayında atamalı evrenin sıklığı düşer (`normalizeProgram`): eşleşmeyi bozmaz.
+  const { daysPerWeek: _dropped, ...phase } = stored.phases[0]!;
+  assert.equal(coachProgramMatches({ ...stored, phases: [phase] }, draft.body), true);
+  const moved = stored.phases.map((item) => ({ ...item, days: item.days.map((day, index) => (index === 1 ? { ...day, weekdays: [5] } : day)) }));
+  assert.equal(coachProgramMatches({ ...stored, phases: moved, schedule: { weekdays: [1, 5] } }, draft.body), false);
 });
 test('health-field revocation during classification discards a previously read response', async () => {
   const f = setup();
