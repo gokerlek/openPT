@@ -20,7 +20,7 @@ import { healthRecordSchema, type HealthRecord } from './schemas/health.ts';
 import { BLOCKED_TEXT } from './exercise-caution.ts';
 import { todayIn } from './format.ts';
 import { GithubError } from './github/errors.ts';
-import { currentPhaseOf, DAY_ID_PATTERN, nextDayId } from './program-plan.ts';
+import { currentPhaseOf, DAY_ID_PATTERN } from './program-plan.ts';
 import type { TrackingType } from './progression.ts';
 import { parseProposals, PROPOSALS_PATH } from './proposals.ts';
 import type { Client } from './schemas/client.ts';
@@ -43,6 +43,7 @@ import {
   dayBody,
   dayExerciseIds,
   dayRowIds,
+  defaultDayId,
   extraKey,
   historyRows,
   lastDoneDates,
@@ -69,7 +70,9 @@ import {
  * Antrenman ekranının öteki uçları (tasarım §4.7) — ince çekirdek, `session-routes.ts`'in kapısıyla
  * (`run`: oturum, kayıt, GitHub hataları):
  * - `GET /api/me/workout?day=`: günün planı (`buildWorkoutDay`), Bugün'ün sayıları ("bu hafta x/3",
- *   bugünkü su) ve sunucudaki yarım antrenman. Gün: istenen → yarım antrenmanın günü → sıradaki gün.
+ *   bugünkü su) ve sunucudaki yarım antrenman. Gün: istenen → yarım antrenmanın günü → varsayılan gün (Faz 3:
+ *   bugüne ya da haftada sıradaki güne atanmış program, atama yoksa evrenin ilk günü; `defaultDayId`). Planlanan
+ *   program bugüne atanmış olan; programın günleri atamalarıyla (`weekdays`).
  *   Index her okumada onarılır (`readIndex`); geçmiş yalnız bugünkü egzersizleri içeren son bitmiş
  *   antrenmanlardan (blob kimliğiyle, önbellekli). Okunamayan geçmiş dosyası planı durdurmaz. Öneri
  *   katmanı (§5) bütün uçlarda aynı girdiyle: onarılmış index, şimdi, danışanın antrenman geçmişi
@@ -130,9 +133,13 @@ export type WorkoutResponse = {
     /** Programın sürüm damgası (`programStamp`): Bugün telefondaki planı bununla eskimiş sayar. */
     stamp: string;
     phaseId: string;
+    /**
+     * Sunucunun varsayılan günü (`defaultDayId`; Faz 3, Karar 5): bugüne ya da haftada sıradaki güne atanmış program,
+     * atama yoksa evrenin ilk günü. Dönüş sırası değil; ad eski telefonun önbellek eşleşmesi bozulmasın diye kaldı.
+     */
     nextDayId: string | null;
-    /** Şu anki evrenin günleri; `lastDate`: son yapıldığı gün ("Başka gün seç"). */
-    days: { id: string; name: string; lastDate?: string }[];
+    /** Şu anki evrenin günleri; `weekdays`: atandığı hafta günleri (yoksa atanmamış); `lastDate`: son yapıldığı gün. */
+    days: { id: string; name: string; weekdays?: number[]; lastDate?: string }[];
     /** Planın kaynağı: PT'nin programı ya da kendi program (kimliği ve adı). Eski yanıtta yok (PT). */
     source?: 'pt' | 'own';
     id?: string;
@@ -397,12 +404,12 @@ export function workoutRoute(deps: WorkoutRouteDeps, dayParam: string | null, pr
     let extras: ExtraRows = {};
     if (program) {
       const requested = dayParam && DAY_ID_PATTERN.test(dayParam) ? dayParam : (current?.program?.dayId ?? null);
-      const dayId = resolveDay(program, requested)?.day.id ?? null;
+      const dayId = resolveDay(program, requested, today)?.day.id ?? null;
       // Yarım antrenmanın muadil ve eklenen hareketlerinin geçmişi de okunur; satır başına ve aynı programdan pencere (§3.9).
-      const ids = new Set([...dayExerciseIds(program, dayId), ...(current?.entries.map((entry) => entry.exerciseId) ?? [])]);
-      const history = await readHistory(repo, index, { exerciseIds: ids, rowIds: dayRowIds(program, dayId), programId: owner?.programId ?? null });
+      const ids = new Set([...dayExerciseIds(program, dayId, today), ...(current?.entries.map((entry) => entry.exerciseId) ?? [])]);
+      const history = await readHistory(repo, index, { exerciseIds: ids, rowIds: dayRowIds(program, dayId, today), programId: owner?.programId ?? null });
       const insight = insightOf(index, now, client);
-      day = buildWorkoutDay({ program, dayId, exercises: catalog.exercises, devices: catalog.devices, history, insight, owner });
+      day = buildWorkoutDay({ program, dayId, exercises: catalog.exercises, devices: catalog.devices, history, insight, owner, today });
       if (day && current) extras = withExtrasCare(sessionExtras({ day, doc: current, catalog, history, insight }), catalog.exercises, care.input);
       if (day) {
         const setIncrease = setSuggestionsFor({
@@ -437,8 +444,13 @@ export function workoutRoute(deps: WorkoutRouteDeps, dayParam: string | null, pr
               // Kısıtlar ya da izinler değişince (ya da onay çekilince) telefondaki plan eskir: kart notu yenilenir.
               stamp: programStamp(program, owner?.programId ?? null) + careStampOf(care.record),
               phaseId: phase.id,
-              nextDayId: nextDayId(program),
-              days: phase.days.map((item) => ({ id: item.id, name: item.name, ...(last[item.id] ? { lastDate: last[item.id] } : {}) })),
+              nextDayId: defaultDayId(program, today),
+              days: phase.days.map((item) => ({
+                id: item.id,
+                name: item.name,
+                ...(item.weekdays?.length ? { weekdays: item.weekdays } : {}),
+                ...(last[item.id] ? { lastDate: last[item.id] } : {}),
+              })),
               source: owner ? 'own' : 'pt',
               ...(owner ? { id: owner.programId, name: owner.name } : {}),
             }
@@ -521,9 +533,10 @@ export function alternativesRoute(
       canRecordHealth(client, 'conditions') ? readTolerant(repo, HEALTH_PATH) : Promise.resolve(null),
       deps.timeZone(),
     ]);
-    const care = careOf(client, healthFile, todayIn(timeZone, deps.now())).input;
+    const date = todayIn(timeZone, deps.now());
+    const care = careOf(client, healthFile, date).input;
     const program: PlanProgram | null = ownRead ? (ownRead.status === 'ok' ? ownRead.program : null) : parseProgram(programFile).program;
-    const found = program ? resolveDay(program, dayParam) : null;
+    const found = program ? resolveDay(program, dayParam, date) : null;
     if (!found || found.day.id !== dayParam) return ROW_GONE;
     const block = found.day.blocks.find((item) => item.rows.some((row) => row.id === rowParam));
     const stored = block?.rows.find((item) => item.id === rowParam);

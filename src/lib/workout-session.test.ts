@@ -117,7 +117,7 @@ describe('antrenman belgesi: başlangıç ve sıradaki set', () => {
 
   test('kendi programın belgesi programın kimliğini ve adını taşır; sunucu günü o programda bulur', async () => {
     const owner = { programId: OWN_ID, name: 'Evde' };
-    const day = buildWorkoutDay({ program: ownProgram(), dayId: OWN_DAY_B, exercises: EXERCISES, devices: DEVICES, history: [], owner });
+    const day = buildWorkoutDay({ program: ownProgram(), dayId: OWN_DAY_B, exercises: EXERCISES, devices: DEVICES, history: [], owner, today: '2026-09-26' });
     assert.ok(day);
     const doc = logNext(day, start(day), 1);
     assert.equal(doc.program?.programId, OWN_ID);

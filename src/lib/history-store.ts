@@ -97,10 +97,19 @@ export async function loadSummary(clientId: string, id: string, timeZone: string
     .sort((a, b) => Date.parse(b.startedAt ?? b.date) - Date.parse(a.startedAt ?? a.date))[0];
   const dayId = doc.program?.dayId;
   if (program && dayId && latest?.id === doc.id) {
-    const window = { exerciseIds: new Set(doc.entries.map((entry) => entry.exerciseId)), rowIds: dayRowIds(program, dayId), programId: own };
+    // Antrenmanın günü seansın tarihi: planlanan program o güne atanmış olan (Faz 3).
+    const window = { exerciseIds: new Set(doc.entries.map((entry) => entry.exerciseId)), rowIds: dayRowIds(program, dayId, doc.date), programId: own };
     const [devices, history] = await Promise.all([listDevices(), readHistory(repo, index, window)]);
     const owner = own ? { programId: own, name: doc.program?.programName ?? '' } : null;
-    const day = buildWorkoutDay({ program, dayId, exercises: byId, devices: new Map(devices.map((device) => [device.id, device])), history, owner });
+    const day = buildWorkoutDay({
+      program,
+      dayId,
+      exercises: byId,
+      devices: new Map(devices.map((device) => [device.id, device])),
+      history,
+      owner,
+      today: doc.date,
+    });
     if (day?.dayId === dayId) next = nextTimeLines(day, doc);
   }
 

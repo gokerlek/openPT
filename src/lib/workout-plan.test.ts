@@ -9,6 +9,7 @@ import {
   afterFinish,
   buildWorkoutDay,
   dayExerciseIds,
+  defaultDayId,
   entryPlanOf,
   historyRows,
   lastTimeOf,
@@ -43,6 +44,8 @@ function finished(id: string, minute: number, sets: { kg: number; reps: number }
 }
 
 const three = (kg: number, reps: number) => [{ kg, reps }, { kg, reps }, { kg, reps }];
+/** Fikstürün günü: 26 Eylül 2026 cumartesi. */
+const TODAY = '2026-09-26';
 
 describe('günün planı', () => {
   test('geçmiş yoksa sıradaki gün; ilk kez barın ağırlığı; aralığın altı', () => {
@@ -64,7 +67,45 @@ describe('günün planı', () => {
     assert.equal(workoutDay({ dayId: DAY_B }).dayId, DAY_B);
     assert.equal(workoutDay({ dayId: DAY_B }).plannedDayId, DAY_A);
     assert.equal(workoutDay({ dayId: 'd_zzzzzz' }).dayId, DAY_A);
-    assert.deepEqual([...dayExerciseIds(parsedProgram(), DAY_B)], ['bench-press']);
+    assert.deepEqual([...dayExerciseIds(parsedProgram(), DAY_B, TODAY)], ['bench-press']);
+  });
+
+  // Faz 3 (Karar 6): planlanan program antrenmanın gününe atanmış olandır; dönüş sırası değil.
+  // Atamalı fikstür: Gün A salı (2), Gün B perşembe (4); 27 Ekim salı, 28 Ekim çarşamba.
+  const assigned = parsedProgram(programFile({}, { schedule: { weekdays: [2, 4] } }));
+  const base = { program: assigned, exercises: EXERCISES, devices: DEVICES, history: [] };
+
+  test('planın günü ve plannedDayId atamadan', () => {
+    const tuesday = buildWorkoutDay({ ...base, dayId: null, today: '2026-10-27' });
+    assert.deepEqual([tuesday?.dayId, tuesday?.plannedDayId], [DAY_A, DAY_A]);
+    assert.equal('plannedDayName' in (tuesday ?? {}), false, 'planlanan yapılıyorsa ad yok');
+    const other = buildWorkoutDay({ ...base, dayId: DAY_B, today: '2026-10-27' });
+    assert.deepEqual([other?.plannedDayId, other?.plannedDayName], [DAY_A, 'Gün A']);
+    const wednesday = buildWorkoutDay({ ...base, dayId: DAY_B, today: '2026-10-28' });
+    assert.equal(wednesday?.plannedDayId, null);
+    assert.equal('plannedDayName' in (wednesday ?? {}), false);
+    // Gün istenmezse atanmamış günde haftada sıradaki atanmış program (dün yapılan kaydırmaz).
+    assert.equal(buildWorkoutDay({ ...base, today: '2026-10-28' })?.dayId, DAY_B);
+    // Dönüş dalı 13. göreve kadar durur: evrenin günleri yine planda.
+    assert.deepEqual(tuesday?.rotationDays?.map((day) => day.id), [DAY_A, DAY_B]);
+  });
+
+  test('varsayılan gün: bugünkü, yoksa haftada sıradaki atanmış, atama yoksa ilk', () => {
+    assert.equal(defaultDayId(assigned, '2026-10-27'), DAY_A);
+    assert.equal(defaultDayId(assigned, '2026-10-28'), DAY_B);
+    assert.equal(defaultDayId(assigned, '2026-10-30'), DAY_A, 'cuma → gelecek salı');
+    const unassigned = parsedProgram(programFile({ lastDayId: DAY_A }));
+    assert.equal(defaultDayId(unassigned, '2026-10-28'), DAY_A, 'eski dönüş sırası okunmaz');
+    assert.equal(defaultDayId({ ...unassigned, phases: [] }, '2026-10-28'), null);
+  });
+
+  test('damga: aynı birleşimde atama yer değiştirince değişir', () => {
+    const swapped = parsedProgram(programFile({}, { schedule: { weekdays: [2, 4] } }));
+    const phase = swapped.phases[0]!;
+    const flipped = { ...swapped, phases: [{ ...phase, days: phase.days.map((day, index) => ({ ...day, weekdays: [index === 0 ? 4 : 2] })) }] };
+    assert.deepEqual(flipped.schedule?.weekdays, assigned.schedule?.weekdays);
+    assert.notEqual(programStamp(flipped), programStamp(assigned));
+    assert.equal(programStamp(swapped), programStamp(assigned));
   });
 
   test('kütüphanede olmayan egzersizin satırı çizilmez, boş kalan blok düşer', () => {
@@ -120,7 +161,7 @@ describe('günün planı: öneri katmanı (§5)', () => {
   const NOW = new Date('2026-09-26T16:00:00.000Z');
   const day = (history: SessionDoc[], experience?: 'new' | 'six_months' | 'one_year') => {
     const index: SessionIndex = { version: 1, items: history.map((doc, n) => indexRowOf(doc, n.toString(16).padStart(40, 'a'))), deleted: [] };
-    const built = buildWorkoutDay({ program: parsedProgram(), exercises: EXERCISES, devices: DEVICES, history, insight: { index, now: NOW, experience } });
+    const built = buildWorkoutDay({ program: parsedProgram(), exercises: EXERCISES, devices: DEVICES, history, insight: { index, now: NOW, experience }, today: TODAY });
     if (!built) throw new Error('Gün kurulamadı.');
     return built;
   };
@@ -406,7 +447,8 @@ describe('Bugün: index\'ten', () => {
     assert.deepEqual(unnamed?.at(-1), { date: '2026-09-25', dayName: 'Antrenman' });
   });
 
-  describe('bitişten hemen sonra: sıradaki gün (sunucu yalnız "advance"te ilerletir)', () => {
+  // Faz 3 (Karar 5): bitiş dönüşü ilerletmez; sıradaki program bugünün atamasından (`defaultDayId`), bitişle değişmez.
+  test('bitişten hemen sonra: afterFinish sırayı değiştirmez (eski telefonun "advance"i de)', () => {
     const DAY_C = 'd_cccccc';
     const days = [
       { id: DAY_A, name: 'Gün A' },
@@ -427,30 +469,12 @@ describe('Bugün: index\'ten', () => {
       program: { revision: 1, dayId, dayName: days.find((day) => day.id === dayId)?.name ?? 'Gün X' },
       ...(value ? { rotation: { value, updatedAt: at(3) } } : {}),
     });
-
-    test('advance: biten günün arkasındaki gün sıradaki (sonda başa döner; başka gün seçildiyse ondan sürer)', () => {
-      const next = afterFinish(data, finished(DAY_A, 'advance'));
-      assert.equal(next.program.nextDayId, DAY_B);
-      assert.deepEqual(next.program.days, days);
-      assert.equal(next.program.revision, 1);
-      assert.equal(afterFinish(data, finished(DAY_C, 'advance')).program.nextDayId, DAY_A);
-      assert.equal(afterFinish({ ...data, program: { ...data.program, nextDayId: DAY_A } }, finished(DAY_B, 'advance')).program.nextDayId, DAY_C);
-      // Aynı bitiş iki kez uygulanırsa sıra iki kez ilerlemez (biten günden hesaplanır).
-      assert.equal(afterFinish(next, finished(DAY_A, 'advance')).program.nextDayId, DAY_B);
-    });
-
-    test('keep (ya da yanıtta rotasyon yok): sıradaki gün aynen kalır', () => {
-      assert.deepEqual(afterFinish(data, finished(DAY_A, 'keep')).program, data.program);
-      assert.deepEqual(afterFinish(data, finished(DAY_A)).program, data.program);
-    });
-
-    test('gün bu programda yok (başka programın Bugün sorgusu) ya da program yok: dokunulmaz', () => {
-      assert.deepEqual(afterFinish(data, finished('d_ownaaa', 'advance')).program, data.program);
-      const { program: _program, ...withoutProgram } = data;
-      assert.ok(!('program' in afterFinish(withoutProgram, finished(DAY_A, 'advance'))));
-      assert.equal(afterFinish({ ...data, program: null }, finished(DAY_A, 'advance')).program, null);
-      assert.equal(afterFinish({ ...data, program: { ...data.program, days: [] } }, finished(DAY_A, 'advance')).program.nextDayId, DAY_A);
-    });
+    for (const doc of [finished(DAY_A, 'advance'), finished(DAY_C, 'advance'), finished(DAY_B, 'keep'), finished(DAY_A), finished('d_ownaaa', 'advance')]) {
+      assert.equal(afterFinish(data, doc).program, data.program, JSON.stringify(doc.program));
+    }
+    const { program: _program, ...withoutProgram } = data;
+    assert.ok(!('program' in afterFinish(withoutProgram, finished(DAY_A, 'advance'))));
+    assert.equal(afterFinish({ ...data, program: null }, finished(DAY_A, 'advance')).program, null);
   });
 });
 
@@ -498,13 +522,13 @@ describe('kendi programlar ve geçmiş penceresi (kendi-program.md §3.9)', () =
     const index: SessionIndex = { version: 1, items: all.map((doc, n) => indexRowOf(doc, sha(n))), deleted: [] };
     const program = parsedProgram();
 
-    const window = historyRows(index, { exerciseIds: dayExerciseIds(program, DAY_A), rowIds: new Set(['r_aaaaaa', 'r_bbbbbb']), programId: null });
+    const window = historyRows(index, { exerciseIds: dayExerciseIds(program, DAY_A, TODAY), rowIds: new Set(['r_aaaaaa', 'r_bbbbbb']), programId: null });
     const picked = new Set(window.map((row) => row.id));
     assert.ok(gym.every((doc) => picked.has(doc.id)), 'PT satırının antrenmanları pencerede');
     assert.equal(window.filter((row) => row.programId === OWN).length, 8, 'en yeni 8 yine okunur');
 
     const history = all.filter((doc) => picked.has(doc.id));
-    const built = buildWorkoutDay({ program, exercises: EXERCISES, devices: DEVICES, history });
+    const built = buildWorkoutDay({ program, exercises: EXERCISES, devices: DEVICES, history, today: TODAY });
     const row = built?.rows.r_aaaaaa;
     assert.equal(row?.plan.reason, 'increase');
     assert.equal(row?.plan.topWeightKg, 62.5, 'evdeki 30 kg salonun planını çekmez');
@@ -519,7 +543,7 @@ describe('kendi programlar ve geçmiş penceresi (kendi-program.md §3.9)', () =
     // Salonda üç tıkanma (60 kg × 5): seri olsaydı hafifletme gelirdi.
     const gym = [0, 1, 2].map((n) => session(n + 1, n * DAY, 'r_aaaaaa', three(60, 5)));
     const program = homeProgram();
-    const own = buildWorkoutDay({ program, exercises: EXERCISES, devices: DEVICES, history: gym, owner: { programId: OWN, name: 'Evde' } });
+    const own = buildWorkoutDay({ program, exercises: EXERCISES, devices: DEVICES, history: gym, owner: { programId: OWN, name: 'Evde' }, today: TODAY });
     const row = own?.rows[HOME_ROW];
     assert.equal(own?.source, 'own');
     assert.equal(own?.programId, OWN);
@@ -527,12 +551,12 @@ describe('kendi programlar ve geçmiş penceresi (kendi-program.md §3.9)', () =
     assert.equal(row?.plan.topWeightKg, 55, 'Epley: 60 × 5 → 8 tekrar, ızgaraya aşağı');
 
     // Programı bilmeyen (eski) çağrı salonun serisinden hafifletirdi.
-    const legacy = buildWorkoutDay({ program, exercises: EXERCISES, devices: DEVICES, history: gym });
+    const legacy = buildWorkoutDay({ program, exercises: EXERCISES, devices: DEVICES, history: gym, today: TODAY });
     assert.equal(legacy?.rows[HOME_ROW]?.plan.reason, 'deload');
 
     // Aynı programın (Evde) antrenmanı varsa seri oradan kurulur.
     const homeOnce = session(20, 5 * DAY, 'r_baskaaa', three(40, 10), OWN);
-    const same = buildWorkoutDay({ program, exercises: EXERCISES, devices: DEVICES, history: [...gym, homeOnce], owner: { programId: OWN, name: 'Evde' } });
+    const same = buildWorkoutDay({ program, exercises: EXERCISES, devices: DEVICES, history: [...gym, homeOnce], owner: { programId: OWN, name: 'Evde' }, today: TODAY });
     assert.equal(same?.rows[HOME_ROW]?.plan.topWeightKg, 42.5);
   });
 

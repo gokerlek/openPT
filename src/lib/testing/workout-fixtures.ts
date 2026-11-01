@@ -97,14 +97,26 @@ export function parsedProgram(raw: Record<string, unknown> = programFile()): Pro
   return v.parse(programSchema, raw);
 }
 
-/** Gün planı: varsayılan program (Gün A: Bench 3 set + Bench 2 set), geçmişsiz. */
-export function workoutDay(options: { raw?: Record<string, unknown>; dayId?: string; history?: SessionDoc[] } = {}): WorkoutDay {
+/** Fikstürlerin günü: 26 Eylül 2026 cumartesi (`sessionDoc`'un tarihi). */
+export const WORKOUT_TODAY = '2026-09-26';
+
+/**
+ * Varsayılan ham program: `programFile` ve Gün A cumartesiye atanmış (Faz 3; kayıttaki `schedule` okunurken atanır),
+ * Gün B atanmamış. Fikstürün gününde planlanan program Gün A'dır (`plannedDayId`).
+ */
+export function assignedFile(): Record<string, unknown> {
+  return programFile({}, { schedule: { weekdays: [6] } });
+}
+
+/** Gün planı: varsayılan program (Gün A: Bench 3 set + Bench 2 set), geçmişsiz, fikstürün gününde. */
+export function workoutDay(options: { raw?: Record<string, unknown>; dayId?: string; history?: SessionDoc[]; today?: string } = {}): WorkoutDay {
   const day = buildWorkoutDay({
-    program: parsedProgram(options.raw),
+    program: parsedProgram(options.raw ?? assignedFile()),
     dayId: options.dayId ?? null,
     exercises: EXERCISES,
     devices: DEVICES,
     history: options.history ?? [],
+    today: options.today ?? WORKOUT_TODAY,
   });
   if (!day) throw new Error('Gün kurulamadı.');
   return day;
@@ -112,7 +124,7 @@ export function workoutDay(options: { raw?: Record<string, unknown>; dayId?: str
 
 /** Gün A'nın blokları verilenlerle değiştirilmiş gün planı (gruplar, piramit, süreli set). */
 export function dayWithBlocks(blocks: unknown[], history: SessionDoc[] = []): WorkoutDay {
-  const raw = programFile();
+  const raw = assignedFile();
   const days = (raw.phases as { days: { blocks: unknown[] }[] }[])[0]?.days;
   if (days?.[0]) days[0].blocks = blocks;
   return workoutDay({ raw, history });

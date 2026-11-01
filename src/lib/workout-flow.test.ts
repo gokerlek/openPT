@@ -393,7 +393,8 @@ describe('günün etkin planı', () => {
 });
 
 describe('bitişte rotasyon satırı (§2.7)', () => {
-  const three = programFile({}, {});
+  // Gün A fikstürün gününe (cumartesi) atanmış: planlanan program o (Faz 3).
+  const three = programFile({}, { schedule: { weekdays: [6] } });
   const withC = {
     ...three,
     phases: [{ ...three.phases[0], days: [...(three.phases[0]?.days ?? []), { id: 'd_cccccc', name: 'Gün C', blocks: [singleBlock('b_dddddd', 'r_dddddd', 2)] }] }],

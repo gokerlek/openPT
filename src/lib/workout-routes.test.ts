@@ -134,9 +134,10 @@ describe('GET /api/me/workout', () => {
     assert.notEqual(rotated.program?.stamp, other.program?.stamp, 'rotasyon damgaya girer');
   });
 
-  test('başka gün seçildiyse planda sıradaki günün adı; günlerin son yapıldığı gün', async () => {
+  test('başka program seçildiyse planda bugünün programının adı; günlerin son yapıldığı gün', async () => {
+    // Gün A cumartesiye atanmış (NOW cumartesi).
     const { deps } = setup({
-      'program.json': programFile(),
+      'program.json': programFile({}, { schedule: { weekdays: [6] } }),
       'sessions/s_aaaaaaaa.json': finished('s_aaaaaaaa', '2026-09-22T15:00:00.000Z', 9),
     });
     const data = body(await workoutRoute(deps, DAY_B));
@@ -144,9 +145,30 @@ describe('GET /api/me/workout', () => {
     assert.equal(data.day?.plannedDayId, DAY_A);
     assert.equal(data.day?.plannedDayName, 'Gün A');
     assert.deepEqual(data.program?.days, [
-      { id: DAY_A, name: 'Gün A', lastDate: '2026-09-22' },
+      { id: DAY_A, name: 'Gün A', weekdays: [6], lastDate: '2026-09-22' },
       { id: DAY_B, name: 'Gün B' },
     ]);
+  });
+
+  // Faz 3 (Karar 5, 6): planın günü ve planlanan program bugünün atamasından; `nextDayId` sunucunun varsayılan günü.
+  test('Bugün yanıtı: gün atamadan, günler atamalarıyla, nextDayId varsayılan gün', async () => {
+    const files = { 'program.json': programFile({ lastDayId: DAY_A }, { schedule: { weekdays: [2, 4] } }) };
+    const tuesday = setup(files);
+    tuesday.deps.now = () => new Date('2026-09-22T09:00:00.000Z');
+    const data = body(await workoutRoute(tuesday.deps, null));
+    assert.deepEqual([data.today, data.day?.dayId, data.day?.plannedDayId, data.program?.nextDayId], ['2026-09-22', DAY_A, DAY_A, DAY_A]);
+    assert.deepEqual(data.program?.days, [
+      { id: DAY_A, name: 'Gün A', weekdays: [2] },
+      { id: DAY_B, name: 'Gün B', weekdays: [4] },
+    ]);
+    const other = body(await workoutRoute(tuesday.deps, DAY_B));
+    assert.deepEqual([other.day?.dayId, other.day?.plannedDayId, other.day?.plannedDayName, other.program?.nextDayId], [DAY_B, DAY_A, 'Gün A', DAY_A]);
+    // Çarşamba atanmamış: planlanan yok; varsayılan gün haftada sıradaki atanmış (perşembe, Gün B).
+    const wednesday = setup(files);
+    wednesday.deps.now = () => new Date('2026-09-23T09:00:00.000Z');
+    const free = body(await workoutRoute(wednesday.deps, null));
+    assert.deepEqual([free.day?.dayId, free.day?.plannedDayId, free.program?.nextDayId], [DAY_B, null, DAY_B]);
+    assert.equal('plannedDayName' in (free.day ?? {}), false);
   });
 
   test('bitmiş antrenmanlardan: plan, "Önceki", bu hafta, bugünkü su (index dosyasız da onarılır)', async () => {
