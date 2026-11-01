@@ -82,8 +82,8 @@ export async function writeProgramFile(
     throw new GithubError(`Program kaydı geçersiz: ${v.getDotPath(issue) ?? 'dosya'}: ${issue.message}`, 500);
   }
   const prior=await readProgramFile(clientId);
-  // Hedef Bugün'deki "Bu hafta x/y" ile aynı kuraldan: eski programın ilk PT kaydı atamalı evrede sıklığı düşürür,
-  // yalnız sıklığa bakmak dondurulmamış haftalara kalıcı olarak 1 yazardı.
+  // Bugün'deki "Bu hafta x/y" ile aynı: atanmış gün sayısı, yoksa sıklık (`programWeekTarget`). Eski programın ilk PT
+  // kaydı atamalı evrede sıklığı düşürür; yalnız sıklığa bakmak dondurulmamış haftalara kalıcı olarak 1 yazardı.
   if(prior?.program){const repo=sessionRepo(clientId);await freezeWeeklyGoals(repo,(await readIndex(repo)).index,programWeekTarget(prior.program)??1);}
   const written = await writeJson(clientRepoName(clientId), PROGRAM_PATH, parsed.output, { sha: options.sha, message: options.message });
   // Genel bakış'ın özeti (antrenman günleri, evre, bildirimler) programdan: yeniden türetilsin.

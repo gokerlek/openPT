@@ -7,13 +7,12 @@ import { listExercises, type ExerciseWithSource } from './exercises';
 import { clientRepoName } from './github/client';
 import { readHealth } from './health';
 import { exerciseSetWeights } from './muscles';
-import { currentPhaseOf } from './program-plan';
 import { readProgramFile } from './programs';
 import { DIGEST_VERSION } from './progress';
 import { loadProgressWith, type ProgressLoad, type ProgressOptions, type RecordsLoad } from './progress-load';
 import type { Client } from './schemas/client';
 import { sessionRepo } from './session-files';
-import { effectiveSchedule, weekTarget } from './training-days';
+import { programWeekTarget } from './training-days';
 
 type ProgressClientRecord = Pick<Client, 'id' | 'training' | 'modules' | 'consents'>;
 
@@ -41,7 +40,7 @@ export function loadProgress(
   options: ProgressOptions = {},
 ): Promise<ProgressLoad | RecordsLoad> {
   const repoName = clientRepoName(client.id);
-  // Program iki şey için bir kez okunur: seri hedefi (haftalık sıklık) ve planlanan gün; okunamazsa ikisi de yok sayılır.
+  // Program iki şey için bir kez okunur: seri hedefi ve planlanan gün sayısı; okunamazsa ikisi de yok sayılır.
   let program: ReturnType<typeof readProgramFile> | null = null;
   const readProgram = () => (program ??= readProgramFile(client.id)).then((file) => file?.program ?? null);
   return loadProgressWith<ExerciseWithSource>(
@@ -54,14 +53,16 @@ export function loadProgress(
         return { exercises, deviceNames: new Map(devices.map((device) => [device.id, device.name])) };
       },
       weeklyGoals: (index,target)=>freezeWeeklyGoals(sessionRepo(client.id),index,target),
+      // Bugün'deki "Bu hafta x/y" ile aynı: atanmış gün sayısı, yoksa sıklık (`programWeekTarget`). Eski programın ilk
+      // PT kaydı atamalı evrede `daysPerWeek`'i düşürür; yalnız sıklığa bakan seri hedefi o zaman kaybolurdu.
       weeklyTarget: async () => {
         const current = await readProgram();
-        return current ? currentPhaseOf(current)?.phase.daysPerWeek : undefined;
+        return current ? programWeekTarget(current) : undefined;
       },
-      // Bugün'deki "bu hafta x/y" ile aynı: danışanın ya da PT'nin seçtiği günler, yoksa haftalık sıklık.
+      // Bugün'deki "Bu hafta x/y" ile aynı: atanmış gün sayısı, yoksa sıklık.
       plannedDays: async () => {
         const current = await readProgram();
-        return current ? (weekTarget(effectiveSchedule(current).weekdays, currentPhaseOf(current)?.phase.daysPerWeek) ?? undefined) : undefined;
+        return current ? programWeekTarget(current) : undefined;
       },
       health: async () => (await readHealth(client.id))?.record ?? null,
       setWeightsOf: exerciseSetWeights,
