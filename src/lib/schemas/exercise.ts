@@ -172,6 +172,8 @@ export const exerciseSchema = v.object({
   gripWidth: v.optional(v.picklist(GRIP_WIDTHS, 'Geçerli bir tutuş genişliği seç.')),
   /** Hareket kalıbı (yatay itiş, squat…): muadil önerisinin ilk ölçütü (`src/lib/alternatives.ts`). */
   pattern: v.optional(v.picklist(MOVEMENT_PATTERNS, 'Hareket kalıbını seç.')),
+  /** Yürüyüş/koşu (koşu bandı): kardiyo hareketinde eğim ve kalori (`src/lib/cardio.ts`). */
+  locomotion: v.optional(v.boolean()),
   /** PT'nin sabitlediği muadiller (egzersiz kimlikleri); önerilerde en başta gelir. */
   alternatives: v.optional(
     v.pipe(v.array(v.pipe(v.string(), v.regex(/^[a-z0-9-]{2,60}$/))), v.maxLength(12, 'En fazla 12 muadil sabitlenebilir.')),

@@ -1,4 +1,5 @@
 import * as v from 'valibot';
+import { CARDIO_LIMITS } from '../cardio.ts';
 import { PROGRESSION_SCHEMES } from '../progression.ts';
 import { SET_LIMITS, isFullLoad } from '../set-plan.ts';
 import {
@@ -46,7 +47,7 @@ const loadPct = v.pipe(
   v.maxValue(100, 'Yük en fazla %100 olur.'),
 );
 
-/** Bir set: hedef (tekrar ya da saniye; min = max → sabit), isteğe bağlı yük yüzdesi, AMRAP. */
+/** Bir set: hedef (tekrar ya da saniye; min = max → sabit), isteğe bağlı yük yüzdesi, AMRAP, kardiyoda mesafe ve eğim. */
 export const setSpecSchema = v.pipe(
   v.object({
     min: int(1, L.secondsMax),
@@ -55,6 +56,16 @@ export const setSpecSchema = v.pipe(
     loadPct: v.optional(loadPct),
     /** "Yapabildiği kadar". */
     amrap: v.optional(v.boolean()),
+    /** Kardiyo: mesafe (m); yürüyüş/koşuda eğim (%). Hangi harekette durduğunu sunucuda `normalizeTemplate` denetler. */
+    distanceM: v.optional(int(1, CARDIO_LIMITS.distanceMax, ' m')),
+    inclinePct: v.optional(
+      v.pipe(
+        v.number('Sayı gir.'),
+        v.minValue(0, 'Eğim en az %0 olur.'),
+        v.maxValue(CARDIO_LIMITS.inclineMax, `Eğim en fazla %${CARDIO_LIMITS.inclineMax} olur.`),
+        v.multipleOf(CARDIO_LIMITS.inclineStep, 'Eğim 0,5 adımla olur.'),
+      ),
+    ),
   }),
   v.forward(v.partialCheck([['min'], ['max']], (set) => set.max >= set.min, 'Üst sınır alt sınırdan küçük olamaz.'), ['max']),
 );

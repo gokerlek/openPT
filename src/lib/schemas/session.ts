@@ -1,4 +1,5 @@
 import * as v from 'valibot';
+import { CARDIO_LIMITS } from '../cardio.ts';
 import { EFFORTS } from '../progression.ts';
 import { DAY_ID_PATTERN, OWN_PROGRAM_ID_PATTERN, OWN_PROGRAM_NAME_MAX, PHASE_ID_PATTERN } from '../program-plan.ts';
 import { BLOCK_ID_PATTERN, ROW_ID_PATTERN, TEMPLATE_LIMITS } from '../template-plan.ts';
@@ -115,6 +116,9 @@ export const sessionSetSchema = v.pipe(
     kg: v.optional(kg),
     reps: v.optional(int(0, SESSION_LIMITS.reps)),
     seconds: v.optional(int(0, SESSION_LIMITS.seconds)),
+    /** Kardiyo: mesafe (m); yürüyüş/koşuda eğim (%), girilmediyse 0. Kalori yazılmaz (kilo sağlık verisi). */
+    distanceM: v.optional(int(0, CARDIO_LIMITS.distanceMax)),
+    inclinePct: v.optional(v.pipe(v.number(), v.minValue(0), v.maxValue(CARDIO_LIMITS.inclineMax))),
     /** Yoksa motor `good` sayar. `fail` yalnız eski kayıtlarda. */
     effort: v.optional(v.picklist([...EFFORTS, 'unknown'] as const)),
     /** O günkü hedef (aralık, yük yüzdesi, AMRAP): motor kaydı bununla değerlendirir. */

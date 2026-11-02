@@ -2466,6 +2466,7 @@ export const EXERCISE_LIBRARY: readonly Exercise[] =  [
       "equipment": "cardio_machine",
       "deviceId": "kosu-bandi",
       "pattern": "cardio",
+      "locomotion": true,
       "primaryMuscles": [
         "cardio"
       ],

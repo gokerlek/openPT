@@ -1,6 +1,8 @@
 import { progressionOf, type ProgressionRule, type ProgressionScheme, type TrackingType } from './progression.ts';
+import { cardioKind } from './cardio.ts';
 import { SET_LIMITS, referenceSet, uniformSets, type SetSpec } from './set-plan.ts';
 import type { Category } from '@/lib/schemas/exercise';
+import type { MovementPattern } from './alternatives.ts';
 
 /**
  * Antrenman şablonu — okuma tarafı (SPEC §7.4).
@@ -124,6 +126,9 @@ export type PlanExercise = {
   primaryMuscles: readonly string[];
   secondaryMuscles: readonly string[];
   stabilizerMuscles?: readonly string[];
+  /** Kardiyo türü için (`cardioKind`): hareket kalıbı ve yürüyüş/koşu işareti. */
+  pattern?: MovementPattern;
+  locomotion?: boolean;
 };
 
 /** Antrenman ekranının set sırası: hangi satır, kaçıncı tur, ardından ne kadar dinlenme. */
@@ -582,11 +587,15 @@ export function normalizeTemplate(
         }
         // Egzersiz yoksa (hata zaten bildirildi) yüzde olduğu gibi kalır.
         const keepPct = set.loadPct !== undefined && set.loadPct < 100 && (!exercise || exercise.trackingType === 'weight_reps');
+        // Mesafe kardiyoda, eğim yürüyüş/koşuda; egzersiz yoksa olduğu gibi kalır.
+        const kind = exercise ? cardioKind(exercise) : 'walk';
         return {
           min: set.min,
           max: set.max,
           ...(keepPct ? { loadPct: set.loadPct } : {}),
           ...(set.amrap === true ? { amrap: true } : {}),
+          ...(kind && set.distanceM !== undefined ? { distanceM: set.distanceM } : {}),
+          ...(kind === 'walk' && set.inclinePct !== undefined ? { inclinePct: set.inclinePct } : {}),
         };
       });
       const stored = options.storedRows?.get(row.id);

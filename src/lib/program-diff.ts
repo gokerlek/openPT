@@ -99,13 +99,20 @@ function uniformCount(block: TemplateBlock): boolean {
   return block.rows.every((row) => row.sets.length === first);
 }
 
-/** Yalnız AMRAP işaretleri mi değişti (sayı, aralık, yüzde aynı). */
+/** Yalnız AMRAP işaretleri mi değişti (sayı, aralık, yüzde, mesafe, eğim aynı). */
 function amrapOnly(a: readonly SetSpec[], b: readonly SetSpec[]): boolean {
   return (
     a.length === b.length &&
     a.every((set, index) => {
       const other = b[index];
-      return other !== undefined && set.min === other.min && set.max === other.max && set.loadPct === other.loadPct;
+      return (
+        other !== undefined &&
+        set.min === other.min &&
+        set.max === other.max &&
+        set.loadPct === other.loadPct &&
+        set.distanceM === other.distanceM &&
+        set.inclinePct === other.inclinePct
+      );
     })
   );
 }

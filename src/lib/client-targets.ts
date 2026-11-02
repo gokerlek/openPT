@@ -20,9 +20,16 @@ import type { TemplateBlock, TemplateRow } from './template-plan.ts';
  *   hedefle aynı değilse (PT o arada satırı değiştirdi ya da sildi) yazılmaz; çağıran PT önerisine çevirir.
  */
 
-/** İki setin hedefi aynı mı (aralık, yük yüzdesi, AMRAP). */
+/** İki setin hedefi aynı mı (aralık, yük yüzdesi, AMRAP, kardiyoda mesafe ve eğim). */
 function sameSet(a: SetSpec, b: SetSpec): boolean {
-  return a.min === b.min && a.max === b.max && (a.loadPct ?? null) === (b.loadPct ?? null) && Boolean(a.amrap) === Boolean(b.amrap);
+  return (
+    a.min === b.min &&
+    a.max === b.max &&
+    (a.loadPct ?? null) === (b.loadPct ?? null) &&
+    Boolean(a.amrap) === Boolean(b.amrap) &&
+    (a.distanceM ?? null) === (b.distanceM ?? null) &&
+    (a.inclinePct ?? null) === (b.inclinePct ?? null)
+  );
 }
 
 export function sameSets(a: readonly SetSpec[], b: readonly SetSpec[]): boolean {

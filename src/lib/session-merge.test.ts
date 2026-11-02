@@ -286,3 +286,31 @@ describe('birleştirme: özellikler (rastgele sıralar, tekrarlar, silmeler)', (
     assert.ok(rich >= seeds.length / 2, `yalnız ${rich} tohumda zengin belge`);
   });
 });
+
+describe('kardiyo alanları', () => {
+  const walk: SessionEntry['sets'][number] = {
+    id: 'st_aaaaaaaa',
+    type: 'working',
+    setIndex: 0,
+    seconds: 1800,
+    distanceM: 3000,
+    inclinePct: 0,
+    target: { min: 1800, max: 1800, distanceM: 3000, inclinePct: 5 },
+    at: at(3),
+    by: W1,
+  };
+
+  test('mesafe ve eğim normalleştirme ve şemadan aynen geçer', () => {
+    const doc = sessionDoc({ entries: [sessionEntry('e_aaaaaa', { sets: [walk] })] });
+    assert.deepEqual(setsOf(normalizeSession(doc))[0], walk);
+    assert.deepEqual(setsOf(v.parse(sessionDocSchema, doc) as StoredSession)[0], walk);
+  });
+
+  test('alanları olmayan eski set alan kazanmaz', () => {
+    const doc = sessionDoc({ entries: [sessionEntry('e_aaaaaa', { sets: [workingSet('st_aaaaaaaa', 3, { target: { min: 8, max: 12 } })] })] });
+    const set = setsOf(normalizeSession(doc))[0];
+    assert.equal(set && 'distanceM' in set, false);
+    assert.equal(set && 'inclinePct' in set, false);
+    assert.deepEqual(set?.target, { min: 8, max: 12 });
+  });
+});

@@ -59,7 +59,7 @@ describe('metinler', () => {
 describe('bodyMassOn', () => {
   const list: MeasurementEntry[] = [
     { date: '2026-09-01', id: 'body_mass', value: 80 },
-    { date: '2026-10-01', id: 'waist', value: 90 },
+    { date: '2026-10-01', id: 'waist_girth', value: 90 },
     { date: '2026-10-01', id: 'body_mass', value: 78 },
     { date: '2026-10-20', id: 'body_mass', value: 76.5 },
   ];
@@ -75,7 +75,7 @@ describe('bodyMassOn', () => {
   });
 
   test('kilo yoksa yok', () => {
-    assert.equal(bodyMassOn([{ date: '2026-10-01', id: 'waist', value: 90 }]), undefined);
+    assert.equal(bodyMassOn([{ date: '2026-10-01', id: 'waist_girth', value: 90 }]), undefined);
     assert.equal(bodyMassOn([]), undefined);
   });
 });
