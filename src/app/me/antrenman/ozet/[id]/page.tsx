@@ -7,6 +7,8 @@ import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTi
 import { coachAccess } from '@/lib/ai/coach-contract';
 import { readAppConfig } from '@/lib/config';
 import { currentClient } from '@/lib/guards';
+import { bodyMassOn } from '@/lib/cardio';
+import { readHealthIfAllowed } from '@/lib/health';
 import { loadSummary } from '@/lib/history-store';
 import { loadPainReport } from '@/lib/pain-report-store';
 import { SummaryCarousel } from './summary-carousel';
@@ -31,7 +33,13 @@ export default async function SummaryPage({
   const [client, config, { id }, query] = await Promise.all([currentClient(), readAppConfig(), params, searchParams]);
   const from = query.from === 'gecmis' ? 'history' : 'finish';
   const [loaded, painOffers] = await Promise.all([
-    loadSummary(client.id, id, config.timeZone),
+    loadSummary(client.id, id, config.timeZone, {
+      // Kardiyo kalorisinin kilosu: yalnız ölçüm onayı sürdükçe (onay yoksa dosya okunmaz).
+      bodyMass: async (date) => {
+        const record = await readHealthIfAllowed(client, ['measurements']);
+        return record ? bodyMassOn(record.measurements, date) : undefined;
+      },
+    }),
     from === 'finish' ? loadPainReport(client, id) : Promise.resolve([]),
   ]);
   if (loaded.status === 'active') redirect('/me/antrenman');

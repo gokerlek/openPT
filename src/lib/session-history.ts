@@ -169,8 +169,11 @@ function skipText(reason: SkipReason | undefined): string {
   return reason ? `geçildi · ${FINISH_REASON_LABELS[reason]}` : 'geçildi';
 }
 
-/** Antrenmanın detayı: setleri olan ya da geçilen hareketler, yapılış sırasıyla. */
-export function sessionDetail(doc: SessionDoc, timeZone: string): SessionDetail {
+/**
+ * Antrenmanın detayı: setleri olan ya da geçilen hareketler, yapılış sırasıyla. `bodyMassKg` (ölçüm onayıyla, seansın
+ * günündeki kilo) verilirse yürüyüş/koşu setinin metninde kalori de (`cardio.ts`).
+ */
+export function sessionDetail(doc: SessionDoc, timeZone: string, bodyMassKg?: number): SessionDetail {
   const exercises: DetailExercise[] = [];
   for (const entry of entriesInOrder(doc)) {
     const working = entry.sets.filter((set) => set.type === 'working');
@@ -187,7 +190,7 @@ export function sessionDetail(doc: SessionDoc, timeZone: string): SessionDetail 
       ...working.map((set, position) => ({
         id: set.id,
         label: formatNumber(position + 1),
-        text: setValueText(set),
+        text: setValueText(set, bodyMassKg),
         effort: set.effort ? EFFORT_LABELS[set.effort] : null,
         warmup: false,
         extra: Boolean(set.extra),

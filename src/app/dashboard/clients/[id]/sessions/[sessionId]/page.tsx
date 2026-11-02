@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { loadClient } from '@/lib/clients';
+import { bodyMassOn } from '@/lib/cardio';
 import { canRecordHealth } from '@/lib/client-status';
 import { readAppConfig } from '@/lib/config';
 import { listExercises } from '@/lib/exercises';
@@ -105,14 +106,15 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
   const { doc, changes, program } = detail.value;
   const [exercises, health] = await Promise.all([
     listExercises(),
-    // Ağrı ayrıntısı yalnız onay sürdükçe; okunamazsa yazılmaz.
-    canRecordHealth(client, 'check_in') ? readHealth(id).catch(() => null) : Promise.resolve(null),
+    // Ağrı ayrıntısı ve kardiyo kalorisinin kilosu yalnız kendi onayı sürdükçe; okunamazsa yazılmaz.
+    canRecordHealth(client, 'check_in') || canRecordHealth(client, 'measurements') ? readHealth(id).catch(() => null) : Promise.resolve(null),
   ]);
   const titles = new Map(exercises.map((exercise) => [exercise.id, exercise.title]));
   const view = ptSessionDetail(doc, {
     timeZone: config.timeZone,
     rowTitle: rowTitleOf(program, titles),
-    painRows: health ? painSkippedRows(health.record.checkIns, doc.id) : new Set(),
+    painRows: health && canRecordHealth(client, 'check_in') ? painSkippedRows(health.record.checkIns, doc.id) : new Set(),
+    bodyMassKg: health && canRecordHealth(client, 'measurements') ? bodyMassOn(health.record.measurements, doc.date) : undefined,
   });
   const lines = ptChangeLines(changes);
 

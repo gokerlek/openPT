@@ -52,9 +52,11 @@ export function ptSessionDetail(
     rowTitle?: (rowId: string) => string | null;
     /** Ağrı nedeniyle geçilen satırlar (yalnız onay sürdükçe). */
     painRows?: ReadonlySet<string>;
+    /** Seansın günündeki kilo (yalnız ölçüm onayı sürdükçe): yürüyüş/koşu setinde kalori. */
+    bodyMassKg?: number | undefined;
   },
 ): PtSessionDetail {
-  const base = sessionDetail(doc, input.timeZone);
+  const base = sessionDetail(doc, input.timeZone, input.bodyMassKg);
   const entries = new Map(doc.entries.map((entry) => [entry.id, entry]));
   const overloads = new Set(doc.entries.flatMap((entry) => entry.sets.filter((set) => set.overload).map((set) => set.id)));
 

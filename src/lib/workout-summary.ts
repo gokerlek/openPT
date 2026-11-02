@@ -1,3 +1,4 @@
+import { totalKcal } from './cardio.ts';
 import { formatKg, formatNumber } from './format.ts';
 import { sessionDayText } from './own-program-text.ts';
 import { mondayOf, type ProgramLogEntry } from './program-plan.ts';
@@ -310,6 +311,8 @@ export type SessionSummary = {
   topMuscle: string | null;
   /** "17 set · 142 tekrar". */
   totals: string;
+  /** Yürüyüş/koşu setlerinin tahmini kalorisi (`cardio.ts`); kilo ya da yürüyüş yoksa 0. */
+  kcal: number;
   exercises: ExerciseLine[];
   changes: ChangeLine[];
 };
@@ -328,6 +331,8 @@ export function sessionSummary<E extends MuscleSource>(input: {
   week: SummaryWeek | null;
   changes: readonly ChangeLine[];
   next: NextLine[] | null;
+  /** Seansın günündeki kilo (yalnız ölçüm onayıyla): yürüyüş/koşu kalorisi. */
+  bodyMassKg?: number | undefined;
 }): SessionSummary {
   const { doc } = input;
   const index = input.index.items.some((row) => row.id === doc.id) ? input.index : upsertIndexRow(input.index, indexRowOf(doc, '0'.repeat(40)));
@@ -389,5 +394,6 @@ export function sessionSummary<E extends MuscleSource>(input: {
     totals: [`${formatNumber(sets)} set`, ...(reps > 0 ? [`${formatNumber(reps)} tekrar`] : []), ...(seconds > 0 ? [`${formatNumber(seconds)} sn`] : [])].join(' · '),
     exercises,
     changes: [...input.changes],
+    kcal: totalKcal(doc.entries.flatMap(working), input.bodyMassKg),
   };
 }

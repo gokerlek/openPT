@@ -80,7 +80,12 @@ export async function loadDetail(
  * (hafta hedefi, değişiklikler). "Gelecek sefer" yalnız en yeni bitmiş antrenmanda: öneri motorunun o günün
  * bu antrenman dahil planı (`buildWorkoutDay`, antrenman ekranıyla aynı).
  */
-export async function loadSummary(clientId: string, id: string, timeZone: string): Promise<SessionLoad<SessionSummary>> {
+export async function loadSummary(
+  clientId: string,
+  id: string,
+  timeZone: string,
+  options: { bodyMass?: (date: string) => Promise<number | undefined> } = {},
+): Promise<SessionLoad<SessionSummary>> {
   const repo = sessionRepo(clientId);
   const [loaded, repaired, exercises] = await Promise.all([readFinished(clientId, id), readIndex(repo), listExercises()]);
   if (loaded.status !== 'ok') return loaded;
@@ -113,8 +118,12 @@ export async function loadSummary(clientId: string, id: string, timeZone: string
     if (day?.dayId === dayId) next = nextTimeLines(day, doc);
   }
 
+  // Kilo (sağlık verisi) yalnız yürüyüş/koşu seti varken okunur: kalorinin tek girdisi.
+  const walked = doc.entries.some((entry) => entry.sets.some((set) => set.type === 'working' && set.inclinePct !== undefined));
+  const bodyMassKg = walked && options.bodyMass ? await options.bodyMass(doc.date) : undefined;
   const summary = sessionSummary({
     doc,
+    bodyMassKg,
     index,
     timeZone,
     exercises: byId,

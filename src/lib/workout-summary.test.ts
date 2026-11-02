@@ -350,3 +350,22 @@ describe('gelecek sefer', () => {
     assert.match(lines[0]?.text ?? '', /^62,5 kg × \d+$/);
   });
 });
+
+describe('kardiyo kalorisi', () => {
+  const walk = (id: string, minute: number) => workingSet(id, minute, { kg: undefined, reps: undefined, seconds: 1800, distanceM: 3000, inclinePct: 5 });
+  const doc = sessionDoc({
+    status: 'finished',
+    finishedAt: at(70),
+    entries: [
+      sessionEntry('e_aaaaaa', { exerciseId: 'kosu-bandi', title: 'Koşu Bandı', sets: [walk('st_aaaaaaaa', 30), walk('st_bbbbbbbb', 65)] }),
+      sessionEntry('e_bbbbbb', { sets: [workingSet('st_cccccccc', 68)] }),
+    ],
+  });
+  const index = upsertIndexRow(emptySessionIndex(), indexRowOf(doc, '0'.repeat(40)));
+  const input = { doc, index, timeZone: TZ, exercises: LIBRARY, setWeightsOf, muscleGroups: groups, week: null, changes: [], next: null };
+
+  test('yürüyüş/koşu setlerinin toplamı; kilo yoksa 0', () => {
+    assert.equal(sessionSummary({ ...input, bodyMassKg: 75 }).kcal, 506);
+    assert.equal(sessionSummary(input).kcal, 0);
+  });
+});

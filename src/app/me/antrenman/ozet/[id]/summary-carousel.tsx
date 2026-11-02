@@ -42,9 +42,9 @@ function CountUp({ value }: { value: number }) {
   );
 }
 
-function Tile({ value, unit, label }: { value: number; unit?: string; label: string }) {
+function Tile({ value, unit, label, wide = false }: { value: number; unit?: string; label: string; wide?: boolean }) {
   return (
-    <div className="flex min-w-0 flex-col gap-0.5 rounded-xl bg-card p-3.5 ring-1 ring-foreground/10">
+    <div className={cn('flex min-w-0 flex-col gap-0.5 rounded-xl bg-card p-3.5 ring-1 ring-foreground/10', wide && 'col-span-2')}>
       <span className="font-heading text-[1.875rem] leading-tight font-semibold whitespace-nowrap tabular-nums">
         <CountUp value={value} />
         {unit ? <span className="ml-1 text-[0.9375rem] font-medium text-muted-foreground">{unit}</span> : null}
@@ -247,6 +247,7 @@ function FirstCard({
         <Tile value={summary.volumeKg} unit="kg" label="toplam ağırlık" />
         <Tile value={summary.sets} label="set" />
         <Tile value={summary.muscles} label="kas çalıştı" />
+        {summary.kcal > 0 ? <Tile value={summary.kcal} unit="kcal" label="yürüyüş/koşu, tahmini" wide /> : null}
       </div>
       {summary.prs > 0 || summary.versusLast ? (
         <div className="flex flex-wrap items-center gap-2 text-sm">

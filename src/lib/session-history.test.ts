@@ -188,3 +188,20 @@ describe('antrenmanın detayı', () => {
     assert.deepEqual(deletePatch(doc, { kind: 'entry', entryId: 'e_bbbbbb' }), { deleteEntryIds: ['e_bbbbbb'] });
   });
 });
+
+describe('kardiyo seti', () => {
+  test('metinde mesafe ve eğim; kilo verilirse kalori', () => {
+    const doc = finished('s_cccccccc', 0, {
+      entries: [
+        sessionEntry('e_aaaaaa', {
+          exerciseId: 'kosu-bandi',
+          title: 'Koşu Bandı',
+          status: 'done',
+          sets: [workingSet('st_aaaaaaaa', 1, { kg: undefined, reps: undefined, seconds: 1800, distanceM: 3000, inclinePct: 5 })],
+        }),
+      ],
+    });
+    assert.equal(sessionDetail(doc, TZ, 75).exercises[0]?.sets[0]?.text, '30:00 · 3 km · %5 · ≈ 253 kcal');
+    assert.equal(sessionDetail(doc, TZ).exercises[0]?.sets[0]?.text, '30:00 · 3 km · %5');
+  });
+});
