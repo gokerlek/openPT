@@ -223,6 +223,26 @@ export function setViews(day: WorkoutDay, doc: Pick<SessionDoc, 'entries'>, rowI
 /** Kaydedilmemiş taslak: danışanın stepper'la değiştirdiği değerler (yalnız o set için). */
 export type SetDraft = { rowId: string; setIndex: number; kg?: number | undefined; value?: number | undefined };
 
+/**
+ * Seçili setin dışındaki setlere yazılanlar: danışan bir satıra yazıp ✓'lamadan başka sete geçince değerler o satırda
+ * kalır (set ✓'lanmadıkça yapılmış sayılmaz). Aynı setin eskisinin yerine yazılır.
+ */
+export function keepTyped(typed: readonly SetDraft[], draft: SetDraft): SetDraft[] {
+  return [...withoutTyped(typed, draft.rowId, draft.setIndex), draft];
+}
+
+/** Setin yazılanı listeden düşer; listede yoksa aynı liste. */
+export function withoutTyped(typed: readonly SetDraft[], rowId: string, setIndex: number): readonly SetDraft[] {
+  const rest = typed.filter((item) => item.rowId !== rowId || item.setIndex !== setIndex);
+  return rest.length === typed.length ? typed : rest;
+}
+
+/** Yalnız hâlâ bekleyen setlerin yazılanları (yapılan, artık günde olmayan set düşer); değişmediyse aynı liste. */
+export function pendingTyped(day: WorkoutDay, doc: Pick<SessionDoc, 'entries'>, typed: readonly SetDraft[]): readonly SetDraft[] {
+  const rest = typed.filter((item) => setViews(day, doc, item.rowId).some((view) => view.setIndex === item.setIndex && !view.logged));
+  return rest.length === typed.length ? typed : rest;
+}
+
 export type NextSet = {
   /** İmlecin birimi (blok): hareket kartının kimliği. */
   unitKey: string;
@@ -251,9 +271,15 @@ export type NextSet = {
  * (birimde set kalmadıysa null). Odakta taslak aynı zamanda seçimdir: danışan tablodan bekleyen başka bir seti seçtiyse
  * (kutusuna dokundu, yazdı) sıradaki set odur; setler istenen sırayla yapılabilir (`chosenSet`).
  */
-export function nextSet(day: WorkoutDay, doc: Pick<SessionDoc, 'entries' | 'order'>, draft?: SetDraft | null, focus?: string | null): NextSet | null {
+export function nextSet(
+  day: WorkoutDay,
+  doc: Pick<SessionDoc, 'entries' | 'order'>,
+  draft?: SetDraft | null,
+  focus?: string | null,
+  typed?: readonly SetDraft[] | null,
+): NextSet | null {
   const cursor = cursorOf(day, doc, focus);
-  const chosen = draft && focus != null ? chosenSet(day, doc, cursor, draft, focus) : null;
+  const chosen = draft && focus != null ? chosenSet(day, doc, cursor, draft, focus, typed) : null;
   if (chosen) return chosen;
   const position = cursor.next;
   if (!position?.rowId) return null;
@@ -261,7 +287,7 @@ export function nextSet(day: WorkoutDay, doc: Pick<SessionDoc, 'entries' | 'orde
   const all = setViews(day, doc, position.rowId);
   const view = all.find((item) => (position.extra === undefined ? !item.extra : item.extra) && !item.logged);
   if (!unit || !view) return null;
-  return setAt(day, doc, { unit, rowId: position.rowId, all, view, round: position.round, restAfterSeconds: position.restAfterSeconds }, draft);
+  return setAt(day, doc, { unit, rowId: position.rowId, all, view, round: position.round, restAfterSeconds: position.restAfterSeconds }, draft, typed);
 }
 
 /**
@@ -269,7 +295,14 @@ export function nextSet(day: WorkoutDay, doc: Pick<SessionDoc, 'entries' | 'orde
  * (set yapıldı, üye geçildi, başka birimin seti) null: imleç karar verir. Bekleyen fazladan setler birbirinin aynısı: hangisi
  * seçilirse seçilsin ilki yapılır. Dinlenme o setin ardındaki; antrenmanda başka set kalmadıysa yok.
  */
-function chosenSet(day: WorkoutDay, doc: Pick<SessionDoc, 'entries' | 'order'>, cursor: WorkoutCursor, draft: SetDraft, focus: string): NextSet | null {
+function chosenSet(
+  day: WorkoutDay,
+  doc: Pick<SessionDoc, 'entries' | 'order'>,
+  cursor: WorkoutCursor,
+  draft: SetDraft,
+  focus: string,
+  typed: readonly SetDraft[] | null | undefined,
+): NextSet | null {
   const unitIndex = cursor.units.findIndex((item) => item.key === focus);
   const unit = cursor.units[unitIndex];
   const member = unit ? unit.members.findIndex((item) => item.rowId === draft.rowId) : -1;
@@ -285,16 +318,17 @@ function chosenSet(day: WorkoutDay, doc: Pick<SessionDoc, 'entries' | 'order'>, 
   const next = cursor.next;
   if (next && next.unit === unitIndex && next.member === member && (next.extra !== undefined) === extra && first === view) return null;
   const left = cursor.units.reduce((sum, item) => sum + item.slots.filter((candidate) => !slotDone(item, candidate)).length, 0);
-  const set = setAt(day, doc, { unit, rowId: draft.rowId, all, view, round: slot.round, restAfterSeconds: left > 1 ? slot.restAfterSeconds : 0 }, draft);
+  const set = setAt(day, doc, { unit, rowId: draft.rowId, all, view, round: slot.round, restAfterSeconds: left > 1 ? slot.restAfterSeconds : 0 }, draft, typed);
   return set && { ...set, chosen: true };
 }
 
-/** Satırın bekleyen bir seti (`view`) ve önceden dolu değerleri. */
+/** Satırın bekleyen bir seti (`view`) ve önceden dolu değerleri: taslağınki, yoksa o sete yazılan (`typed`), yoksa öneri. */
 function setAt(
   day: WorkoutDay,
   doc: Pick<SessionDoc, 'entries'>,
   at: { unit: CursorUnit; rowId: string; all: SetView[]; view: SetView; round: number; restAfterSeconds: number },
   draft: SetDraft | null | undefined,
+  typed: readonly SetDraft[] | null | undefined,
 ): NextSet | null {
   const { view, all } = at;
   const row = day.rows[at.rowId];
@@ -302,14 +336,17 @@ function setAt(
   if (!row || !template) return null;
 
   const entry = entryForRow(doc.entries, at.rowId);
-  const own = draft && draft.rowId === at.rowId && draft.setIndex === view.setIndex ? draft : null;
+  const mine = (item: SetDraft | null | undefined): item is SetDraft => item != null && item.rowId === at.rowId && item.setIndex === view.setIndex;
+  const drafted = mine(draft) ? draft : undefined;
+  const saved = typed?.find(mine);
+  const own = { kg: drafted?.kg ?? saved?.kg, value: drafted?.value ?? saved?.value };
   const common = { unitKey: at.unit.key, rowId: at.rowId, position: view.position, total: all.length, setIndex: view.setIndex, target: view.target, plannedKg: view.plannedKg, restAfterSeconds: at.restAfterSeconds, round: at.round };
   if (view.extra) {
     // Fazladan set: ağırlık bu hareketin son setinden (danışanın bugünkü ağırlığı), tekrar aralığın altı.
     const lastKg = entry?.sets.filter((set) => set.type === 'working' && set.kg !== undefined).at(-1)?.kg;
-    const kg = row.trackingType === 'weight_reps' ? (own?.kg ?? lastKg ?? view.plannedKg) : undefined;
+    const kg = row.trackingType === 'weight_reps' ? (own.kg ?? lastKg ?? view.plannedKg) : undefined;
     const cap = row.adjusted ? extraPlanOf(row, template).cap : undefined;
-    const value = own?.value ?? prefillSet({ target: view.target, setIndex: view.setIndex, plannedKg: kg, lastTime: row.lastTime, cap }).value;
+    const value = own.value ?? prefillSet({ target: view.target, setIndex: view.setIndex, plannedKg: kg, lastTime: row.lastTime, cap }).value;
     return { ...common, kg, value, extra: true };
   }
 
@@ -326,10 +363,10 @@ function setAt(
   const previous = views[view.position - 1];
   const changed =
     previous?.logged?.kg !== undefined && Math.abs(previous.logged.kg - previous.plannedKg) > 0.001 && (previous.target.loadPct ?? 100) !== (view.target.loadPct ?? 100);
-  const kg = row.trackingType === 'weight_reps' ? (own?.kg ?? (changed ? previous?.logged?.kg : undefined) ?? suggestion.weightKg) : undefined;
+  const kg = row.trackingType === 'weight_reps' ? (own.kg ?? (changed ? previous?.logged?.kg : undefined) ?? suggestion.weightKg) : undefined;
   // Yoklamanın indirdiği gün: önceden dolu tekrar/süre planın bu setteki hedefini aşmaz (`prefillSet`).
   const cap = row.adjusted ? row.plan.sets.find((item) => item.setIndex === view.setIndex)?.target : undefined;
-  const value = own?.value ?? prefillSet({ target: view.target, setIndex: view.setIndex, plannedKg: kg, lastTime: row.lastTime, cap }).value;
+  const value = own.value ?? prefillSet({ target: view.target, setIndex: view.setIndex, plannedKg: kg, lastTime: row.lastTime, cap }).value;
   return { ...common, kg, value };
 }
 

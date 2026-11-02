@@ -79,6 +79,9 @@ import {
   workoutSummary,
   type EffortChoice,
   type EffortQuestion,
+  keepTyped,
+  pendingTyped,
+  withoutTyped,
   type NextSet,
   type SetView,
 } from '@/lib/workout-session';
@@ -1082,7 +1085,7 @@ export function WorkoutScreen({
     const shownFocus = validFocus(plan, doc, focus);
     const list = listView(plan, doc, shownFocus);
     const cursor = cursorOf(plan, doc, shownFocus);
-    const next = nextSet(plan, doc, local.draft, shownFocus);
+    const next = nextSet(plan, doc, local.draft, shownFocus, local.drafts);
     // Kaydedilirken kart ve panel az önce kaydedilen seti gösterir (✓ önce satırda), sonra sıradakine geçer.
     // Odaktaki birimde set kalmadıysa (biten hareket açıldı) kart yine o birimin: setleri ve tablosu görünür.
     const shown = saving?.next ?? next;
@@ -1159,7 +1162,7 @@ export function WorkoutScreen({
       // Set yazmak günün etkin planını değiştirmez (muadil ve eklenenler aynı): önce ve sonra aynı plan.
       const plan = planOf(current);
       const focused = focusRef.current;
-      const next = nextSet(plan, current.doc, current.draft, focused);
+      const next = nextSet(plan, current.doc, current.draft, focused, current.drafts);
       if (!next) return;
       unlockAudio();
       const row = plan.rows[next.rowId];
@@ -1181,7 +1184,9 @@ export function WorkoutScreen({
       // "+ Set ekle" seti sayılmaz (önceki bir hareketin fazladan setine geri dönülmez). Yoksa planın bütün setleri
       // yapıldı (kalan yalnız fazladan set olabilir): bitiş sorusu; fazladan set için hareket listeden açılır.
       const followingKey = after.kind === 'next' ? nextUnitAfter(plan, doc, next.unitKey) : null;
-      commit(withChange({ ...current, draft: null, rest: null, timer: null, ...(achievement?{achievementSeen:[...(current.achievementSeen??[]),achievement.key]}:{}) }, doc, { send: true }));
+      // Yapılan setin (ve o arada başka cihazda yapılanların) yazılanı düşer; ✓'lanmayan setlerinki kalır.
+      const drafts = current.drafts && pendingTyped(plan, doc, current.drafts);
+      commit(withChange({ ...current, draft: null, ...(drafts ? { drafts } : {}), rest: null, timer: null, ...(achievement?{achievementSeen:[...(current.achievementSeen??[]),achievement.key]}:{}) }, doc, { send: true }));
       outbox.schedule();
       if(achievement){toast.success(achievement.title,{id:`achievement-${doc.id}-${achievement.key}`,description:`${row?.title} · ${achievement.description}`,duration:6000});if(achievement.kind==='record')vibrate([20,40,20]);}
       setTransition(null);
@@ -1283,7 +1288,7 @@ export function WorkoutScreen({
   const onResetKg = useCallback(() => {
     const current = localRef.current;
     if (!current) return;
-    const next = nextSet(planOf(current), current.doc, current.draft, focusRef.current);
+    const next = nextSet(planOf(current), current.doc, current.draft, focusRef.current, current.drafts);
     if (!next) return;
     commit({ ...current, draft: { rowId: next.rowId, setIndex: next.setIndex, kg: next.plannedKg, value: next.value } });
     guard();
@@ -1360,33 +1365,42 @@ export function WorkoutScreen({
     (values: { kg?: number | undefined; value?: number | undefined }) => {
       const current = localRef.current;
       if (!current || saving) return;
-      const next = nextSet(planOf(current), current.doc, current.draft, focusRef.current);
+      const next = nextSet(planOf(current), current.doc, current.draft, focusRef.current, current.drafts);
       if (!next) return;
-      commit({ ...current, draft: { rowId: next.rowId, setIndex: next.setIndex, kg: values.kg ?? next.kg, value: values.value ?? next.value } });
+      // Setin yazılanı artık taslakta: listede kalmaz.
+      const drafts = current.drafts && withoutTyped(current.drafts, next.rowId, next.setIndex);
+      commit({ ...current, draft: { rowId: next.rowId, setIndex: next.setIndex, kg: values.kg ?? next.kg, value: values.value ?? next.value }, ...(drafts ? { drafts } : {}) });
     },
     [commit, saving],
   );
 
   /**
    * Tablodan bekleyen bir seti seçmek (kutusuna ya da satırına dokunmak, kutusuna yazmak): taslak o setin olur, sıradaki set
-   * odur (panel ve şerit ona geçer; `nextSet`'in seçimi). Setler istenen sırayla yapılır. Taslak tek: başka sete geçince
-   * önceki setin yazılanı bırakılır. Seçilemeyen sette (yapıldı, üye geçildi), kaydedilirken ve süreli set sayarken bir şey
-   * olmaz. Seçildiyse seçilen set.
+   * odur (panel ve şerit ona geçer; `nextSet`'in seçimi). Setler istenen sırayla yapılır. Seçimden çıkan sete yazılan o
+   * satırda kalır (`keepTyped`; set ✓'lanmadıkça yapılmış sayılmaz), seçilen setin daha önce yazılanı taslağa döner.
+   * Seçilemeyen sette (yapıldı, üye geçildi), kaydedilirken ve süreli set sayarken bir şey olmaz. Seçildiyse seçilen set.
    */
   const onPick = useCallback(
     (rowId: string, setIndex: number, values: { kg?: number | undefined; value?: number | undefined } = {}): NextSet | null => {
       const current = localRef.current;
       if (!current || saving || finishingRef.current || timedSetRunning(current, focusRef.current)) return null;
-      const own = current.draft?.rowId === rowId && current.draft.setIndex === setIndex ? current.draft : { rowId, setIndex };
-      const picked = nextSet(planOf(current), current.doc, own, focusRef.current);
+      const plan = planOf(current);
+      const typed = current.drafts ?? [];
+      const was = current.draft;
+      const own = was?.rowId === rowId && was.setIndex === setIndex ? was : { rowId, setIndex };
+      const picked = nextSet(plan, current.doc, own, focusRef.current, typed);
       // Bekleyen fazladan setler birbirinin aynısı: hangisine dokunulursa ilki seçilir.
       if (!picked || picked.rowId !== rowId || (picked.setIndex !== setIndex && !picked.extra)) return null;
       const draft = { rowId, setIndex: picked.setIndex, kg: values.kg ?? picked.kg, value: values.value ?? picked.value };
-      const was = current.draft;
-      const same = was?.rowId === draft.rowId && was.setIndex === draft.setIndex && was.kg === draft.kg && was.value === draft.value;
+      const moving = was !== null && (was.rowId !== draft.rowId || was.setIndex !== draft.setIndex);
+      // Önerinin aynısı tutulmaz: öneri sonra (önceki set yapılınca) değişebilir.
+      const suggested = moving ? nextSet(plan, current.doc, { rowId: was.rowId, setIndex: was.setIndex }, focusRef.current) : null;
+      const typedThere = moving && suggested?.rowId === was.rowId && suggested.setIndex === was.setIndex && (suggested.kg !== was.kg || suggested.value !== was.value);
+      const drafts = withoutTyped(typedThere ? keepTyped(typed, was) : typed, draft.rowId, draft.setIndex);
+      const same = was !== null && !moving && was.kg === draft.kg && was.value === draft.value;
       // İmlecin kendi setine taslaksız dokunmak bir şey değiştirmez.
       const already = !was && !picked.chosen && values.kg === undefined && values.value === undefined;
-      if (!same && !already) commit({ ...current, draft });
+      if (drafts !== typed || (!same && !already)) commit({ ...current, draft, drafts });
       return picked;
     },
     [commit, saving],
@@ -1593,7 +1607,10 @@ export function WorkoutScreen({
             const after = nextSet(localWorkoutDay(next, back.doc), back.doc, latest.draft, focusRef.current);
             const moved = before?.rowId !== after?.rowId || before?.setIndex !== after?.setIndex;
             const draft = latest.draft && after && latest.draft.rowId === after.rowId && latest.draft.setIndex === after.setIndex ? latest.draft : null;
-            commit(withChange(moved ? { ...next, draft, timer: null } : next, back.doc, { send: true }));
+            // Geri gelen setin (o arada yazılmışsa) yazılanı düşer.
+            const drafts = latest.drafts && pendingTyped(localWorkoutDay(next, back.doc), back.doc, latest.drafts);
+            const restored = drafts ? { ...next, drafts } : next;
+            commit(withChange(moved ? { ...restored, draft, timer: null } : restored, back.doc, { send: true }));
             outbox.schedule();
             announce(`Set ${position + 1} geri geldi`);
           },
@@ -2031,8 +2048,9 @@ export function WorkoutScreen({
       setSwapTarget(null);
       if (doc === current.doc) return;
       const extras = option ? { ...current.extras, [extraKey(target.rowId, option.exerciseId)]: option.extra } : current.extras;
-      // Hareket değişti: eski hareketin taslağı ve sayacı yenisine taşınmaz (muadil kendi önerisiyle).
-      commitFlow(current, doc, { extras, draft: null, timer: null });
+      // Hareket değişti: eski hareketin taslağı, yazılanları ve sayacı yenisine taşınmaz (muadil kendi önerisiyle).
+      const drafts = current.drafts?.filter((item) => item.rowId !== target.rowId);
+      commitFlow(current, doc, { extras, draft: null, ...(drafts ? { drafts } : {}), timer: null });
       const to = option?.title ?? current.plan.rows[target.rowId]?.title ?? '';
       toast.success(option ? `${from} yerine ${to}` : `Yeniden ${to}`);
       announce(option ? `${from} yerine ${to}` : `Asıl hareket: ${to}`);
@@ -2114,7 +2132,10 @@ export function WorkoutScreen({
       if (!current || saving || performance.now() < guardUntil.current) return;
       const plan = planOf(current);
       const before = nextSet(plan, current.doc, current.draft, focusRef.current);
-      const next = { ...current, extraRounds: dropExtraRound(plan, key) };
+      const dropped = { ...current, extraRounds: dropExtraRound(plan, key) };
+      // Bırakılan setin yazılanı düşer (yeniden istenen fazladan set boş gelsin).
+      const drafts = current.drafts && pendingTyped(planOf(dropped), current.doc, current.drafts);
+      const next = drafts ? { ...dropped, drafts } : dropped;
       const after = nextSet(planOf(next), current.doc, current.draft, focusRef.current);
       const moved = before?.rowId !== after?.rowId || before?.setIndex !== after?.setIndex;
       commit(moved ? { ...next, draft: null, timer: null } : next);
@@ -2342,13 +2363,13 @@ export function WorkoutScreen({
   const nextKey = next ? `${next.rowId}:${next.setIndex}` : null;
   const collapsed = panelClosed && (forcedOpen === null || forcedOpen !== nextKey);
   // Bekleyen her setin satırdan girişi (kg/tekrar kutuları ve ✓): şu anki setinki paneldekiyle aynı taslak, diğerlerinde o
-  // setin önceden dolu değerleri; dokunulan set seçilir (`onPick`). Düzenleme açıkken yok: aynı anda iki düzenleyici olmasın.
+  // sete yazılan ya da önceden dolu değerler; dokunulan set seçilir (`onPick`). Düzenleme açıkken yok: aynı anda iki düzenleyici olmasın.
   // Aşırı yük soruluyorsa ✓ önce seti seçip uyarıyı panelde gösterir (panel kapalıysa bu set için açılır); uyarı panelde
   // görünürken ✓ onaylar ("Onayla · Set bitti" gibi).
   const entryOf = (set: SetView): RowEntry | null => {
     if (!row || edit || shownFocus === null) return null;
     const current = next && next.rowId === row.rowId && (next.setIndex === set.setIndex || (next.extra && set.extra)) ? next : null;
-    const values = current ?? nextSet(plan, doc, { rowId: row.rowId, setIndex: set.setIndex }, shownFocus);
+    const values = current ?? nextSet(plan, doc, { rowId: row.rowId, setIndex: set.setIndex }, shownFocus, local.drafts);
     if (!values || values.rowId !== row.rowId || (values.setIndex !== set.setIndex && !(values.extra && set.extra))) return null;
     const asks = overloadState(plan, doc, values, values.kg) === 'ask';
     return {

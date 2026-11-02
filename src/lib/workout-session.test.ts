@@ -30,6 +30,7 @@ import {
   ensureEntries,
   elapsedText,
   findSet,
+  keepTyped,
   logSet,
   logWarmup,
   newEntryId,
@@ -37,6 +38,7 @@ import {
   nextSet,
   nextText,
   overloadState,
+  pendingTyped,
   previousText,
   restoreSet,
   setEntryEffort,
@@ -49,6 +51,7 @@ import {
   targetText,
   unlogWarmup,
   warmupViews,
+  withoutTyped,
   workoutSummary,
 } from './workout-session.ts';
 
@@ -143,6 +146,27 @@ describe('antrenman belgesi: başlangıç ve sıradaki set', () => {
     assert.deepEqual(doc.entries[0]?.sets.map((set) => set.setIndex), [2, 0, 1]);
     assert.equal(doc.entries[0]?.status, 'done');
     assert.equal(nextSet(day, doc, null, 'b_aaaaaa'), null);
+  });
+
+  test("başka sete yazılan ✓'lanmadan da o sette kalır; taslak önce gelir; set yapılınca düşer", () => {
+    const day = workoutDay();
+    let doc = start(day);
+    const typed = keepTyped([], { rowId: 'r_aaaaaa', setIndex: 1, kg: 30, value: 9 });
+    const values = (next: ReturnType<typeof nextSet>) => next && { setIndex: next.setIndex, kg: next.kg, value: next.value };
+    // İmlecin seti (0) öneriyle; seçilen 1. set yazılanıyla; taslak yazılanın önüne geçer.
+    assert.deepEqual(values(nextSet(day, doc, null, 'b_aaaaaa', typed)), { setIndex: 0, kg: 20, value: 8 });
+    assert.deepEqual(values(nextSet(day, doc, { rowId: 'r_aaaaaa', setIndex: 1 }, 'b_aaaaaa', typed)), { setIndex: 1, kg: 30, value: 9 });
+    assert.deepEqual(values(nextSet(day, doc, { rowId: 'r_aaaaaa', setIndex: 1, kg: 32.5 }, 'b_aaaaaa', typed)), { setIndex: 1, kg: 32.5, value: 9 });
+    // İmleç o sete gelince (taslaksız) yazılanı gösterir.
+    doc = logNext(day, doc, 1);
+    assert.deepEqual(values(nextSet(day, doc, null, 'b_aaaaaa', typed)), { setIndex: 1, kg: 30, value: 9 });
+    // Aynı setin eskisinin yerine yazılır; listede olmayanı düşürmek aynı listeyi verir.
+    assert.deepEqual(keepTyped(typed, { rowId: 'r_aaaaaa', setIndex: 1, kg: 35 }), [{ rowId: 'r_aaaaaa', setIndex: 1, kg: 35 }]);
+    assert.equal(withoutTyped(typed, 'r_aaaaaa', 2), typed);
+    // Yapılan setin yazılanı düşer.
+    assert.equal(pendingTyped(day, doc, typed), typed);
+    doc = logSet(day, doc, { rowId: 'r_aaaaaa', setIndex: 1, kg: 30, value: 9, stamp: stamp(3), random: sequence() }).doc;
+    assert.deepEqual(pendingTyped(day, doc, typed), []);
   });
 
   test('kendi programın belgesi programın kimliğini ve adını taşır; sunucu günü o programda bulur', async () => {

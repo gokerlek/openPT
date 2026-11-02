@@ -66,6 +66,8 @@ export type LocalWorkout = {
   /** Bu antrenmandaki dinlenme sayısı: kilit uyarısı yalnız ilkinde. */
   restCount: number;
   draft: SetDraft | null;
+  /** Seçili setin dışındaki setlere yazılanlar (`keepTyped`); önceki sürümün kaydında yok. */
+  drafts?: readonly SetDraft[];
   /** Süreli setin sayacı ("Başlat ▶"); sayılmıyorsa null. */
   timer: SetTimer | null;
   /**
@@ -278,6 +280,7 @@ export function parseLocalWorkout(text: string | null): LocalWorkout | null {
     rest: restOf(raw.rest),
     restCount: count(raw.restCount),
     draft: isDraft(raw.draft) ? raw.draft : null,
+    ...(Array.isArray(raw.drafts) ? { drafts: raw.drafts.filter(isDraft).slice(0, 100) } : {}),
     timer: parseSetTimer(raw.timer),
     extraRounds: roundsOf(raw.extraRounds),
   };
