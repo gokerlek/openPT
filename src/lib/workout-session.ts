@@ -221,8 +221,16 @@ export function setViews(day: WorkoutDay, doc: Pick<SessionDoc, 'entries'>, rowI
   return [...planned, ...extras];
 }
 
+/** Setin girilen değerleri: ağırlık, tekrar ya da süre (`value`), kardiyoda mesafe ve eğim (`cardio.ts`). */
+export type SetValues = {
+  kg?: number | undefined;
+  value?: number | undefined;
+  distanceM?: number | undefined;
+  inclinePct?: number | undefined;
+};
+
 /** Kaydedilmemiş taslak: danışanın stepper'la değiştirdiği değerler (yalnız o set için). */
-export type SetDraft = { rowId: string; setIndex: number; kg?: number | undefined; value?: number | undefined };
+export type SetDraft = { rowId: string; setIndex: number } & SetValues;
 
 /**
  * Seçili setin dışındaki setlere yazılanlar: danışan bir satıra yazıp ✓'lamadan başka sete geçince değerler o satırda
@@ -259,6 +267,9 @@ export type NextSet = {
   /** Önceden dolu ağırlık (ağırlıksız harekette yok) ve tekrar/süre. */
   kg: number | undefined;
   value: number;
+  /** Kardiyoda önceden dolu mesafe, yürüyüş/koşuda eğim (`cardioPrefill`); yoksa boş. */
+  distanceM?: number;
+  inclinePct?: number;
   /** Birimin turu (0'dan; fazladan turda planın turlarının arkasından): grubun "Tur 2/3"ü. */
   round: number;
   /** "+ Set ekle" ile istenen fazladan set. */
@@ -323,6 +334,19 @@ function chosenSet(
   return set && { ...set, chosen: true };
 }
 
+/**
+ * Kardiyo setinin önceden dolu mesafesi ve eğimi (kuvvet setlerindeki gibi): taslak → o sete yazılan → hedef → geçen
+ * seferin aynı seti; hiçbiri yoksa boş. Eğim yalnız yürüyüş/koşuda; kardiyo olmayan satırda ikisi de yok.
+ */
+function cardioPrefill(row: WorkoutRow, target: SetTarget, setIndex: number, own: readonly (SetDraft | undefined)[]): Pick<NextSet, 'distanceM' | 'inclinePct'> {
+  if (!row.cardio) return {};
+  const last = row.lastTime.find((item) => item.setIndex === setIndex);
+  const pick = (key: 'distanceM' | 'inclinePct') => own.map((item) => item?.[key]).find((value) => value !== undefined) ?? target[key] ?? last?.[key];
+  const distanceM = pick('distanceM');
+  const inclinePct = row.cardio === 'walk' ? pick('inclinePct') : undefined;
+  return { ...(distanceM !== undefined ? { distanceM } : {}), ...(inclinePct !== undefined ? { inclinePct } : {}) };
+}
+
 /** Satırın bekleyen bir seti (`view`) ve önceden dolu değerleri: taslağınki, yoksa o sete yazılan (`typed`), yoksa öneri. */
 function setAt(
   day: WorkoutDay,
@@ -341,7 +365,18 @@ function setAt(
   const drafted = mine(draft) ? draft : undefined;
   const saved = typed?.find(mine);
   const own = { kg: drafted?.kg ?? saved?.kg, value: drafted?.value ?? saved?.value };
-  const common = { unitKey: at.unit.key, rowId: at.rowId, position: view.position, total: all.length, setIndex: view.setIndex, target: view.target, plannedKg: view.plannedKg, restAfterSeconds: at.restAfterSeconds, round: at.round };
+  const common = {
+    unitKey: at.unit.key,
+    rowId: at.rowId,
+    position: view.position,
+    total: all.length,
+    setIndex: view.setIndex,
+    target: view.target,
+    plannedKg: view.plannedKg,
+    restAfterSeconds: at.restAfterSeconds,
+    round: at.round,
+    ...cardioPrefill(row, view.target, view.setIndex, [drafted, saved]),
+  };
   if (view.extra) {
     // Fazladan set: ağırlık bu hareketin son setinden (danışanın bugünkü ağırlığı), tekrar aralığın altı.
     const lastKg = entry?.sets.filter((set) => set.type === 'working' && set.kg !== undefined).at(-1)?.kg;
@@ -443,12 +478,24 @@ function putEntry(doc: SessionDoc, entry: SessionEntry, extra: Partial<Pick<Sess
  * "Set bitti": hareketin kaydı yoksa oluşur; set o günkü hedefi ve planı taşır. Ağırlık yalnız
  * ağırlıklı harekette; süreli harekette değer saniyedir. `overload`: aşırı yük onaylandı (ya da bu
  * harekette zaten onaylanmıştı); hareketin ilk aşırı yük setinde PT'ye bildirim (`notices`). `extra`:
- * "+ Set ekle" ile istenen fazladan set (`setIndex` planın arkasından; hedefi ve planı planın son setinin).
+ * "+ Set ekle" ile istenen fazladan set (`setIndex` planın arkasından; hedefi ve planı planın son setinin). Kardiyoda
+ * mesafe, yürüyüş/koşuda eğim de yazılır.
  */
 export function logSet(
   day: WorkoutDay,
   doc: SessionDoc,
-  input: { rowId: string; setIndex: number; kg?: number | undefined; value: number; overload?: boolean; extra?: boolean; stamp: Stamp; random?: Random },
+  input: {
+    rowId: string;
+    setIndex: number;
+    kg?: number | undefined;
+    value: number;
+    distanceM?: number | undefined;
+    inclinePct?: number | undefined;
+    overload?: boolean;
+    extra?: boolean;
+    stamp: Stamp;
+    random?: Random;
+  },
 ): { doc: SessionDoc; setId: string } {
   const row = day.rows[input.rowId];
   const template = templateRowOf(day, input.rowId);
@@ -468,6 +515,9 @@ export function logSet(
     setIndex: input.setIndex,
     ...(weighted && input.kg !== undefined ? { kg: input.kg } : {}),
     ...(row.trackingType === 'duration' ? { seconds: input.value } : { reps: input.value }),
+    // Kardiyoda mesafe; yürüyüş/koşuda eğim hep (girilmediyse 0): kalori yalnız eğimi olan sette (`cardio.ts`).
+    ...(row.cardio && input.distanceM !== undefined ? { distanceM: input.distanceM } : {}),
+    ...(row.cardio === 'walk' ? { inclinePct: input.inclinePct ?? 0 } : {}),
     ...(target ? { target } : {}),
     ...(weighted ? { topWeightKg: row.plan.topWeightKg } : {}),
     plannedSetCount: row.plan.sets.length,
@@ -506,7 +556,12 @@ export function findSet(doc: Pick<SessionDoc, 'entries'>, setId: string): { entr
 }
 
 /** Setin düzenlenmesi (alttaki panelin "Kaydet"i): değerler değişir, yapıldığı an (`at`) değişmez; birleştirme `editedAt`'le. */
-export function editSet(doc: SessionDoc, setId: string, values: { kg?: number | undefined; value: number }, stamp: Stamp): SessionDoc {
+export function editSet(
+  doc: SessionDoc,
+  setId: string,
+  values: { kg?: number | undefined; value: number; distanceM?: number | undefined; inclinePct?: number | undefined },
+  stamp: Stamp,
+): SessionDoc {
   const found = findSet(doc, setId);
   if (!found) return doc;
   const { set } = found;
@@ -514,6 +569,9 @@ export function editSet(doc: SessionDoc, setId: string, values: { kg?: number | 
     ...set,
     ...(set.kg !== undefined || values.kg !== undefined ? { kg: values.kg ?? set.kg } : {}),
     ...(set.seconds !== undefined ? { seconds: values.value } : { reps: values.value }),
+    // Kardiyo: verilen alan değişir, verilmeyen kalır.
+    ...(values.distanceM !== undefined ? { distanceM: values.distanceM } : {}),
+    ...(values.inclinePct !== undefined ? { inclinePct: values.inclinePct } : {}),
     editedAt: stamp.at,
     by: stamp.by,
   };

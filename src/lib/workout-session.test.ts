@@ -5,7 +5,7 @@ import { sessionDocSchema, type SessionDoc } from './schemas/session.ts';
 import { volumeOf, waterOf } from './session-index.ts';
 import { toSetResults } from './session-results.ts';
 import { at, DAY_A, programFile, sessionDoc, sessionEntry, W1, workingSet } from './testing/session-fixtures.ts';
-import { DEVICES, EXERCISES, dayWithBlocks, workoutDay } from './testing/workout-fixtures.ts';
+import { DEVICES, EXERCISES, PLANK, WORKOUT_TODAY, assignedFile, dayWithBlocks, parsedProgram, workoutDay } from './testing/workout-fixtures.ts';
 import { OWN_DAY_B, OWN_ID, ownProgram } from './testing/own-fixtures.ts';
 import { fakeSessionRepo } from './testing/fake-session-repo.ts';
 import { ownProgramPath } from './own-programs.ts';
@@ -958,5 +958,94 @@ describe('kardiyo metinleri', () => {
     assert.equal(targetCell(target, 'duration', 'walk'), '30 dk');
     assert.equal(targetText(target, 'duration', 'walk'), 'Hedef 30 dk · 3 km · %5');
     assert.equal(targetText({ min: 30, max: 45 }, 'duration'), 'Hedef 30–45 sn');
+  });
+});
+
+describe('kardiyo: önceden dolu mesafe ve eğim, kayıt ve düzeltme', () => {
+  const { locomotion: _none, ...plain } = { ...PLANK, locomotion: true };
+  const treadmill = { ...plain, id: 'kosu-bandi', title: 'Koşu Bandı', category: 'warmup' as const, equipment: 'cardio_machine', pattern: 'cardio' as const, locomotion: true, primaryMuscles: ['cardio'] };
+  const cycle = { ...plain, id: 'sabit-bisiklet', title: 'Sabit Bisiklet', category: 'warmup' as const, equipment: 'cardio_machine', pattern: 'cardio' as const, primaryMuscles: ['cardio'] };
+  const exercises = new Map([...EXERCISES, [treadmill.id, treadmill], [cycle.id, cycle]]);
+
+  function cardioDay(walkSets: unknown[], history: SessionDoc[] = []) {
+    const raw = assignedFile();
+    const days = (raw.phases as { days: { blocks: unknown[] }[] }[])[0]?.days;
+    if (days?.[0]) {
+      days[0].blocks = [
+        { id: 'b_card01', kind: 'single', restSeconds: 60, rows: [{ id: 'r_card01', exerciseId: 'kosu-bandi', sets: walkSets }] },
+        { id: 'b_card02', kind: 'single', restSeconds: 60, rows: [{ id: 'r_card02', exerciseId: 'sabit-bisiklet', sets: [{ min: 600, max: 600, distanceM: 4000, inclinePct: 2 }] }] },
+        { id: 'b_card03', kind: 'single', restSeconds: 60, rows: [{ id: 'r_card03', exerciseId: 'bench-press', sets: [{ min: 8, max: 10 }] }] },
+      ];
+    }
+    const day = buildWorkoutDay({ program: parsedProgram(raw), dayId: null, exercises, devices: DEVICES, history, today: WORKOUT_TODAY });
+    if (!day) throw new Error('Gün kurulamadı.');
+    return day;
+  }
+
+  const lastWalk = sessionDoc({
+    id: 's_aaaaaaaa',
+    status: 'finished',
+    startedAt: at(-1000),
+    finishedAt: at(-960),
+    entries: [
+      sessionEntry('e_card01', {
+        rowId: 'r_card01',
+        exerciseId: 'kosu-bandi',
+        title: 'Koşu Bandı',
+        sets: [{ id: 'st_00000000', type: 'working', setIndex: 0, seconds: 1700, distanceM: 2800, inclinePct: 4, at: at(-999), by: W1 }],
+      }),
+    ],
+  });
+
+  test('satırın kardiyo türü: yürüyüş/koşu, makine, kuvvette yok', () => {
+    const day = cardioDay([{ min: 1800, max: 1800 }]);
+    assert.equal(day.rows.r_card01?.cardio, 'walk');
+    assert.equal(day.rows.r_card02?.cardio, 'machine');
+    assert.equal(day.rows.r_card03?.cardio, undefined);
+  });
+
+  test('mesafe ve eğim hedeften; hedefte yoksa geçen seferden; o da yoksa boş', () => {
+    const fromTarget = cardioDay([{ min: 1800, max: 1800, distanceM: 3000, inclinePct: 5 }], [lastWalk]);
+    const next = nextSet(fromTarget, start(fromTarget));
+    assert.deepEqual({ distanceM: next?.distanceM, inclinePct: next?.inclinePct }, { distanceM: 3000, inclinePct: 5 });
+    const fromLast = cardioDay([{ min: 1800, max: 1800 }], [lastWalk]);
+    const again = nextSet(fromLast, start(fromLast));
+    assert.deepEqual({ distanceM: again?.distanceM, inclinePct: again?.inclinePct }, { distanceM: 2800, inclinePct: 4 });
+    const empty = cardioDay([{ min: 1800, max: 1800 }]);
+    const none = nextSet(empty, start(empty));
+    assert.equal(none && 'distanceM' in none, false);
+    assert.equal(none && 'inclinePct' in none, false);
+  });
+
+  test('taslak ve satırda yazılan hedefi ezer; makinede eğim yok', () => {
+    const day = cardioDay([{ min: 1800, max: 1800, distanceM: 3000, inclinePct: 5 }]);
+    const doc = start(day);
+    const drafted = nextSet(day, doc, { rowId: 'r_card01', setIndex: 0, distanceM: 3200 }, 'b_card01');
+    assert.deepEqual({ distanceM: drafted?.distanceM, inclinePct: drafted?.inclinePct }, { distanceM: 3200, inclinePct: 5 });
+    const typed = nextSet(day, doc, null, 'b_card01', [{ rowId: 'r_card01', setIndex: 0, inclinePct: 7.5 }]);
+    assert.equal(typed?.inclinePct, 7.5);
+    const bike = nextSet(day, doc, null, 'b_card02');
+    assert.deepEqual({ distanceM: bike?.distanceM, inclinePct: bike?.inclinePct }, { distanceM: 4000, inclinePct: undefined });
+  });
+
+  test('kayıt: yürüyüşte mesafe ve eğim (girilmediyse 0), makinede yalnız mesafe, kuvvette hiçbiri', () => {
+    const day = cardioDay([{ min: 1800, max: 1800 }]);
+    let doc = start(day);
+    doc = logSet(day, doc, { rowId: 'r_card01', setIndex: 0, value: 1800, distanceM: 3000, stamp: stamp(1), random: sequence() }).doc;
+    doc = logSet(day, doc, { rowId: 'r_card02', setIndex: 0, value: 600, distanceM: 4000, inclinePct: 3, stamp: stamp(2), random: sequence() }).doc;
+    doc = logSet(day, doc, { rowId: 'r_card03', setIndex: 0, kg: 60, value: 10, distanceM: 1, inclinePct: 1, stamp: stamp(3), random: sequence() }).doc;
+    const setOf = (rowId: string) => doc.entries.find((entry) => entry.rowId === rowId)?.sets[0];
+    assert.deepEqual([setOf('r_card01')?.seconds, setOf('r_card01')?.distanceM, setOf('r_card01')?.inclinePct], [1800, 3000, 0]);
+    assert.deepEqual([setOf('r_card02')?.distanceM, setOf('r_card02') && 'inclinePct' in setOf('r_card02')!], [4000, false]);
+    assert.equal(setOf('r_card03') && ('distanceM' in setOf('r_card03')! || 'inclinePct' in setOf('r_card03')!), false);
+    assert.ok(v.safeParse(sessionDocSchema, doc).success);
+  });
+
+  test('düzeltme: verilen alan değişir, verilmeyen kalır', () => {
+    const day = cardioDay([{ min: 1800, max: 1800 }]);
+    const logged = logSet(day, start(day), { rowId: 'r_card01', setIndex: 0, value: 1800, distanceM: 3000, inclinePct: 5, stamp: stamp(1), random: sequence() });
+    const fixed = editSet(logged.doc, logged.setId, { value: 1800, distanceM: 3200 }, stamp(2));
+    const set = findSet(fixed, logged.setId)?.set;
+    assert.deepEqual([set?.seconds, set?.distanceM, set?.inclinePct], [1800, 3200, 5]);
   });
 });

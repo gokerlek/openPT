@@ -1,5 +1,6 @@
 import * as v from 'valibot';
 import { groupByEquipment, rankAlternatives } from './alternatives.ts';
+import { bodyMassOn } from './cardio.ts';
 import { effectiveSets } from './client-targets.ts';
 import { postGuard } from './client-auth-routes.ts';
 import { canRecordHealth } from './client-status.ts';
@@ -336,6 +337,16 @@ function careOf(client: Client, healthFile: StoredJson | null | 'broken', today:
 }
 
 /**
+ * Kardiyo kalorisi için en son vücut ağırlığı (`cardio.ts`): yalnız ölçüm onayı varken; dosya yoksa, bozuksa ya da
+ * ölçüm yoksa yok (kalori gösterilmez).
+ */
+function bodyMassOf(client: Client, healthFile: StoredJson | null | 'broken'): number | undefined {
+  if (!canRecordHealth(client, 'measurements') || !healthFile || healthFile === 'broken') return undefined;
+  const parsed = v.safeParse(healthRecordSchema, healthFile.content);
+  return parsed.success ? bodyMassOn(parsed.output.measurements) : undefined;
+}
+
+/**
  * Günün satırlarına kart notu (`care`); kısıt yoksa gün aynen döner. Kendi programda satırı danışan seçti: metin
  * "antrenörün planladı" demez (`own`, muadil ve eklenenle aynı).
  */
@@ -384,8 +395,11 @@ export function workoutRoute(deps: WorkoutRouteDeps, dayParam: string | null, pr
       catalogOf(deps),
       deps.timeZone(),
       readTolerant(repo, PROPOSALS_PATH),
-      // Sağlık verisi yalnız onay varken okunur (gösterim de işlemedir): set artışının hazır oluşluk koşulu ve kısıtlar.
-      canRecordHealth(client, 'readiness') || canRecordHealth(client, 'conditions') ? readTolerant(repo, HEALTH_PATH) : Promise.resolve(null),
+      // Sağlık verisi yalnız onay varken okunur (gösterim de işlemedir): set artışının hazır oluşluk koşulu, kısıtlar ve
+      // kardiyo kalorisinin kilosu (ölçüm onayı).
+      canRecordHealth(client, 'readiness') || canRecordHealth(client, 'conditions') || canRecordHealth(client, 'measurements')
+        ? readTolerant(repo, HEALTH_PATH)
+        : Promise.resolve(null),
     ]);
     const now = deps.now();
     const today = todayIn(timeZone, now);
@@ -426,6 +440,8 @@ export function workoutRoute(deps: WorkoutRouteDeps, dayParam: string | null, pr
         });
         if (setIncrease.length > 0) day = { ...day, setIncrease };
         day = withRowCare(day, catalog.exercises, care.input);
+        const bodyMassKg = bodyMassOf(client, healthFile);
+        if (bodyMassKg !== undefined) day = { ...day, bodyMassKg };
       }
     }
 

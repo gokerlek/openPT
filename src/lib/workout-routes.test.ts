@@ -668,3 +668,25 @@ describe('kendi programlar (kendi-program.md §3.2, §5.4)', () => {
     assert.equal((await alternativesRoute(deps, OWN_DAY_A, OWN_ROW_GOBLET, '../x')).status, 400);
   });
 });
+
+describe('kardiyo kalorisinin kilosu', () => {
+  test('yalnız ölçüm onayıyla, en son ölçüm; onay yoksa yok', async () => {
+    const health = {
+      version: 2,
+      checkIns: [],
+      measurements: [
+        { date: '2026-09-01', id: 'body_mass', value: 76 },
+        { date: '2026-09-20', id: 'body_mass', value: 74 },
+      ],
+    };
+    const files = { 'program.json': programFile(), 'health.json': health };
+    const consented = setup(files);
+    consented.deps.loadClient = async () => ({
+      ...CLIENT,
+      modules: { health: { enabled: true, fields: ['measurements'] } },
+      consents: { health: { granted: true, version: HEALTH_CONSENT_VERSION, fields: ['measurements'], at: '2026-09-01T10:00:00.000Z' } },
+    });
+    assert.equal(body(await workoutRoute(consented.deps, null)).day?.bodyMassKg, 74);
+    assert.equal(body(await workoutRoute(setup(files).deps, null)).day?.bodyMassKg, undefined);
+  });
+});

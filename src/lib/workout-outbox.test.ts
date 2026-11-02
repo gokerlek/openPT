@@ -103,7 +103,7 @@ describe('kuyruk: telefondaki kayıt', () => {
       rest: startRest('st_aaaaaaaa', 90, 1_000),
       restCount: 1,
       draft: { rowId: 'r_aaaaaa', setIndex: 1, kg: 25 },
-      drafts: [{ rowId: 'r_aaaaaa', setIndex: 2, kg: 30, value: 7 }],
+      drafts: [{ rowId: 'r_aaaaaa', setIndex: 2, kg: 30, value: 7 }, { rowId: 'r_bbbbbb', setIndex: 0, value: 1800, distanceM: 3000, inclinePct: 2.5 }],
       timer: startSetTimer({ rowId: 'r_bbbbbb', setIndex: 0, target: { min: 30, max: 45 } }, 2_000),
       lastSentAt: 500,
     };
