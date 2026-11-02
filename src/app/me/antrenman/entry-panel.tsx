@@ -6,12 +6,13 @@ import { Check, Plus } from '@/components/line-icons';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Stepper } from '@/components/ui/stepper';
+import { CARDIO_LIMITS, minutesOf } from '@/lib/cardio';
 import { formatKg, formatNumber } from '@/lib/format';
 import { gridOf } from '@/lib/progression';
 import { SESSION_LIMITS } from '@/lib/schemas/session';
 import { cn } from '@/lib/utils';
 import type { WorkoutRow } from '@/lib/workout-plan';
-import { clockText, targetText, type NextSet, type OverloadState } from '@/lib/workout-session';
+import { clockText, targetText, type NextSet, type OverloadState, type SetValues } from '@/lib/workout-session';
 import type { SetTimerTick } from '@/lib/workout-timer';
 
 /** Süreli harekette stepper adımı (sn). */
@@ -207,7 +208,7 @@ export function EntryPanel({
   /** Süreli setin sayacı çalışıyorsa hâli. */
   timer: TimerView | null;
   now: number;
-  onChange: (values: { kg?: number | undefined; value?: number | undefined }) => void;
+  onChange: (values: SetValues) => void;
   onResetKg: () => void;
   onDone: () => void;
   onStartTimer: () => void;
@@ -262,6 +263,10 @@ export function EntryPanel({
 
   const weighted = row.trackingType === 'weight_reps';
   const duration = row.trackingType === 'duration';
+  const cardio = row.cardio ?? null;
+  // Yürüyüş/koşuda süre dakikayla girilir (saniye saklanır).
+  const walk = cardio === 'walk';
+  const valueMax = walk ? SESSION_LIMITS.seconds / 60 : duration ? SESSION_LIMITS.seconds : SESSION_LIMITS.reps;
   const grid = weighted ? gridOf(row.spec) : null;
   const { kg, value } = next;
   const running = duration && timer !== null && !frozen;
@@ -316,7 +321,7 @@ export function EntryPanel({
         <span className="text-muted-foreground" aria-hidden>
           ·
         </span>
-        <span className="min-w-0 flex-1 truncate text-muted-foreground">{targetText(next.target, row.trackingType)}</span>
+        <span className="min-w-0 flex-1 truncate text-muted-foreground">{targetText(next.target, row.trackingType, cardio)}</span>
         {inTransition && transition ? (
           <span className="shrink-0 text-[0.8125rem] text-primary">Geçiş {clockText(Math.ceil((transition.endsAt - now) / 1000))}</span>
         ) : running ? (
@@ -354,19 +359,56 @@ export function EntryPanel({
       ) : (
         <Stepper
           size="xl"
-          value={value}
+          value={walk ? minutesOf(value) : value}
           onValueChange={(changed) => {
-            if (changed !== null && Number.isFinite(changed)) onChange({ value: Math.min(duration ? SESSION_LIMITS.seconds : SESSION_LIMITS.reps, Math.max(0, Math.round(changed))) });
+            if (changed === null || !Number.isFinite(changed)) return;
+            const shown = Math.min(valueMax, Math.max(0, changed));
+            onChange({ value: walk ? Math.round(shown * 60) : Math.round(shown) });
           }}
           min={0}
-          max={duration ? SESSION_LIMITS.seconds : SESSION_LIMITS.reps}
-          step={duration ? SECONDS_STEP : 1}
-          unit={duration ? 'sn' : 'tekrar'}
+          max={valueMax}
+          step={walk ? 1 : duration ? SECONDS_STEP : 1}
+          inputMode={walk ? 'decimal' : 'numeric'}
+          unit={walk ? 'dk' : duration ? 'sn' : 'tekrar'}
           aria-label={duration ? `Süre, ${row.title}` : next.target.amrap ? `Yaptığın tekrar, ${row.title}` : `Tekrar, ${row.title}`}
           decrementLabel={duration ? 'Süreyi azalt' : 'Tekrarı azalt'}
           incrementLabel={duration ? 'Süreyi artır' : 'Tekrarı artır'}
         />
       )}
+      {cardio && !frozen ? (
+        // Sayaç çalışırken de görünür: bandın ekranındaki mesafe ve eğim "Bitir"den önce yazılır.
+        <div className={cn('grid gap-2', walk && 'grid-cols-[1.4fr_1fr]')}>
+          <Stepper
+            value={next.distanceM ?? null}
+            onValueChange={(changed) => {
+              if (changed !== null && Number.isFinite(changed)) onChange({ distanceM: Math.min(CARDIO_LIMITS.distanceMax, Math.max(0, Math.round(changed))) });
+            }}
+            min={0}
+            max={CARDIO_LIMITS.distanceMax}
+            step={CARDIO_LIMITS.distanceStep}
+            unit="m"
+            aria-label={`Mesafe, ${row.title}`}
+            decrementLabel="Mesafeyi azalt"
+            incrementLabel="Mesafeyi artır"
+          />
+          {walk ? (
+            <Stepper
+              value={next.inclinePct ?? null}
+              onValueChange={(changed) => {
+                if (changed !== null && Number.isFinite(changed)) onChange({ inclinePct: Math.min(CARDIO_LIMITS.inclineMax, Math.max(0, changed)) });
+              }}
+              min={0}
+              max={CARDIO_LIMITS.inclineMax}
+              step={CARDIO_LIMITS.inclineStep}
+              inputMode="decimal"
+              unit="%"
+              aria-label={`Eğim, ${row.title}`}
+              decrementLabel="Eğimi azalt"
+              incrementLabel="Eğimi artır"
+            />
+          ) : null}
+        </div>
+      ) : null}
       {ask ? (
         <div role="alert" className="flex min-h-11 items-center gap-2 text-sm text-destructive-text">
           <WarningCircle weight="fill" className="size-4.5 shrink-0" />

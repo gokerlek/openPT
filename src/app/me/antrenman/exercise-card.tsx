@@ -219,6 +219,7 @@ export function ExerciseCard({
   onAddSet,
   onDropExtra,
   ownProgram = false,
+  bodyMassKg,
 }: {
   row: WorkoutRow;
   group: GroupView | null;
@@ -255,6 +256,8 @@ export function ExerciseCard({
   onDropExtra: () => void;
   /** Kendi programda satır notu danışanın kendi notudur: etiket "Not:" (`docs/design/kendi-program.md` §2.9). */
   ownProgram?: boolean;
+  /** Danışanın kilosu (ölçüm onayıyla): yürüyüş/koşu setinin kalorisi; yoksa kalori yok, kartta not. */
+  bodyMassKg?: number | undefined;
 }) {
   const [open, setOpen] = useState<'reason' | 'note' | 'setup' | 'care' | null>(null);
   const [warmOpen, setWarmOpen] = useState(false);
@@ -279,7 +282,9 @@ export function ExerciseCard({
   const tableRef = useRef<HTMLTableElement>(null);
   const weighted = row.trackingType === 'weight_reps';
   const showTarget = !isStraight(sets.map((set) => set.target));
-  const valueHead = row.trackingType === 'duration' ? 'Süre' : 'Tekrar';
+  const cardio = row.cardio ?? null;
+  const walk = cardio === 'walk';
+  const valueHead = walk ? 'Dk' : row.trackingType === 'duration' ? 'Süre' : 'Tekrar';
   const reason = row.plan.reason as SuggestionReason;
   // Öneri katmanının gerekçesi (§5.7): kısa çip ve tamamı; eski anlık görüntüde gerekçenin genel metni.
   const reasonChip = row.why?.chip ?? REASON_LABELS[reason] ?? '';
@@ -400,13 +405,16 @@ export function ExerciseCard({
             {warmups.length > 0 && (!warmDone || warmOpen) ? <WarmupRow warmups={warmups} onToggle={onToggleWarmup} /> : null}
 
             <Table ref={tableRef} aria-label={`${row.title} setleri`} className="table-fixed tabular-nums">
-              {/* 375 px'te: 40 + Önceki + (48) + 64 + 56 + 44; "Önceki" en az ~90 px kalır. kg kutusu "102,5"i sığdırır. */}
+              {/* 375 px'te: 40 + Önceki + (48) + 64 + 56 + 44; "Önceki" en az ~90 px kalır. kg kutusu "102,5"i sığdırır.
+                  Kardiyoda kg yerine süreden sonra mesafe (64) ve yürüyüş/koşuda eğim (48); "Önceki" iki satıra sarar. */}
               <colgroup>
                 <col className="w-10" />
                 <col />
                 {showTarget ? <col className="w-12" /> : null}
                 {weighted ? <col className="w-16" /> : null}
                 <col className="w-14" />
+                {cardio ? <col className="w-16" /> : null}
+                {walk ? <col className="w-12" /> : null}
                 <col className="w-11" />
               </colgroup>
               <TableHeader>
@@ -416,6 +424,8 @@ export function ExerciseCard({
                   {showTarget ? <TableHead className="h-6 text-xs font-medium text-muted-foreground">Hedef</TableHead> : null}
                   {weighted ? <TableHead className="h-6 text-xs font-medium text-muted-foreground">kg</TableHead> : null}
                   <TableHead className="h-6 text-xs font-medium text-muted-foreground">{valueHead}</TableHead>
+                  {cardio ? <TableHead className="h-6 text-xs font-medium text-muted-foreground">Metre</TableHead> : null}
+                  {walk ? <TableHead className="h-6 text-xs font-medium text-muted-foreground">Eğim %</TableHead> : null}
                   <TableHead className="h-6">
                     <span className="sr-only">Durum</span>
                   </TableHead>
@@ -430,6 +440,8 @@ export function ExerciseCard({
                       key={set.extra ? `extra-${set.setIndex}` : set.setIndex}
                       set={set}
                       trackingType={row.trackingType}
+                      cardio={cardio}
+                      bodyMassKg={bodyMassKg}
                       showTarget={showTarget}
                       group={group !== null}
                       highlight={highlight}
@@ -452,6 +464,9 @@ export function ExerciseCard({
                 })}
               </TableBody>
             </Table>
+            {walk && bodyMassKg === undefined ? (
+              <p className="border-t px-3 py-2 text-xs text-muted-foreground">Kalori, antrenörünün girdiği vücut ağırlığından hesaplanır.</p>
+            ) : null}
             {onAddSet ? (
               <Button variant="ghost" className="h-11 w-full justify-start gap-2 rounded-none border-t px-3 text-primary hover:text-primary" onClick={onAddSet}>
                 <Plus data-icon="inline-start" weight="bold" />

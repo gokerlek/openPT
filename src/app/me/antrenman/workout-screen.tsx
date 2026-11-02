@@ -83,6 +83,7 @@ import {
   pendingTyped,
   withoutTyped,
   type NextSet,
+  type SetValues,
   type SetView,
 } from '@/lib/workout-session';
 import { startSetTimer, stopSetTimer, tickSetTimer } from '@/lib/workout-timer';
@@ -138,6 +139,22 @@ function useNow(intervalMs: number): number {
 
 function stampOf(local: LocalWorkout) {
   return { at: new Date().toISOString(), by: local.doc.writer };
+}
+
+/** Taslağın değerleri: verilenler, verilmeyenler önceden dolu değerden (ağırlık, tekrar/süre, kardiyoda mesafe ve eğim). */
+function valuesOf(prefilled: Pick<NextSet, 'kg' | 'value' | 'distanceM' | 'inclinePct'>, values: SetValues): SetValues {
+  const distanceM = values.distanceM ?? prefilled.distanceM;
+  const inclinePct = values.inclinePct ?? prefilled.inclinePct;
+  return {
+    kg: values.kg ?? prefilled.kg,
+    value: values.value ?? prefilled.value,
+    ...(distanceM !== undefined ? { distanceM } : {}),
+    ...(inclinePct !== undefined ? { inclinePct } : {}),
+  };
+}
+
+function sameValues(a: SetValues, b: SetValues): boolean {
+  return a.kg === b.kg && a.value === b.value && a.distanceM === b.distanceM && a.inclinePct === b.inclinePct;
 }
 
 /** Planın programı adres parçası olarak (`program=`): kendi programın kimliği ya da `pt`. */
@@ -1174,6 +1191,8 @@ export function WorkoutScreen({
         setIndex: next.setIndex,
         kg: next.kg,
         value,
+        distanceM: next.distanceM,
+        inclinePct: next.inclinePct,
         overload,
         extra: next.extra === true,
         stamp: stampOf(current),
@@ -1194,7 +1213,7 @@ export function WorkoutScreen({
       setSaving({ next: { ...next, value } });
       vibrate(10);
       const logged = findSet(doc, setId)?.set;
-      announce(`Set ${next.position + 1} kaydedildi${logged ? `: ${setValueText(logged)}` : ''}`);
+      announce(`Set ${next.position + 1} kaydedildi${logged ? `: ${setValueText(logged, plan.bodyMassKg)}` : ''}`);
 
       if (after.kind === 'member') {
         // Grupta turun sıradaki üyesi: dinlenme yok; kart 12 px kayar, devrede istasyon geçişi sayar.
@@ -1362,14 +1381,14 @@ export function WorkoutScreen({
   );
 
   const onDraft = useCallback(
-    (values: { kg?: number | undefined; value?: number | undefined }) => {
+    (values: SetValues) => {
       const current = localRef.current;
       if (!current || saving) return;
       const next = nextSet(planOf(current), current.doc, current.draft, focusRef.current, current.drafts);
       if (!next) return;
       // Setin yazılanı artık taslakta: listede kalmaz.
       const drafts = current.drafts && withoutTyped(current.drafts, next.rowId, next.setIndex);
-      commit({ ...current, draft: { rowId: next.rowId, setIndex: next.setIndex, kg: values.kg ?? next.kg, value: values.value ?? next.value }, ...(drafts ? { drafts } : {}) });
+      commit({ ...current, draft: { rowId: next.rowId, setIndex: next.setIndex, ...valuesOf(next, values) }, ...(drafts ? { drafts } : {}) });
     },
     [commit, saving],
   );
@@ -1381,7 +1400,7 @@ export function WorkoutScreen({
    * Seçilemeyen sette (yapıldı, üye geçildi), kaydedilirken ve süreli set sayarken bir şey olmaz. Seçildiyse seçilen set.
    */
   const onPick = useCallback(
-    (rowId: string, setIndex: number, values: { kg?: number | undefined; value?: number | undefined } = {}): NextSet | null => {
+    (rowId: string, setIndex: number, values: SetValues = {}): NextSet | null => {
       const current = localRef.current;
       if (!current || saving || finishingRef.current || timedSetRunning(current, focusRef.current)) return null;
       const plan = planOf(current);
@@ -1391,15 +1410,15 @@ export function WorkoutScreen({
       const picked = nextSet(plan, current.doc, own, focusRef.current, typed);
       // Bekleyen fazladan setler birbirinin aynısı: hangisine dokunulursa ilki seçilir.
       if (!picked || picked.rowId !== rowId || (picked.setIndex !== setIndex && !picked.extra)) return null;
-      const draft = { rowId, setIndex: picked.setIndex, kg: values.kg ?? picked.kg, value: values.value ?? picked.value };
+      const draft = { rowId, setIndex: picked.setIndex, ...valuesOf(picked, values) };
       const moving = was !== null && (was.rowId !== draft.rowId || was.setIndex !== draft.setIndex);
       // Önerinin aynısı tutulmaz: öneri sonra (önceki set yapılınca) değişebilir.
       const suggested = moving ? nextSet(plan, current.doc, { rowId: was.rowId, setIndex: was.setIndex }, focusRef.current) : null;
-      const typedThere = moving && suggested?.rowId === was.rowId && suggested.setIndex === was.setIndex && (suggested.kg !== was.kg || suggested.value !== was.value);
+      const typedThere = moving && suggested?.rowId === was.rowId && suggested.setIndex === was.setIndex && !sameValues(suggested, was);
       const drafts = withoutTyped(typedThere ? keepTyped(typed, was) : typed, draft.rowId, draft.setIndex);
-      const same = was !== null && !moving && was.kg === draft.kg && was.value === draft.value;
+      const same = was !== null && !moving && sameValues(was, draft);
       // İmlecin kendi setine taslaksız dokunmak bir şey değiştirmez.
-      const already = !was && !picked.chosen && values.kg === undefined && values.value === undefined;
+      const already = !was && !picked.chosen && sameValues(values, {});
       if (drafts !== typed || (!same && !already)) commit({ ...current, draft, drafts });
       return picked;
     },
@@ -1417,14 +1436,13 @@ export function WorkoutScreen({
       if (!current || !found || saving || finishingRef.current) return;
       const { set } = found;
       const old = set.reps ?? set.seconds ?? 0;
-      const kg = values.kg ?? set.kg;
-      const value = values.value ?? old;
-      if (kg === set.kg && value === old) return;
-      const doc = editSet(current.doc, setId, { kg, value }, stampOf(current));
+      const fixed = { kg: values.kg ?? set.kg, value: values.value ?? old, distanceM: values.distanceM ?? set.distanceM, inclinePct: values.inclinePct ?? set.inclinePct };
+      if (sameValues(fixed, { kg: set.kg, value: old, distanceM: set.distanceM, inclinePct: set.inclinePct })) return;
+      const doc = editSet(current.doc, setId, fixed, stampOf(current));
       commit(withChange(current, doc, { send: true }));
       outbox.schedule();
-      const fixed = findSet(doc, setId)?.set;
-      announce(`Set düzeltildi${fixed ? `: ${setValueText(fixed)}` : ''}`);
+      const saved = findSet(doc, setId)?.set;
+      announce(`Set düzeltildi${saved ? `: ${setValueText(saved)}` : ''}`);
     },
     [saving, commit, outbox, announce],
   );
@@ -2375,6 +2393,8 @@ export function WorkoutScreen({
     return {
       kg: values.kg,
       value: values.value,
+      distanceM: values.distanceM,
+      inclinePct: values.inclinePct,
       invalid: asks,
       disabled: saving !== null || timerRunning,
       onSelect: () => {
@@ -2521,6 +2541,7 @@ export function WorkoutScreen({
                   onClickCapture={swallow}>
                   <ExerciseCard
                     row={row}
+                    bodyMassKg={plan.bodyMassKg}
                     group={group}
                     sets={sets}
                     warmups={warmups}
@@ -2623,7 +2644,7 @@ export function WorkoutScreen({
                 total={rest.total}
                 view={restView}
                 summary={restSummary}
-                saved={restSet ? { text: `Set ${(restPosition ?? 0) + 1} kaydedildi · ${setValueText(restSet)}`, setId: restSet.id } : null}
+                saved={restSet ? { text: `Set ${(restPosition ?? 0) + 1} kaydedildi · ${setValueText(restSet, plan.bodyMassKg)}`, setId: restSet.id } : null}
                 lockWarning={local.restCount === 1 && (isIOS() || !wakeHeld)}
                 amrap={restSet?.target?.amrap ? { reps: restSet.reps ?? 0 } : null}
                 effort={restEffort}

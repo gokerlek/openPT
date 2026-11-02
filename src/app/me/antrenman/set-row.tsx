@@ -6,12 +6,13 @@ import { animate, motion, useMotionValue, useReducedMotion, useTransform } from 
 import { ArrowUp, Trash } from '@phosphor-icons/react';
 import { Check, X } from '@/components/line-icons';
 import { NUMBER_FORMAT, WHOLE_FORMAT } from '@/components/ui/stepper';
+import { CARDIO_LIMITS, distanceText, durationClock, inclineText, minutesOf, walkKcal, type CardioKind } from '@/lib/cardio';
 import { formatNumber } from '@/lib/format';
 import { DURATION, INSTANT, SWIPE, tween } from '@/lib/motion';
 import type { TrackingType } from '@/lib/progression';
 import { SESSION_LIMITS } from '@/lib/schemas/session';
 import { cn } from '@/lib/utils';
-import { previousText, setValueText, targetCell, type SetView } from '@/lib/workout-session';
+import { previousText, setValueText, targetCell, type SetValues, type SetView } from '@/lib/workout-session';
 
 /** Şu anki satırın ✓'u: panel kapalıyken "Set bitti"nin yerine klavye odağının gideceği yer. */
 export const ROW_DONE_ID = 'set-done-row';
@@ -45,18 +46,21 @@ const INPUT_CELL = 'px-1 py-1.5 align-middle whitespace-nowrap';
 export type RowEntry = {
   kg: number | undefined;
   value: number;
+  /** Kardiyoda önceden dolu (ya da yazılan) mesafe ve eğim. */
+  distanceM: number | undefined;
+  inclinePct: number | undefined;
   /** Aşırı yük soruluyor: kg kutusu kırmızı çizgili. */
   invalid: boolean;
   /** Kaydedilirken ya da süreli set sayarken kutular ve ✓ kapalı. */
   disabled: boolean;
   /** Seti seçer; zaten seçiliyse bir şey yapmaz. */
   onSelect: () => void;
-  onChange: (values: { kg?: number | undefined; value?: number | undefined }) => void;
+  onChange: (values: SetValues) => void;
   onDone: () => void;
 };
 
 /** Yapılmış setin yerinde düzeltilmesi: kutudan çıkınca (Enter) yazılır. */
-export type FixSet = (setId: string, values: { kg?: number | undefined; value?: number | undefined }) => void;
+export type FixSet = (setId: string, values: SetValues) => void;
 
 /**
  * Hücredeki sayı kutusu (Base UI NumberField, stepper'sız): dokununca klavye açılır, virgül de nokta da ondalık
@@ -179,6 +183,8 @@ type Track = { id: number; x: number; y: number; base: number; dragging: boolean
 export function SetRow({
   set,
   trackingType,
+  cardio,
+  bodyMassKg,
   showTarget,
   group,
   highlight,
@@ -197,6 +203,10 @@ export function SetRow({
 }: {
   set: SetView;
   trackingType: TrackingType;
+  /** Kardiyo satırı: mesafe hücresi, yürüyüş/koşuda eğim hücresi, süre dakika ve yapılmış sette kalori (`cardio.ts`). */
+  cardio: CardioKind | null;
+  /** Danışanın kilosu (ölçüm onayıyla); yoksa kalori yazılmaz. */
+  bodyMassKg: number | undefined;
   showTarget: boolean;
   /** Grupta bekleyen fazladan satırın ✕'u "turu kaldır" der. */
   group: boolean;
@@ -236,7 +246,35 @@ export function SetRow({
   const input = logged ? null : entry;
   const fix = logged && onFix ? onFix : null;
   const duration = trackingType === 'duration';
-  const valueLabel = `${label}, ${duration ? 'süre (sn)' : amrap ? 'yaptığın tekrar' : 'tekrar'}`;
+  const walk = cardio === 'walk';
+  const valueLabel = `${label}, ${walk ? 'süre (dk)' : duration ? 'süre (sn)' : amrap ? 'yaptığın tekrar' : 'tekrar'}`;
+  const kcal = logged && walk ? walkKcal(logged, bodyMassKg) : null;
+  // Yürüyüş/koşuda süre kutusu dakika (saniye saklanır).
+  const shownValue = (seconds: number | undefined) => (walk && seconds !== undefined ? minutesOf(seconds) : seconds);
+  const storedValue = (shown: number) => (walk ? Math.round(shown * 60) : shown);
+  const valueText = (seconds: number) => (walk ? durationClock(seconds) : duration ? `${seconds} sn` : String(seconds));
+  const cardioCell = (key: 'distanceM' | 'inclinePct', text: (value: number) => string) => {
+    const current = input ? input[key] : logged?.[key];
+    return input || fix ? (
+      <motion.td data-slot="table-cell" style={cellStyle} onClick={stop} className={INPUT_CELL}>
+        <CellNumber
+          value={current}
+          max={key === 'distanceM' ? CARDIO_LIMITS.distanceMax : CARDIO_LIMITS.inclineMax}
+          decimal={key === 'inclinePct'}
+          invalid={false}
+          disabled={input ? input.disabled : locked}
+          label={`${label}, ${key === 'distanceM' ? 'mesafe (m)' : 'eğim (%)'}`}
+          settled={!input}
+          onFocus={input?.onSelect}
+          onChange={(changed) => (input ? input.onChange({ [key]: changed }) : logged && fix?.(logged.id, { [key]: changed }))}
+        />
+      </motion.td>
+    ) : (
+      <motion.td data-slot="table-cell" style={cellStyle} className={cn(CELL, logged ? 'font-semibold' : 'text-muted-foreground')}>
+        {current !== undefined ? text(current) : '—'}
+      </motion.td>
+    );
+  };
 
   const settle = (to: 'open' | 'closed') => {
     if (to === 'open') setActive(true);
@@ -331,7 +369,7 @@ export function SetRow({
           <button
             type="button"
             id={setEditButtonId(logged.id)}
-            aria-label={`${label}, ${setValueText(logged)}. Düzenle`}
+            aria-label={`${label}, ${setValueText(logged, bodyMassKg)}. Düzenle`}
             onClick={(event) => {
               event.stopPropagation();
               onEdit(logged.id);
@@ -344,7 +382,10 @@ export function SetRow({
         )}
         {amrap ? <span className="sr-only">, AMRAP</span> : null}
       </motion.td>
-      <motion.td data-slot="table-cell" style={cellStyle} className={cn(CELL, 'truncate text-muted-foreground')}>
+      <motion.td
+        data-slot="table-cell"
+        style={cellStyle}
+        className={cn(CELL, 'truncate text-muted-foreground', cardio && 'text-xs leading-tight whitespace-normal')}>
         {set.extra && input ? (
           // Yalnız ✕ bırakır (onaysız, geri alınmaz): yazıya dokunmak satırı seçer.
           <span className="inline-flex max-w-full items-center">
@@ -364,12 +405,13 @@ export function SetRow({
         ) : set.extra ? (
           'fazladan'
         ) : (
-          previousText(set.previous, trackingType)
+          previousText(set.previous, trackingType, cardio)
         )}
+        {kcal ? <span className="block font-medium text-primary-text">≈ {kcal} kcal</span> : null}
       </motion.td>
       {showTarget ? (
         <motion.td data-slot="table-cell" style={cellStyle} className={cn(CELL, 'text-muted-foreground')}>
-          {targetCell(set.target, trackingType)}
+          {targetCell(set.target, trackingType, cardio)}
         </motion.td>
       ) : null}
       {weighted && (input || fix) ? (
@@ -408,29 +450,33 @@ export function SetRow({
       {input || fix ? (
         <motion.td data-slot="table-cell" style={cellStyle} onClick={stop} className={INPUT_CELL}>
           <CellNumber
-            value={input ? input.value : value}
-            max={duration ? SESSION_LIMITS.seconds : SESSION_LIMITS.reps}
-            decimal={false}
+            value={shownValue(input ? input.value : value)}
+            max={walk ? SESSION_LIMITS.seconds / 60 : duration ? SESSION_LIMITS.seconds : SESSION_LIMITS.reps}
+            decimal={walk}
             invalid={false}
             disabled={input ? input.disabled : locked}
             label={valueLabel}
             settled={!input}
             onFocus={input?.onSelect}
-            onChange={(changed) => (input ? input.onChange({ value: changed }) : logged && fix?.(logged.id, { value: changed }))}
+            onChange={(changed) =>
+              input ? input.onChange({ value: storedValue(changed) }) : logged && fix?.(logged.id, { value: storedValue(changed) })
+            }
           />
         </motion.td>
       ) : (
         <motion.td data-slot="table-cell" style={cellStyle} className={cn(CELL, logged ? 'font-semibold' : 'text-muted-foreground')}>
-          {value !== undefined ? (duration ? `${value} sn` : value) : amrap && !showTarget ? targetCell(set.target, trackingType) : '—'}
+          {value !== undefined ? valueText(value) : amrap && !showTarget ? targetCell(set.target, trackingType, cardio) : '—'}
         </motion.td>
       )}
+      {cardio ? cardioCell('distanceM', distanceText) : null}
+      {walk ? cardioCell('inclinePct', inclineText) : null}
       {/* Son hücre yerinde durur, içeriği kayar: "Sil" onun içinde satırın sağ kenarına tutunur. */}
       <td data-slot="table-cell" style={logged ? { touchAction: 'pan-y pinch-zoom' } : undefined} className={cn(CELL, 'relative p-0 text-center')}>
         <motion.div style={{ x }}>
           {logged ? (
             <button
               type="button"
-              aria-label={`${label}, ${setValueText(logged)}, yapıldı. İşareti kaldır`}
+              aria-label={`${label}, ${setValueText(logged, bodyMassKg)}, yapıldı. İşareti kaldır`}
               onClick={(event) => {
                 event.stopPropagation();
                 onUntick(logged.id);
@@ -449,7 +495,7 @@ export function SetRow({
               type="button"
               id={highlight === 'current' ? ROW_DONE_ID : undefined}
               disabled={input.disabled}
-              aria-label={`${label}, ${weighted && input.kg !== undefined ? `${formatNumber(input.kg)} kg × ${input.value}` : duration ? `${input.value} sn` : `${input.value} tekrar`}: yapıldı olarak işaretle`}
+              aria-label={`${label}, ${weighted && input.kg !== undefined ? `${formatNumber(input.kg)} kg × ${input.value}` : duration ? valueText(input.value) : `${input.value} tekrar`}: yapıldı olarak işaretle`}
               onClick={(event) => {
                 event.stopPropagation();
                 input.onDone();
