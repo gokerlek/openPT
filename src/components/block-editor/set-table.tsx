@@ -11,6 +11,7 @@ import { InputGroup, InputGroupAddon, InputGroupInput } from '@/components/ui/in
 import { Stepper, type StepperSource } from '@/components/ui/stepper';
 import { Toggle } from '@/components/ui/toggle';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { CARDIO_LIMITS, cardioKind, minutesOf } from '@/lib/cardio';
 import { loadSpecFor } from '@/lib/device-loads';
 import { formatNumber } from '@/lib/format';
 import { describeSetRules } from '@/lib/progression';
@@ -48,6 +49,13 @@ const TIME_CHIPS: readonly (readonly [number, number])[] = [
   [45, 45],
   [60, 60],
 ];
+/** Yürüyüş/koşuda çipler dakika. */
+const WALK_CHIPS: readonly (readonly [number, number])[] = [
+  [10, 10],
+  [20, 20],
+  [30, 30],
+  [45, 45],
+];
 
 /** Sayı kutusunun değeri: boş → yok, çözülemeyen giriş → NaN (şema "Sayı gir." der). */
 function numberOf(input: HTMLInputElement): number | undefined {
@@ -57,6 +65,14 @@ function numberOf(input: HTMLInputElement): number | undefined {
 
 function shown(value: unknown): number | '' {
   return typeof value === 'number' && !Number.isNaN(value) ? value : '';
+}
+
+/** Yürüyüş/koşuda süre kutusu dakika: saniye → dakika (gösterim), dakika → saniye (yazım; boş ve bozuk aynen). */
+function shownMinutes(value: unknown): number | '' {
+  return typeof value === 'number' && !Number.isNaN(value) ? minutesOf(value) : '';
+}
+function secondsOf(minutes: number | undefined): number | undefined {
+  return minutes === undefined || Number.isNaN(minutes) ? minutes : Math.round(minutes * 60);
 }
 
 function rangeText(set: Pick<SetSpec, 'min' | 'max'>): string {
@@ -223,7 +239,8 @@ export function BlockSecondsField({
 
 /**
  * Düz setlerin hedefi: iki kutu ilk sete bağlıdır (hata ve odak), yazılan değer bütün setlere
- * tek seferde gider. Altında çipler (tekrar ya da süre); basılı çip şu anki hedeftir.
+ * tek seferde gider. Altında çipler (tekrar ya da süre); basılı çip şu anki hedeftir. Kardiyoda
+ * mesafe, yürüyüş/koşuda eğim de (`cardio.ts`); yürüyüş/koşuda süre dakikayla yazılır.
  */
 export function TargetField({ blockIndex, rowIndex, row, exercise }: RowProps) {
   const editor = useEditor();
@@ -231,17 +248,24 @@ export function TargetField({ blockIndex, rowIndex, row, exercise }: RowProps) {
   const setsPath = blockField(path, blockIndex, 'rows', rowIndex, 'sets');
   const minField = useField(form, { path: blockField(path, blockIndex, 'rows', rowIndex, 'sets', 0, 'min') });
   const maxField = useField(form, { path: blockField(path, blockIndex, 'rows', rowIndex, 'sets', 0, 'max') });
+  const distanceField = useField(form, { path: blockField(path, blockIndex, 'rows', rowIndex, 'sets', 0, 'distanceM') });
+  const inclineField = useField(form, { path: blockField(path, blockIndex, 'rows', rowIndex, 'sets', 0, 'inclinePct') });
   const isDuration = exercise?.trackingType === 'duration';
-  const max = isDuration ? TEMPLATE_LIMITS.secondsMax : TEMPLATE_LIMITS.repsMax;
-  const step = isDuration ? 5 : 1;
-  const errors = minField.errors ?? maxField.errors;
+  const cardio = exercise ? cardioKind(exercise) : null;
+  const walk = cardio === 'walk';
+  const max = walk ? TEMPLATE_LIMITS.secondsMax / 60 : isDuration ? TEMPLATE_LIMITS.secondsMax : TEMPLATE_LIMITS.repsMax;
+  const step = walk ? 1 : isDuration ? 5 : 1;
+  const errors = minField.errors ?? maxField.errors ?? distanceField.errors ?? inclineField.errors;
   const amrap = setShape(row.sets).amrap;
   const amrapBadge = amrap === 'none' ? null : amrap === 'last' ? (row.sets.length === 1 ? 'AMRAP' : 'son set AMRAP') : amrap === 'all' ? 'hepsi AMRAP' : 'AMRAP';
   const first = row.sets[0];
-  const chips = isDuration ? TIME_CHIPS : REP_CHIPS;
-  const unit = isDuration ? 'sn' : 'tekrar';
+  const chips = walk ? WALK_CHIPS : isDuration ? TIME_CHIPS : REP_CHIPS;
+  const unit = walk ? 'dk' : isDuration ? 'sn' : 'tekrar';
+  const scale = walk ? 60 : 1;
+  const display = walk ? shownMinutes : shown;
+  const toStored = (value: number | undefined) => (walk ? secondsOf(value) : value);
 
-  const writeAll = (patch: Partial<Pick<SetSpec, 'min' | 'max'>>) => {
+  const writeAll = (patch: Partial<Pick<SetSpec, 'min' | 'max' | 'distanceM' | 'inclinePct'>>) => {
     const sets = (getInput(form, { path: setsPath }) ?? []) as SetSpec[];
     setInput(form, { path: setsPath, input: sets.map((set) => ({ ...set, ...patch })) as SetSpec[] });
   };
@@ -264,8 +288,8 @@ export function TargetField({ blockIndex, rowIndex, row, exercise }: RowProps) {
           aria-label="En az"
           aria-invalid={Boolean(minField.errors) || undefined}
           className="h-8 w-14 text-center tabular-nums touch:h-11"
-          value={shown(minField.input)}
-          onChange={(event) => writeAll({ min: numberOf(event.currentTarget) as number })}
+          value={display(minField.input)}
+          onChange={(event) => writeAll({ min: toStored(numberOf(event.currentTarget)) as number })}
           onKeyDown={keepLineEnter}
         />
         <span className="text-muted-foreground" aria-hidden>
@@ -283,13 +307,55 @@ export function TargetField({ blockIndex, rowIndex, row, exercise }: RowProps) {
           aria-label="En çok"
           aria-invalid={Boolean(maxField.errors) || undefined}
           className="h-8 w-14 text-center tabular-nums touch:h-11"
-          value={shown(maxField.input)}
-          onChange={(event) => writeAll({ max: numberOf(event.currentTarget) as number })}
+          value={display(maxField.input)}
+          onChange={(event) => writeAll({ max: toStored(numberOf(event.currentTarget)) as number })}
           onKeyDown={keepLineEnter}
         />
         <span className="text-sm text-muted-foreground">{unit}</span>
         {amrapBadge ? <Badge variant="secondary">{amrapBadge}</Badge> : null}
       </div>
+      {cardio ? (
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          <label className="flex items-center gap-2 text-sm text-muted-foreground">
+            Mesafe
+            <Input
+              {...distanceField.props}
+              id={`distance-${row.id}`}
+              type="number"
+              inputMode="numeric"
+              min={1}
+              max={CARDIO_LIMITS.distanceMax}
+              step={CARDIO_LIMITS.distanceStep}
+              aria-invalid={Boolean(distanceField.errors) || undefined}
+              className="h-8 w-20 text-center tabular-nums text-foreground touch:h-11"
+              value={shown(distanceField.input)}
+              onChange={(event) => writeAll({ distanceM: numberOf(event.currentTarget) })}
+              onKeyDown={keepLineEnter}
+            />
+            m
+          </label>
+          {walk ? (
+            <label className="flex items-center gap-2 text-sm text-muted-foreground">
+              Eğim
+              <Input
+                {...inclineField.props}
+                id={`incline-${row.id}`}
+                type="number"
+                inputMode="decimal"
+                min={0}
+                max={CARDIO_LIMITS.inclineMax}
+                step={CARDIO_LIMITS.inclineStep}
+                aria-invalid={Boolean(inclineField.errors) || undefined}
+                className="h-8 w-16 text-center tabular-nums text-foreground touch:h-11"
+                value={shown(inclineField.input)}
+                onChange={(event) => writeAll({ inclinePct: numberOf(event.currentTarget) })}
+                onKeyDown={keepLineEnter}
+              />
+              %
+            </label>
+          ) : null}
+        </div>
+      ) : null}
       <FieldError>{errors?.[0]}</FieldError>
       {exercise ? (
         <div
@@ -297,7 +363,7 @@ export function TargetField({ blockIndex, rowIndex, row, exercise }: RowProps) {
           aria-label="Hazır hedefler"
           className="-mx-3 flex gap-1.5 overflow-x-auto px-3 pt-1 pb-0.5 [scrollbar-width:none] sm:mx-0 sm:flex-wrap sm:px-0">
           {chips.map(([min, max]) => {
-            const pressed = first?.min === min && first?.max === max;
+            const pressed = first?.min === min * scale && first?.max === max * scale;
             const label = min === max ? formatNumber(min) : `${formatNumber(min)}–${formatNumber(max)}`;
             return (
               <Toggle
@@ -305,10 +371,10 @@ export function TargetField({ blockIndex, rowIndex, row, exercise }: RowProps) {
                 variant="outline"
                 size="sm"
                 pressed={pressed}
-                onPressedChange={() => writeAll({ min, max })}
+                onPressedChange={() => writeAll({ min: min * scale, max: max * scale })}
                 aria-label={`${label} ${unit}`}
                 className="h-8 min-w-11 shrink-0 rounded-full px-3 tabular-nums touch:h-11">
-                {isDuration ? `${label} sn` : label}
+                {isDuration ? `${label} ${unit}` : label}
               </Toggle>
             );
           })}

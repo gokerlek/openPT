@@ -7,6 +7,7 @@ import { LabeledSelect } from '@/components/labeled-select';
 import { Button } from '@/components/ui/button';
 import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
+import { Toggle } from '@/components/ui/toggle';
 import { loadSpecFor } from '@/lib/device-loads';
 import { formatNumber } from '@/lib/format';
 import { defaultRule, describeRule, PROGRESSION_LABELS, RIR_LABELS, type ProgressionRule } from '@/lib/progression';
@@ -150,6 +151,39 @@ function LoadStep({ form, deviceById }: { form: Form; deviceById: ReadonlyMap<st
   );
 }
 
+/** Süreli kardiyo harekette (deseni kardiyo) yürüyüş/koşu anahtarı: eğim ve kalori (`cardio.ts`). */
+function LocomotionField({ form }: { form: Form }) {
+  return (
+    <FormField of={form} path={['pattern']}>
+      {(patternField) =>
+        patternField.input === 'cardio' ? (
+          <FormField of={form} path={['locomotion']}>
+            {(field) => (
+              <Field>
+                <FieldLabel htmlFor="locomotion">Yürüyüş/koşu: eğim ve kalori</FieldLabel>
+                <div>
+                  <Toggle
+                    id="locomotion"
+                    variant="outline"
+                    pressed={field.input === true}
+                    onPressedChange={(pressed) => setInput(form, { path: ['locomotion'], input: pressed })}>
+                    {field.input === true ? 'Açık' : 'Kapalı'}
+                  </Toggle>
+                </div>
+                <FieldDescription>
+                  Açıksa hedefe mesafenin yanında eğim de yazılır; danışan eğimi girer, kalori danışanın kilosundan hesaplanır.
+                </FieldDescription>
+              </Field>
+            )}
+          </FormField>
+        ) : (
+          <></>
+        )
+      }
+    </FormField>
+  );
+}
+
 export function LoadFields({
   form,
   deviceById,
@@ -186,6 +220,7 @@ export function LoadFields({
             </div>
 
             {tracking === 'weight_reps' ? <LoadStep form={form} deviceById={deviceById} /> : null}
+            {tracking === 'duration' ? <LocomotionField form={form} /> : null}
 
             <div className="grid gap-4 sm:grid-cols-2">
               <FormField of={form} path={['progression', 'scheme']}>

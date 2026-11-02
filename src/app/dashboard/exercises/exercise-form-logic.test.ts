@@ -136,3 +136,16 @@ describe('ilerleme kuralı', () => {
     assert.match(LIBRARY_IMPACT_NOTE, /satırda özel cihaz\/kural yoksa/);
   });
 });
+
+describe('yürüyüş/koşu işareti', () => {
+  const treadmill = { ...values, category: 'warmup' as const, trackingType: 'duration' as const, equipment: 'cardio_machine' as const, pattern: 'cardio' as const };
+
+  test('yalnız süreli kardiyo harekette ve açıkken gider', () => {
+    const body = toExercisePayload({ ...treadmill, locomotion: true }, { attachmentIds: [] });
+    assert.equal(body.locomotion, true);
+    assert.ok(v.safeParse(saveSchema, JSON.parse(JSON.stringify(body))).success);
+    assert.equal('locomotion' in toExercisePayload({ ...treadmill, locomotion: false }, { attachmentIds: [] }), false);
+    assert.equal('locomotion' in toExercisePayload({ ...values, locomotion: true }, { attachmentIds: [] }), false);
+    assert.equal('locomotion' in toExercisePayload({ ...treadmill, pattern: 'mobility', locomotion: true }, { attachmentIds: [] }), false);
+  });
+});
