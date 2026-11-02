@@ -1,6 +1,6 @@
 # Kardiyo hedefleri: mesafe, süre, eğim ve kalori (tasarım)
 
-Tarih: 2026-11-02. Durum: onay bekliyor.
+Tarih: 2026-11-02. Durum: onaylandı (2026-11-02). Uygulama planı: `docs/plans/2026-11-02-kardiyo-hedefleri.md`.
 
 ## Neden
 
