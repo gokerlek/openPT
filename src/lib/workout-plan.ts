@@ -1,5 +1,6 @@
 import {achievementBaseline,type AchievementBaseline} from './workout-achievements.ts';
 import type { AlternativeCandidate } from './alternatives.ts';
+import { cardioKind, type CardioKind } from './cardio.ts';
 import { withClientTargets } from './client-targets.ts';
 import type { RowCare } from './constraint-filter.ts';
 import { loadSpecFor, type DeviceLoadSettings } from './device-loads.ts';
@@ -114,6 +115,8 @@ export type WorkoutRow = {
   exerciseId: string;
   title: string;
   trackingType: TrackingType;
+  /** Kardiyo satırı: mesafe; yürüyüş/koşuda eğim ve kalori (`cardio.ts`). Kardiyo değilse (ya da eski anlık görüntüde) yok. */
+  cardio?: CardioKind;
   deviceId?: string;
   /** Ağırlık ızgarası: öneri de stepper da bununla adımlar. */
   spec: LoadSpec;
@@ -193,6 +196,11 @@ export type WorkoutDay = {
    * Yalnız telefonda, günün etkin hâlinde (`workout-flow.ts` → `withExtraRounds`); sunucu yazmaz.
    */
   extraRounds?: Record<string, number>;
+  /**
+   * Danışanın en son vücut ağırlığı (kg): yalnız ölçüm onayı sürdükçe, kalori hesabı için (`cardio.ts`). Sağlık verisidir:
+   * seansa yazılmaz, yalnız ekranda kullanılır. Onay ya da ölçüm yoksa yok.
+   */
+  bodyMassKg?: number;
 };
 
 /**
@@ -234,7 +242,13 @@ function findDay(program: PlanProgram, dayId: string): { phase: Program['phases'
 function previousSets(entry: SessionEntry): PreviousSet[] {
   return entry.sets
     .filter((set) => set.type === 'working' && !set.extra)
-    .map((set, position) => ({ setIndex: set.setIndex ?? position, ...(set.kg !== undefined ? { kg: set.kg } : {}), value: set.reps ?? set.seconds ?? 0 }));
+    .map((set, position) => ({
+      setIndex: set.setIndex ?? position,
+      ...(set.kg !== undefined ? { kg: set.kg } : {}),
+      value: set.reps ?? set.seconds ?? 0,
+      ...(set.distanceM !== undefined ? { distanceM: set.distanceM } : {}),
+      ...(set.inclinePct !== undefined ? { inclinePct: set.inclinePct } : {}),
+    }));
 }
 
 /** Seansın programı: kendi programın kimliği, PT'nin programında null. */
@@ -392,12 +406,14 @@ export function workoutRowFor(input: {
   const select = { rowId: row.id, exerciseId: row.exerciseId, deviceId, programId: input.programId };
   const setupNote = setupNoteOf(input.history, select);
   const previous = input.dayId ? previousRowOf(input.history, { dayId: input.dayId, rowId: row.id, exerciseId: row.exerciseId }) : undefined;
+  const cardio = cardioKind(exercise);
   return {
     rowId: row.id,
     blockId: input.blockId,
     exerciseId: row.exerciseId,
     title: exercise.title,
     trackingType: exercise.trackingType,
+    ...(cardio ? { cardio } : {}),
     ...(deviceId ? { deviceId } : {}),
     spec,
     rule,

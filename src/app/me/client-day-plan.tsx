@@ -1,5 +1,6 @@
 import { Bandaids } from '@phosphor-icons/react/dist/ssr';
 import { Badge } from '@/components/ui/badge';
+import { cardioKind } from '@/lib/cardio';
 import { clientSetText } from '@/lib/client-set-text';
 import { BLOCK_KIND_LABELS, describeBlock, groupSkipNote, roundsOf, rowLabels, type PlanExercise, type TemplateBlock } from '@/lib/template-plan';
 
@@ -19,7 +20,7 @@ export function ClientDayPlan({
   cared,
 }: {
   blocks: readonly TemplateBlock[];
-  exercises: ReadonlyMap<string, Pick<PlanExercise, 'title' | 'trackingType'>>;
+  exercises: ReadonlyMap<string, Pick<PlanExercise, 'title' | 'trackingType' | 'pattern' | 'locomotion'>>;
   labels?: ReadonlyMap<string, string>;
   cared?: ReadonlySet<string>;
 }) {
@@ -57,7 +58,7 @@ export function ClientDayPlan({
                       <span className="font-medium">{exercise.title}</span>
                     )}
                     <span className="text-sm text-muted-foreground">
-                      {clientSetText(row.sets, exercise.trackingType, single ? block.restSeconds : undefined)}
+                      {clientSetText(row.sets, exercise.trackingType, single ? block.restSeconds : undefined, cardioKind(exercise))}
                     </span>
                     {row.note ? <span className="text-sm italic text-muted-foreground">{row.note}</span> : null}
                   </div>

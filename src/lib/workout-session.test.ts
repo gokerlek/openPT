@@ -938,3 +938,25 @@ describe('ekran metinleri', () => {
     assert.equal(elapsedText(3600 + 4 * 60 + 18), '1:04:18');
   });
 });
+
+describe('kardiyo metinleri', () => {
+  test('kaydın metni: mesafe ve eğimle, kilo verilirse kalori', () => {
+    assert.equal(setValueText({ seconds: 1800, distanceM: 3000, inclinePct: 5 }, 75), '30:00 · 3 km · %5 · ≈ 253 kcal');
+    assert.equal(setValueText({ seconds: 1800, distanceM: 3000, inclinePct: 5 }), '30:00 · 3 km · %5');
+    assert.equal(setValueText({ seconds: 600, distanceM: 4000 }, 75), '10:00 · 4 km');
+    assert.equal(setValueText({ seconds: 45 }), '45 sn');
+  });
+
+  test('"Önceki": yürüyüşte saat, makinede saniye ve mesafe', () => {
+    assert.equal(previousText({ setIndex: 0, value: 1800, distanceM: 3000, inclinePct: 5 }, 'duration', 'walk'), '30:00 · 3 km · %5');
+    assert.equal(previousText({ setIndex: 0, value: 600, distanceM: 4000 }, 'duration', 'machine'), '600 sn · 4 km');
+    assert.equal(previousText({ setIndex: 0, value: 45 }, 'duration'), '45 sn');
+  });
+
+  test('hedef: yürüyüşte dakika; panelde mesafe ve eğim', () => {
+    const target = { min: 1800, max: 1800, distanceM: 3000, inclinePct: 5 };
+    assert.equal(targetCell(target, 'duration', 'walk'), '30 dk');
+    assert.equal(targetText(target, 'duration', 'walk'), 'Hedef 30 dk · 3 km · %5');
+    assert.equal(targetText({ min: 30, max: 45 }, 'duration'), 'Hedef 30–45 sn');
+  });
+});

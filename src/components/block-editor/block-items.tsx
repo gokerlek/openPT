@@ -15,6 +15,7 @@ import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrig
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { clientTargetState } from '@/lib/client-targets';
 import { DEVICE_KIND_LABELS, DEVICE_KINDS, loadSpecFor } from '@/lib/device-loads';
+import { cardioKind } from '@/lib/cardio';
 import { deviceChangeMessage, dropTargetLabel, groupWorkText, rowWorkText } from '@/lib/edit-messages';
 import { familyOf } from '@/lib/muscles';
 import { describeRule, describeSetRules, PROGRESSION_LABELS, RIR_LABELS } from '@/lib/progression';
@@ -229,7 +230,9 @@ function RowMeta({
 }) {
   const { devices, clientTargets, care } = useEditor();
   const device = exercise ? rowDevice(row, exercise, devices) : undefined;
-  const text = exercise ? rowWorkText(row.sets, exercise.trackingType, block.kind === 'single' ? block.restSeconds : undefined) : null;
+  const text = exercise
+    ? rowWorkText(row.sets, exercise.trackingType, block.kind === 'single' ? block.restSeconds : undefined, cardioKind(exercise))
+    : null;
   const target = clientTargets[row.id];
   // Danışanın kısıtı (tasarım `kisit-tarama.md` §3.3): yasak ya da dikkat; gerekçe ekran okuyucuda ve ipucunda.
   const flag = care?.map[row.exerciseId];

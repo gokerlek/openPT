@@ -1,5 +1,6 @@
 import type { TrackingType } from './progression.ts';
-import { isFullLoad, setShape, type SetSpec } from './set-plan.ts';
+import type { CardioKind } from './cardio.ts';
+import { cardioTargetParts, isFullLoad, setShape, timedSets, type SetSpec } from './set-plan.ts';
 import { formatRest } from './template-plan.ts';
 
 /**
@@ -73,13 +74,18 @@ function loadPhrase(list: readonly SetSpec[]): string | null {
 
 /**
  * Bir satırın setleri danışana. `restSeconds` yalnız tek harekette verilir (setler arası); grupta
- * dinlenme grubun başlığında anlatılır.
+ * dinlenme grubun başlığında anlatılır. Kardiyoda mesafe ve eğim de ("1 set: 30 dk · 3 km · %5").
  */
-export function clientSetText(sets: readonly SetSpec[], trackingType: TrackingType, restSeconds?: number): string {
-  const list = effective(sets, trackingType);
+export function clientSetText(
+  sets: readonly SetSpec[],
+  trackingType: TrackingType,
+  restSeconds?: number,
+  cardio: CardioKind | null = null,
+): string {
+  const list = timedSets(effective(sets, trackingType), cardio);
   if (list.length === 0) return '';
-  const unit = trackingType === 'duration' ? 'sn' : 'tekrar';
+  const unit = cardio === 'walk' ? 'dk' : trackingType === 'duration' ? 'sn' : 'tekrar';
   const rest =
     restSeconds === undefined ? null : restSeconds > 0 ? `${formatRest(restSeconds)} dinlenme` : 'setler arası dinlenme yok';
-  return [setsPhrase(list, unit), loadPhrase(list), rest].filter(Boolean).join(' · ');
+  return [setsPhrase(list, unit), ...cardioTargetParts(list), loadPhrase(list), rest].filter(Boolean).join(' · ');
 }

@@ -1,3 +1,4 @@
+import { cardioParts, cardioText, minutesOf, walkKcal, type CardioKind } from './cardio.ts';
 import { formatKg, formatNumber } from './format.ts';
 import { isFullLoad, isOverload, nextSetInPlan, type Effort, type SetTarget, type TrackingType } from './progression.ts';
 import { SESSION_ID_LENGTHS, SESSION_LIMITS, type SessionDoc, type SessionEntry, type SessionSet } from './schemas/session.ts';
@@ -859,45 +860,68 @@ export function pendingExtra(day: WorkoutDay, doc: Pick<SessionDoc, 'entries' | 
 
 /* --- ekran metinleri --- */
 
-const unitOf = (trackingType: TrackingType) => (trackingType === 'duration' ? 'sn' : 'tekrar');
+const unitOf = (trackingType: TrackingType, cardio: CardioKind | null = null) =>
+  cardio === 'walk' ? 'dk' : trackingType === 'duration' ? 'sn' : 'tekrar';
 
 function range(target: Pick<SetTarget, 'min' | 'max'>): string {
   return target.min === target.max ? formatNumber(target.min) : `${formatNumber(target.min)}–${formatNumber(target.max)}`;
 }
 
-/** Tablodaki "Hedef" sütunu: "12", "10–12", AMRAP'ta "8+", süreli harekette "30 sn". */
-export function targetCell(target: SetTarget, trackingType: TrackingType): string {
-  const text = target.amrap ? `${formatNumber(target.min)}+` : range(target);
-  return trackingType === 'duration' ? `${text} sn` : text;
+/** Yürüyüş/koşuda hedef dakikayla anlatılır. */
+function timed(target: SetTarget, cardio: CardioKind | null): SetTarget {
+  return cardio === 'walk' ? { ...target, min: minutesOf(target.min), max: minutesOf(target.max) } : target;
 }
 
-/** Paneldeki hedef: "Hedef 8–10", AMRAP'ta "En az 8, yapabildiğin kadar", süreli "Hedef 30–45 sn". */
-export function targetText(target: SetTarget, trackingType: TrackingType): string {
-  if (target.amrap) return `En az ${formatNumber(target.min)}${trackingType === 'duration' ? ' sn' : ''}, yapabildiğin kadar`;
-  return `Hedef ${range(target)}${trackingType === 'duration' ? ' sn' : ''}`;
+/** Tablodaki "Hedef" sütunu: "12", "10–12", AMRAP'ta "8+", süreli harekette "30 sn", yürüyüş/koşuda "30 dk". */
+export function targetCell(target: SetTarget, trackingType: TrackingType, cardio: CardioKind | null = null): string {
+  const shown = timed(target, cardio);
+  const text = shown.amrap ? `${formatNumber(shown.min)}+` : range(shown);
+  return trackingType === 'duration' ? `${text} ${unitOf(trackingType, cardio)}` : text;
 }
 
-/** Kaydın metni: "62,5 kg × 10", "10 tekrar", "45 sn". */
-export function setValueText(set: Pick<SessionSet, 'kg' | 'reps' | 'seconds'>): string {
+/** Paneldeki hedef: "Hedef 8–10", AMRAP'ta "En az 8, yapabildiğin kadar", süreli "Hedef 30–45 sn"; kardiyoda mesafe ve eğim de. */
+export function targetText(target: SetTarget, trackingType: TrackingType, cardio: CardioKind | null = null): string {
+  const shown = timed(target, cardio);
+  const unit = trackingType === 'duration' ? ` ${unitOf(trackingType, cardio)}` : '';
+  const extra = cardio ? cardioParts(target).map((part) => ` · ${part}`).join('') : '';
+  if (shown.amrap) return `En az ${formatNumber(shown.min)}${unit}, yapabildiğin kadar${extra}`;
+  return `Hedef ${range(shown)}${unit}${extra}`;
+}
+
+/**
+ * Kaydın metni: "62,5 kg × 10", "10 tekrar", "45 sn"; kardiyoda "30:00 · 3 km · %5", yürüyüş/koşuda kilo verilirse
+ * "· ≈ 253 kcal" de (`cardio.ts`).
+ */
+export function setValueText(set: Pick<SessionSet, 'kg' | 'reps' | 'seconds' | 'distanceM' | 'inclinePct'>, bodyMassKg?: number): string {
+  if (set.seconds !== undefined && (set.distanceM !== undefined || set.inclinePct !== undefined)) {
+    return cardioText(set, walkKcal(set, bodyMassKg));
+  }
   const load = set.kg !== undefined && set.kg > 0 ? formatKg(set.kg) : null;
   if (set.seconds !== undefined) return load ? `${load} × ${set.seconds} sn` : `${set.seconds} sn`;
   return load ? `${load} × ${set.reps ?? 0}` : `${set.reps ?? 0} tekrar`;
 }
 
-/** "Önceki" sütunu: "60 × 10", ağırlıksızda "10", süreli "45 sn"; yoksa "—". */
-export function previousText(previous: PreviousSet | undefined, trackingType: TrackingType): string {
+/** "Önceki" sütunu: "60 × 10", ağırlıksızda "10", süreli "45 sn", yürüyüş/koşuda "30:00 · 3 km · %5"; yoksa "—". */
+export function previousText(previous: PreviousSet | undefined, trackingType: TrackingType, cardio: CardioKind | null = null): string {
   if (!previous) return '—';
-  if (trackingType === 'duration') return `${formatNumber(previous.value)} sn`;
+  if (cardio === 'walk') return cardioText({ seconds: previous.value, distanceM: previous.distanceM, inclinePct: previous.inclinePct });
+  if (trackingType === 'duration') return [`${formatNumber(previous.value)} sn`, ...(cardio ? cardioParts(previous) : [])].join(' · ');
   return previous.kg !== undefined && previous.kg > 0 && trackingType === 'weight_reps'
     ? `${formatNumber(previous.kg)} × ${formatNumber(previous.value)}`
     : formatNumber(previous.value);
 }
 
 /** Dinlenmedeki "Sıradaki": "Set 3 · 62,5 kg × 8–10"; başka harekette adıyla. */
-export function nextText(next: Pick<NextSet, 'position' | 'target' | 'kg'>, row: Pick<WorkoutRow, 'title' | 'trackingType'>, withName: boolean): string {
-  const target = next.target.amrap ? `${formatNumber(next.target.min)}+` : range(next.target);
+export function nextText(
+  next: Pick<NextSet, 'position' | 'target' | 'kg'>,
+  row: Pick<WorkoutRow, 'title' | 'trackingType' | 'cardio'>,
+  withName: boolean,
+): string {
+  const cardio = row.cardio ?? null;
+  const shown = timed(next.target, cardio);
+  const target = shown.amrap ? `${formatNumber(shown.min)}+` : range(shown);
   const body =
-    next.kg !== undefined ? `${formatKg(next.kg)} × ${target}` : `${target} ${unitOf(row.trackingType)}`;
+    next.kg !== undefined ? `${formatKg(next.kg)} × ${target}` : `${target} ${unitOf(row.trackingType, cardio)}`;
   return `${withName ? `${row.title} · ` : ''}Set ${next.position + 1} · ${body}`;
 }
 

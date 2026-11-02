@@ -1,4 +1,5 @@
 import { Badge } from '@/components/ui/badge';
+import { cardioKind } from '@/lib/cardio';
 import { groupWorkText, rowWorkText } from '@/lib/edit-messages';
 import { formatSets } from '@/lib/set-plan';
 import {
@@ -33,7 +34,7 @@ export function DayPlan({
   className,
 }: {
   blocks: readonly TemplateBlock[];
-  exercises: ReadonlyMap<string, Pick<PlanExercise, 'title' | 'trackingType'>>;
+  exercises: ReadonlyMap<string, Pick<PlanExercise, 'title' | 'trackingType' | 'pattern' | 'locomotion'>>;
   missing: 'show' | 'hide';
   audience?: 'pt' | 'client';
   rowNotes?: Readonly<Record<string, string>>;
@@ -62,12 +63,13 @@ export function DayPlan({
               const exercise = exercises.get(row.exerciseId);
               const trackingType = exercise?.trackingType ?? 'weight_reps';
               const rest = block.kind === 'single' ? block.restSeconds : undefined;
+              const cardio = exercise ? cardioKind(exercise) : null;
               const work =
                 audience === 'pt'
-                  ? rowWorkText(row.sets, trackingType, rest)
+                  ? rowWorkText(row.sets, trackingType, rest, cardio)
                   : rest !== undefined && rest > 0
-                    ? `${formatSets(row.sets, trackingType, 'client')} · ${formatRest(rest)} dinlenme`
-                    : formatSets(row.sets, trackingType, 'client');
+                    ? `${formatSets(row.sets, trackingType, 'client', cardio)} · ${formatRest(rest)} dinlenme`
+                    : formatSets(row.sets, trackingType, 'client', cardio);
               return (
                 <div key={row.id} className="flex items-baseline gap-3">
                   <span className="w-6 shrink-0 text-sm font-medium tabular-nums text-muted-foreground">{labels.get(row.id)}</span>

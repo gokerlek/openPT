@@ -346,7 +346,14 @@ export function restoreUnit(plan: TemplateBody, doc: SessionDoc, entryId: string
 
 /* --- önceden dolu değerler (§2.4) --- */
 
-export type PreviousSet = { setIndex: number; kg?: number | undefined; value: number };
+export type PreviousSet = {
+  setIndex: number;
+  kg?: number | undefined;
+  value: number;
+  /** Kardiyo setinde mesafe ve eğim (`cardio.ts`). */
+  distanceM?: number | undefined;
+  inclinePct?: number | undefined;
+};
 
 /**
  * Setin önceden dolu değerleri. Ağırlık: kaydedilmemiş taslak → bu seansın önceki seti → plan (v1

@@ -170,6 +170,7 @@ export function pickerExercises(list: readonly ExerciseWithSource[]): PickerExer
     equipment: exercise.equipment,
     ...(exercise.deviceId ? { deviceId: exercise.deviceId } : {}),
     ...(exercise.pattern ? { pattern: exercise.pattern } : {}),
+    ...(exercise.locomotion ? { locomotion: true } : {}),
     ...(exercise.grip ? { grip: exercise.grip } : {}),
     ...(exercise.alternatives?.length ? { alternatives: exercise.alternatives } : {}),
     ...(exercise.progression ? { progression: exercise.progression } : {}),

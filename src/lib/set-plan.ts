@@ -1,3 +1,4 @@
+import { distanceText, inclineText, minutesOf, type CardioKind } from './cardio.ts';
 import { isFullLoad, type SetTarget, type TrackingType } from './progression.ts';
 
 /**
@@ -211,6 +212,26 @@ function effective(sets: readonly SetSpec[], trackingType: TrackingType): readon
   return trackingType === 'weight_reps' ? sets : sets.map(withoutPct);
 }
 
+/** Yürüyüş/koşuda süre dakikayla anlatılır (`cardio.ts`). */
+export function timedSets(sets: readonly SetSpec[], cardio: CardioKind | null): readonly SetSpec[] {
+  return cardio === 'walk' ? sets.map((set) => ({ ...set, min: minutesOf(set.min), max: minutesOf(set.max) })) : sets;
+}
+
+/** Bir kardiyo alanı: setlerin hepsinde aynıysa tek değer, farklıysa " / " ile (eksik "—"); hiçbirinde yoksa yok. */
+function cardioPart(values: readonly (number | undefined)[], text: (value: number) => string): string | null {
+  if (values.every((value) => value === undefined)) return null;
+  const texts = values.map((value) => (value === undefined ? '—' : text(value)));
+  return texts.every((item) => item === texts[0]) ? (texts[0] as string) : texts.join(' / ');
+}
+
+/** Kardiyo hedefinin mesafesi ve eğimi ("3 km", "%5"); eğim 0 yazılmaz. */
+export function cardioTargetParts(sets: readonly SetSpec[]): string[] {
+  return [
+    cardioPart(sets.map((set) => set.distanceM), distanceText),
+    cardioPart(sets.map((set) => set.inclinePct || undefined), inclineText),
+  ].filter((part): part is string => part !== null);
+}
+
 function positions(indexes: readonly number[]): string {
   return indexes.map((index) => `${index + 1}.`).join(', ');
 }
@@ -219,12 +240,22 @@ function positions(indexes: readonly number[]): string {
  * Setlerin okunur anlatımı (detay, gün planı, danışan ekranı):
  * "3 × 8–12 tekrar · son set AMRAP", "12 / 10 / 8 tekrar · piramit %80 → %100",
  * "5 / 8 / 8 tekrar · back-off %85", "30–60 / 45+ sn". Danışana "yapabildiğin kadar" yazılır.
+ * Kardiyoda mesafe ve eğim de: "1 × 30 dk · 3 km · %5" (yürüyüş/koşuda süre dakika, `cardio`).
  */
-export function formatSets(sets: readonly SetSpec[], trackingType: TrackingType, audience: 'pt' | 'client' = 'pt'): string {
-  const list = effective(sets, trackingType);
+export function formatSets(
+  sets: readonly SetSpec[],
+  trackingType: TrackingType,
+  audience: 'pt' | 'client' = 'pt',
+  cardio: CardioKind | null = null,
+): string {
+  const list = timedSets(effective(sets, trackingType), cardio);
+  const unit = cardio === 'walk' ? 'dk' : trackingType === 'duration' ? 'sn' : 'tekrar';
+  const text = formatList(list, unit, audience === 'client');
+  return text && [text, ...cardioTargetParts(list)].join(' · ');
+}
+
+function formatList(list: readonly SetSpec[], unit: string, client: boolean): string {
   const shape = setShape(list);
-  const unit = trackingType === 'duration' ? 'sn' : 'tekrar';
-  const client = audience === 'client';
   const first = list[0];
   if (!first) return '';
 
@@ -261,10 +292,14 @@ export function formatSets(sets: readonly SetSpec[], trackingType: TrackingType,
  * Program geçmişi için kısa biçim: "3×8–12", "3×30–60 sn, son set AMRAP",
  * "12/10/8 (piramit %80/%90/%100)", "5/8/8 (back-off %85)", "8–12/8–12 (yük %70/%100)".
  */
-export function setsText(sets: readonly SetSpec[], trackingType: TrackingType): string {
-  const list = effective(sets, trackingType);
+export function setsText(sets: readonly SetSpec[], trackingType: TrackingType, cardio: CardioKind | null = null): string {
+  const list = timedSets(effective(sets, trackingType), cardio);
+  const text = shortList(list, cardio === 'walk' ? ' dk' : trackingType === 'duration' ? ' sn' : '');
+  return text && [text, ...cardioTargetParts(list)].join(' · ');
+}
+
+function shortList(list: readonly SetSpec[], seconds: string): string {
   const shape = setShape(list);
-  const seconds = trackingType === 'duration' ? ' sn' : '';
   const first = list[0];
   if (!first) return '';
 
