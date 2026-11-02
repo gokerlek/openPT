@@ -5,6 +5,7 @@ import { Check } from '@/components/line-icons';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Stepper } from '@/components/ui/stepper';
+import { minutesOf } from '@/lib/cardio';
 import { EFFORT_LABELS, gridOf, type Effort } from '@/lib/progression';
 import { SESSION_LIMITS } from '@/lib/schemas/session';
 import type { WorkoutRow } from '@/lib/workout-plan';
@@ -56,6 +57,9 @@ export function SetEditPanel({
   const { row } = edit;
   const weighted = row.trackingType === 'weight_reps' && edit.kg !== undefined;
   const duration = row.trackingType === 'duration';
+  // Yürüyüş/koşuda süre dakikayla düzeltilir (tablo ve giriş paneli gibi), saniye saklanır.
+  const walk = row.cardio === 'walk';
+  const valueMax = walk ? SESSION_LIMITS.seconds / 60 : duration ? SESSION_LIMITS.seconds : SESSION_LIMITS.reps;
   const grid = weighted ? gridOf(row.spec) : null;
   const save = () => onSave({ ...(weighted ? { kg } : {}), value, ...(edit.effort !== null ? { effort } : {}) });
 
@@ -103,14 +107,17 @@ export function SetEditPanel({
       ) : null}
       <Stepper
         size="xl"
-        value={value}
+        value={walk ? minutesOf(value) : value}
         onValueChange={(changed) => {
-          if (changed !== null && Number.isFinite(changed)) setValue(Math.min(duration ? SESSION_LIMITS.seconds : SESSION_LIMITS.reps, Math.max(0, Math.round(changed))));
+          if (changed === null || !Number.isFinite(changed)) return;
+          const shown = Math.min(valueMax, Math.max(0, changed));
+          setValue(walk ? Math.round(shown * 60) : Math.round(shown));
         }}
         min={0}
-        max={duration ? SESSION_LIMITS.seconds : SESSION_LIMITS.reps}
-        step={duration ? SECONDS_STEP : 1}
-        unit={duration ? 'sn' : 'tekrar'}
+        max={valueMax}
+        step={walk ? 1 : duration ? SECONDS_STEP : 1}
+        inputMode={walk ? 'decimal' : 'numeric'}
+        unit={walk ? 'dk' : duration ? 'sn' : 'tekrar'}
         aria-label={duration ? `Süre, ${row.title}` : `Tekrar, ${row.title}`}
         decrementLabel={duration ? 'Süreyi azalt' : 'Tekrarı azalt'}
         incrementLabel={duration ? 'Süreyi artır' : 'Tekrarı artır'}

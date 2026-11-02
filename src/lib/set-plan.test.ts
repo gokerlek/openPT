@@ -198,6 +198,17 @@ describe('kardiyo hedefleri', () => {
     assert.equal(setsText([{ min: 600, max: 600, distanceM: 4000 }], 'duration'), '1×600 sn · 4 km');
   });
 
+  test('"Setleri eşitle" mesafe ve eğimi korur', () => {
+    const sets: SetSpec[] = [
+      { min: 1800, max: 1800, distanceM: 3000, inclinePct: 5 },
+      { min: 600, max: 600, distanceM: 1000, inclinePct: 5 },
+    ];
+    assert.deepEqual(straightPreset(sets), [
+      { min: 1800, max: 1800, distanceM: 3000, inclinePct: 5 },
+      { min: 1800, max: 1800, distanceM: 3000, inclinePct: 5 },
+    ]);
+  });
+
   test('setlerde farklı mesafe tek tek; eğim 0 yazılmaz', () => {
     const sets: SetSpec[] = [
       { min: 600, max: 600, distanceM: 2000, inclinePct: 0 },

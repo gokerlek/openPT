@@ -388,8 +388,9 @@ export function TargetField({ blockIndex, rowIndex, row, exercise }: RowProps) {
 export function SetsSummary({ row, exercise }: Pick<RowProps, 'row' | 'exercise'>) {
   const editor = useEditor();
   const shape = setShape(row.sets).kind;
-  const steps = row.sets.map((set) => `${rangeText(set)}${set.amrap ? '+' : ''}`).join(' / ');
-  const unit = exercise?.trackingType === 'duration' ? ' sn' : '';
+  const walk = exercise ? cardioKind(exercise) === 'walk' : false;
+  const steps = row.sets.map((set) => `${rangeText(walk ? { min: minutesOf(set.min), max: minutesOf(set.max) } : set)}${set.amrap ? '+' : ''}`).join(' / ');
+  const unit = walk ? ' dk' : exercise?.trackingType === 'duration' ? ' sn' : '';
   const suffix = shape === 'pyramid' ? ' · piramit' : shape === 'backoff' ? ' · back-off' : '';
   const text = `${steps}${unit}${suffix}`;
   // Kendi programda set düzeni seçilmez: kopyalanan satırın düzeni yalnız okunur ("Setleri eşitle" aşağıda).
@@ -447,6 +448,7 @@ function SetNumberInput({
   max,
   step,
   disabled,
+  minutes = false,
   onValue,
 }: {
   rowId: string;
@@ -458,6 +460,8 @@ function SetNumberInput({
   max: number;
   step: number;
   disabled: boolean;
+  /** Yürüyüş/koşuda süre dakikayla yazılır, saniye saklanır. */
+  minutes?: boolean;
   onValue: (value: number | undefined) => void;
 }) {
   const last = index === count - 1;
@@ -477,8 +481,8 @@ function SetNumberInput({
       aria-label={label}
       aria-invalid={Boolean(field.errors) || undefined}
       className={cn('text-center tabular-nums', column === 'pct' ? 'touch:h-11' : 'h-10 w-14 px-1.5 touch:h-11')}
-      value={shown(field.input)}
-      onChange={(event) => onValue(numberOf(event.currentTarget))}
+      value={minutes ? shownMinutes(field.input) : shown(field.input)}
+      onChange={(event) => onValue(minutes ? secondsOf(numberOf(event.currentTarget)) : numberOf(event.currentTarget))}
       onKeyDown={(event) => {
         const action = enterAction('set', event.nativeEvent);
         if (action === 'pass') return;
@@ -504,8 +508,10 @@ function SetRow({ blockIndex, rowIndex, row, exercise, index }: RowProps & { ind
   const count = row.sets.length;
   const duration = exercise?.trackingType === 'duration';
   const weighted = exercise?.trackingType === 'weight_reps';
-  const max = duration ? TEMPLATE_LIMITS.secondsMax : TEMPLATE_LIMITS.repsMax;
-  const step = duration ? 5 : 1;
+  // Yürüyüş/koşuda süre dakika (düz setlerin hedef alanı gibi).
+  const walk = exercise ? cardioKind(exercise) === 'walk' : false;
+  const max = walk ? TEMPLATE_LIMITS.secondsMax / 60 : duration ? TEMPLATE_LIMITS.secondsMax : TEMPLATE_LIMITS.repsMax;
+  const step = walk ? 1 : duration ? 5 : 1;
   const disabled = !exercise;
   const errors = minField.errors ?? maxField.errors ?? pctField.errors;
   const write = (name: 'min' | 'max' | 'loadPct', value: number | undefined) => setInput(form, { path: at(name), input: value as number });
@@ -520,10 +526,11 @@ function SetRow({ blockIndex, rowIndex, row, exercise, index }: RowProps & { ind
           count={count}
           column="min"
           field={minField}
-          label={`Set ${n} en az`}
+          label={`Set ${n} en az${walk ? ' (dk)' : ''}`}
           max={max}
           step={step}
           disabled={disabled}
+          minutes={walk}
           onValue={(value) => write('min', value)}
         />
         <span className="text-muted-foreground" aria-hidden>
@@ -535,10 +542,11 @@ function SetRow({ blockIndex, rowIndex, row, exercise, index }: RowProps & { ind
           count={count}
           column="max"
           field={maxField}
-          label={`Set ${n} en çok`}
+          label={`Set ${n} en çok${walk ? ' (dk)' : ''}`}
           max={max}
           step={step}
           disabled={disabled}
+          minutes={walk}
           onValue={(value) => write('max', value)}
         />
         <div className="flex basis-full items-center gap-2 pl-7 min-[360px]:basis-auto min-[360px]:pl-0">

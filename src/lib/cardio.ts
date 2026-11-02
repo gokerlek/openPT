@@ -18,6 +18,12 @@ export const CARDIO_LIMITS = { distanceMax: 100_000, inclineMax: 30, inclineStep
 
 export type CardioValues = { seconds?: number | undefined; distanceM?: number | undefined; inclinePct?: number | undefined };
 
+/** Setin kardiyo alanları olmadan: hareket başka kardiyo türüne (ya da kardiyo olmayana) geçince hedef taşınmaz. */
+export function withoutCardio<T extends { distanceM?: number | undefined; inclinePct?: number | undefined }>(set: T): Omit<T, 'distanceM' | 'inclinePct'> {
+  const { distanceM: _distance, inclinePct: _incline, ...rest } = set;
+  return rest;
+}
+
 export function cardioKind(exercise: {
   trackingType: TrackingType;
   pattern?: string | undefined;

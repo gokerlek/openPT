@@ -32,7 +32,8 @@ type Random = (n: number) => Uint8Array;
 
 /** Muadilin planı gelmediyse: asıl satırın düzeni ve ağırlıkları, muadilin adı ve cihazıyla ("Önceki" yok). */
 function fallbackSwapRow(original: WorkoutRow, entry: SessionEntry): WorkoutRow {
-  const { warmups: _warmups, setupNote: _setupNote, note: _note, deviceId: _deviceId, ...rest } = original;
+  // Kardiyo türü asıl hareketin: muadil başka hareket olabilir, mesafe ve eğim sütunları taşınmaz.
+  const { warmups: _warmups, setupNote: _setupNote, note: _note, deviceId: _deviceId, cardio: _cardio, ...rest } = original;
   return { ...rest, exerciseId: entry.exerciseId, title: entry.title, ...(entry.deviceId ? { deviceId: entry.deviceId } : {}), lastTime: [] };
 }
 

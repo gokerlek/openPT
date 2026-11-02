@@ -11,6 +11,7 @@ import {
   type ProgramPhase,
   type ProgramState,
 } from './program-plan.ts';
+import { cardioKind } from './cardio.ts';
 import { ptTargetsEdit } from './client-targets.ts';
 import { PROGRESSION_LABELS, RIR_LABELS, type TrackingType } from './progression.ts';
 import { sameWeekdays, weekdaysText } from './day-assignments.ts';
@@ -40,7 +41,7 @@ import {
  */
 
 export type DiffContext = {
-  exercises: ReadonlyMap<string, { title: string; trackingType: TrackingType }>;
+  exercises: ReadonlyMap<string, { title: string; trackingType: TrackingType; pattern?: string | undefined; locomotion?: boolean | undefined }>;
   devices: ReadonlyMap<string, { name: string }>;
 };
 
@@ -134,6 +135,11 @@ function amrapChange(a: readonly SetSpec[], b: readonly SetSpec[]): string {
 export function diffDay(before: Pick<ProgramDay, 'blocks'>, after: Pick<ProgramDay, 'blocks'>, ctx: DiffContext): string[] {
   const title = (row: TemplateRow) => ctx.exercises.get(row.exerciseId)?.title ?? row.exerciseId;
   const tt = (row: TemplateRow): TrackingType => ctx.exercises.get(row.exerciseId)?.trackingType ?? 'weight_reps';
+  // Yürüyüş/koşuda süre dakikayla yazılır (`cardio.ts`).
+  const cardioOf = (row: TemplateRow) => {
+    const exercise = ctx.exercises.get(row.exerciseId);
+    return exercise ? cardioKind(exercise) : null;
+  };
   const names = (block: TemplateBlock) => block.rows.map(title).join(' + ');
 
   const beforeRows = flatten(before.blocks);
@@ -204,13 +210,13 @@ export function diffDay(before: Pick<ProgramDay, 'blocks'>, after: Pick<ProgramD
       rowLines.push(`${name} gruptan çıkarıldı (dinlenme ${restText(next.block.restSeconds)})`);
     }
 
-    const textA = setsText(a.sets, tt(a));
-    const textB = setsText(b.sets, tt(b));
+    const textA = setsText(a.sets, tt(a), cardioOf(a));
+    const textB = setsText(b.sets, tt(b), cardioOf(b));
     if (textA !== textB) {
       const roundsOnly =
         roundsReported.has(next.block.id) &&
         previous.block.id === next.block.id &&
-        setsText(resizeSets(a.sets, b.sets.length), tt(a)) === textB;
+        setsText(resizeSets(a.sets, b.sets.length), tt(a), cardioOf(a)) === textB;
       if (tt(a) === tt(b) && amrapOnly(a.sets, b.sets)) rowLines.push(`${name}: ${amrapChange(a.sets, b.sets)}`);
       else if (!roundsOnly) rowLines.push(`${name} ${textA} → ${textB}`);
     }

@@ -365,6 +365,8 @@ function setAt(
   const drafted = mine(draft) ? draft : undefined;
   const saved = typed?.find(mine);
   const own = { kg: drafted?.kg ?? saved?.kg, value: drafted?.value ?? saved?.value };
+  // Yürüyüş/koşuda önceden dolu süre tam dakika: kutu dakika gösterir (599 sn "10" görünüp 9:59 kaydedilmesin).
+  const whole = (seconds: number) => (row.cardio === 'walk' && seconds > 0 ? Math.max(60, Math.round(seconds / 60) * 60) : seconds);
   const common = {
     unitKey: at.unit.key,
     rowId: at.rowId,
@@ -382,7 +384,7 @@ function setAt(
     const lastKg = entry?.sets.filter((set) => set.type === 'working' && set.kg !== undefined).at(-1)?.kg;
     const kg = row.trackingType === 'weight_reps' ? (own.kg ?? lastKg ?? view.plannedKg) : undefined;
     const cap = row.adjusted ? extraPlanOf(row, template).cap : undefined;
-    const value = own.value ?? prefillSet({ target: view.target, setIndex: view.setIndex, plannedKg: kg, lastTime: row.lastTime, cap }).value;
+    const value = own.value ?? whole(prefillSet({ target: view.target, setIndex: view.setIndex, plannedKg: kg, lastTime: row.lastTime, cap }).value);
     return { ...common, kg, value, extra: true };
   }
 
@@ -402,7 +404,7 @@ function setAt(
   const kg = row.trackingType === 'weight_reps' ? (own.kg ?? (changed ? previous?.logged?.kg : undefined) ?? suggestion.weightKg) : undefined;
   // Yoklamanın indirdiği gün: önceden dolu tekrar/süre planın bu setteki hedefini aşmaz (`prefillSet`).
   const cap = row.adjusted ? row.plan.sets.find((item) => item.setIndex === view.setIndex)?.target : undefined;
-  const value = own.value ?? prefillSet({ target: view.target, setIndex: view.setIndex, plannedKg: kg, lastTime: row.lastTime, cap }).value;
+  const value = own.value ?? whole(prefillSet({ target: view.target, setIndex: view.setIndex, plannedKg: kg, lastTime: row.lastTime, cap }).value);
   return { ...common, kg, value };
 }
 

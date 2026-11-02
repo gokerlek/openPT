@@ -10,7 +10,7 @@ import { OWN_DAY_B, OWN_ID, ownProgram } from './testing/own-fixtures.ts';
 import { fakeSessionRepo } from './testing/fake-session-repo.ts';
 import { ownProgramPath } from './own-programs.ts';
 import { putSession } from './session-files-core.ts';
-import { buildWorkoutDay } from './workout-plan.ts';
+import { buildWorkoutDay, swapRowFor } from './workout-plan.ts';
 import { feedbackItems } from './program-feedback.ts';
 import { completion } from './session-finish.ts';
 import { withExtraRounds } from './workout-flow.ts';
@@ -1039,6 +1039,20 @@ describe('kardiyo: önceden dolu mesafe ve eğim, kayıt ve düzeltme', () => {
     assert.deepEqual([setOf('r_card02')?.distanceM, setOf('r_card02') && 'inclinePct' in setOf('r_card02')!], [4000, false]);
     assert.equal(setOf('r_card03') && ('distanceM' in setOf('r_card03')! || 'inclinePct' in setOf('r_card03')!), false);
     assert.ok(v.safeParse(sessionDocSchema, doc).success);
+  });
+
+  test('yürüyüşte önceden dolu süre tam dakika', () => {
+    const day = cardioDay([{ min: 300, max: 600 }], [lastWalk]);
+    const next = nextSet(day, start(day));
+    assert.equal((next?.value ?? 1) % 60, 0);
+  });
+
+  test('muadil başka kardiyo türündeyse mesafe ve eğim taşınmaz; aynı türde kalır', () => {
+    const row = { id: 'r_card01', exerciseId: 'kosu-bandi', sets: [{ min: 1800, max: 1800, distanceM: 3000, inclinePct: 5 }] };
+    const swap = (original: typeof treadmill | typeof cycle, exercise: typeof treadmill | typeof cycle) =>
+      swapRowFor({ row, blockId: 'b_card01', original, exercise, devices: DEVICES, history: [], firstForMuscle: false }).template.sets;
+    assert.deepEqual(swap(treadmill, cycle), [{ min: 1800, max: 1800 }]);
+    assert.deepEqual(swap(treadmill, { ...treadmill, id: 'kosu-bandi-2' }), row.sets);
   });
 
   test('düzeltme: verilen alan değişir, verilmeyen kalır', () => {

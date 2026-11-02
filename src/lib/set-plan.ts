@@ -151,9 +151,14 @@ export function targetToAll(sets: readonly SetSpec[], index: number): SetSpec[] 
   return sets.map((set) => ({ ...set, min: source.min, max: source.max }));
 }
 
-/** Düz: aynı sayıda set, referans setin aralığı, yüzde yok; "son set AMRAP" kalır. */
+/** Düz: aynı sayıda set, referans setin aralığı (kardiyoda mesafesi ve eğimi), yüzde yok; "son set AMRAP" kalır. */
 export function straightPreset(sets: readonly SetSpec[]): SetSpec[] {
-  const next = uniformSets(referenceSet(sets), Math.max(1, sets.length));
+  const reference = referenceSet(sets);
+  const cardio = {
+    ...(reference.distanceM !== undefined ? { distanceM: reference.distanceM } : {}),
+    ...(reference.inclinePct !== undefined ? { inclinePct: reference.inclinePct } : {}),
+  };
+  const next = uniformSets(reference, Math.max(1, sets.length)).map((set) => ({ ...set, ...cardio }));
   return hadLastAmrap(sets) ? markLastAmrap(next) : next;
 }
 

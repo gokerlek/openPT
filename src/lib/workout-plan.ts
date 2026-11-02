@@ -1,6 +1,6 @@
 import {achievementBaseline,type AchievementBaseline} from './workout-achievements.ts';
 import type { AlternativeCandidate } from './alternatives.ts';
-import { cardioKind, type CardioKind } from './cardio.ts';
+import { cardioKind, withoutCardio, type CardioKind } from './cardio.ts';
 import { withClientTargets } from './client-targets.ts';
 import type { RowCare } from './constraint-filter.ts';
 import { loadSpecFor, type DeviceLoadSettings } from './device-loads.ts';
@@ -442,7 +442,7 @@ function valueKind(trackingType: TrackingType): 'time' | 'count' {
 export function swapRowFor(input: {
   row: TemplateRow;
   blockId: string;
-  original: Pick<PlanExercise, 'trackingType'>;
+  original: Pick<PlanExercise, 'trackingType' | 'pattern' | 'locomotion'>;
   exercise: WorkoutExercise;
   devices: ReadonlyMap<string, WorkoutDevice>;
   history: readonly SessionDoc[];
@@ -451,7 +451,9 @@ export function swapRowFor(input: {
   programId?: string | null | undefined;
 }): ExtraRow {
   const { row, exercise } = input;
-  const sets = valueKind(input.original.trackingType) === valueKind(exercise.trackingType) ? row.sets : defaultSets(exercise, row.sets.length);
+  const kept = valueKind(input.original.trackingType) === valueKind(exercise.trackingType) ? row.sets : defaultSets(exercise, row.sets.length);
+  // Kardiyo hedefi yalnız aynı kardiyo türünde kalır: koşu bandının mesafesi ve eğimi bisiklete ya da plank'a geçmez.
+  const sets = cardioKind(input.original) === cardioKind(exercise) ? kept : kept.map(withoutCardio);
   const template: TemplateRow = { id: row.id, exerciseId: exercise.id, sets, ...(row.rule ? { rule: row.rule } : {}) };
   return {
     exerciseId: exercise.id,
