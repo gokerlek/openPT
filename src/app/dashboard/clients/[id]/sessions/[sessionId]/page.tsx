@@ -158,7 +158,7 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
         <ul className="grid gap-4 lg:grid-cols-2 lg:items-start" aria-label="Hareketler">
           {view.exercises.map((exercise) => (
             <li key={exercise.entryId}>
-              <ExerciseCard exercise={exercise} />
+              <SessionExercise exercise={exercise} />
             </li>
           ))}
         </ul>
@@ -189,7 +189,7 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
   );
 }
 
-function ExerciseCard({ exercise }: { exercise: PtDetailExercise }) {
+function SessionExercise({ exercise }: { exercise: PtDetailExercise }) {
   const description = [exercise.note, ...exercise.notes].join(' · ');
   return (
     <Card size="sm">

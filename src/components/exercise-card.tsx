@@ -46,7 +46,7 @@ export function ExerciseCard({
 }
 
 /** Seçim modunda seçili kart: halka ve hafif ana renk zemini. */
-export const SELECTED = 'data-selected:ring-2 data-selected:ring-primary-text data-selected:bg-[color-mix(in_oklab,var(--primary)_6%,var(--card))]';
+const SELECTED = 'data-selected:ring-2 data-selected:ring-primary-text data-selected:bg-[color-mix(in_oklab,var(--primary)_6%,var(--card))]';
 
 /** Sürüklenen öğenin yerinde kalan yer tutucu: kesik çizgi, içerik görünmez (yükseklik aynı). */
 export const PLACEHOLDER =

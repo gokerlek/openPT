@@ -497,7 +497,7 @@ function SetNumberInput({
 }
 
 /** Bir set: n · min–max · % (ağırlıklı harekette) · AMRAP. 360 px'in altında % ve AMRAP alt satıra iner. */
-function SetRow({ blockIndex, rowIndex, row, exercise, index }: RowProps & { index: number }) {
+function EditorSetRow({ blockIndex, rowIndex, row, exercise, index }: RowProps & { index: number }) {
   const { form, path } = useEditor();
   const at = (name: 'min' | 'max' | 'loadPct' | 'amrap') => blockField(path, blockIndex, 'rows', rowIndex, 'sets', index, name);
   const minField = useField(form, { path: at('min') });
@@ -670,7 +670,7 @@ export function SetsSection({ blockIndex, rowIndex, row, exercise, title, open, 
           ) : null}
           <ol className="flex flex-col gap-2" aria-label={`${title} setleri`}>
             {row.sets.map((_, index) => (
-              <SetRow key={index} blockIndex={blockIndex} rowIndex={rowIndex} row={row} exercise={exercise} index={index} />
+              <EditorSetRow key={index} blockIndex={blockIndex} rowIndex={rowIndex} row={row} exercise={exercise} index={index} />
             ))}
           </ol>
           {setsArray.errors ? <FieldError>{setsArray.errors[0]}</FieldError> : null}

@@ -95,7 +95,7 @@ import { WORKOUT_KEY, WORKOUT_OVERVIEW_KEY } from '../workout-overview';
 import { clearLocalWorkout, clearWorkoutCache, readLocalWorkout, readWorkoutCache, saveLocalWorkout, saveWorkoutCache, writerId } from '../workout-storage';
 import { AddExerciseSheet } from './add-exercise-sheet';
 import { ENTRY_PANEL_TOGGLE_ID, EntryPanel, type TimerView, type TransitionView } from './entry-panel';
-import { ExerciseCard } from './exercise-card';
+import { WorkoutExerciseCard } from './exercise-card';
 import { ProgramUpdateSheet, type ProgramAnswer } from './program-update-sheet';
 import { RestPanel, RestStrip, type EffortPromptView, type RestView } from './rest-panel';
 import { SetEditPanel, type SetEditValues, type SetEditView } from './set-edit-panel';
@@ -2605,7 +2605,7 @@ export function WorkoutScreen({
                   // grupta sıradaki üyenin setini kaydetmez.
                   onPointerDownCapture={swallow}
                   onClickCapture={swallow}>
-                  <ExerciseCard
+                  <WorkoutExerciseCard
                     row={row}
                     bodyMassKg={plan.bodyMassKg}
                     group={group}

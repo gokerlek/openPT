@@ -33,17 +33,17 @@ import {
 } from './template-plan.ts';
 
 /**
- * Şablon düzenleyicinin işlemleri: ekleme, değiştirme, kaldırma, kopyalama, taşıma
+ * Şablon düzenleyicinin işlemleri: ekleme, değiştirme, kaldırma, taşıma
  * (`moveItem`), üstüne bırakıp gruplama (`combineInto`), grubu dağıtma, tür değiştirme,
- * seçim modunun toplu işlemleri (`groupBlocks`, `duplicateBlocks`, `removeBlocks`),
+ * seçim modunun toplu işlemleri (`groupBlocks`, `removeBlocks`),
  * satırın cihazını ve setlerini (sayı, tur, hazır düzenler) değiştirme. Setler satırla
  * birlikte taşınır: gruplama ve gruptan çıkarma hareketin setlerini değiştirmez.
  *
  * Hepsi saf ve değiştirmez (yeni dizi döner); düzenleyici sonucu forma tek seferde
  * yazar. Reddedilen ya da etkisiz işlem aynı diziyi döner (çağıran `===` ile anlar);
- * nedenini önceden `moveCheck`, `combineOutcome`, `addToGroupOutcome`, `groupCheck`,
- * `canDuplicate` ve `canDuplicateBlocks` söyler. Satır kimliği yalnız satır oluşurken üretilir: sıralama,
- * gruplama, hareket ya da cihaz değişimi kimliği korur ("Kopyala" yeni kimlik alır).
+ * nedenini önceden `moveCheck`, `combineOutcome`, `addToGroupOutcome` ve `groupCheck`
+ * söyler. Satır kimliği yalnız satır oluşurken üretilir: sıralama, gruplama, hareket ya da
+ * cihaz değişimi kimliği korur.
  * Antrenman kayıtları satıra bu kimlikle bağlanır.
  *
  * Yol takma adıyla çalışma zamanı içe aktarması yapmaz (testler Node'un kendi test
@@ -209,77 +209,6 @@ export function removeRow(blocks: readonly TemplateBlock[], rowId: string, exerc
 export function removeBlock(blocks: readonly TemplateBlock[], blockId: string): TemplateBlock[] {
   const next = blocks.filter((block) => block.id !== blockId);
   return next.length === blocks.length ? (blocks as TemplateBlock[]) : next;
-}
-
-/** Satırın bağımsız kopyası (setler ve kural da kopyalanır), verilen kimlikle. */
-function cloneRow(row: TemplateRow, id: string): TemplateRow {
-  return { ...row, id, sets: copySets(row.sets), ...(row.rule ? { rule: { ...row.rule } } : {}) };
-}
-
-/**
- * Üyenin kopyası grubun içinde kalır mı: grup, türü değişmeden bir hareket daha alıyorsa
- * (süperset hiç, kompleks 6'ya, devre 8'e kadar). Kopya grubun türünü sessizce değiştirmez.
- */
-function copyFitsInGroup(block: TemplateBlock): boolean {
-  return block.kind !== 'single' && block.rows.length < BLOCK_ROWS[block.kind].max;
-}
-
-/**
- * Kopya sığar mı (⧉ düğmesinin pasifliği; 40 hareket, 30 blok). Blok kimliğinde bütün
- * blok (`duplicateBlock`), satır kimliğinde satır (`duplicateRow`) sorulur.
- */
-export function canDuplicate(blocks: readonly TemplateBlock[], id: string): boolean {
-  const rows = countRows(blocks);
-  const whole = blocks.find((block) => block.id === id);
-  if (whole) return blocks.length < TEMPLATE_LIMITS.blocks && rows + whole.rows.length <= TEMPLATE_LIMITS.rows;
-  const found = locate(blocks, id);
-  const owner = found ? blocks[found.blockIndex] : undefined;
-  if (!owner || rows >= TEMPLATE_LIMITS.rows) return false;
-  return copyFitsInGroup(owner) || blocks.length < TEMPLATE_LIMITS.blocks;
-}
-
-/**
- * Satırı kopyalar (yeni kimlikle). Tek hareketse hemen arkasına aynı ayarlarla yeni blok.
- * Devre ya da kompleks üyesi, grup türü değişmeden sığıyorsa grubun içinde kaynağın
- * arkasına; süperset üyesi (ve sığmayan üye) grubun arkasına tek hareket olur: kendi
- * setleriyle, dinlenme türün varsayılanı (`exercises` verilmezse grubun dinlenmesi).
- * Sığmıyorsa aynı dizi.
- */
-export function duplicateRow(blocks: readonly TemplateBlock[], rowId: string, ids: IdSource, exercises?: Lookup): TemplateBlock[] {
-  const found = locate(blocks, rowId);
-  if (!found || !canDuplicate(blocks, rowId)) return blocks as TemplateBlock[];
-  const block = blocks[found.blockIndex] as TemplateBlock;
-  const copy = cloneRow(block.rows[found.rowIndex] as TemplateRow, ids('r'));
-
-  const next = [...blocks];
-  if (copyFitsInGroup(block)) {
-    const rows = [...block.rows];
-    rows.splice(found.rowIndex + 1, 0, copy);
-    next[found.blockIndex] = { ...block, rows };
-    return next;
-  }
-  const { transitionSeconds: _transition, ...settings } = block;
-  const single: TemplateBlock =
-    block.kind !== 'single' && exercises
-      ? singleOf(ids('b'), copy, exercises)
-      : { ...settings, id: ids('b'), kind: 'single', rows: [copy] };
-  next.splice(found.blockIndex + 1, 0, single);
-  return next;
-}
-
-/**
- * Bloğu bütünüyle kopyalar (grup yüzünde ⧉): hemen arkasına, aynı ayarlarla, blok ve
- * satırlar yeni kimlikle. Sığmıyorsa (30 blok, 40 hareket) aynı dizi.
- */
-export function duplicateBlock(blocks: readonly TemplateBlock[], blockId: string, ids: IdSource): TemplateBlock[] {
-  const index = blocks.findIndex((block) => block.id === blockId);
-  const block = blocks[index];
-  if (!block || !canDuplicate(blocks, blockId)) return blocks as TemplateBlock[];
-  const id = ids('b');
-  const copy: TemplateBlock = { ...block, id, rows: block.rows.map((row) => cloneRow(row, ids('r'))) };
-  const next = [...blocks];
-  next.splice(index + 1, 0, copy);
-  return next;
 }
 
 /**
@@ -609,29 +538,6 @@ export function groupBlocks(blocks: readonly TemplateBlock[], blockIds: Iterable
   const group = withKind({ id: first.block.id, kind, restSeconds: DEFAULT_GROUP_REST_SECONDS[kind], rows }, kind);
   const leaving = new Set(picked.map(({ block }) => block.id));
   return blocks.flatMap((block) => (block.id === first.block.id ? [group] : leaving.has(block.id) ? [] : [block]));
-}
-
-/** Seçimin kopyası sığar mı ("Kopyala"; 30 blok, 40 hareket). Boş seçimde hayır. */
-export function canDuplicateBlocks(blocks: readonly TemplateBlock[], blockIds: Iterable<string>): boolean {
-  const picked = pickBlocks(blocks, blockIds);
-  const rows = picked.reduce((sum, { block }) => sum + block.rows.length, 0);
-  return (
-    picked.length > 0 && blocks.length + picked.length <= TEMPLATE_LIMITS.blocks && countRows(blocks) + rows <= TEMPLATE_LIMITS.rows
-  );
-}
-
-/**
- * Seçili blokları kopyalar: kopyalar liste sırasıyla son seçilen bloğun arkasına girer,
- * aynı ayarlarla; blok ve satırlar yeni kimlikle. Sığmıyorsa aynı dizi.
- */
-export function duplicateBlocks(blocks: readonly TemplateBlock[], blockIds: Iterable<string>, ids: IdSource): TemplateBlock[] {
-  const picked = pickBlocks(blocks, blockIds);
-  const last = picked.at(-1);
-  if (!last || !canDuplicateBlocks(blocks, picked.map(({ block }) => block.id))) return blocks as TemplateBlock[];
-  const copies = picked.map(({ block }): TemplateBlock => ({ ...block, id: ids('b'), rows: block.rows.map((row) => cloneRow(row, ids('r'))) }));
-  const next = [...blocks];
-  next.splice(last.index + 1, 0, ...copies);
-  return next;
 }
 
 /** Seçili blokları bütün satırlarıyla kaldırır ("Sil"). Hiçbiri yoksa aynı dizi. */

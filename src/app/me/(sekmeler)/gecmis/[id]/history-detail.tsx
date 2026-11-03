@@ -166,7 +166,7 @@ export function HistoryDetail({ initialDoc, changes, timeZone }: { initialDoc: S
           <AnimatePresence initial={false}>
             {view.exercises.map((exercise) => (
               <motion.li key={exercise.entryId} exit={EXIT} className="overflow-hidden">
-                <ExerciseCard exercise={exercise} editing={editing} onDelete={ask} />
+                <HistoryExercise exercise={exercise} editing={editing} onDelete={ask} />
               </motion.li>
             ))}
           </AnimatePresence>
@@ -205,7 +205,7 @@ export function HistoryDetail({ initialDoc, changes, timeZone }: { initialDoc: S
   );
 }
 
-function ExerciseCard({ exercise, editing, onDelete }: { exercise: DetailExercise; editing: boolean; onDelete: (target: DeleteTarget) => void }) {
+function HistoryExercise({ exercise, editing, onDelete }: { exercise: DetailExercise; editing: boolean; onDelete: (target: DeleteTarget) => void }) {
   const removeExercise = () => onDelete({ kind: 'entry', entryId: exercise.entryId });
   return (
     <Card size="sm" className="gap-0 py-0">
@@ -228,7 +228,7 @@ function ExerciseCard({ exercise, editing, onDelete }: { exercise: DetailExercis
         <AnimatePresence initial={false}>
           {exercise.sets.map((set) => (
             <motion.li key={set.id} exit={EXIT} className="overflow-hidden border-t">
-              <SetRow set={set} title={exercise.title} editing={editing} onDelete={() => onDelete({ kind: 'set', entryId: exercise.entryId, setId: set.id })} />
+              <HistorySet set={set} title={exercise.title} editing={editing} onDelete={() => onDelete({ kind: 'set', entryId: exercise.entryId, setId: set.id })} />
             </motion.li>
           ))}
         </AnimatePresence>
@@ -237,7 +237,7 @@ function ExerciseCard({ exercise, editing, onDelete }: { exercise: DetailExercis
   );
 }
 
-function SetRow({ set, title, editing, onDelete }: { set: DetailSet; title: string; editing: boolean; onDelete: () => void }) {
+function HistorySet({ set, title, editing, onDelete }: { set: DetailSet; title: string; editing: boolean; onDelete: () => void }) {
   const label = set.warmup ? `${title} ısınma setini sil` : `${title} ${set.label}. seti sil`;
   return (
     <SwipeRow id={set.id} end={[deleteAction(onDelete, { removes: false })]} disabled={!editing}>

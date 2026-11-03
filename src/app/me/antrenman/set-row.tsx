@@ -141,7 +141,7 @@ function CellNumber({
  *   ✕'u (sil) o zaman "Önceki" hücresinde ("fazladan ✕").
  * - Yapılmış setin kg ve tekrar/süresi de yerinde düzeltilir (`onFix`): çerçevesiz kutu, kutudan çıkınca yazılır.
  */
-export function SetRow({
+export function WorkoutSetRow({
   set,
   trackingType,
   cardio,

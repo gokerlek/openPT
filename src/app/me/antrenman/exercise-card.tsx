@@ -20,7 +20,7 @@ import { cn } from '@/lib/utils';
 import type { GroupMemberStatus, GroupView } from '@/lib/workout-groups';
 import type { WorkoutRow } from '@/lib/workout-plan';
 import type { SetView, WarmupView } from '@/lib/workout-session';
-import { SetRow, type FixSet, type RowEntry } from './set-row';
+import { WorkoutSetRow, type FixSet, type RowEntry } from './set-row';
 
 const UP = new Set<string>(['increase', 'range_increase']);
 const DOWN = new Set<string>(['decrease', 'deload', 'calibrate', 'pain_reduce']);
@@ -184,7 +184,7 @@ function SetupNoteForm({ note, onSave }: { note: string | undefined; onSave: (te
  * kayar). Bekleyen her satırın kg ve tekrar hücreleri yazılabilir, boş ✓ seti kaydeder ("Set bitti" ile aynı, `entryOf`);
  * setler istenen sırayla yapılır, dokunulan satır şu anki set olur. Yapılan setin değerleri yerinde düzeltilir (`onFixSet`);
  * satırın geri kalanına dokunmak onu alttaki panelde düzenlemeye açar (şerit o satıra geçer); ✓'a dokunmak
- * işareti kaldırır, sola kaydırmak "Sil"i açar (`SetRow`). Yeni kaydın ✓'u satıra, panel değişmeden önce düşer
+ * işareti kaldırır, sola kaydırmak "Sil"i açar (`WorkoutSetRow`). Yeni kaydın ✓'u satıra, panel değişmeden önce düşer
  * (iOS'ta titreşim yok; kaydedildiğini bu gösterir). Onaylanmış aşırı yük satırda ↑ ile görünür.
  *
  * Grupta (süperset, devre, kompleks) başlığın yerinde tur ve üyeler; altta şu anki üyenin çipleri ve
@@ -197,7 +197,7 @@ function SetupNoteForm({ note, onSave }: { note: string | undefined; onSave: (te
  * her üyeye bir set). Fazladan satırın "Önceki" hücresinde "fazladan" yazar; bekleyen fazladan set oradaki
  * ✕ ile bırakılır (düzenleme açıkken son hücrede).
  */
-export function ExerciseCard({
+export function WorkoutExerciseCard({
   row,
   group,
   sets,
@@ -384,7 +384,7 @@ export function ExerciseCard({
 
             {warmups.length > 0 && (!warmDone || warmOpen) ? <WarmupRow warmups={warmups} onToggle={onToggleWarmup} /> : null}
 
-            {/* ARIA tablosu: satırlar `SwipeRow` içinde kayabilsin diye `<table>` değil (`SetRow`). 375 px'te: 40 + Önceki +
+            {/* ARIA tablosu: satırlar `SwipeRow` içinde kayabilsin diye `<table>` değil (`WorkoutSetRow`). 375 px'te: 40 + Önceki +
                 (48) + 64 + 56 + 44; "Önceki" en az ~90 px kalır. kg kutusu "102,5"i sığdırır. Kardiyoda kg yerine süreden sonra
                 mesafe (64) ve yürüyüş/koşuda eğim (48); "Önceki" iki satıra sarar. Başlık ve satırlar aynı şablonu paylaşır. */}
             <div role="table" aria-label={`${row.title} setleri`} className="text-sm tabular-nums">
@@ -430,7 +430,7 @@ export function ExerciseCard({
                     const logged = set.logged;
                     const highlight = editingSetId !== null ? (logged?.id === editingSetId ? 'editing' : null) : set.setIndex === currentSetIndex ? 'current' : null;
                     return (
-                      <SetRow
+                      <WorkoutSetRow
                         key={set.extra ? `extra-${set.setIndex}` : set.setIndex}
                         set={set}
                         trackingType={row.trackingType}
