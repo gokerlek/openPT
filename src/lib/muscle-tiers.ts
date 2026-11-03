@@ -83,6 +83,15 @@ export const STATUS_MARK: Record<MuscleStatusTone, MuscleMark> = {
   declined: 'declined',
 };
 
+export function statusMarks(statuses: Partial<Record<BodyMuscle, MuscleStatusTone>>): MuscleMarks {
+  const marks: MuscleMarks = {};
+  for (const muscle of BODY_MUSCLES) {
+    const tone = statuses[muscle];
+    if (tone) marks[muscle] = STATUS_MARK[tone];
+  }
+  return marks;
+}
+
 const STATUS_TITLES: Record<MuscleStatusTone, string> = {
   strong: 'Belirgin gelişme (%5 ve üstü)',
   improved: 'Gelişme',
@@ -142,21 +151,38 @@ export function statusLegend(statuses: Partial<Record<BodyMuscle, MuscleStatusTo
 }
 
 /**
- * Yük haritasının ortak propları (`MuscleMap`'e yayılır): işaret, açıklama, ekran okuyucu adı ("{önek}: en çok çalışan 6
- * kas") ve üstüne gelince yazı ("Ön bacak · 6 set"). `rows` verilirse açıklama onlardan kurulur (antrenman özetinin aile
- * satırları); `legend: false` küçük kart içindir.
+ * Yük haritasının ortak propları (`MuscleMap`'e yayılır): işaret, açıklama ve ekran okuyucu adı ("{önek}: en çok çalışan 6
+ * kas"). Yalnız veri: sunucu bileşeninden de geçer; üstüne gelince yazıyı harita açıklamadan kurar (`legendText`). `rows`
+ * verilirse açıklama onlardan kurulur (antrenman özetinin aile satırları); `legend: false` küçük kart içindir.
  */
 export function loadMapProps(
   load: Partial<Record<Muscle, number>>,
   scale: LoadScale,
   prefix: string,
   options: { legend?: boolean; rows?: readonly LoadRow[] } = {},
-): { marks: MuscleMarks; legend?: MuscleLegendData; label: string; describe: (muscle: BodyMuscle) => string } {
+): { marks: MuscleMarks; legend?: MuscleLegendData; label: string } {
   const worked = BODY_MUSCLES.filter((muscle) => (load[muscle] ?? 0) > 0).sort((a, b) => (load[b] ?? 0) - (load[a] ?? 0));
   const label = worked.length > 0 ? `${prefix}: ${summarizeMuscles(worked.slice(0, 6)).join(', ')}` : `${prefix}: kas yükü yok`;
-  const describe = (muscle: BodyMuscle) => `${MUSCLE_LABELS[muscle]} · ${formatNumber(load[muscle] ?? 0)} set`;
   const marks = loadMarks(load, scale);
-  if (options.legend === false) return { marks, label, describe };
+  if (options.legend === false) return { marks, label };
   const legend = options.rows ? loadLegend(options.rows, scale, load.cardio) : muscleLoadLegend(load, scale);
-  return { marks, legend, label, describe };
+  return { marks, legend, label };
+}
+
+/** Hareket haritasının ortak propları: işaret, açıklama ve ekran okuyucu adı ("Çalışan kaslar: …"). */
+export function roleMapProps(exercise: Worked): { marks: MuscleMarks; legend: MuscleLegendData; label: string } {
+  const marks = roleMarks(exercise);
+  // Rol sırasıyla: önce hedef, sonra yardımcı, sonra dengeleyici.
+  const worked = roleLegend(exercise).groups.flatMap((group) => group.rows.map((row) => row.key as BodyMuscle));
+  const label = worked.length > 0 ? `Çalışan kaslar: ${summarizeMuscles(worked).join(', ')}` : 'Belirli bir kas grubu işaretlenmedi';
+  return { marks, legend: roleLegend(exercise), label };
+}
+
+/** Kasın açıklamadaki kısa yazısı (haritada üstüne gelince): "Ön bacak · 6 set" ya da "Ön bacak · hedef"; yoksa `null`. */
+export function legendText(legend: MuscleLegendData, key: string): string | null {
+  for (const group of legend.groups) {
+    const row = group.rows.find((item) => item.key === key);
+    if (row) return `${row.label} · ${row.sets !== undefined ? `${formatNumber(row.sets)} set` : group.title.toLocaleLowerCase('tr')}`;
+  }
+  return null;
 }

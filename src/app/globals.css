@@ -163,17 +163,13 @@
 }
 
 /*
- * Kas haritası (SPEC §6: hedef / yardımcı / dengeleyici). Boş kas yüzeye yakın gri; hedef
- * `--primary-strong` (kenarlıktan ≥3:1 olduğu için boş kastan da ≥3:1). Yardımcı ve dengeleyici
- * hedefin boş kasla karışımı: parlaklık sırası boş < dengeleyici < yardımcı < hedef; renk körlüğü
- * için ayrıca desenle çizilir (muscle-map.tsx: hedef dolu, yardımcı çizgili, dengeleyici noktalı).
+ * Kas haritası. Boş kas yüzeye yakın gri; hedef `--primary-strong` (kenarlıktan ≥3:1 olduğu için boş kastan da ≥3:1).
+ * Kademeler ara tonla değil desenle ayrılır (muscle-patterns.tsx): dolu, boş zeminde hedef renginde çizgi ya da nokta.
  */
 :root {
     --muscle-neutral: color-mix(in oklab, var(--foreground) 5%, var(--card));
     --muscle-empty: color-mix(in oklab, var(--foreground) 8%, var(--card));
     --muscle-target: var(--primary-strong);
-    --muscle-secondary: color-mix(in oklab, var(--muscle-target) 45%, var(--muscle-empty));
-    --muscle-stabilizer: color-mix(in oklab, var(--muscle-target) 20%, var(--muscle-empty));
 }
 
 .dark {

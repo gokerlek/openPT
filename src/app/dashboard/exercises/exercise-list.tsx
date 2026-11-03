@@ -18,7 +18,8 @@ import {
   type Icon,
 } from '@phosphor-icons/react';
 import { CircleDashed } from '@/components/line-icons';
-import { Plus, X } from '@/components/line-icons';
+import { Plus } from '@/components/line-icons';
+import { RemovableChip } from '@/components/removable-chip';
 import { MuscleMap } from '@/components/muscle-map/muscle-map';
 import { PageHeader } from '@/components/page-header';
 import { TrainingTabs } from '../training-tabs';
@@ -235,15 +236,12 @@ export function ExerciseList({
               {selectedBody.length > 0 ? (
                 <div className="flex flex-wrap gap-1.5" aria-label="Seçili kaslar">
                   {selectedBody.map((muscle) => (
-                    <Button
+                    <RemovableChip
                       key={muscle}
-                      variant="secondary"
-                      size="xs"
-                      onClick={() => toggle(muscle)}
-                      aria-label={`${MUSCLE_LABELS[muscle]} süzgecini kaldır`}>
-                      {MUSCLE_LABELS[muscle]}
-                      <X data-icon="inline-end" />
-                    </Button>
+                      label={MUSCLE_LABELS[muscle]}
+                      removeLabel={`${MUSCLE_LABELS[muscle]} süzgecini kaldır`}
+                      onRemove={() => toggle(muscle)}
+                    />
                   ))}
                 </div>
               ) : null}

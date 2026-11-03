@@ -45,13 +45,8 @@ import { DEVICE_KIND_LABELS, DEVICE_KINDS, KIND_EQUIPMENT } from "@/lib/device-l
 import { GRIP_LABELS, GRIP_WIDTH_LABELS } from "@/lib/grips";
 import type { Attachment } from "@/lib/schemas/attachment";
 import type { Device } from "@/lib/schemas/device";
-import {
-  isBodyMuscle,
-  ROLE_INTENSITY,
-  ROLE_LABELS,
-  type MuscleIntensity,
-  type MuscleRole,
-} from "@/lib/muscles";
+import { isBodyMuscle, ROLE_LABELS, type MuscleRole } from "@/lib/muscles";
+import { roleLegend, roleMarks } from "@/lib/muscle-tiers";
 import {
   defaultRule,
   EQUIPMENT_LOAD_DEFAULTS,
@@ -618,11 +613,6 @@ export function ExerciseForm({
                       ).filter(
                         (muscle) => !primary.includes(muscle) && !secondary.includes(muscle),
                       );
-                      const lists: Record<MuscleRole, Muscle[]> = {
-                        primary,
-                        secondary,
-                        stabilizer,
-                      };
                       const roleOf = (muscle: Muscle): MuscleRole | null =>
                         primary.includes(muscle)
                           ? "primary"
@@ -632,12 +622,11 @@ export function ExerciseForm({
                               ? "stabilizer"
                               : null;
 
-                      const intensity: MuscleIntensity = {};
-                      for (const role of ["stabilizer", "secondary", "primary"] as const) {
-                        for (const muscle of lists[role]) {
-                          if (isBodyMuscle(muscle)) intensity[muscle] = ROLE_INTENSITY[role];
-                        }
-                      }
+                      const worked = {
+                        primaryMuscles: primary,
+                        secondaryMuscles: secondary,
+                        stabilizerMuscles: stabilizer,
+                      };
 
                       // Kaslar sabit sırada saklanır.
                       const save = (next: Record<MuscleRole, Muscle[]>) => {
@@ -687,7 +676,9 @@ export function ExerciseForm({
                           </FieldDescription>
                           <MuscleMap
                             layout="split"
-                            intensity={intensity}
+                            marks={roleMarks(worked)}
+                            legend={roleLegend(worked)}
+                            onRemoveRow={(muscle) => setRole(muscle as Muscle, null)}
                             selected={bodySelected}
                             onToggle={cycle}
                             describe={(muscle) => {
@@ -715,32 +706,6 @@ export function ExerciseForm({
                             <Heartbeat data-icon="inline-start" />
                             Kardiyo hareketi
                           </Toggle>
-                          {(["primary", "secondary", "stabilizer"] as const).map((role) =>
-                            lists[role].length > 0 ? (
-                              <div
-                                key={role}
-                                className="flex flex-wrap items-center gap-1.5"
-                                aria-label={`${ROLE_LABELS[role]} kaslar`}
-                              >
-                                <span className="w-20 text-xs text-muted-foreground">
-                                  {ROLE_LABELS[role]}
-                                </span>
-                                {lists[role].map((muscle) => (
-                                  <Button
-                                    key={muscle}
-                                    type="button"
-                                    variant="secondary"
-                                    size="xs"
-                                    onClick={() => setRole(muscle, null)}
-                                    aria-label={`${MUSCLE_LABELS[muscle]} kasını kaldır`}
-                                  >
-                                    {MUSCLE_LABELS[muscle]}
-                                    <X data-icon="inline-end" />
-                                  </Button>
-                                ))}
-                              </div>
-                            ) : null,
-                          )}
                           <FieldError>{errors?.[0]}</FieldError>
                         </Field>
                       );
