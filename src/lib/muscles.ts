@@ -1,5 +1,5 @@
-import { rankAlternatives, type AlternativeCandidate } from '@/lib/alternatives';
-import { MUSCLE_FAMILIES, MUSCLE_LABELS, MUSCLES, type Exercise, type Muscle } from '@/lib/schemas/exercise';
+import { rankAlternatives, type AlternativeCandidate } from './alternatives.ts';
+import { MUSCLE_FAMILIES, MUSCLE_LABELS, MUSCLES, type Exercise, type Muscle } from './schemas/exercise.ts';
 
 /**
  * Kas yardımcıları — kas haritası ve kas süzgeci ortak kullanır.
