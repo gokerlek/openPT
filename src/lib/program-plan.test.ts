@@ -1072,8 +1072,9 @@ test('displayDays: ilk atanmış güne göre, atanmamışlar saklanan sırayla s
     displayDays(days).map((day) => day.id),
     ['C', 'B', 'A', 'D', 'E'],
   );
+  const unassigned: { id: string; weekdays?: number[] }[] = [{ id: 'A' }, { id: 'B' }];
   assert.deepEqual(
-    displayDays([{ id: 'A' }, { id: 'B' }]).map((day) => day.id),
+    displayDays(unassigned).map((day) => day.id),
     ['A', 'B'],
   );
 });
