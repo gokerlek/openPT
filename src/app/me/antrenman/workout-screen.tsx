@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { Skeleton } from '@/components/ui/skeleton';
 import { showGuardedUndo, showUndoToast } from '@/components/undo-toast';
+import { cardioSpeedIssue } from '@/lib/cardio';
 import { formatKg } from '@/lib/format';
 import { DRAG, DURATION, EASE, tween, WORKOUT } from '@/lib/motion';
 import { EFFORT_LABELS } from '@/lib/progression';
@@ -1188,6 +1189,13 @@ export function WorkoutScreen({
       unlockAudio();
       const row = plan.rows[next.rowId];
       const value = seconds ?? next.value;
+      // İnsan sınırı: bu sürede bu mesafe yapılamıyorsa set yazılmaz, nedeni söylenir ("1 saniyede 1000 metre").
+      const speedIssue = row?.cardio ? cardioSpeedIssue(row.cardio, { seconds: value, distanceM: next.distanceM }) : null;
+      if (speedIssue) {
+        toast.error(speedIssue);
+        announce(speedIssue);
+        return;
+      }
       // Aşırı yük: "Onayla · Set bitti" (ilk kez) ya da bu harekette zaten onaylanmış.
       const overload = overloadState(plan, current.doc, next, next.kg) !== 'none';
       const { doc, setId } = logSet(plan, current.doc, {
@@ -1442,6 +1450,15 @@ export function WorkoutScreen({
       const old = set.reps ?? set.seconds ?? 0;
       const fixed = { kg: values.kg ?? set.kg, value: values.value ?? old, distanceM: values.distanceM ?? set.distanceM, inclinePct: values.inclinePct ?? set.inclinePct };
       if (sameValues(fixed, { kg: set.kg, value: old, distanceM: set.distanceM, inclinePct: set.inclinePct })) return;
+      // İnsan sınırı: düzeltme de yapılamayacak hızı yazmaz.
+      const rowKey = rowKeyOf(found.entry);
+      const cardio = rowKey ? planOf(current).rows[rowKey]?.cardio : undefined;
+      const speedIssue = cardio && set.seconds !== undefined ? cardioSpeedIssue(cardio, { seconds: fixed.value, distanceM: fixed.distanceM }) : null;
+      if (speedIssue) {
+        toast.error(speedIssue);
+        announce(speedIssue);
+        return;
+      }
       const doc = editSet(current.doc, setId, fixed, stampOf(current));
       commit(withChange(current, doc, { send: true }));
       outbox.schedule();

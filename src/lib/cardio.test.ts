@@ -1,6 +1,6 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { bodyMassOn, cardioKind, cardioText, distanceText, totalKcal, walkKcal } from './cardio.ts';
+import { CARDIO_LIMITS, bodyMassOn, cardioKind, cardioSpeedIssue, cardioText, distanceText, totalKcal, walkKcal } from './cardio.ts';
 import type { MeasurementEntry } from './schemas/health.ts';
 
 describe('cardioKind', () => {
@@ -85,5 +85,30 @@ describe('totalKcal', () => {
     const walk = { seconds: 1800, distanceM: 3000, inclinePct: 5 };
     assert.equal(totalKcal([walk, walk, { seconds: 600, distanceM: 4000 }], 75), 506);
     assert.equal(totalKcal([walk], undefined), 0);
+  });
+});
+
+describe('insan sınırları', () => {
+  test('1 saniyede 1000 metre olmaz; yürüyüş/koşuda en fazla 40 km/sa', () => {
+    assert.match(cardioSpeedIssue('walk', { seconds: 1, distanceM: 1000 }) ?? '', /en fazla 40 km\/sa/);
+    assert.equal(cardioSpeedIssue('walk', { seconds: 1800, distanceM: 5000 }), null); // 10 km/sa
+    assert.equal(cardioSpeedIssue('walk', { seconds: 360, distanceM: 4000 }), null); // tam 40 km/sa
+    assert.notEqual(cardioSpeedIssue('walk', { seconds: 360, distanceM: 4100 }), null);
+  });
+
+  test('öteki kardiyoda en fazla 80 km/sa', () => {
+    assert.equal(cardioSpeedIssue('machine', { seconds: 1800, distanceM: 30000 }), null); // 60 km/sa
+    assert.match(cardioSpeedIssue('machine', { seconds: 600, distanceM: 20000 }) ?? '', /en fazla 80 km\/sa/);
+  });
+
+  test('mesafe varken süre 0 olmaz; mesafe yoksa denetim yok', () => {
+    assert.notEqual(cardioSpeedIssue('walk', { seconds: 0, distanceM: 500 }), null);
+    assert.equal(cardioSpeedIssue('walk', { seconds: 0 }), null);
+    assert.equal(cardioSpeedIssue('walk', { seconds: 1800, distanceM: 0 }), null);
+  });
+
+  test('eğim girişte en fazla %15; eski kayıtlar %30 ile okunur', () => {
+    assert.equal(CARDIO_LIMITS.inclineMax, 15);
+    assert.equal(CARDIO_LIMITS.inclineReadMax, 30);
   });
 });

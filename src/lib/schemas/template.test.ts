@@ -116,3 +116,13 @@ describe('set kuralları', () => {
     );
   });
 });
+
+describe('kardiyo hedefinde insan sınırı', () => {
+  const row = (set: Record<string, unknown>) => v.safeParse(templateSaveSchema.entries.blocks, [
+    { id: 'b_aaaaaa', kind: 'single', restSeconds: 60, rows: [{ id: 'r_aaaaaa', exerciseId: 'treadmill', sets: [set] }] },
+  ]);
+  test('hedefte 1 saniyede 1000 metre olmaz; makul hedef geçer', () => {
+    assert.equal(row({ min: 1, max: 1, distanceM: 1000 }).success, false);
+    assert.equal(row({ min: 1800, max: 1800, distanceM: 5000 }).success, true);
+  });
+});

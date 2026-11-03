@@ -14,7 +14,14 @@ import type { MeasurementEntry } from './schemas/health.ts';
 
 export type CardioKind = 'machine' | 'walk';
 
-export const CARDIO_LIMITS = { distanceMax: 100_000, inclineMax: 30, inclineStep: 0.5, distanceStep: 100 } as const;
+/**
+ * Girişin sınırları. Eğim girişte en fazla %15 (koşu bantlarının üst sınırı); kayıtta %30'a kadar okunur (`inclineReadMax`:
+ * bu sınırdan önce yazılan kayıt ve şablon okunamaz olmasın).
+ */
+export const CARDIO_LIMITS = { distanceMax: 100_000, inclineMax: 15, inclineReadMax: 30, inclineStep: 0.5, distanceStep: 100 } as const;
+
+/** İnsan sınırı: yürüyüş ve koşuda en fazla 40 km/sa (insanın ulaşabildiği en yüksek hız), öteki kardiyo makinelerinde 80 km/sa. */
+export const CARDIO_SPEED_MAX_KMH: Record<CardioKind, number> = { walk: 40, machine: 80 };
 
 export type CardioValues = { seconds?: number | undefined; distanceM?: number | undefined; inclinePct?: number | undefined };
 
@@ -49,6 +56,20 @@ export function walkKcal(set: CardioValues, bodyMassKg: number | undefined): num
   const grade = inclinePct / 100;
   const vo2 = speed <= WALK_MAX_SPEED ? 0.1 * speed + 1.8 * speed * grade + 3.5 : 0.2 * speed + 0.9 * speed * grade + 3.5;
   return Math.round(((vo2 * bodyMassKg) / 1000) * 5 * minutes);
+}
+
+/**
+ * Mesafe bu sürede yapılabilir mi (insan sınırı, `CARDIO_SPEED_MAX_KMH`): yapılamıyorsa nedeni, yapılabiliyorsa null.
+ * Mesafe yoksa denetim yok; mesafe varken süre 0 olamaz. "1 saniyede 1000 metre" yazılmasın.
+ */
+export function cardioSpeedIssue(kind: CardioKind, set: Pick<CardioValues, 'seconds' | 'distanceM'>): string | null {
+  const { seconds, distanceM } = set;
+  if (!distanceM || distanceM <= 0) return null;
+  if (!seconds || seconds <= 0) return 'Mesafe için süre de girilmeli.';
+  const max = CARDIO_SPEED_MAX_KMH[kind];
+  // km/sa = m / sn × 3,6; tam sınır geçer (çarpımla: kayan nokta yuvarlaması sınırı aşmış saymasın).
+  if (distanceM * 3600 <= max * 1000 * seconds) return null;
+  return `${distanceText(distanceM)} bu sürede olmaz: ${kind === 'walk' ? 'yürüyüş ve koşuda' : 'kardiyoda'} hız en fazla ${max} km/sa.`;
 }
 
 /** Setlerin toplam kalorisi (yürüyüş/koşu olmayanlar 0). */

@@ -118,7 +118,7 @@ export const sessionSetSchema = v.pipe(
     seconds: v.optional(int(0, SESSION_LIMITS.seconds)),
     /** Kardiyo: mesafe (m); yürüyüş/koşuda eğim (%), girilmediyse 0. Kalori yazılmaz (kilo sağlık verisi). */
     distanceM: v.optional(int(0, CARDIO_LIMITS.distanceMax)),
-    inclinePct: v.optional(v.pipe(v.number(), v.minValue(0), v.maxValue(CARDIO_LIMITS.inclineMax))),
+    inclinePct: v.optional(v.pipe(v.number(), v.minValue(0), v.maxValue(CARDIO_LIMITS.inclineReadMax))),
     /** Yoksa motor `good` sayar. `fail` yalnız eski kayıtlarda. */
     effort: v.optional(v.picklist([...EFFORTS, 'unknown'] as const)),
     /** O günkü hedef (aralık, yük yüzdesi, AMRAP): motor kaydı bununla değerlendirir. */

@@ -1,5 +1,5 @@
 import * as v from 'valibot';
-import { CARDIO_LIMITS } from '../cardio.ts';
+import { CARDIO_LIMITS, CARDIO_SPEED_MAX_KMH, cardioSpeedIssue } from '../cardio.ts';
 import { PROGRESSION_SCHEMES } from '../progression.ts';
 import { SET_LIMITS, isFullLoad } from '../set-plan.ts';
 import {
@@ -62,12 +62,21 @@ export const setSpecSchema = v.pipe(
       v.pipe(
         v.number('Sayı gir.'),
         v.minValue(0, 'Eğim en az %0 olur.'),
-        v.maxValue(CARDIO_LIMITS.inclineMax, `Eğim en fazla %${CARDIO_LIMITS.inclineMax} olur.`),
+        v.maxValue(CARDIO_LIMITS.inclineReadMax, `Eğim en fazla %${CARDIO_LIMITS.inclineReadMax} olur.`),
         v.multipleOf(CARDIO_LIMITS.inclineStep, 'Eğim 0,5 adımla olur.'),
       ),
     ),
   }),
   v.forward(v.partialCheck([['min'], ['max']], (set) => set.max >= set.min, 'Üst sınır alt sınırdan küçük olamaz.'), ['max']),
+  // İnsan sınırı: hareketin türü (yürüyüş/koşu) burada bilinmez, en geniş kardiyo sınırı (antrenmanda türüne göre).
+  v.forward(
+    v.partialCheck(
+      [['max'], ['distanceM']],
+      (set) => cardioSpeedIssue('machine', { seconds: set.max, distanceM: set.distanceM }) === null,
+      `Bu sürede bu mesafe olmaz: hız en fazla ${CARDIO_SPEED_MAX_KMH.machine} km/sa.`,
+    ),
+    ['distanceM'],
+  ),
 );
 // Tekrarda üst sınır 100: kayıt türü burada bilinmediği için sunucuda `normalizeTemplate` denetler.
 
