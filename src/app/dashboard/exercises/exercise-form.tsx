@@ -10,13 +10,17 @@ import {
   getDeepError,
   getInput,
   insert,
+  move,
   remove,
   setInput,
   useForm,
 } from "@formisch/react";
-import { Heartbeat, PushPin, WarningCircle } from "@phosphor-icons/react";
+import { Heartbeat, PushPin, Trash, WarningCircle } from "@phosphor-icons/react";
 import { toast } from "sonner";
-import { Plus, X } from "@/components/line-icons";
+import { Plus } from "@/components/line-icons";
+import { SortableList } from "@/components/list/sortable-list";
+import { SwipeRow, deleteAction } from "@/components/swipe/swipe-row";
+import { showUndoToast } from "@/components/undo-toast";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -316,32 +320,58 @@ export function ExerciseForm({
             <FieldArray of={form} path={["cues"]}>
               {(array) => (
                 <div className="flex flex-col gap-2">
-                  {array.items.map((item, index) => (
-                    <div key={item} className="flex gap-2">
-                      <FormField of={form} path={["cues", index]}>
-                        {(field) => (
-                          <Input
-                            {...field.props}
-                            value={field.input ?? ""}
-                            placeholder="Kürek kemiklerini sıkıştır"
-                            aria-label={`${index + 1}. ipucu`}
-                          />
-                        )}
-                      </FormField>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="touch:size-11"
-                        aria-label={`${index + 1}. ipucunu sil`}
-                        onClick={() =>
-                          remove(form, { path: ["cues"], at: index })
-                        }
-                      >
-                        <X />
-                      </Button>
-                    </div>
-                  ))}
+                  <SortableList
+                    items={array.items}
+                    keyOf={(item) => item}
+                    nameOf={(item) => `${array.items.indexOf(item) + 1}. ipucu`}
+                    label="İpuçları"
+                    className={array.items.length === 0 ? "hidden" : undefined}
+                    onStep={(item, target) => {
+                      const from = array.items.indexOf(item);
+                      const to = target === "up" ? from - 1 : from + 1;
+                      if (to >= 0 && to < array.items.length) move(form, { path: ["cues"], from, to });
+                    }}
+                    onDrop={(item, over) =>
+                      move(form, { path: ["cues"], from: array.items.indexOf(item), to: array.items.indexOf(over) })
+                    }
+                    renderItem={(item, slot) => {
+                      const index = array.items.indexOf(item);
+                      const removeCue = () => {
+                        const value = getInput(form, { path: ["cues", index] }) ?? "";
+                        remove(form, { path: ["cues"], at: index });
+                        showUndoToast("İpucu silindi", () =>
+                          insert(form, { path: ["cues"], at: index, initialInput: value }),
+                        );
+                      };
+                      return (
+                        <SwipeRow id={item} end={[deleteAction(removeCue)]}>
+                          <div className="relative flex gap-2 rounded-lg border bg-card px-2 pt-3 pb-2">
+                            {slot.grabber}
+                            <FormField of={form} path={["cues", index]}>
+                              {(field) => (
+                                <Input
+                                  {...field.props}
+                                  value={field.input ?? ""}
+                                  placeholder="Kürek kemiklerini sıkıştır"
+                                  aria-label={`${index + 1}. ipucu`}
+                                />
+                              )}
+                            </FormField>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="touch:size-11"
+                              aria-label={`${index + 1}. ipucunu sil`}
+                              onClick={removeCue}
+                            >
+                              <Trash />
+                            </Button>
+                          </div>
+                        </SwipeRow>
+                      );
+                    }}
+                  />
                   {array.items.length < 6 ? (
                     <Button
                       type="button"

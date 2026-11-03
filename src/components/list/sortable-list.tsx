@@ -128,6 +128,8 @@ function SortableItem({
   return (
     <li
       ref={ref}
+      // Kaydırarak silinince satır (ve liste aralığı) kapanır (`SwipeRow`, `removes`).
+      data-swipe-collapse
       className={cn(
         'relative rounded-xl motion-safe:transition-opacity',
         isDragging && 'opacity-40',

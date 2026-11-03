@@ -20,6 +20,7 @@
  */
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { Trash } from '@phosphor-icons/react';
 import { animate, motion, useDragControls, useMotionValue, useReducedMotion, useTransform, type MotionValue, type PanInfo } from 'motion/react';
 import { vibrate } from '@/lib/haptics';
 import { INSTANT, SWIPE, tween } from '@/lib/motion';
@@ -40,6 +41,22 @@ export type SwipeAction = {
   /** Şu an yapılamaz (ör. şablon dolu): soluk; basınca `onPress` yine çağrılır (nedeni duyurur), tam kaydırma tetiklemez. */
   disabled?: boolean;
 };
+
+/**
+ * Listelerin tek silme eylemi (sola kaydırma, sonuna kadar kaydırmak doğrudan siler): adı her yerde "Sil". Yerel silmede
+ * satır kapanır (`removes`, ardından 8 sn "Geri al"); kayıt silmesinde (`removes: false`) onay penceresi açılır.
+ */
+export function deleteAction(onPress: () => void, options: { removes?: boolean; disabled?: boolean } = {}): SwipeAction {
+  return {
+    key: 'sil',
+    label: 'Sil',
+    icon: <Trash weight="bold" />,
+    tone: 'destructive',
+    removes: options.removes ?? true,
+    ...(options.disabled ? { disabled: true } : {}),
+    onPress,
+  };
+}
 
 /** `start`: sağa kaydırınca soldan açılan panel; `end`: sola kaydırınca sağdan açılan. */
 type Side = 'start' | 'end';

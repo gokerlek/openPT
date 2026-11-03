@@ -537,11 +537,6 @@ export function removePhase(phases: Phases, phaseId: string, currentPhaseId: str
   return phases.filter((phase) => phase.id !== phaseId);
 }
 
-/** Evreyi bir öne ya da arkaya taşır; uçlarda değişmez. */
-export function movePhase(phases: Phases, phaseId: string, delta: -1 | 1): ProgramPhase[] {
-  return shift(phases, phases.findIndex((phase) => phase.id === phaseId), delta) ?? (phases as ProgramPhase[]);
-}
-
 /** Evreye gün ekler: verilen günün arkasına, yoksa sona. Sınırdaysa değişmez. */
 export function addDay(phases: Phases, phaseId: string, day: ProgramDay, afterDayId?: string): ProgramPhase[] {
   if (!canAddDay(phases, phaseId)) return phases as ProgramPhase[];

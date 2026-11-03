@@ -33,7 +33,6 @@ import {
   missingExerciseDays,
   moveDay,
   moveDayToPhase,
-  movePhase,
   nextDayName,
   nextPhaseName,
   normalizeProgram,
@@ -437,12 +436,6 @@ describe('düzenleyici işlemleri', () => {
 
   test('taşıma uçlarda bir şey yapmaz', () => {
     const phases = [uyum, guc];
-    assert.equal(movePhase(phases, 'p_uyum01', -1), phases);
-    assert.equal(movePhase(phases, 'p_guc001', 1), phases);
-    assert.deepEqual(
-      movePhase(phases, 'p_guc001', -1).map((phase) => phase.id),
-      ['p_guc001', 'p_uyum01'],
-    );
     assert.equal(moveDay(phases, 'p_uyum01', 'd_aaaaaa', -1), phases);
     assert.equal(moveDay(phases, 'p_uyum01', 'd_cccccc', 1), phases);
     assert.deepEqual(
