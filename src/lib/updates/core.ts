@@ -18,3 +18,15 @@ export function codeRepository(value:string|undefined,owner:string,dataRepo:stri
 export function validUpdateCommit(commit:{parents:{sha:string}[];message:string},head:string,tag:string) {
   return RELEASE_PATTERN.test(tag) && commit.parents.length===1 && commit.parents[0]?.sha===head && commit.message===`Axon update ${tag}`;
 }
+export type UpdateRun={tag:string;status:string;conclusion:string|null;applied:boolean};
+export type UpdateStep='prepare'|'preparing'|'publish'|'published';
+/**
+ * Sürümün sıradaki adımı hazırlığın durumundan; ekran ve sunucu aynı kuralla karar verir, aynı adım iki kez istenmez.
+ * Süren hazırlık (hangi sürüm olursa olsun) bekletir; başarılı hazırlık yayın, aktarılmış kod Vercel'i bekler; başarısız
+ * hazırlık ya da başka sürümün işi yeniden hazırlatır.
+ */
+export function updateStep(tag:string,run:UpdateRun|null):UpdateStep {
+  if(run && run.status!=='completed')return 'preparing';
+  if(!run || run.tag!==tag || run.conclusion!=='success')return 'prepare';
+  return run.applied?'published':'publish';
+}

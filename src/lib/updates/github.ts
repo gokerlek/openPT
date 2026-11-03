@@ -1,7 +1,7 @@
 import 'server-only';
 import * as v from 'valibot';
 import {serverEnv} from '@/lib/env';
-import {codeRepository,newerRelease,UPSTREAM,WORKFLOW,RELEASE_PATTERN,validUpdateCommit} from './core';
+import {codeRepository,newerRelease,UPSTREAM,WORKFLOW,RELEASE_PATTERN,updateStep,validUpdateCommit} from './core';
 import pkg from '../../../package.json';
 import {githubRequest} from './request';
 import {requireUpdateWorkflow} from './readiness';
@@ -48,12 +48,23 @@ export async function startUpdate(tag:string) {
   if(!release?.automatic || release.tag!==tag)throw new Error('Bu sürüm otomatik güncelleme için uygun değil.');
   const repo=updateRepo();
   const pending=await updateStatus();
-  if(pending && pending.status!=='completed')throw new Error('Bir güncelleme zaten hazırlanıyor.');
+  // Aynı adım iki kez istenmez (çift dokunuş, iki sekme): süren ya da bitmiş hazırlık, aktarılmış kod.
+  const step=updateStep(tag,pending);
+  if(step==='preparing')throw new Error('Bir güncelleme zaten hazırlanıyor.');
+  if(step==='publish')throw new Error('Bu sürüm hazır. Güncellemeyi yayınla ile tamamla.');
+  if(step==='published')throw new Error('Bu sürümün kodu aktarıldı. Vercel yayını bitince yeni sürüm görünür.');
   const metadata=await github<{default_branch:string}>(`/repos/${repo}`);
   const branch=metadata!.default_branch;
   const ref=await github<{object:{sha:string}}>(`/repos/${repo}/git/ref/heads/${encodeURIComponent(branch)}`);
+  const before=await latestRunId(repo);
   await github(`/repos/${repo}/actions/workflows/${WORKFLOW}/dispatches`,{method:'POST',body:JSON.stringify({ref:branch,inputs:{release:tag,expected_head:ref!.object.sha}})});
+  // GitHub yeni işi birkaç saniye listelemez: görünene kadar (en çok ~15 sn) beklenir, ardından gelen kontrol "Hazırlanıyor" der.
+  for(let attempt=0;attempt<10 && (await latestRunId(repo))===before;attempt++)await new Promise(resolve=>setTimeout(resolve,1500));
   return {url:`https://github.com/${repo}/actions/workflows/${WORKFLOW}`};
+}
+async function latestRunId(repo:string) {
+  const result=await github<{workflow_runs:{id:number}[]}>(`/repos/${repo}/actions/workflows/${WORKFLOW}/runs?event=workflow_dispatch&per_page=1`,{},true);
+  return result?.workflow_runs[0]?.id ?? null;
 }
 export async function applyUpdate(runId:number) {
   const repo=updateRepo();
