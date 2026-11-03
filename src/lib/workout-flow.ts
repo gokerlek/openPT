@@ -9,7 +9,7 @@ import { dayBody, entryPlanOf, extraKey, type ExtraRow, type ExtraRows, type Wor
 import { cursorOf, cursorOverrides, ensureEntries, newRowEntryId } from './workout-session.ts';
 
 /**
- * Antrenmanın listesi ve atlama (tasarım §2.6) — saf: liste + odak ekranının listesi, "Sırayı değiştir",
+ * Antrenmanın listesi ve atlama (tasarım §2.6) — saf: liste + odak ekranının listesi, taşıma,
  * "Bu hareketi atla" ve toast'taki "Geri al", atlananı geri alma, "Muadil seç" (muadil), "Hareket ekle" ve
  * bitişteki isteğe bağlı neden. Sıra değişiklikleri imlecin işleridir (`workout-cursor.ts`: birim tek hareket
  * ya da grubun tamamı); burası onları günün etkin planıyla çağırır.
@@ -113,6 +113,8 @@ export type FlowItem = {
   /** Yapılan ve planlanan çalışma setleri ("2/3"). */
   done: number;
   planned: number;
+  /** Antrenmanda eklenen hareket (planda yok): seti yazılmamışsa silinebilir (`canRemoveAdded`). */
+  added: boolean;
 };
 
 function isSkipped(unit: CursorUnit): boolean {
@@ -160,6 +162,7 @@ function itemOf(day: WorkoutDay, doc: Pick<SessionDoc, 'entries'>, unit: CursorU
     members,
     done: unit.members.reduce((sum, member) => sum + Math.min(member.done, member.planned), 0),
     planned: unit.members.reduce((sum, member) => sum + member.planned, 0),
+    added: doc.entries.some((entry) => entry.id === unit.key && entry.added === true),
   };
 }
 
@@ -378,7 +381,7 @@ function reorderMovable(day: WorkoutDay, doc: SessionDoc, key: string, place: (m
   return normalizeSession({ ...ready, order: { value: ordered.flatMap(entryIdsOf), updatedAt: stamp.at, by: stamp.by } });
 }
 
-/** "Sırayı değiştir" (liste, Faz 2): birim bir yukarı ya da aşağı. Taşınamıyorsa belge aynen döner. */
+/** Klavyeyle taşıma (liste, Alt + ↑/↓): birim bir yukarı ya da aşağı. Taşınamıyorsa belge aynen döner. */
 export function moveUnit(day: WorkoutDay, doc: SessionDoc, key: string, direction: -1 | 1, stamp: Stamp, random?: Random): SessionDoc {
   return reorderMovable(day, doc, key, (movable, from) => {
     const to = from + direction;
@@ -389,7 +392,7 @@ export function moveUnit(day: WorkoutDay, doc: SessionDoc, key: string, directio
   }, stamp, random);
 }
 
-/** Sürükleme ("Sırayı değiştir" kipinde): birim bırakıldığı bitmemiş birimin yerine. Hedef biten ya da atlanan ise belge aynen döner. */
+/** Sürükleme (listede tutamaçtan): birim bırakıldığı bitmemiş birimin yerine. Hedef biten ya da atlanan ise belge aynen döner. */
 export function moveUnitTo(day: WorkoutDay, doc: SessionDoc, key: string, targetKey: string, stamp: Stamp, random?: Random): SessionDoc {
   return reorderMovable(day, doc, key, (movable, from) => {
     const to = movable.findIndex((unit) => unit.key === targetKey);
@@ -504,6 +507,23 @@ export function addExercise(day: WorkoutDay, doc: SessionDoc, input: { entryId: 
   const units = cursorOf(day, ready).units;
   const order = [...units.filter((unit) => !isSkipped(unit)).flatMap(entryIdsOf), entry.id, ...units.filter(isSkipped).flatMap(entryIdsOf)];
   return normalizeSession({ ...ready, entries: [...ready.entries, entry], order: { value: order, updatedAt: stamp.at, by: stamp.by } });
+}
+
+/**
+ * Antrenmanda eklenen hareket silinebilir mi: kaydı `added` ve henüz seti yok. Plandaki hareket silinmez ("Atla" ile
+ * atlanır); seti yazılmış eklenen hareket de silinmez (önce setleri silinir ya da atlanır).
+ */
+export function canRemoveAdded(doc: Pick<SessionDoc, 'entries'>, key: string): boolean {
+  const entry = doc.entries.find((item) => item.id === key);
+  return entry?.added === true && entry.sets.length === 0;
+}
+
+/**
+ * Eklenen hareketi siler: kimlik kalıcı iz listesine girer (`withDeletions`; başka cihazdaki kopyası da düşer). "Geri al"
+ * hareketi yeni kimlikle yeniden ekler (`addExercise`). Silinemezse null.
+ */
+export function removeAdded(doc: SessionDoc, key: string): SessionDoc | null {
+  return canRemoveAdded(doc, key) ? withDeletions(doc, { entryIds: [key] }) : null;
 }
 
 /* --- bitişte neden --- */

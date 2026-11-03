@@ -9,6 +9,7 @@ import { addExtraRound, afterLog, cursorOf, easyShortcut, ensureEntries, logSet,
 import { nextMemberLetter } from './workout-groups.ts';
 import {
   addExercise,
+  canRemoveAdded,
   canSwap,
   dropAt,
   dropWithUndo,
@@ -23,6 +24,7 @@ import {
   nextUnitAfter,
   optionText,
   previousUnitBefore,
+  removeAdded,
   restoreAt,
   swapRow,
   undoSkip,
@@ -287,6 +289,38 @@ describe('"Hareket ekle"', () => {
     assert.deepEqual(view.items.map((item) => [item.members[0]?.number, item.key]).at(-1), ['4', 'e_added1']);
     assert.equal(view.plannedSets, 10);
     valid(doc);
+  });
+
+  test('eklenen ve seti yazılmamış hareket silinir; plandaki ya da seti yazılmış silinmez', () => {
+    const day = threeDay();
+    const { extra, doc } = added(day, start(day), 'e_added1');
+    const live = effectiveDay(day, doc, { [extraKey('e_added1', 'push-up')]: extra });
+    const plannedKey = listView(live, doc).items[0]?.key ?? '';
+    assert.equal(canRemoveAdded(doc, 'e_added1'), true);
+    assert.equal(canRemoveAdded(doc, plannedKey), false);
+    const next = removeAdded(doc, 'e_added1');
+    assert.ok(next);
+    assert.equal(next.entries.some((entry) => entry.id === 'e_added1'), false);
+    assert.equal(next.deletedEntryIds.includes('e_added1'), true, 'iz kalır: başka cihazdaki kopya geri gelmez');
+    // Plan her seferinde güncel belgeden kurulur; satır `extras`'ta kalsa da silinen kayıt listeye dönmez.
+    const after = effectiveDay(day, next, { [extraKey('e_added1', 'push-up')]: extra });
+    assert.equal(listView(after, next).items.some((item) => item.key === 'e_added1'), false);
+    assert.equal(removeAdded(doc, plannedKey), null);
+    const logged: SessionDoc = {
+      ...doc,
+      entries: doc.entries.map((entry) => (entry.id === 'e_added1' ? { ...entry, sets: [workingSet('st_added1', 6)] } : entry)),
+    };
+    assert.equal(canRemoveAdded(logged, 'e_added1'), false);
+    assert.equal(removeAdded(logged, 'e_added1'), null);
+    valid(next);
+  });
+
+  test('liste öğesi eklenen hareketi bilir', () => {
+    const day = threeDay();
+    const { extra, doc } = added(day, start(day), 'e_added1');
+    const view = listView(effectiveDay(day, doc, { [extraKey('e_added1', 'push-up')]: extra }), doc);
+    assert.equal(view.items.find((item) => item.key === 'e_added1')?.added, true);
+    assert.equal(view.items[0]?.added, false);
   });
 
   test('atlananların önüne girer; "Şimdi yap" odağında hemen yapılır ve setleri kendi kaydına yazılır', () => {

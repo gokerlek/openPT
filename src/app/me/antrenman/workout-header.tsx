@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowBendDownRight, ArrowsLeftRight, CaretLeft, CloudSlash, Drop, Pause, Swap, WarningCircle } from '@phosphor-icons/react';
+import { ArrowBendDownRight, ArrowsLeftRight, CaretLeft, CloudSlash, Drop, Pause, Swap, Trash, WarningCircle } from '@phosphor-icons/react';
 import { DotsThree, Spinner } from '@/components/line-icons';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -17,7 +17,7 @@ export type WorkoutStatus = { tone: 'warn' | 'offline' | 'busy'; text: string; r
 export type MenuAction = { onSelect: () => void } | { note: string };
 
 /** Odakta ⋯ menüsünün hareket öğeleri (8. görev): odaktaki hareket için **Muadil seç** ve **Bu hareketi atla**. */
-export type FocusActions = { swap: MenuAction; skip: MenuAction };
+export type FocusActions = { swap: MenuAction; skip: MenuAction; remove?: MenuAction };
 
 /** Hareketin öğesi: devre dışıyken soluklaşmaz, nedeni okunur kalsın (adın altında, öğenin erişilebilir adının parçası). */
 function ActionItem({ action, icon, label }: { action: MenuAction; icon: React.ReactNode; label: string }) {
@@ -119,6 +119,7 @@ export function WorkoutHeader({
                 <>
                   <ActionItem action={focusActions.swap} icon={<Swap />} label="Muadil seç" />
                   <ActionItem action={focusActions.skip} icon={<ArrowBendDownRight />} label="Bu hareketi atla" />
+                  {focusActions.remove ? <ActionItem action={focusActions.remove} icon={<Trash />} label="Hareketi sil" /> : null}
                   <DropdownMenuSeparator />
                 </>
               ) : null}

@@ -124,6 +124,14 @@ function SortableItem({
     [setDragRef, setDropRef],
   );
   const grabber = movable ? <CardGrabber ref={setActivatorNodeRef} dragging={isDragging} {...listeners} /> : null;
+  // Taşınan öğenin düğümü DOM'da yer değiştirir ve odak düşebilir: odaktaki öğe taşımadan sonra yeniden odaklanır.
+  const step = (target: 'up' | 'down') => {
+    const focused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    onStep(target);
+    window.requestAnimationFrame(() => {
+      if (focused?.isConnected && document.activeElement !== focused) focused.focus();
+    });
+  };
 
   return (
     <li
@@ -142,10 +150,10 @@ function SortableItem({
         const target = moveTargetOf(event);
         if (target !== 'up' && target !== 'down') return;
         event.preventDefault();
-        if ((target === 'up' && canUp) || (target === 'down' && canDown)) onStep(target);
+        if ((target === 'up' && canUp) || (target === 'down' && canDown)) step(target);
       }}>
       {render({ grabber, dragging: isDragging })}
-      {movable ? <MoveButtons name={name} canUp={canUp} canDown={canDown} onStep={onStep} /> : null}
+      {movable ? <MoveButtons name={name} canUp={canUp} canDown={canDown} onStep={step} /> : null}
     </li>
   );
 }

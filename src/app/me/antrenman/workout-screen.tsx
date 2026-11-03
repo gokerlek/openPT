@@ -10,6 +10,7 @@ import { ArrowClockwise, Barbell, WarningCircle } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { Skeleton } from '@/components/ui/skeleton';
+import { showUndoToast } from '@/components/undo-toast';
 import { formatKg } from '@/lib/format';
 import { DRAG, DURATION, EASE, tween, WORKOUT } from '@/lib/motion';
 import { EFFORT_LABELS } from '@/lib/progression';
@@ -21,6 +22,7 @@ import { waterOf } from '@/lib/session-index';
 import { rowKeyOf, type CursorUnit } from '@/lib/workout-cursor';
 import {
   addExercise,
+  canRemoveAdded,
   canSwap,
   dropWithUndo,
   firstSkippedKey,
@@ -31,6 +33,7 @@ import {
   moveUnitTo,
   nextUnitAfter,
   previousUnitBefore,
+  removeAdded,
   restoreAt,
   swapRow,
   undoSkip,
@@ -303,7 +306,7 @@ function addressMarked(): boolean {
  * Zorluk, ısınma, ayar notu ve AMRAP düzeltmesi kendi başına gönderilmez, sonraki set yazımına biner.
  *
  * Liste + odak (Faz 2): adreste odak yoksa ana ekran günün listesi (`WorkoutList`: satıra dokunmak o hareketi açar,
- * atlananı geri alır, "Sırayı değiştir", "Hareket ekle", altta "Başla/Devam et: <ad>" ya da "Antrenmanı bitir");
+ * atlananı geri alır, tutamaçla taşınır, "Hareket ekle", altta "Başla/Devam et: <ad>" ya da "Antrenmanı bitir");
  * odak varsa (`?hareket=<birim>`, `workout-nav.ts`) o hareketin kartı ve giriş paneli: sıradaki set yalnız o birimde
  * aranır, sıra kendiliğinden değişmez, biten birim set tablosuyla açılır, "‹ Liste" ve geri tuşu listeye döner. Ekran
  * şu anki hareketin odağıyla açılır (açılış kuralı: liste işaretli girdinin üstünde odak girdisi). Listeden geri tuşu
@@ -316,10 +319,10 @@ function addressMarked(): boolean {
  *
  * Yapılan set (§2.4): tablodaki satıra (ya da dinlenmenin "Düzenle"sine) dokunmak onu alttaki panelde düzenlemeye açar
  * (`SetEditPanel`, satır vurgulu; yazım eski set sheet'ininki). ✓'a dokunmak işareti kaldırır; sola kaydırıp
- * "Sil" ve panelin "Seti sil"i seti siler: onay yok, 5 sn toast'ta "Geri al" (`restoreSet`). Süreli set sayarken ikisi
+ * "Sil" ve panelin "Seti sil"i seti siler: onay yok, 8 sn "Geri al" (`showUndoToast`) (`restoreSet`). Süreli set sayarken ikisi
  * de yapılmaz.
  *
- * Atlama ve muadil (§2.6): odakta ⋯ menüsünde tek dokunuşluk "Bu hareketi atla" (atlananlara; 5 sn toast [Geri al])
+ * Atlama ve muadil (§2.6): odakta ⋯ menüsünde tek dokunuşluk "Bu hareketi atla" (atlananlara; 8 sn "Geri al")
  * ve "Muadil seç" (kendi geçmişiyle; kısıt notunda da "Değiştir"). Ekran günün etkin planıyla çalışır (`planOf`:
  * muadiller ve eklenenler). Atlama, sıra ve muadil de kendi başına gönderilmez; neden yalnız bitişte sorulur.
  *
@@ -1551,7 +1554,7 @@ export function WorkoutScreen({
 
   /**
    * Seti kaldırır: ✓'u kaldırmak (`untick`: set yapılmadı) ya da sola kaydırıp "Sil", panelin "Seti sil"i (`delete`). İkisi
-   * de eski onaylı silmenin yazımı (`deleteSet`, hemen gönderilir), onay sormaz: 5 sn toast'taki "Geri al" seti geri getirir
+   * de eski onaylı silmenin yazımı (`deleteSet`, hemen gönderilir), onay sormaz: 8 sn "Geri al" seti geri getirir
    * (`restoreSet`: yeni kimlikle, aynı yerine). Fark fazladan sette: silmek tek harekette istenen turu da bırakır (yeniden
    * beklemesin), ✓'u kaldırmak bırakmaz (satır bekleyen fazladan set olur). Setin dinlenmesi biter. Taslağa dokunulmaz:
    * tablodan seçilen set (taslağın seti) seçili kalır; kaldırılan set yeniden yazılırsa `onDone` taslağı düşürür (`draft: null`). Set kaydedilirken, bitiş yoldayken ve
@@ -1596,44 +1599,40 @@ export function WorkoutScreen({
         (document.getElementById('set-done') ?? document.getElementById(ROW_DONE_ID) ?? document.getElementById('exercise-title'))?.focus({ preventScroll: true });
       });
       const sessionId = current.doc.id;
-      toast(text, {
-        // Hangi hareketin seti: toast başka harekete geçildikten sonra da görünür (grupta "Set 2" iki üyede de var).
-        description: `${title} · ${setValueText(found.set)}`,
-        duration: WORKOUT.skipToastMs,
-        classNames: TOAST_BUTTONS,
-        action: {
-          label: 'Geri al',
-          onClick: () => {
-            const latest = localRef.current;
-            if (!mountedRef.current || pausingRef.current || !latest || latest.doc.id !== sessionId || finishingRef.current) return;
-            // Süreli set sayarken geri getirmek sıradaki seti değiştirip süren seti bırakırdı (`removeSet` gibi).
-            if (timedSetRunning(latest, focusRef.current)) {
-              toast('Süre sayıyor', { description: 'Seti geri getirmek için önce bitir ya da vazgeç.' });
-              return;
-            }
-            // Silmenin bıraktığı fazladan tur da geri gelir; fazladan setin denetimi de o turla (`restoreSet`).
-            const rounds = dropped && unitKey ? { ...latest.extraRounds, [unitKey]: (latest.extraRounds[unitKey] ?? 0) + 1 } : latest.extraRounds;
-            const next = { ...latest, extraRounds: rounds };
-            const back = restoreSet(planOf(next), latest.doc, { ...found, removedAt }, stampOf(latest));
-            if (!back) {
-              toast(`Set ${position + 1} geri getirilemedi`, { description: 'O arada yeniden yapıldı ya da hareket değişti.' });
-              return;
-            }
-            // Geri gelen set sıradaki setin yerindeyse sıradaki set değişir (`onDropExtra` gibi): süreli setin sayacı düşer,
-            // taslak yalnız yeni sıradaki setinse kalır (silmeden önce yazılan taslak böylece kendi setine döner).
-            const before = nextSet(planOf(latest), latest.doc, latest.draft, focusRef.current);
-            const after = nextSet(localWorkoutDay(next, back.doc), back.doc, latest.draft, focusRef.current);
-            const moved = before?.rowId !== after?.rowId || before?.setIndex !== after?.setIndex;
-            const draft = latest.draft && after && latest.draft.rowId === after.rowId && latest.draft.setIndex === after.setIndex ? latest.draft : null;
-            // Geri gelen setin (o arada yazılmışsa) yazılanı düşer.
-            const drafts = latest.drafts && pendingTyped(localWorkoutDay(next, back.doc), back.doc, latest.drafts);
-            const restored = drafts ? { ...next, drafts } : next;
-            commit(withChange(moved ? { ...restored, draft, timer: null } : restored, back.doc, { send: true }));
-            outbox.schedule();
-            announce(`Set ${position + 1} geri geldi`);
-          },
+      showUndoToast(
+        text,
+        () => {
+          const latest = localRef.current;
+          if (!mountedRef.current || pausingRef.current || !latest || latest.doc.id !== sessionId || finishingRef.current) return;
+          // Süreli set sayarken geri getirmek sıradaki seti değiştirip süren seti bırakırdı (`removeSet` gibi).
+          if (timedSetRunning(latest, focusRef.current)) {
+            toast('Süre sayıyor', { description: 'Seti geri getirmek için önce bitir ya da vazgeç.' });
+            return;
+          }
+          // Silmenin bıraktığı fazladan tur da geri gelir; fazladan setin denetimi de o turla (`restoreSet`).
+          const rounds = dropped && unitKey ? { ...latest.extraRounds, [unitKey]: (latest.extraRounds[unitKey] ?? 0) + 1 } : latest.extraRounds;
+          const next = { ...latest, extraRounds: rounds };
+          const back = restoreSet(planOf(next), latest.doc, { ...found, removedAt }, stampOf(latest));
+          if (!back) {
+            toast(`Set ${position + 1} geri getirilemedi`, { description: 'O arada yeniden yapıldı ya da hareket değişti.' });
+            return;
+          }
+          // Geri gelen set sıradaki setin yerindeyse sıradaki set değişir (`onDropExtra` gibi): süreli setin sayacı düşer,
+          // taslak yalnız yeni sıradaki setinse kalır (silmeden önce yazılan taslak böylece kendi setine döner).
+          const before = nextSet(planOf(latest), latest.doc, latest.draft, focusRef.current);
+          const after = nextSet(localWorkoutDay(next, back.doc), back.doc, latest.draft, focusRef.current);
+          const moved = before?.rowId !== after?.rowId || before?.setIndex !== after?.setIndex;
+          const draft = latest.draft && after && latest.draft.rowId === after.rowId && latest.draft.setIndex === after.setIndex ? latest.draft : null;
+          // Geri gelen setin (o arada yazılmışsa) yazılanı düşer.
+          const drafts = latest.drafts && pendingTyped(localWorkoutDay(next, back.doc), back.doc, latest.drafts);
+          const restored = drafts ? { ...next, drafts } : next;
+          commit(withChange(moved ? { ...restored, draft, timer: null } : restored, back.doc, { send: true }));
+          outbox.schedule();
+          announce(`Set ${position + 1} geri geldi`);
         },
-      });
+        // Hangi hareketin seti: bildirim başka harekete geçildikten sonra da görünür (grupta "Set 2" iki üyede de var).
+        { description: `${title} · ${setValueText(found.set)}` },
+      );
     },
     [saving, commit, outbox, guard, announce, later],
   );
@@ -1916,7 +1915,7 @@ export function WorkoutScreen({
   }, [goToList, announce]);
 
   /**
-   * "Sırayı değiştir" kipinde ▲/▼ ya da Alt + ↑/↓: birim bir adım (`moveUnit`; biten ve atlanan yerinde kalır, aradan
+   * Listede Alt + ↑/↓ ya da gizli "Yukarı/Aşağı taşı": birim bir adım (`moveUnit`; biten ve atlanan yerinde kalır, aradan
    * atlanır). Kendi başına gönderilmez (`commitFlow`, sonraki set yazımına biner). Canlı bölge yeni yerini söyler
    * ("Plank 3. sırada", sürüklemedeki gibi).
    */
@@ -1936,7 +1935,7 @@ export function WorkoutScreen({
     [saving, commitFlow, highlightUnit, announce],
   );
 
-  /** Sürükleyip bırakmak ("Sırayı değiştir" kipinde): birim bırakıldığı bitmemiş birimin yerine (`moveUnitTo`). */
+  /** Sürükleyip bırakmak (listede tutamaçtan): birim bırakıldığı bitmemiş birimin yerine (`moveUnitTo`). */
   const onMoveUnitTo = useCallback(
     (key: string, targetKey: string) => {
       const current = localRef.current;
@@ -1956,7 +1955,7 @@ export function WorkoutScreen({
   /**
    * "Bu hareketi atla" (odakta ⋯): tek dokunuş, neden sorulmaz (bitişte sorulur). Birim atlananlara (`dropWithUndo`; biten
    * birimde yok, öğe devre dışı), odak sıradaki birime (`nextUnitAfter`: sıra değişmez, başka birimde bekleyen fazladan
-   * set sayılmaz); kalmadıysa listeye (klavye odağı atlanan satıra) ve hepsi yapıldıysa bitiş sorusu. 5 sn toast'ta
+   * set sayılmaz); kalmadıysa listeye (klavye odağı atlanan satıra) ve hepsi yapıldıysa bitiş sorusu. 8 sn bildirimde
    * "Geri al" (`undoSkip`) hareketi ve odağı geri getirir.
    *
    * Liste bir kare bile görünmez: belge ve odak tek geçişte (`startTransition`) yazılır. Atlanan birim adreste odakta
@@ -1995,27 +1994,23 @@ export function WorkoutScreen({
       announce(`${title} atlandı`);
       if (target) focusLater('exercise-title', DURATION.base);
       const sessionId = current.doc.id;
-      toast(`${title} atlandı`, {
-        ...(done > 0 ? { description: `${done}/${planned} set yapıldı` } : {}),
-        duration: WORKOUT.skipToastMs,
-        classNames: TOAST_BUTTONS,
-        action: {
-          label: 'Geri al',
-          onClick: () => {
-            const latest = localRef.current;
-            // Bitiş (ya da iptal, değiştirme) gönderilirken geri alınmaz: belge yolda, meşgul bitiş sorusu kapanmamalı. Ara
-            // verilirken ya da ekran kapandıktan sonra da (toast Bugün'de kalır) hiçbir şey yapmaz (`pausingRef`, `mountedRef`).
-            if (!mountedRef.current || pausingRef.current || !latest || latest.doc.id !== sessionId || finishingRef.current) return;
-            commitFlow(latest, undoSkip(planOf(latest), latest.doc, result.undo, stampOf(latest)), {}, key);
-            // Son hareket atlanınca açılan bitiş sorusu kapanır (hareket yine yapılacak); açılmadıysa zamanlayıcısı açmaz.
-            setFinishOpen(false);
-            openFocus(key);
-            highlightUnit(key);
-            announce(`${title} geri alındı`);
-            focusLater('exercise-title', DURATION.base);
-          },
+      showUndoToast(
+        `${title} atlandı`,
+        () => {
+          const latest = localRef.current;
+          // Bitiş (ya da iptal, değiştirme) gönderilirken geri alınmaz: belge yolda, meşgul bitiş sorusu kapanmamalı. Ara
+          // verilirken ya da ekran kapandıktan sonra da (toast Bugün'de kalır) hiçbir şey yapmaz (`pausingRef`, `mountedRef`).
+          if (!mountedRef.current || pausingRef.current || !latest || latest.doc.id !== sessionId || finishingRef.current) return;
+          commitFlow(latest, undoSkip(planOf(latest), latest.doc, result.undo, stampOf(latest)), {}, key);
+          // Son hareket atlanınca açılan bitiş sorusu kapanır (hareket yine yapılacak); açılmadıysa zamanlayıcısı açmaz.
+          setFinishOpen(false);
+          openFocus(key);
+          highlightUnit(key);
+          announce(`${title} geri alındı`);
+          focusLater('exercise-title', DURATION.base);
         },
-      });
+        done > 0 ? { description: `${done}/${planned} set yapıldı` } : {},
+      );
       finishIfDone(result.doc);
     },
     [saving, commitFlow, openFocus, goToList, highlightUnit, announce, focusLater, finishIfDone],
@@ -2038,6 +2033,49 @@ export function WorkoutScreen({
       announce(`${unitTitle(plan, current.doc, unit)} yeniden sırada`);
     },
     [commitFlow, highlightUnit, announce],
+  );
+
+  /**
+   * Antrenmanda eklenen ve seti yazılmamış hareketi siler (listede sola kaydırma, odakta ⋯ "Hareketi sil"; `removeAdded`):
+   * kayıt kalıcı iz listesine girer, satırı `extras`'tan düşer; odaktaysa listeye dönülür. 8 sn "Geri al" hareketi yeni
+   * kimlikle yeniden ekler (silme izi her kopyada kazanır, aynı kimlik geri gelemez); yapılacakların sonuna girer.
+   */
+  const onRemoveAdded = useCallback(
+    (key: string) => {
+      const current = localRef.current;
+      if (!current || saving) return;
+      const plan = planOf(current);
+      const unit = cursorOf(plan, current.doc).units.find((item) => item.key === key);
+      const entry = current.doc.entries.find((item) => item.id === key);
+      const doc = removeAdded(current.doc, key);
+      if (!unit || !entry || !doc) return;
+      const title = unitTitle(plan, current.doc, unit);
+      const extraId = extraKey(key, entry.exerciseId);
+      const extra = current.extras?.[extraId];
+      const { [extraId]: _removed, ...extras } = current.extras ?? {};
+      const focused = focusRef.current === key;
+      commitFlow(current, doc, { extras }, focused ? null : focusRef.current);
+      if (focused) goToList();
+      announce(`${title} silindi`);
+      const sessionId = current.doc.id;
+      if (!extra) {
+        // Planı bu telefonda yok (başka cihazda eklendi): geri getirilecek satır yok.
+        toast(`${title} silindi`);
+        return;
+      }
+      showUndoToast(`${title} silindi`, () => {
+        const latest = localRef.current;
+        // Ara verilirken, ekran kapandıktan sonra ya da bitiş yoldayken hiçbir şey yapmaz (atlamanın "Geri al"ı gibi).
+        if (!mountedRef.current || pausingRef.current || !latest || latest.doc.id !== sessionId || finishingRef.current) return;
+        const entryId = newEntryId(latest.doc);
+        const keyed = rekeyExtra(extra, entryId);
+        const back = addExercise(planOf(latest), latest.doc, { entryId, extra: keyed, stamp: stampOf(latest) });
+        commitFlow(latest, back, { extras: { ...latest.extras, [extraKey(entryId, keyed.exerciseId)]: keyed } });
+        highlightUnit(entryId);
+        announce(`${title} geri geldi`);
+      });
+    },
+    [saving, commitFlow, goToList, highlightUnit, announce],
   );
 
   /** "Değiştir": sheet'i şu anki hareket için açar; muadil seçildiyse başta asıl hareket. */
@@ -2098,7 +2136,7 @@ export function WorkoutScreen({
         announce(`${item.title} eklendi`);
         toast.success(`${item.title} eklendi`, {
           description: 'Yapılacakların sonunda',
-          duration: WORKOUT.skipToastMs,
+          duration: WORKOUT.addedToastMs,
           classNames: TOAST_BUTTONS,
           // Ara verilirken ya da ekran kapandıktan sonra (toast Bugün'de kalır) hiçbir şey yapmaz (`pausingRef`, `mountedRef`).
           action: { label: 'Şimdi yap', onClick: () => (mountedRef.current && !pausingRef.current ? onOpenUnit(entryId) : undefined) },
@@ -2443,6 +2481,16 @@ export function WorkoutScreen({
             : list.items.find((item) => item.key === shownFocus)?.state === 'done'
               ? { note: 'Bu hareket bitti' }
               : { onSelect: () => onDropUnit(shownFocus) },
+          // Yalnız antrenmanda eklenen harekette: seti yoksa silinir, varsa nedeni yazar (plandaki hareket atlanır).
+          ...(list.items.find((item) => item.key === shownFocus)?.added
+            ? {
+                remove: saving
+                  ? savingNote
+                  : canRemoveAdded(doc, shownFocus)
+                    ? { onSelect: () => onRemoveAdded(shownFocus) }
+                    : { note: 'Seti var; önce setleri sil ya da atla' },
+              }
+            : {}),
         }
       : null;
 
@@ -2525,7 +2573,8 @@ export function WorkoutScreen({
               onAdd={() => setAddOpen(true)}
               onMove={onMoveUnit}
               onMoveTo={onMoveUnitTo}
-              onAnnounce={announce}
+              canRemove={(key) => canRemoveAdded(doc, key)}
+              onRemove={onRemoveAdded}
             />
           ) : (
             <AnimatePresence mode="popLayout" initial={false}>
