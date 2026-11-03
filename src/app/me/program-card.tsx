@@ -18,7 +18,7 @@ import { activeItem, shownProgram } from '@/lib/own-program-index';
 import { lastDateByProgram, ptUpdatedSince } from '@/lib/own-program-text';
 import { PT_PROGRAM_NAME } from '@/lib/own-programs';
 import { readOwnOverview, readOwnProgramOf } from '@/lib/own-programs-store';
-import { currentPhaseOf, frequencyLabel, phaseStatus } from '@/lib/program-plan';
+import { displayDays, currentPhaseOf, frequencyLabel, phaseStatus } from '@/lib/program-plan';
 import { previewBlocks, rowLabels, templateSummary, type TemplateBlock } from '@/lib/template-plan';
 import { isoWeekdayOf, phaseFrequency, todayAssigned, WEEKDAY_NAMES, type Weekday } from '@/lib/training-days';
 import { lastDoneDates, programStamp, type PlanOwner, type PlanProgram } from '@/lib/workout-plan';
@@ -310,7 +310,7 @@ export async function ProgramCard({
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
             <ul className="flex flex-col gap-2" aria-label="Programlar">
-              {phase.days.map((day) => {
+              {displayDays(phase.days).map((day) => {
                 const itemSummary = summaryOf(day);
                 const lastDate = lastByDay[day.id];
                 return (

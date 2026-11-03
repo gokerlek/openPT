@@ -21,7 +21,7 @@ import { healthRecordSchema, type HealthRecord } from './schemas/health.ts';
 import { BLOCKED_TEXT } from './exercise-caution.ts';
 import { todayIn } from './format.ts';
 import { GithubError } from './github/errors.ts';
-import { currentPhaseOf, DAY_ID_PATTERN } from './program-plan.ts';
+import { displayDays, currentPhaseOf, DAY_ID_PATTERN } from './program-plan.ts';
 import type { TrackingType } from './progression.ts';
 import { parseProposals, PROPOSALS_PATH } from './proposals.ts';
 import type { Client } from './schemas/client.ts';
@@ -461,7 +461,7 @@ export function workoutRoute(deps: WorkoutRouteDeps, dayParam: string | null, pr
               stamp: programStamp(program, owner?.programId ?? null) + careStampOf(care.record),
               phaseId: phase.id,
               nextDayId: defaultDayId(program, today),
-              days: phase.days.map((item) => ({
+              days: displayDays(phase.days).map((item) => ({
                 id: item.id,
                 name: item.name,
                 ...(item.weekdays?.length ? { weekdays: item.weekdays } : {}),

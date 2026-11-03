@@ -496,15 +496,6 @@ export function canAddDay(phases: Phases, phaseId: string): boolean {
   return Boolean(phase) && (phase?.days.length ?? 0) < PROGRAM_LIMITS.daysPerPhase && countDays(phases) < PROGRAM_LIMITS.days;
 }
 
-function shift<T>(items: readonly T[], index: number, delta: -1 | 1): T[] | null {
-  const target = index + delta;
-  if (index < 0 || target < 0 || target >= items.length) return null;
-  const next = [...items];
-  const [item] = next.splice(index, 1);
-  next.splice(target, 0, item as T);
-  return next;
-}
-
 function insertAfter<T extends { id: string }>(items: readonly T[], item: T, afterId?: string): T[] {
   const index = afterId === undefined ? -1 : items.findIndex((entry) => entry.id === afterId);
   const next = [...items];
@@ -652,14 +643,6 @@ export function moveDayToPhase(phases: Phases, dayId: string, targetPhaseId: str
     if (phase.id === targetPhaseId) return { ...phase, days: [...kept, moved] };
     if (phase.days.some((item) => item.id === dayId)) return { ...phase, days: phase.days.filter((item) => item.id !== dayId) };
     return phase;
-  });
-}
-
-/** Günü evrenin içinde bir öne ya da arkaya taşır; uçlarda değişmez. */
-export function moveDay(phases: Phases, phaseId: string, dayId: string, delta: -1 | 1): ProgramPhase[] {
-  return updatePhase(phases, phaseId, (phase) => {
-    const days = shift(phase.days, phase.days.findIndex((day) => day.id === dayId), delta);
-    return days ? { ...phase, days } : phase;
   });
 }
 

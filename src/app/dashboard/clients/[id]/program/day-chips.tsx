@@ -5,7 +5,7 @@ import { Copy, FileText, Square, WarningCircle } from '@phosphor-icons/react';
 import { Plus } from '@/components/line-icons';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { blankDay, canAddDay, copyDay, programIdSource, addDay, type ProgramPhase } from '@/lib/program-plan';
+import { displayDays, blankDay, canAddDay, copyDay, programIdSource, addDay, type ProgramPhase } from '@/lib/program-plan';
 import { weekdayNamesText, weekdaysText } from '@/lib/training-days';
 import { cn } from '@/lib/utils';
 import type { PhaseActions, ProgramFormStore } from './program-form';
@@ -101,7 +101,8 @@ export function DayChips({
 }) {
   return (
     <div className="flex flex-wrap gap-2">
-      {phase.days.map((day, dayIndex) => {
+      {displayDays(phase.days).map((day) => {
+        const dayIndex = phase.days.indexOf(day);
         const selected = day.id === selectedDayId;
         const failing = Boolean(getDeepError(form, { path: ['phases', phaseIndex, 'days', dayIndex] })) || missingDayIds.has(day.id);
         const assigned = day.weekdays ?? [];

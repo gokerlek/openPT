@@ -19,6 +19,7 @@ import { showGuardedUndo } from '@/components/undo-toast';
 import { UnsavedChangesGuard, type UnsavedChangesGuardHandle } from '@/components/unsaved-changes-guard';
 import { cleanWeekdays, upgradeAssignments } from '@/lib/day-assignments';
 import {
+  displayDays,
   addDay,
   dayFromTemplateForEditing,
   droppedDeviceNotice,
@@ -69,7 +70,7 @@ export type PhaseActions = {
   /** Evrelere böl (açık) ya da evreleri kaldır (günler şu anki evrede tek listede birleşir); geri alınabilir. */
   setPhased: (phased: boolean) => void;
   /** Günü başka evreye taşır (sona). */
-  moveDay: (dayId: string, phaseId: string) => void;
+  moveToPhase: (dayId: string, phaseId: string) => void;
   openAddDay: (phaseId: string) => void;
   openSaveTemplate: () => void;
 };
@@ -223,8 +224,11 @@ export function ProgramForm({
 
   // Seçim her çizimde çözülür: silinen gün eski yolla hiç çizilmez (Formisch yolu dizinle bulur).
   const currentIndex = Math.max(0, phases.findIndex((phase) => phase.id === currentPhaseId));
+  // Seçim yoksa evrenin gösterimdeki ilk programı (hafta gününe göre; atama yoksa saklanan ilk).
+  const firstShown = displayDays(phases[currentIndex]?.days ?? [])[0];
   const located =
-    locateDay(phases, selectedDayId) ?? (phases[currentIndex]?.days[0] ? { phaseIndex: currentIndex, dayIndex: 0 } : null);
+    locateDay(phases, selectedDayId) ??
+    (firstShown ? { phaseIndex: currentIndex, dayIndex: phases[currentIndex]?.days.indexOf(firstShown) ?? 0 } : null);
   const selectedPhase = located ? phases[located.phaseIndex] : undefined;
   const selectedDay = located ? selectedPhase?.days[located.dayIndex] : undefined;
 
@@ -316,7 +320,7 @@ export function ProgramForm({
     select: setSelectedDayId,
     setCurrentPhase: (phaseId) => setInput(form, { path: ['currentPhaseId'], input: phaseId }),
     setPhased,
-    moveDay: (dayId, phaseId) => {
+    moveToPhase: (dayId, phaseId) => {
       const all = current();
       const day = all.flatMap((phase) => phase.days).find((item) => item.id === dayId);
       const target = all.find((phase) => phase.id === phaseId);

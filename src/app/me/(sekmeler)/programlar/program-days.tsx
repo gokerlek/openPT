@@ -3,6 +3,7 @@ import { formatDayShort } from '@/lib/format';
 import { weekdayNamesText } from '@/lib/training-days';
 import { templateSummary, type PlanExercise, type TemplateBlock } from '@/lib/template-plan';
 import { ClientDayPlan } from '../../client-day-plan';
+import { displayDays } from '@/lib/program-plan';
 
 type Day = { id: string; name: string; weekdays?: readonly number[] | undefined; blocks: readonly TemplateBlock[] };
 
@@ -28,7 +29,7 @@ export function ProgramDays({
 }) {
   return (
     <ul className="flex flex-col gap-3">
-      {days.map((day) => {
+      {displayDays(days).map((day) => {
         const summary = templateSummary({ blocks: day.blocks }, exercises);
         const last = lastByDay.get(day.id);
         const status = [weekdayNamesText(day.weekdays ?? []) || null, day.id === todayId ? 'bugün' : null, last ? `son: ${formatDayShort(last)}` : null]

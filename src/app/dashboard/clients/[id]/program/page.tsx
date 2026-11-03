@@ -28,6 +28,7 @@ import { formatDate, formatDay, formatDayShort, formatNumber, todayIn } from '@/
 import { requirePt } from '@/lib/guards';
 import { exerciseSetWeights } from '@/lib/muscles';
 import {
+  displayDays,
   countDays,
   currentPhaseOf,
   frequencyLabel,
@@ -264,7 +265,7 @@ export default async function ProgramPage({ params }: { params: Promise<{ id: st
 
   const dayCards = (phase: ProgramPhase) => (
     <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-      {phase.days.map((day) => {
+      {displayDays(phase.days).map((day) => {
         const summary = templateSummary({ blocks: day.blocks }, byId);
         // Bugünün ya da haftada sıradaki atanmış programı (yalnız şu anki evrede) işaretli.
         const isNext = phase.id === current?.phase.id && day.id === nextId;
@@ -546,7 +547,7 @@ export default async function ProgramPage({ params }: { params: Promise<{ id: st
                         )}
                       </div>
                       <span className="text-sm text-muted-foreground">
-                        {[weeksText(phase.weeks), perWeek(phaseFrequency(phase)), phase.days.map((day) => day.name).join(', ')]
+                        {[weeksText(phase.weeks), perWeek(phaseFrequency(phase)), displayDays(phase.days).map((day) => day.name).join(', ')]
                           .filter(Boolean)
                           .join(' · ')}
                       </span>

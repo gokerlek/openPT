@@ -3,7 +3,7 @@
 import { useMemo } from 'react';
 import Link from 'next/link';
 import { getInput, setInput, useField } from '@formisch/react';
-import { ArrowLeft, ArrowRight, ArrowSquareRight, Copy, FloppyDisk, Trash } from '@phosphor-icons/react';
+import { ArrowSquareRight, Copy, FloppyDisk, Trash } from '@phosphor-icons/react';
 import { BlockEditor, useBlocks } from '@/components/block-editor/block-editor';
 import { DotsThreeVertical } from '@/components/line-icons';
 import type { EditorCare } from '@/lib/constraint-filter';
@@ -37,7 +37,6 @@ import {
   canAddDay,
   canMoveDay,
   copyDay,
-  moveDay,
   programIdSource,
   removeDay,
   type ProgramDay,
@@ -147,18 +146,6 @@ export function DayEditor({
                 <DotsThreeVertical weight="bold" />
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="min-w-52 touch:**:data-[slot=dropdown-menu-item]:min-h-11 touch:**:data-[slot=dropdown-menu-sub-trigger]:min-h-11">
-                <DropdownMenuItem
-                  disabled={dayIndex === 0}
-                  onClick={() => actions.update((all) => moveDay(all, phase.id, day.id, -1), { announce: `${day.name} sola taşındı` })}>
-                  <ArrowLeft />
-                  Sola taşı
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  disabled={dayIndex === phase.days.length - 1}
-                  onClick={() => actions.update((all) => moveDay(all, phase.id, day.id, 1), { announce: `${day.name} sağa taşındı` })}>
-                  <ArrowRight />
-                  Sağa taşı
-                </DropdownMenuItem>
                 {otherPhases.length > 0 ? (
                   <DropdownMenuSub>
                     <DropdownMenuSubTrigger disabled={onlyDay}>
@@ -169,7 +156,7 @@ export function DayEditor({
                       {otherPhases.map((target) => {
                         const full = !canMoveDay(phases, day.id, target.id);
                         return (
-                          <DropdownMenuItem key={target.id} disabled={full} onClick={() => actions.moveDay(day.id, target.id)}>
+                          <DropdownMenuItem key={target.id} disabled={full} onClick={() => actions.moveToPhase(day.id, target.id)}>
                             &apos;{target.name}&apos; evresine{full ? ' (dolu)' : ''}
                           </DropdownMenuItem>
                         );
@@ -190,12 +177,12 @@ export function DayEditor({
                   variant="destructive"
                   disabled={phase.days.length <= 1}
                   onClick={() =>
-                    actions.updateWithUndo((all) => removeDay(all, phase.id, day.id), `${day.name} kaldırıldı`, {
+                    actions.updateWithUndo((all) => removeDay(all, phase.id, day.id), `${day.name} silindi`, {
                       select: neighbour?.id,
                     })
                   }>
                   <Trash />
-                  Kaldır
+                  Sil
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>

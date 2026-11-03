@@ -24,7 +24,7 @@ import { formatDate, formatDayShort, formatNumber, todayIn } from '@/lib/format'
 import type { HealthRecord } from '@/lib/schemas/health';
 import { newestFirst, painHistory } from '@/lib/screening';
 import { clientRepoName } from '@/lib/github/client';
-import { countDays, currentPhaseOf, frequencyLabel, phaseStatus, phaseStatusLabel } from '@/lib/program-plan';
+import { displayDays, countDays, currentPhaseOf, frequencyLabel, phaseStatus, phaseStatusLabel } from '@/lib/program-plan';
 import { readProgramFile, type ProgramFile } from '@/lib/programs';
 import { CLIENT_ID_PATTERN, CLIENT_STATUS_LABELS, HEALTH_FIELD_INFO, TRAINING_EXPERIENCE_LABELS, type HealthField } from '@/lib/schemas/client';
 import { templateSummary } from '@/lib/template-plan';
@@ -302,7 +302,7 @@ function ProgramCard({
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
         <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3" aria-label={program.phased ? 'Şu anki evrenin programları' : 'Programlar'}>
-          {current?.phase.days.map((day) => {
+          {displayDays(current?.phase.days ?? []).map((day) => {
             const summary = templateSummary({ blocks: day.blocks }, exercises);
             const isNext = day.id === upcoming?.dayId;
             return (

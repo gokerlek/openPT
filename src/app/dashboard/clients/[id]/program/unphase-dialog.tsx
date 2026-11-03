@@ -11,7 +11,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { hasAssignments } from '@/lib/day-assignments';
-import { PROGRAM_LIMITS, frequencyLabel, mergePhases, mergePhasesCheck, type ProgramPhase } from '@/lib/program-plan';
+import { displayDays, PROGRAM_LIMITS, frequencyLabel, mergePhases, mergePhasesCheck, type ProgramPhase } from '@/lib/program-plan';
 
 /**
  * Evreleri kaldırma onayı (birden çok evrede): programlar sırasıyla tek listede birleşir, aynı adlı program "… 2"
@@ -36,7 +36,7 @@ export function UnphaseDialog({
   const check = mergePhasesCheck(phases);
   const { phases: merged, renamed } = mergePhases(phases, currentPhaseId);
   const current = phases.find((phase) => phase.id === currentPhaseId) ?? phases[0];
-  const names = merged[0]?.days.map((day) => day.name).join(', ') ?? '';
+  const names = displayDays(merged[0]?.days ?? []).map((day) => day.name).join(', ');
   const phaseOf = (dayId: string) => phases.find((phase) => phase.days.some((day) => day.id === dayId))?.name ?? '';
   const frequency = frequencyLabel(current?.daysPerWeek)?.toLocaleLowerCase('tr');
   const currentAssigned = current ? hasAssignments(current.days) : false;

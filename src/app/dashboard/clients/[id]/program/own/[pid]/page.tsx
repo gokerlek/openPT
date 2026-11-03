@@ -23,7 +23,7 @@ import { exerciseSetWeights } from '@/lib/muscles';
 import { programLine } from '@/lib/own-program-text';
 import { isOwnProgramId, ownSummaryOf } from '@/lib/own-programs';
 import { readOwnProgramOf } from '@/lib/own-programs-store';
-import { missingExerciseDays, phaseMuscleLoad } from '@/lib/program-plan';
+import { displayDays, missingExerciseDays, phaseMuscleLoad } from '@/lib/program-plan';
 import { CLIENT_ID_PATTERN } from '@/lib/schemas/client';
 import { templateSummary } from '@/lib/template-plan';
 import { upcomingAssigned, weekdaysText } from '@/lib/training-days';
@@ -122,7 +122,7 @@ export default async function OwnProgramViewPage({ params }: { params: Promise<{
         </CardHeader>
         <CardContent>
           <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {phase?.days.map((day) => {
+            {displayDays(phase?.days ?? []).map((day) => {
               const summary = templateSummary({ blocks: day.blocks }, byId);
               const isNext = day.id === upcoming?.dayId;
               return (

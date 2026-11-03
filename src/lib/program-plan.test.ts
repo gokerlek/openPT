@@ -31,7 +31,6 @@ import {
   mergePhases,
   mergePhasesCheck,
   missingExerciseDays,
-  moveDay,
   moveDayToPhase,
   nextDayName,
   nextPhaseName,
@@ -431,16 +430,6 @@ describe('düzenleyici işlemleri', () => {
     assert.deepEqual(
       removePhase(phases, 'p_guc001', 'p_uyum01').map((phase) => phase.id),
       ['p_uyum01'],
-    );
-  });
-
-  test('taşıma uçlarda bir şey yapmaz', () => {
-    const phases = [uyum, guc];
-    assert.equal(moveDay(phases, 'p_uyum01', 'd_aaaaaa', -1), phases);
-    assert.equal(moveDay(phases, 'p_uyum01', 'd_cccccc', 1), phases);
-    assert.deepEqual(
-      moveDay(phases, 'p_uyum01', 'd_cccccc', -1)[0]?.days.map((day) => day.id),
-      ['d_aaaaaa', 'd_cccccc', 'd_bbbbbb'],
     );
   });
 

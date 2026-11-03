@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { newOwnProgramId, OWN_PROGRAM_LIMITS, ownNameProblem, ownStartBody, type OwnStart } from '@/lib/own-programs';
 import { formatNumber } from '@/lib/format';
-import { programIdSource, type ClientTargets, type ProgramPhase, type TemplateOption } from '@/lib/program-plan';
+import { displayDays, programIdSource, type ClientTargets, type ProgramPhase, type TemplateOption } from '@/lib/program-plan';
 import type { TemplateBlock } from '@/lib/template-plan';
 
 type StartKind = OwnStart['kind'];
@@ -175,14 +175,14 @@ export function NewProgramFlow({
 
         {kind === 'pt' && current ? (
           <div className="flex flex-col gap-1 pl-7">
-            {current.days.map(dayRow)}
+            {displayDays(current.days).map(dayRow)}
             {others.length > 0 ? (
               <details className="flex flex-col gap-1">
                 <summary className="flex min-h-11 cursor-pointer items-center text-sm text-muted-foreground">Öteki evreler</summary>
                 {others.map((phase) => (
                   <div key={phase.id} className="flex flex-col gap-1">
                     <p className="text-sm font-medium text-muted-foreground">{phase.name}</p>
-                    {phase.days.map(dayRow)}
+                    {displayDays(phase.days).map(dayRow)}
                   </div>
                 ))}
               </details>

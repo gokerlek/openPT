@@ -27,6 +27,7 @@ import { dayBlocksPath } from '@/lib/editor-undo';
 import { formatNumber } from '@/lib/format';
 import { copyPtDays, OWN_PROGRAM_LIMITS, ownNameProblem, type OwnProgramDay, type OwnProgramPhase } from '@/lib/own-programs';
 import {
+  displayDays,
   addDay,
   blankDay,
   copyDay,
@@ -135,7 +136,7 @@ export function OwnProgramForm(props: OwnProgramFormProps) {
       phases: toInput(phases),
     };
     const added = phases[0]?.days.length !== initial.phases[0]?.days.length;
-    return { input, dropped: prepared.droppedDeviceRowIds, added, firstDayId: (added ? phases[0]?.days.at(-1)?.id : phases[0]?.days[0]?.id) ?? '' };
+    return { input, dropped: prepared.droppedDeviceRowIds, added, firstDayId: (added ? phases[0]?.days.at(-1)?.id : displayDays(phases[0]?.days ?? [])[0]?.id) ?? '' };
   });
   const form = useForm({ schema: ownProgramFormSchema, initialInput: start.input });
   // Açılışta gün alanı olan programlar: boş seçim onlarda boş dizi, ötekilerde alansız (`weekdaysInput`; form kirli kalmasın).
@@ -228,7 +229,7 @@ export function OwnProgramForm(props: OwnProgramFormProps) {
     write(removeDay(all as ProgramPhase[], target.id, selectedDay.id) as OwnProgramPhase[]);
     if (neighbour) setSelectedDayId(neighbour.id);
     showGuardedUndo(
-      `${selectedDay.name} kaldırıldı`,
+      `${selectedDay.name} silindi`,
       { locate: () => 'root', read: () => current(), write: (_, value) => write(value), before },
       { onUndone: () => setSelectedDayId(selectedDay.id) },
     );
@@ -415,7 +416,7 @@ export function OwnProgramForm(props: OwnProgramFormProps) {
             Programlar
           </span>
           <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none]" role="group" aria-labelledby="own-days-label">
-            {days.map((day) => {
+            {displayDays(days).map((day) => {
               const selected = day.id === selectedDay?.id;
               const failing = missing.some((item) => item.dayId === day.id);
               const assigned = weekdaysText(day.weekdays ?? []);
@@ -477,10 +478,10 @@ export function OwnProgramForm(props: OwnProgramFormProps) {
                 type="button"
                 variant="ghost"
                 className="h-11 self-start px-2 text-destructive hover:text-destructive"
-                aria-label={`Kaldır: ${selectedDay.name}`}
+                aria-label={`Sil: ${selectedDay.name}`}
                 onClick={removeSelectedDay}>
                 <Trash data-icon="inline-start" />
-                Kaldır
+                Sil
               </Button>
             ) : null}
           </>

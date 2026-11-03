@@ -25,6 +25,7 @@ import { GOALS, GOAL_LABELS, type AssistantSelection, type AssistantView, type A
 import type { COACH_PAGES } from '@/lib/ai/coach-contract';
 import { PROGRAM_COPY, sensitiveNotice } from '@/lib/ai/coach-copy';
 import { BODY_MUSCLES, isBodyMuscle } from '@/lib/muscles';
+import { displayDays } from '@/lib/program-plan';
 
 export function CoachPanel({ clientId, role, page: _page = 'overview', general = false, initialTab, autoReview = false, onAutoReview, transport = fetchJson }: { clientId: string; role: 'pt' | 'client'; page?: typeof COACH_PAGES[number]; general?: boolean; initialTab?: 'review' | 'program'; autoReview?: boolean; onAutoReview?: () => void; transport?: typeof fetchJson }) {
   const endpoint = general ? '/api/coach' : role === 'pt' ? `/api/clients/${clientId}/coach` : '/api/me/coach';
@@ -116,7 +117,7 @@ export function CoachPanel({ clientId, role, page: _page = 'overview', general =
 }
 function DraftCard({ draft, data, role, clientId, busy, apply }: { draft: AssistantDraft; data: AssistantView; role: 'pt' | 'client'; clientId: string; busy: boolean; apply: () => void }) {
   const exercises = new Map(data.exercises.map(e => [e.id, { title: e.title, trackingType: e.trackingType as TrackingType }]));
-  const days = draft.body.phases.flatMap(p => p.days);
+  const days = draft.body.phases.flatMap(p => displayDays(p.days));
   return <Card><CardHeader><CardTitle>{draft.name}</CardTitle><CardDescription>{GOAL_LABELS[draft.selection.goal]} · {days.length} gün</CardDescription><CardAction><Badge variant="secondary">{draft.status === 'saved' ? 'Atandı / kaydedildi' : 'Taslak'}</Badge></CardAction></CardHeader>
     <CardContent className="flex flex-col gap-4"><Tabs defaultValue={days[0]?.id}><div className="overflow-x-auto"><TabsList>{days.map(day => <TabsTrigger key={day.id} value={day.id}>{day.name}</TabsTrigger>)}</TabsList></div>{days.map(day => <TabsContent key={day.id} value={day.id}><DayPlan blocks={day.blocks} exercises={exercises} missing="show" audience={role} /></TabsContent>)}</Tabs>
       {draft.attention.length ? <Alert><AlertTitle>Gözden geçirilecekler</AlertTitle><AlertDescription><ul className="flex list-disc flex-col gap-1 pl-4">{draft.attention.map(t => <li key={t}>{t}</li>)}</ul></AlertDescription></Alert> : null}
