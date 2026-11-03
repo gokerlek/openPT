@@ -1,6 +1,6 @@
 {
   "name": "pulsecoach",
-  "version": "0.1.4",
+  "version": "0.2.0",
   "private": true,
   "description": "Tek antrenörlük PT ve danışan uygulaması. Veritabanı yok: veriler antrenörün kendi GitHub repolarında JSON olarak durur.",
   "type": "module",
