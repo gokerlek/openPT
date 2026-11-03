@@ -249,15 +249,18 @@ export function validFocus(day: WorkoutDay, doc: Pick<SessionDoc, 'entries' | 'o
 }
 
 /**
- * Açılacak sıradaki birim (odakta kendiliğinden geçiş, odaktaki hareketi geçme; 8. görevin "Sıradaki" satırı):
- * odaksız listenin "şu an"ı (`listView`: yarım bırakılan birim, yoksa sırada planı bitmemiş ilk birim) `except`
- * dışında; "şu an" `except` ise sırada planı bitmemiş ilk öteki açılabilen birim. Bekleyen "+ Set ekle" seti
- * birimi sıraya sokmaz (yalnız fazladan seti kalan birime geri dönülmez); plan dışı kayıt da açılmaz. Yoksa null.
+ * Açılacak sıradaki birim (odakta kendiliğinden geçiş, odaktaki hareketi geçme; "Sıradaki" satırı): listede `except`'in
+ * ardından planı bitmemiş ilk açılabilen birim, sonda başa dönerek. Geri dönmez: önceki bitmemiş (yarım bırakılan da)
+ * ancak sıra başa dönünce gelir. Odak yokken (`except` null) listenin "şu an"ı (`listView`: yarım bırakılan, yoksa
+ * sırada ilk bitmemiş; "Devam et"). Atlamada belge atlamadan öncekidir: atlanan sona iner, sıradaki eski yerinin ardından.
+ * Bekleyen "+ Set ekle" seti birimi sıraya sokmaz; plan dışı kayıt da açılmaz. Yoksa null.
  */
 export function nextUnitAfter(day: WorkoutDay, doc: Pick<SessionDoc, 'entries' | 'order'>, except: string | null): string | null {
-  const view = listView(day, doc);
-  if (view.current !== null && view.current !== except) return view.current;
-  return cursorOf(day, doc).units.find((unit) => unit.key !== except && openable(day, unit) && !isFinished(unit))?.key ?? null;
+  if (except === null) return listView(day, doc).current;
+  const units = cursorOf(day, doc).units;
+  const index = units.findIndex((unit) => unit.key === except);
+  const ahead = index === -1 ? units : [...units.slice(index + 1), ...units.slice(0, index)];
+  return ahead.find((unit) => unit.key !== except && openable(day, unit) && !isFinished(unit))?.key ?? null;
 }
 
 /**

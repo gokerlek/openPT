@@ -1979,7 +1979,8 @@ export function WorkoutScreen({
       const title = unitTitle(plan, current.doc, unit);
       const done = unit.members.reduce((sum, member) => sum + Math.min(member.done, member.planned), 0);
       const planned = unit.members.reduce((sum, member) => sum + member.planned, 0);
-      const target = nextUnitAfter(localWorkoutDay(current, result.doc), result.doc, key);
+      // Sıradaki atlamadan önceki sırayla: atlanan sona iner, sıradaki onun eski yerinin ardından (geri dönmez).
+      const target = nextUnitAfter(plan, current.doc, key);
       startTransition(() => {
         commitFlow(current, result.doc, {}, target);
         if (target) openFocus(target);
