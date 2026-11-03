@@ -7,6 +7,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { toast } from 'sonner';
 import { CaretRight, Drop, Trash } from '@phosphor-icons/react';
 import { Minus, Plus } from '@/components/line-icons';
+import { ConfirmDeleteDialog } from '@/components/confirm-delete-dialog';
 import { SwipeGroup, SwipeRow, type SwipeAction } from '@/components/swipe/swipe-row';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -20,7 +21,6 @@ import { SESSION_ID_LENGTHS, type SessionDoc } from '@/lib/schemas/session';
 import { DELETE_BODY, DELETE_DETAIL, deleteCopy, deletePatch, sessionDetail, type DeleteTarget, type DetailExercise, type DetailSet } from '@/lib/session-history';
 import { randomId } from '@/lib/template-plan';
 import { CHANGE_LABELS, type ChangeLine } from '@/lib/workout-summary';
-import { DeleteDialog } from '../../../delete-dialog';
 import { WORKOUT_KEY } from '../../../workout-overview';
 import { writerId } from '../../../workout-storage';
 
@@ -47,7 +47,7 @@ type PatchResponse = { doc: SessionDoc };
  * yeniden hesaplanır).
  *
  * - **Düzenle** kipi her set ve hareket satırına 44 px 🗑 koyar; sola kaydırma (`SwipeRow`) aynı işlemin
- *   kısayoludur (panel düğmesi görünür düğmenin kopyası). Her silme onaylıdır (`DeleteDialog`: üst üste
+ *   kısayoludur (panel düğmesi görünür düğmenin kopyası). Her silme onaylıdır (`ConfirmDeleteDialog`: üst üste
  *   düğmeler, Vazgeç en altta); editördeki onaysız silme ve "Geri al" burada yok. Onaydan sonra satır yüzü
  *   dışarı çıkarak kalkar; bildirim yok.
  * - Antrenmanın tamamı başlıktaki "Sil"le: iz dosyası, genel commit mesajı ("Kayıt silindi"); Geçmiş'e dönülür.
@@ -191,14 +191,14 @@ export function HistoryDetail({ initialDoc, changes, timeZone }: { initialDoc: S
         </Card>
       ) : null}
 
-      <DeleteDialog
+      <ConfirmDeleteDialog
         open={dialog?.open ?? false}
+        onOpenChange={(open) => (open ? undefined : close())}
         title={dialog?.title ?? ''}
         subject={dialog?.subject ?? ''}
         body={DELETE_BODY}
         detail={DELETE_DETAIL}
         busy={remove.isPending}
-        onCancel={close}
         onConfirm={() => (dialog?.open ? remove.mutate(dialog.target) : undefined)}
       />
     </>

@@ -2,19 +2,10 @@
 
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { useRouter } from 'next/navigation';
-import { CaretDown } from '@phosphor-icons/react';
 import { toast } from 'sonner';
 import { discardDraft } from '@/components/block-editor/editor-draft';
+import { ConfirmDeleteDialog } from '@/components/confirm-delete-dialog';
 import { Check } from '@/components/line-icons';
-import {
-  AlertDialog,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Drawer, DrawerContent, DrawerDescription, DrawerFooter, DrawerHeader, DrawerTitle } from '@/components/ui/drawer';
@@ -225,10 +216,8 @@ export function DeleteOwnProgram({
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [expanded, setExpanded] = useState(false);
   const [state, setState] = useState<DeleteState>({ kind: 'confirm' });
   const [note, setNote] = useState<string | null>(null);
-  const cancel = useRef<HTMLButtonElement>(null);
 
   const remove = async () => {
     setBusy(true);
@@ -268,80 +257,57 @@ export function DeleteOwnProgram({
     }
   };
 
+  const sessionStep = state.kind === 'sessionConfirm';
   return (
     <>
-      <Button variant="ghost" className="h-11 self-start px-2 text-destructive hover:text-destructive" onClick={() => setOpen(true)}>
-        Programı sil
-      </Button>
-      <AlertDialog
-        open={open}
-        onOpenChange={(next) => (next || busy ? undefined : setOpen(false))}
-        onOpenChangeComplete={(next) => {
-          if (next) return;
-          setExpanded(false);
+      <Button
+        variant="ghost"
+        className="h-11 self-start px-2 text-destructive hover:text-destructive"
+        onClick={() => {
           setState({ kind: 'confirm' });
           setNote(null);
+          setOpen(true);
         }}>
-        <AlertDialogContent initialFocus={cancel}>
-          {state.kind === 'sessionConfirm' ? (
-            <AlertDialogHeader>
-              <AlertDialogTitle>Yarım antrenman silinsin mi?</AlertDialogTitle>
-              <AlertDialogDescription>Kaydettiğin setler uygulamadan kalkar, geri getirilemez. Antrenörünün veri deposunun geçmişinde kalır.</AlertDialogDescription>
-            </AlertDialogHeader>
-          ) : (
-            <AlertDialogHeader>
-              <AlertDialogTitle>{name} silinsin mi?</AlertDialogTitle>
-              <AlertDialogDescription className="flex flex-col gap-2 text-left">
-                <span>Program uygulamadan kalkar, geri getirilemez. Antrenörünün veri deposunun geçmişinde kalır.</span>
-                {active ? <span>Bugün yeniden antrenörünün programıyla açılır.</span> : null}
-                {shared ? <span>Antrenörüne bildirilir.</span> : null}
-              </AlertDialogDescription>
-              <div className="w-full text-left">
-                <Button variant="ghost" className="-ml-2 h-11 px-2 text-muted-foreground" aria-expanded={expanded} onClick={() => setExpanded(!expanded)}>
-                  Ayrıntı
-                  <CaretDown data-icon="inline-end" className={expanded ? 'rotate-180' : undefined} />
-                </Button>
-                {expanded ? (
-                  <p className="text-sm text-muted-foreground">
-                    Yaptığın antrenmanlar silinmez; Geçmiş ve İlerleme&apos;de program adıyla kalır. Deponun eski sürümleri ve kayıt notları da
-                    silinmez.
-                  </p>
-                ) : null}
-              </div>
-              {state.kind === 'session' ? (
-                <p className="rounded-lg bg-muted p-3 text-left text-sm" role="status">
-                  Yarım antrenmanın bu programdan; önce bitir ya da sil.
-                </p>
-              ) : null}
-              {note ? (
-                <p className="text-left text-sm text-muted-foreground" role="status">
-                  {note}
-                </p>
-              ) : null}
-            </AlertDialogHeader>
-          )}
-          <AlertDialogFooter>
-            <AlertDialogCancel ref={cancel} className="h-11" disabled={busy}>
-              Vazgeç
-            </AlertDialogCancel>
-            {state.kind === 'session' ? (
-              <Button variant="destructive" className="h-11" disabled={busy} onClick={() => setState({ kind: 'sessionConfirm', sessionId: state.sessionId })}>
-                Yarım antrenmanı sil
-              </Button>
-            ) : state.kind === 'sessionConfirm' ? (
-              <Button variant="destructive" className="h-11" disabled={busy} onClick={() => void removeSession(state.sessionId)}>
-                {busy ? <Spinner data-icon="inline-start" /> : null}
-                Yarım antrenmanı sil
-              </Button>
-            ) : (
-              <Button variant="destructive" className="h-11" disabled={busy} onClick={() => void remove()}>
-                {busy ? <Spinner data-icon="inline-start" /> : null}
-                Programı sil
-              </Button>
-            )}
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        Programı sil
+      </Button>
+      <ConfirmDeleteDialog
+        open={open}
+        onOpenChange={setOpen}
+        title={sessionStep ? 'Yarım antrenman silinsin mi?' : `${name} silinsin mi?`}
+        body={
+          sessionStep
+            ? 'Kaydettiğin setler uygulamadan kalkar, geri getirilemez. Antrenörünün veri deposunun geçmişinde kalır.'
+            : [
+                'Program uygulamadan kalkar, geri getirilemez. Antrenörünün veri deposunun geçmişinde kalır.',
+                active ? 'Bugün yeniden antrenörünün programıyla açılır.' : null,
+                shared ? 'Antrenörüne bildirilir.' : null,
+              ]
+                .filter(Boolean)
+                .join(' ')
+        }
+        detail={
+          sessionStep
+            ? null
+            : "Yaptığın antrenmanlar silinmez; Geçmiş ve İlerleme'de program adıyla kalır. Deponun eski sürümleri ve kayıt notları da silinmez."
+        }
+        confirmLabel={state.kind === 'confirm' ? 'Programı sil' : 'Yarım antrenmanı sil'}
+        busy={busy}
+        onConfirm={() => {
+          if (state.kind === 'session') setState({ kind: 'sessionConfirm', sessionId: state.sessionId });
+          else if (state.kind === 'sessionConfirm') void removeSession(state.sessionId);
+          else void remove();
+        }}>
+        {state.kind === 'session' ? (
+          <p className="rounded-lg bg-muted p-3 text-left text-sm" role="status">
+            Yarım antrenmanın bu programdan; önce bitir ya da sil.
+          </p>
+        ) : null}
+        {note && !sessionStep ? (
+          <p className="text-left text-sm text-muted-foreground" role="status">
+            {note}
+          </p>
+        ) : null}
+      </ConfirmDeleteDialog>
     </>
   );
 }

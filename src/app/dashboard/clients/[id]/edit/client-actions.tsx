@@ -14,6 +14,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
+import { ConfirmDeleteDialog } from '@/components/confirm-delete-dialog';
 import { Button } from '@/components/ui/button';
 import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
@@ -31,6 +32,7 @@ import { useServiceMutation } from '@/lib/query/use-service';
 export function ClientActions({ id, name }: { id: string; name: string | null }) {
   const router = useRouter();
   const [typed, setTyped] = useState('');
+  const [confirming, setConfirming] = useState(false);
   // Kaydı okunamayan danışanda ad bilinmez: onay olarak kimlik yazılır (sunucu da öyle bekler).
   const expected = name ?? id;
   const label = name ?? 'Bu danışan';
@@ -85,50 +87,38 @@ export function ClientActions({ id, name }: { id: string; name: string | null })
         </AlertDialog>
       ) : null}
 
-      <AlertDialog onOpenChange={(open) => (open ? undefined : setTyped(''))}>
-        <AlertDialogTrigger render={<Button variant="destructive" />}>
-          <Trash data-icon="inline-start" />
-          Sil
-        </AlertDialogTrigger>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>{label} kalıcı olarak silinsin mi?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Danışanın repo&apos;su ve içindeki her şey (kayıt, antrenmanlar, sağlık verisi) silinir. GitHub silinen repo&apos;yu
-              90 gün boyunca yalnız hesap sahibine geri alma imkânı verir; sonra tamamen gider.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <Field data-invalid={Boolean(removeError) || undefined}>
-            <FieldLabel htmlFor="confirm-name">
-              {name ? 'Onaylamak için danışanın adını yaz' : `Onaylamak için kimliği yaz: ${id}`}
-            </FieldLabel>
-            <Input
-              id="confirm-name"
-              autoComplete="off"
-              value={typed}
-              placeholder={expected}
-              aria-invalid={Boolean(removeError) || undefined}
-              onChange={(event) => setTyped(event.currentTarget.value)}
-            />
-            <FieldDescription>Büyük-küçük harf fark etmez.</FieldDescription>
-            <FieldError>{removeError}</FieldError>
-          </Field>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Vazgeç</AlertDialogCancel>
-            <AlertDialogAction
-              variant="destructive"
-              disabled={!matches || remove.isPending}
-              onClick={(event) => {
-                // Silme bitene kadar diyalog açık kalsın: hata olursa altında görünsün.
-                event.preventDefault();
-                remove.mutate();
-              }}>
-              {remove.isPending ? <Spinner data-icon="inline-start" /> : null}
-              Kalıcı olarak sil
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <Button variant="destructive" onClick={() => setConfirming(true)}>
+        <Trash data-icon="inline-start" />
+        Sil
+      </Button>
+      <ConfirmDeleteDialog
+        open={confirming}
+        onOpenChange={(open) => {
+          setConfirming(open);
+          if (!open) setTyped('');
+        }}
+        title={`${label} kalıcı olarak silinsin mi?`}
+        body="Danışanın repo'su ve içindeki her şey (kayıt, antrenmanlar, sağlık verisi) silinir. GitHub silinen repo'yu 90 gün boyunca yalnız hesap sahibine geri alma imkânı verir; sonra tamamen gider."
+        confirmLabel="Kalıcı olarak sil"
+        confirmDisabled={!matches}
+        busy={remove.isPending}
+        onConfirm={() => remove.mutate()}>
+        <Field data-invalid={Boolean(removeError) || undefined}>
+          <FieldLabel htmlFor="confirm-name">
+            {name ? 'Onaylamak için danışanın adını yaz' : `Onaylamak için kimliği yaz: ${id}`}
+          </FieldLabel>
+          <Input
+            id="confirm-name"
+            autoComplete="off"
+            value={typed}
+            placeholder={expected}
+            aria-invalid={Boolean(removeError) || undefined}
+            onChange={(event) => setTyped(event.currentTarget.value)}
+          />
+          <FieldDescription>Büyük-küçük harf fark etmez.</FieldDescription>
+          <FieldError>{removeError}</FieldError>
+        </Field>
+      </ConfirmDeleteDialog>
     </>
   );
 }

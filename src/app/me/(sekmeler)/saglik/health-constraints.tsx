@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { CheckCircle } from '@phosphor-icons/react';
 import { toast } from 'sonner';
 import { ChoiceChips } from '@/components/choice-chips';
+import { ConfirmDeleteDialog } from '@/components/confirm-delete-dialog';
 import { Plus } from '@/components/line-icons';
 import {
   AlertDialog,
@@ -121,23 +122,23 @@ function BetterButton({ view }: { view: ClientConstraintView }) {
 
 function WithdrawButton({ view }: { view: ClientConstraintView }) {
   const withdraw = useReportAction(view.id, 'Bildirim geri çekildi.');
+  const [open, setOpen] = useState(false);
   return (
-    <AlertDialog>
-      <AlertDialogTrigger render={<Button variant="ghost" className="h-11 flex-1" />}>Geri çek</AlertDialogTrigger>
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>Bildirimini geri çekmek istiyor musun?</AlertDialogTitle>
-          <AlertDialogDescription>Antrenörün bu bildirimi artık görmez; zorlayan hareketlerdeki notlar da kalkar.</AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel className="h-11">Vazgeç</AlertDialogCancel>
-          <AlertDialogAction className="h-11" disabled={withdraw.isPending} onClick={() => withdraw.mutate(null)}>
-            {withdraw.isPending ? <Spinner data-icon="inline-start" /> : null}
-            Geri çek
-          </AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
+    <>
+      <Button variant="ghost" className="h-11 flex-1" onClick={() => setOpen(true)}>
+        Geri çek
+      </Button>
+      <ConfirmDeleteDialog
+        open={open}
+        onOpenChange={setOpen}
+        title="Bildirimini geri çekmek istiyor musun?"
+        body="Antrenörün bu bildirimi artık görmez; zorlayan hareketlerdeki notlar da kalkar."
+        confirmLabel="Geri çek"
+        confirmVariant="default"
+        busy={withdraw.isPending}
+        onConfirm={() => withdraw.mutate(null)}
+      />
+    </>
   );
 }
 
