@@ -343,10 +343,12 @@ export function ExerciseForm({
                           insert(form, { path: ["cues"], at: index, initialInput: value }),
                         );
                       };
+                      // Tutamaç kaydırma satırının dışında: dokunma alanı kartın üstüne taşar (`SwipeRow` kırpar).
                       return (
+                        <>
+                        {slot.grabber}
                         <SwipeRow id={item} end={[deleteAction(removeCue)]}>
                           <div className="relative flex gap-2 rounded-lg border bg-card px-2 pt-3 pb-2">
-                            {slot.grabber}
                             <FormField of={form} path={["cues", index]}>
                               {(field) => (
                                 <Input
@@ -369,6 +371,7 @@ export function ExerciseForm({
                             </Button>
                           </div>
                         </SwipeRow>
+                        </>
                       );
                     }}
                   />

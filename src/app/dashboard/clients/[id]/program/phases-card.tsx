@@ -127,13 +127,15 @@ function PhaseRow({ phase, index, shared, slot }: { phase: ProgramPhase; index: 
   const weeks = typeof weeksField.input === 'number' && !Number.isNaN(weeksField.input) ? weeksField.input : '';
 
   return (
+    <>
+    {/* Tutamaç kaydırma satırının dışında: dokunma alanı kartın üstüne taşar (`SwipeRow` kırpar). */}
+    {slot.grabber}
     <SwipeRow id={phase.id} end={[deleteAction(() => removePhaseWithUndo(phase, shared), { disabled: isCurrent || phases.length <= 1 })]}>
     <div
       className={cn(
         'relative flex flex-col gap-3 rounded-lg border bg-card p-3 pt-4',
         isCurrent && 'border-primary-text bg-[color-mix(in_oklab,var(--primary)_5%,var(--card))]',
       )}>
-      {slot.grabber}
       <div className="flex flex-wrap items-end gap-3">
         <Field data-invalid={Boolean(nameField.errors) || undefined} className="basis-full gap-1.5 sm:max-w-sm sm:flex-1 sm:basis-auto">
           <FieldLabel htmlFor={`phase-name-${phase.id}`} className="text-xs text-muted-foreground">
@@ -213,6 +215,7 @@ function PhaseRow({ phase, index, shared, slot }: { phase: ProgramPhase; index: 
       </div>
     </div>
     </SwipeRow>
+    </>
   );
 }
 

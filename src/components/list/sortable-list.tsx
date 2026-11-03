@@ -10,7 +10,10 @@ import { LIST_ACCESSIBILITY, autoScrollEdge, listAutoScroll, setReordering, useL
 import { MoveButtons } from './move-buttons';
 
 export type SortableSlot = {
-  /** Kartın üstündeki tutamaç (`CardGrabber`); taşınamayan öğede `null`. Kartın `relative` kabuğunun içine konur. */
+  /**
+   * Kartın üstündeki tutamaç (`CardGrabber`); taşınamayan öğede `null`. Öğenin içinde, `SwipeRow`'un dışında durur
+   * (`li` `relative`): dokunma alanı kartın 12 px üstüne taşar, kaydırma satırı onu kırpardı.
+   */
   grabber: React.ReactNode;
   dragging: boolean;
 };

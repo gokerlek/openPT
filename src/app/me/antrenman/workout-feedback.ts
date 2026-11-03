@@ -52,13 +52,6 @@ export function beep(times = 1, frequency = 880): void {
   }
 }
 
-export function vibrate(pattern: number | number[]): void {
-  try {
-    navigator.vibrate?.(pattern);
-  } catch {
-    // iOS'ta yok.
-  }
-}
 
 export function isIOS(): boolean {
   if (typeof navigator === 'undefined') return false;

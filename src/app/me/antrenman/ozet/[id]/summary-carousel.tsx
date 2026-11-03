@@ -16,7 +16,7 @@ import type { PainReportOffer } from '@/lib/pain-report';
 import type { Trend } from '@/lib/session-records';
 import { cn } from '@/lib/utils';
 import { CHANGE_LABELS, type SessionSummary } from '@/lib/workout-summary';
-import { vibrate } from '../../workout-feedback';
+import { vibrate } from '@/lib/haptics';
 import { PainReportCallout } from './pain-report-callout';
 
 const CARDS = ['Antrenman tamamlandı', 'Rekorlar ve gelişim', 'Çalışan kaslar', 'Hareketler'] as const;

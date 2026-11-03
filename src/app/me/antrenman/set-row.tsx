@@ -2,13 +2,14 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { NumberField } from '@base-ui/react/number-field';
-import { animate, motion, useMotionValue, useReducedMotion, useTransform } from 'motion/react';
-import { ArrowUp, Trash } from '@phosphor-icons/react';
+import { motion } from 'motion/react';
+import { ArrowUp } from '@phosphor-icons/react';
 import { Check, X } from '@/components/line-icons';
+import { SwipeRow, deleteAction } from '@/components/swipe/swipe-row';
 import { NUMBER_FORMAT, WHOLE_FORMAT } from '@/components/ui/stepper';
 import { CARDIO_LIMITS, distanceText, durationClock, inclineText, minutesOf, walkKcal, type CardioKind } from '@/lib/cardio';
 import { formatNumber } from '@/lib/format';
-import { DURATION, INSTANT, SWIPE, tween } from '@/lib/motion';
+import { DURATION, tween } from '@/lib/motion';
 import type { TrackingType } from '@/lib/progression';
 import { SESSION_LIMITS } from '@/lib/schemas/session';
 import { cn } from '@/lib/utils';
@@ -25,18 +26,9 @@ export function setEditButtonId(setId: string): string {
   return `set-edit-${setId}`;
 }
 
-/** Açılan "Sil"in genişliği (`SwipeRow`'un düğmesiyle aynı). */
-const REVEAL = SWIPE.actionWidth;
-
-/** Sola çekme düğmenin ötesinde dirençle sürer; sağa (kapalıyken) hiç. */
-function dragged(value: number): number {
-  if (value >= 0) return 0;
-  return value < -REVEAL ? -REVEAL + (value + REVEAL) * 0.25 : value;
-}
-
-const CELL = 'p-2 align-middle whitespace-nowrap';
+const CELL = 'flex min-w-0 items-center p-2 whitespace-nowrap';
 /** Şu anki satırın kutulu hücresi: kutu sütunu doldursun diye yatay boşluk dar. */
-const INPUT_CELL = 'px-1 py-1.5 align-middle whitespace-nowrap';
+const INPUT_CELL = 'flex min-w-0 items-center px-1 py-1.5 whitespace-nowrap';
 
 /**
  * Bekleyen bir setin satırdan girişi: kg ve tekrar/süre kutuları alttaki panelin stepper'larıyla aynı taslağı yazar, ✓ "Set
@@ -135,49 +127,18 @@ function CellNumber({
 }
 
 /**
- * Bu basışın `click`'ini yutar (`SwipeRow`'daki gibi, iOS: açık "Sil" varken tablodaki ilk dokunuş yalnız kapatır, dokunulan
- * satırı düzenlemeye açmaz ya da ✓'unu kaldırmaz). Tıklama gelmezse (kaydırma, uzun basış) yutucu kendiliğinden kalkar.
- */
-export function swallowClick(down: PointerEvent) {
-  const onClick = (event: MouseEvent) => {
-    event.preventDefault();
-    event.stopPropagation();
-    release();
-  };
-  const onEnd = (event: PointerEvent) => {
-    if (event.pointerId !== down.pointerId) return;
-    window.setTimeout(release, event.type === 'pointercancel' ? 0 : 400);
-  };
-  const release = () => {
-    document.removeEventListener('click', onClick, true);
-    document.removeEventListener('pointerup', onEnd, true);
-    document.removeEventListener('pointercancel', onEnd, true);
-  };
-  document.addEventListener('click', onClick, true);
-  document.addEventListener('pointerup', onEnd, true);
-  document.addEventListener('pointercancel', onEnd, true);
-}
-
-type Track = { id: number; x: number; y: number; base: number; dragging: boolean; lastX: number; lastT: number; velocity: number };
-
-/**
- * Set tablosunun bir satırı (tasarım §2.4). Gerçek `<tr>`: tablo ekran okuyucuda tablo kalır.
+ * Set tablosunun bir satırı (tasarım §2.4). ARIA tablosu (`role="row"`, `role="cell"`): satır `SwipeRow` içinde kayabilsin
+ * diye `<tr>` değil; başlık ve satırlar aynı sütun şablonunu paylaşır (`columns`), ekran okuyucuda tablo kalır.
  *
  * - Yapılan sete dokunmak onu alttaki panelde düzenlemeye açar (`onEdit`); klavyede set numarası düğmedir ("Set 2, 40 kg ×
- *   6. Düzenle"). ✓ bir anahtardır: dokunmak işareti kaldırır (set silinir, toast'ta "Geri al"; `onUntick`).
- * - Yalnız dokunmatikte sola kaydırmak sağda yıkıcı **Sil**'i açar (`SwipeRow`'un eşikleri ve yayı); dokununca set silinir,
- *   onay yok, toast'ta "Geri al". Klavye ve ekran okuyucu için karşılığı panelin "Seti sil"i, bu yüzden "Sil" `aria-hidden`
- *   ve sekme sırasında değil (`SwipeRow` gibi). Kartta aynı anda tek satır açık (`open`, `onOpenChange`); dışarı dokunmak ve
- *   Esc kapatır (kart dinler), açık satıra dokunmak yalnız kapatır. Kaydırmanın ardından gelen tıklama yutulur: kaydırma
- *   düzenlemeyi açmaz.
- * - `<tr>` kaydırılmaz (tablo satırına `transform` ve `touch-action` uygulanmaz): hücreler birlikte kayar, "Sil" son hücrenin
- *   içinde satırın sağ kenarında durur ve hücrelerin bıraktığı yeri doldurur. Dikey kaydırma tarayıcıda kalır (hücrelerde
- *   `touch-action: pan-y`); dikey hareket kaydırmayı başlatmaz.
- * - Hareket azaltma tercihinde "Sil" yaysız, anında açılıp kapanır (parmağı izlemek doğrudan işlemdir, kalır).
- * - `locked` (set kaydedilirken, süreli set sayarken, düzenlenen satırda): kaydırma yok; dokunuşlar ekrana gider, o karar verir.
+ *   6. Düzenle"). ✓ bir anahtardır: dokunmak işareti kaldırır (set silinir, 8 sn "Geri al"; `onUntick`).
+ * - Sola kaydırmak her listedeki gibi kırmızı **Sil**'i açar (`SwipeRow`, `deleteAction`); sonuna kadar kaydırmak siler,
+ *   onay yok, 8 sn "Geri al". Klavye ve ekran okuyucu için karşılığı panelin "Seti sil"i. Kartta aynı anda tek satır açık
+ *   (`SwipeGroup`); dışarı dokunmak ve Esc kapatır, açık satıra dokunmak yalnız kapatır.
+ * - `locked` (set kaydedilirken, süreli set sayarken, düzenlenen satırda) ya da bekleyen set: kaydırma yok.
  * - Her bekleyen set `entry` alır: kg ve tekrar/süre hücreleri yazılabilir kutu, son hücrede boş ✓ ("yapıldı" işaretle;
  *   "Set bitti" ile aynı). Setler istenen sırayla yapılır: kutuya ya da satıra dokunmak seti seçer. Bekleyen fazladan setin
- *   ✕'u (bırak) o zaman "Önceki" hücresinde ("fazladan ✕").
+ *   ✕'u (sil) o zaman "Önceki" hücresinde ("fazladan ✕").
  * - Yapılmış setin kg ve tekrar/süresi de yerinde düzeltilir (`onFix`): çerçevesiz kutu, kutudan çıkınca yazılır.
  */
 export function SetRow({
@@ -192,9 +153,8 @@ export function SetRow({
   entry,
   fresh,
   rowRef,
-  open,
+  columns,
   locked,
-  onOpenChange,
   onEdit,
   onFix,
   onUntick,
@@ -208,7 +168,7 @@ export function SetRow({
   /** Danışanın kilosu (ölçüm onayıyla); yoksa kalori yazılmaz. */
   bodyMassKg: number | undefined;
   showTarget: boolean;
-  /** Grupta bekleyen fazladan satırın ✕'u "turu kaldır" der. */
+  /** Grupta bekleyen fazladan satırın ✕'u "turu sil" der. */
   group: boolean;
   /** Şeritli satır: şu anki set (`current`) ya da paneldeki düzenlenen set (`editing`). */
   highlight: 'current' | 'editing' | null;
@@ -218,10 +178,10 @@ export function SetRow({
   entry: RowEntry | null;
   /** Az önce kaydedildi: ✓ belirerek gelir. */
   fresh: boolean;
-  rowRef?: React.Ref<HTMLTableRowElement> | undefined;
-  open: boolean;
+  rowRef?: React.Ref<HTMLDivElement> | undefined;
+  /** Başlıkla ortak sütun şablonu (`grid-template-columns`). */
+  columns: string;
   locked: boolean;
-  onOpenChange: (open: boolean) => void;
   onEdit: (setId: string) => void;
   /** Yapılmış setin yerinde düzeltilmesi; düzenleme açıkken null. */
   onFix: FixSet | null;
@@ -229,13 +189,6 @@ export function SetRow({
   onDelete: (setId: string) => void;
   onDropExtra: () => void;
 }) {
-  const reduced = useReducedMotion() ?? false;
-  const x = useMotionValue(0);
-  const width = useTransform(x, (value) => Math.max(0, -value));
-  // "Sil" çizili: kaydırma, açık panel ya da kapanış sürüyor.
-  const [active, setActive] = useState(false);
-  const track = useRef<Track | null>(null);
-  const swiped = useRef(false);
   const logged = set.logged;
   const swipeable = Boolean(logged) && !locked;
   const weighted = trackingType === 'weight_reps';
@@ -256,7 +209,7 @@ export function SetRow({
   const cardioCell = (key: 'distanceM' | 'inclinePct', text: (value: number) => string) => {
     const current = input ? input[key] : logged?.[key];
     return input || fix ? (
-      <motion.td data-slot="table-cell" style={cellStyle} onClick={stop} className={INPUT_CELL}>
+      <div role="cell" onClick={stop} className={INPUT_CELL}>
         <CellNumber
           value={current}
           max={key === 'distanceM' ? CARDIO_LIMITS.distanceMax : CARDIO_LIMITS.inclineMax}
@@ -268,211 +221,140 @@ export function SetRow({
           onFocus={input?.onSelect}
           onChange={(changed) => (input ? input.onChange({ [key]: changed }) : logged && fix?.(logged.id, { [key]: changed }))}
         />
-      </motion.td>
+      </div>
     ) : (
-      <motion.td data-slot="table-cell" style={cellStyle} className={cn(CELL, logged ? 'font-semibold' : 'text-muted-foreground')}>
+      <div role="cell" className={cn(CELL, logged ? 'font-semibold' : 'text-muted-foreground')}>
         {current !== undefined ? text(current) : '—'}
-      </motion.td>
+      </div>
     );
   };
 
-  const settle = (to: 'open' | 'closed') => {
-    if (to === 'open') setActive(true);
-    void animate(x, to === 'open' ? -REVEAL : 0, reduced ? INSTANT : SWIPE.spring).then(() => {
-      if (x.get() === 0 && !track.current?.dragging) setActive(false);
-    });
-  };
-  const latestSettle = useRef(settle);
-  useEffect(() => {
-    latestSettle.current = settle;
-  });
-
-  // Kart kapattı (başka satır açıldı, dışarı dokunuldu, Esc, kilit) ya da set artık kaydırılmıyor.
-  useEffect(() => {
-    if ((!open || !swipeable) && !track.current?.dragging && x.get() !== 0) latestSettle.current('closed');
-  }, [open, swipeable, x]);
-
-  const end = (event: React.PointerEvent, cancelled: boolean) => {
-    const start = track.current;
-    if (!start || event.pointerId !== start.id) return;
-    track.current = null;
-    if (!start.dragging) return;
-    // Yarıdan fazla çekildiyse ya da sola fırlatıldıysa açık kalır; sağa fırlatmak kapatır.
-    const opened = !cancelled && (start.velocity < -SWIPE.flingVelocity || (start.velocity <= SWIPE.flingVelocity && x.get() < -REVEAL / 2));
-    onOpenChange(opened);
-    settle(opened ? 'open' : 'closed');
-  };
-
-  const cellStyle = { x, ...(logged ? { touchAction: 'pan-y pinch-zoom' } : {}) };
-
   return (
-    <tr
-      ref={rowRef}
-      data-slot="table-row"
-      data-set-row={logged?.id}
-      aria-current={highlight === 'current' ? 'step' : highlight === 'editing' ? 'true' : undefined}
-      onPointerDown={(event) => {
-        swiped.current = false;
-        track.current =
-          swipeable && event.pointerType === 'touch' && event.isPrimary
-            ? { id: event.pointerId, x: event.clientX, y: event.clientY, base: open ? -REVEAL : 0, dragging: false, lastX: event.clientX, lastT: event.timeStamp, velocity: 0 }
-            : null;
-      }}
-      onPointerMove={(event) => {
-        const start = track.current;
-        if (!start || event.pointerId !== start.id) return;
-        const dx = event.clientX - start.x;
-        const dy = event.clientY - start.y;
-        if (!start.dragging) {
-          // `useCardGesture`'ın hakemi: yatay niyet kaydırır, dikey niyet sayfayı (tarayıcı) kaydırır, azı dokunmadır. Kapalı
-          // satırı sağa çekmek bir şey açmaz: kaydırma sayılmaz (başka satırın "Sil"ini de kapatmaz).
-          if (Math.abs(dx) > SWIPE.startDistance && Math.abs(dx) > SWIPE.directionRatio * Math.abs(dy) && start.base + dx < 0) {
-            start.dragging = true;
-            swiped.current = true;
-            setActive(true);
-            onOpenChange(true);
-          } else {
-            if (Math.abs(dy) > SWIPE.scrollSlop) track.current = null;
-            return;
-          }
-        }
-        const elapsed = event.timeStamp - start.lastT;
-        if (elapsed > 0) start.velocity = ((event.clientX - start.lastX) / elapsed) * 1000;
-        start.lastX = event.clientX;
-        start.lastT = event.timeStamp;
-        x.set(dragged(start.base + dx));
-      }}
-      onPointerUp={(event) => end(event, false)}
-      onPointerCancel={(event) => end(event, true)}
-      onClickCapture={(event) => {
-        // Klavyeyle gelen tıklama (`detail` 0) kaydırma değildir.
-        if (event.detail === 0) return;
-        const onAction = event.target instanceof Element && event.target.closest('[data-set-swipe-action]') !== null;
-        if (swiped.current || (open && !onAction)) {
-          event.preventDefault();
-          event.stopPropagation();
-          if (!swiped.current) onOpenChange(false);
-          swiped.current = false;
-        }
-      }}
-      onClick={logged ? () => onEdit(logged.id) : input && !input.disabled ? input.onSelect : undefined}
-      className={cn(
-        'h-12 scroll-mb-3 border-b transition-colors',
-        highlight && 'bg-primary/10',
-        (logged || input) && 'cursor-pointer',
-      )}>
-      <motion.td data-slot="table-cell" style={cellStyle} className={cn(CELL, 'relative pl-3 font-medium')}>
-        {highlight ? (
-          <motion.span layoutId="current-set-strip" transition={tween(DURATION.base)} className="absolute inset-y-0 left-0 w-[3px] bg-primary-strong" aria-hidden />
-        ) : null}
-        {logged ? (
-          <button
-            type="button"
-            id={setEditButtonId(logged.id)}
-            aria-label={`${label}, ${setValueText(logged, bodyMassKg)}. Düzenle`}
-            onClick={(event) => {
-              event.stopPropagation();
-              onEdit(logged.id);
-            }}
-            className="-my-2 -ml-1 inline-flex h-11 min-w-7 items-center rounded-md px-1 outline-none focus-visible:ring-3 focus-visible:ring-ring/50">
-            {set.position + 1}
-          </button>
-        ) : (
-          set.position + 1
-        )}
-        {amrap ? <span className="sr-only">, AMRAP</span> : null}
-      </motion.td>
-      <motion.td
-        data-slot="table-cell"
-        style={cellStyle}
-        className={cn(CELL, 'truncate text-muted-foreground', cardio && 'text-xs leading-tight whitespace-normal')}>
-        {set.extra && input ? (
-          // Yalnız ✕ bırakır (onaysız, geri alınmaz): yazıya dokunmak satırı seçer.
-          <span className="inline-flex max-w-full items-center">
-            <span className="truncate">fazladan</span>
+    <SwipeRow
+      id={logged?.id ?? `set-${set.setIndex}${set.extra ? '-extra' : ''}`}
+      end={logged ? [deleteAction(() => onDelete(logged.id), { removes: false })] : []}
+      disabled={!swipeable}>
+      <div
+        ref={rowRef}
+        role="row"
+        data-set-row={logged?.id}
+        aria-current={highlight === 'current' ? 'step' : highlight === 'editing' ? 'true' : undefined}
+        style={{ gridTemplateColumns: columns }}
+        onClick={logged ? () => onEdit(logged.id) : input && !input.disabled ? input.onSelect : undefined}
+        className={cn(
+          'grid h-12 scroll-mb-3 border-b bg-card transition-colors',
+          highlight && 'bg-[color-mix(in_oklab,var(--primary)_10%,var(--card))]',
+          (logged || input) && 'cursor-pointer',
+        )}>
+        <div role="cell" className={cn(CELL, 'relative pl-3 font-medium')}>
+          {highlight ? (
+            <motion.span layoutId="current-set-strip" transition={tween(DURATION.base)} className="absolute inset-y-0 left-0 w-[3px] bg-primary-strong" aria-hidden />
+          ) : null}
+          {logged ? (
             <button
               type="button"
-              disabled={input.disabled}
-              aria-label={`${label}, fazladan: ${group ? 'turu' : 'seti'} kaldır`}
+              id={setEditButtonId(logged.id)}
+              aria-label={`${label}, ${setValueText(logged, bodyMassKg)}. Düzenle`}
               onClick={(event) => {
                 event.stopPropagation();
-                onDropExtra();
+                onEdit(logged.id);
               }}
-              className="-my-2 inline-flex size-9 shrink-0 items-center justify-center rounded-full outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50 [&_svg]:size-3.5">
-              <X weight="bold" />
+              className="-my-2 -ml-1 inline-flex h-11 min-w-7 items-center rounded-md px-1 outline-none focus-visible:ring-3 focus-visible:ring-ring/50">
+              {set.position + 1}
             </button>
-          </span>
-        ) : set.extra ? (
-          'fazladan'
-        ) : (
-          previousText(set.previous, trackingType, cardio)
-        )}
-        {kcal ? <span className="block font-medium text-primary-text">≈ {kcal} kcal</span> : null}
-      </motion.td>
-      {showTarget ? (
-        <motion.td data-slot="table-cell" style={cellStyle} className={cn(CELL, 'text-muted-foreground')}>
-          {targetCell(set.target, trackingType, cardio)}
-        </motion.td>
-      ) : null}
-      {weighted && (input || fix) ? (
-        <motion.td data-slot="table-cell" style={cellStyle} onClick={stop} className={cn(INPUT_CELL, 'relative')}>
-          <CellNumber
-            value={input ? input.kg : kg}
-            max={SESSION_LIMITS.kg}
-            decimal
-            invalid={input?.invalid ?? false}
-            disabled={input ? input.disabled : locked}
-            label={`${label}, ağırlık (kg)`}
-            settled={!input}
-            onFocus={input?.onSelect}
-            onChange={(next) => (input ? input.onChange({ kg: next }) : logged && fix?.(logged.id, { kg: next }))}
-          />
-          {logged?.overload ? (
-            <>
-              <ArrowUp weight="bold" className="pointer-events-none absolute top-1/2 right-2 size-3 -translate-y-1/2 text-destructive-text" aria-hidden />
-              <span className="sr-only">, hedefin çok üzerinde</span>
-            </>
-          ) : null}
-        </motion.td>
-      ) : weighted ? (
-        <motion.td data-slot="table-cell" style={cellStyle} className={cn(CELL, logged ? 'font-semibold' : 'text-muted-foreground')}>
-          <span className="inline-flex items-center gap-0.5">
-            {kg !== undefined ? formatNumber(kg) : '—'}
+          ) : (
+            set.position + 1
+          )}
+          {amrap ? <span className="sr-only">, AMRAP</span> : null}
+        </div>
+        <div
+          role="cell"
+          className={cn(CELL, 'block truncate self-center text-muted-foreground', cardio && 'text-xs leading-tight whitespace-normal')}>
+          {set.extra && input ? (
+            // Yalnız ✕ siler (onaysız, 8 sn "Geri al"): yazıya dokunmak satırı seçer.
+            <span className="inline-flex max-w-full items-center">
+              <span className="truncate">fazladan</span>
+              <button
+                type="button"
+                disabled={input.disabled}
+                aria-label={`${label}, fazladan: ${group ? 'turu' : 'seti'} sil`}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onDropExtra();
+                }}
+                className="-my-2 inline-flex size-9 shrink-0 items-center justify-center rounded-full outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50 [&_svg]:size-3.5">
+                <X weight="bold" />
+              </button>
+            </span>
+          ) : set.extra ? (
+            'fazladan'
+          ) : (
+            previousText(set.previous, trackingType, cardio)
+          )}
+          {kcal ? <span className="block font-medium text-primary-text">≈ {kcal} kcal</span> : null}
+        </div>
+        {showTarget ? (
+          <div role="cell" className={cn(CELL, 'text-muted-foreground')}>
+            {targetCell(set.target, trackingType, cardio)}
+          </div>
+        ) : null}
+        {weighted && (input || fix) ? (
+          <div role="cell" onClick={stop} className={cn(INPUT_CELL, 'relative')}>
+            <CellNumber
+              value={input ? input.kg : kg}
+              max={SESSION_LIMITS.kg}
+              decimal
+              invalid={input?.invalid ?? false}
+              disabled={input ? input.disabled : locked}
+              label={`${label}, ağırlık (kg)`}
+              settled={!input}
+              onFocus={input?.onSelect}
+              onChange={(next) => (input ? input.onChange({ kg: next }) : logged && fix?.(logged.id, { kg: next }))}
+            />
             {logged?.overload ? (
               <>
-                <ArrowUp weight="bold" className="size-3.5 text-destructive-text" aria-hidden />
+                <ArrowUp weight="bold" className="pointer-events-none absolute top-1/2 right-2 size-3 -translate-y-1/2 text-destructive-text" aria-hidden />
                 <span className="sr-only">, hedefin çok üzerinde</span>
               </>
             ) : null}
-          </span>
-        </motion.td>
-      ) : null}
-      {input || fix ? (
-        <motion.td data-slot="table-cell" style={cellStyle} onClick={stop} className={INPUT_CELL}>
-          <CellNumber
-            value={shownValue(input ? input.value : value)}
-            max={walk ? SESSION_LIMITS.seconds / 60 : duration ? SESSION_LIMITS.seconds : SESSION_LIMITS.reps}
-            decimal={walk}
-            invalid={false}
-            disabled={input ? input.disabled : locked}
-            label={valueLabel}
-            settled={!input}
-            onFocus={input?.onSelect}
-            onChange={(changed) =>
-              input ? input.onChange({ value: storedValue(changed) }) : logged && fix?.(logged.id, { value: storedValue(changed) })
-            }
-          />
-        </motion.td>
-      ) : (
-        <motion.td data-slot="table-cell" style={cellStyle} className={cn(CELL, logged ? 'font-semibold' : 'text-muted-foreground')}>
-          {value !== undefined ? valueText(value) : amrap && !showTarget ? targetCell(set.target, trackingType, cardio) : '—'}
-        </motion.td>
-      )}
-      {cardio ? cardioCell('distanceM', distanceText) : null}
-      {walk ? cardioCell('inclinePct', inclineText) : null}
-      {/* Son hücre yerinde durur, içeriği kayar: "Sil" onun içinde satırın sağ kenarına tutunur. */}
-      <td data-slot="table-cell" style={logged ? { touchAction: 'pan-y pinch-zoom' } : undefined} className={cn(CELL, 'relative p-0 text-center')}>
-        <motion.div style={{ x }}>
+          </div>
+        ) : weighted ? (
+          <div role="cell" className={cn(CELL, logged ? 'font-semibold' : 'text-muted-foreground')}>
+            <span className="inline-flex items-center gap-0.5">
+              {kg !== undefined ? formatNumber(kg) : '—'}
+              {logged?.overload ? (
+                <>
+                  <ArrowUp weight="bold" className="size-3.5 text-destructive-text" aria-hidden />
+                  <span className="sr-only">, hedefin çok üzerinde</span>
+                </>
+              ) : null}
+            </span>
+          </div>
+        ) : null}
+        {input || fix ? (
+          <div role="cell" onClick={stop} className={INPUT_CELL}>
+            <CellNumber
+              value={shownValue(input ? input.value : value)}
+              max={walk ? SESSION_LIMITS.seconds / 60 : duration ? SESSION_LIMITS.seconds : SESSION_LIMITS.reps}
+              decimal={walk}
+              invalid={false}
+              disabled={input ? input.disabled : locked}
+              label={valueLabel}
+              settled={!input}
+              onFocus={input?.onSelect}
+              onChange={(changed) =>
+                input ? input.onChange({ value: storedValue(changed) }) : logged && fix?.(logged.id, { value: storedValue(changed) })
+              }
+            />
+          </div>
+        ) : (
+          <div role="cell" className={cn(CELL, logged ? 'font-semibold' : 'text-muted-foreground')}>
+            {value !== undefined ? valueText(value) : amrap && !showTarget ? targetCell(set.target, trackingType, cardio) : '—'}
+          </div>
+        )}
+        {cardio ? cardioCell('distanceM', distanceText) : null}
+        {walk ? cardioCell('inclinePct', inclineText) : null}
+        <div role="cell" className={cn(CELL, 'justify-center p-0')}>
           {logged ? (
             <button
               type="button"
@@ -508,7 +390,7 @@ export function SetRow({
           ) : set.extra ? (
             <button
               type="button"
-              aria-label={`${label}, fazladan: ${group ? 'turu' : 'seti'} kaldır`}
+              aria-label={`${label}, fazladan: ${group ? 'turu' : 'seti'} sil`}
               onClick={(event) => {
                 event.stopPropagation();
                 onDropExtra();
@@ -517,31 +399,8 @@ export function SetRow({
               <X weight="bold" />
             </button>
           ) : null}
-        </motion.div>
-        {active && logged ? (
-          <motion.button
-            type="button"
-            tabIndex={-1}
-            aria-hidden
-            inert={!open}
-            data-set-swipe-action
-            onClick={(event) => {
-              event.stopPropagation();
-              track.current = null;
-              x.jump(0);
-              setActive(false);
-              onOpenChange(false);
-              onDelete(logged.id);
-            }}
-            style={{ width }}
-            className="absolute inset-y-0 right-0 overflow-hidden bg-destructive text-background outline-none select-none">
-            <span className="absolute inset-y-0 right-0 flex w-18 flex-col items-center justify-center gap-1 text-[11px] leading-none font-semibold [&_svg]:size-5">
-              <Trash weight="bold" />
-              Sil
-            </span>
-          </motion.button>
-        ) : null}
-      </td>
-    </tr>
+        </div>
+      </div>
+    </SwipeRow>
   );
 }

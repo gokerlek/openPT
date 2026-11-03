@@ -121,7 +121,6 @@ export function WorkoutList({
                 (item.state === 'current' || item.key === highlight) &&
                   'border-primary/30 bg-[color-mix(in_oklab,var(--primary)_10%,var(--card))]',
               )}>
-              {slot.grabber}
               <button
                 type="button"
                 id={listRowId(item.key)}
@@ -137,12 +136,18 @@ export function WorkoutList({
               ) : null}
             </div>
           );
-          return canRemove(item.key) ? (
-            <SwipeRow id={item.key} end={[deleteAction(() => onRemove(item.key))]}>
-              {card}
-            </SwipeRow>
-          ) : (
-            card
+          // Tutamaç kaydırma satırının dışında: dokunma alanı kartın üstüne taşar (`SwipeRow` kırpar).
+          return (
+            <>
+              {slot.grabber}
+              {canRemove(item.key) ? (
+                <SwipeRow id={item.key} end={[deleteAction(() => onRemove(item.key))]}>
+                  {card}
+                </SwipeRow>
+              ) : (
+                card
+              )}
+            </>
           );
         }}
       />

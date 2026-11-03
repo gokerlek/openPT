@@ -10,7 +10,7 @@ import { ArrowClockwise, Barbell, WarningCircle } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { Skeleton } from '@/components/ui/skeleton';
-import { showUndoToast } from '@/components/undo-toast';
+import { showGuardedUndo, showUndoToast } from '@/components/undo-toast';
 import { formatKg } from '@/lib/format';
 import { DRAG, DURATION, EASE, tween, WORKOUT } from '@/lib/motion';
 import { EFFORT_LABELS } from '@/lib/progression';
@@ -104,7 +104,8 @@ import { ROW_DONE_ID, setEditButtonId, type FixSet, type RowEntry } from './set-
 import { StartCheck, type StartCheckHandle } from './start-check';
 import { SwapSheet, type SwapTarget } from './swap-sheet';
 import { useWorkoutOutbox } from './use-workout-outbox';
-import { beep, isIOS, unlockAudio, useWakeLock, vibrate } from './workout-feedback';
+import { beep, isIOS, unlockAudio, useWakeLock } from './workout-feedback';
+import { vibrate } from '@/lib/haptics';
 import { WorkoutHeader, type FocusActions, type WorkoutStatus } from './workout-header';
 import { LIST_TITLE_ID, listRowId, WorkoutList, WorkoutListBar } from './workout-list';
 import { WorkoutSwitchSheet } from './workout-switch-sheet';
@@ -2179,7 +2180,7 @@ export function WorkoutScreen({
   );
 
   /**
-   * Bekleyen fazladan seti (grupta turu) bırakır; geriye bir şey kalmadıysa bitirme sorusu. Dokunuş kilidi açıkken yok
+   * Bekleyen fazladan seti (grupta turu) siler (8 sn "Geri al"); geriye bir şey kalmadıysa bitirme sorusu. Dokunuş kilidi açıkken yok
    * sayılır: fazladan setin ✓'u kaldırılınca aynı hücrede ✕ çıkar, çift dokunuşun ikincisi turu da bırakırdı.
    */
   const onDropExtra = useCallback(
@@ -2196,7 +2197,23 @@ export function WorkoutScreen({
       const moved = before?.rowId !== after?.rowId || before?.setIndex !== after?.setIndex;
       commit(moved ? { ...next, draft: null, timer: null } : next);
       guard();
-      announce('Fazladan set kaldırıldı');
+      announce('Fazladan set silindi');
+      // 8 sn "Geri al": istenen tur sayısı geri yazılır; o arada değiştiyse (yeni tur istendi, set yapıldı) yazılmaz.
+      const sessionId = current.doc.id;
+      const roundsOf = (local: LocalWorkout) => local.extraRounds[key] ?? 0;
+      showGuardedUndo(
+        'Fazladan set silindi',
+        {
+          locate: () => {
+            const latest = localRef.current;
+            return latest && mountedRef.current && !pausingRef.current && !finishingRef.current && latest.doc.id === sessionId ? latest : null;
+          },
+          read: roundsOf,
+          write: (latest, rounds) => commit({ ...latest, extraRounds: { ...latest.extraRounds, [key]: rounds } }),
+          before: roundsOf(current),
+        },
+        { onUndone: () => announce('Fazladan set geri geldi') },
+      );
       // Odakta yalnız odaktaki birim bitmiş olabilir: bitirme sorusu hiçbir yerde set kalmadıysa.
       if (before && !after && !nextSet(planOf(next), current.doc)) {
         later(DURATION.slow + 50, () => {

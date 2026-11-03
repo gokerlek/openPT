@@ -169,7 +169,7 @@ function TimerBox({ view, target }: { view: TimerView; target: NextSet['target']
  *   "Düzelt" önerilen ağırlığa döner. Engellemez.
  * - Devrede istasyon geçişi panelin üst kenarında ince çubuk olarak sayar.
  * - Hareketi atlamak ve muadil seçmek üst çubuğun ⋯ menüsünde (8. görev; "Hareketi geç ›" kalktı).
- * - "+ Set ekle" ile istenen fazladan sette üst satırda "Fazladan" rozeti ve sağda "Kaldır" (fazladan set bırakılır).
+ * - "+ Set ekle" ile istenen fazladan sette üst satırda "Fazladan" rozeti ve sağda "Sil" (fazladan set silinir, 8 sn "Geri al").
  * - Üst satırın sağındaki ⌄ paneli kapatır (`collapsed`, danışanın bu cihazdaki tercihi): altta yalnız gezinme satırı ve ⌃
  *   kalır, set tablodaki satırdan girilir. Süreli set sayarken panel açık görünür (sayaç burada).
  */
@@ -214,7 +214,7 @@ export function EntryPanel({
   onStartTimer: () => void;
   onStopTimer: () => void;
   onCancelTimer: () => void;
-  /** Fazladan sette "Kaldır": istenen fazladan set (grupta tur) bırakılır. */
+  /** Fazladan sette "Sil": istenen fazladan set (grupta tur) silinir (8 sn "Geri al"). */
   onDropExtra: () => void;
   onFinish: () => void;
   /** Listede önceki hareket ("‹ Önceki"); ilk harekette null. */
@@ -329,8 +329,8 @@ export function EntryPanel({
             Vazgeç
           </Button>
         ) : next.extra && !frozen ? (
-          <Button variant="ghost" className="h-11 shrink-0 px-3 text-muted-foreground" aria-label="Fazladan seti kaldır" onClick={onDropExtra}>
-            Kaldır
+          <Button variant="ghost" className="h-11 shrink-0 px-3 text-muted-foreground" aria-label="Fazladan seti sil" onClick={onDropExtra}>
+            Sil
           </Button>
         ) : null}
         {running ? null : <PanelToggle collapsed={false} onToggle={onToggleCollapsed} className="-mr-2" />}

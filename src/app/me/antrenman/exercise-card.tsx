@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Table, TableBody, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { SwipeGroup } from '@/components/swipe/swipe-row';
 import { rowCareText } from '@/lib/constraint-filter';
 import { formatNumber } from '@/lib/format';
 import { DURATION, EASE, tween, WORKOUT } from '@/lib/motion';
@@ -20,7 +20,7 @@ import { cn } from '@/lib/utils';
 import type { GroupMemberStatus, GroupView } from '@/lib/workout-groups';
 import type { WorkoutRow } from '@/lib/workout-plan';
 import type { SetView, WarmupView } from '@/lib/workout-session';
-import { SetRow, swallowClick, type FixSet, type RowEntry } from './set-row';
+import { SetRow, type FixSet, type RowEntry } from './set-row';
 
 const UP = new Set<string>(['increase', 'range_increase']);
 const DOWN = new Set<string>(['decrease', 'deload', 'calibrate', 'pain_reduce']);
@@ -264,25 +264,29 @@ export function ExerciseCard({
   // Grupta üye değişince (ya da hareket muadille değişince) açık çip kapanır (her hareketin kendi notu var).
   const shownKey = `${row.rowId}:${row.exerciseId}`;
   const [shownRow, setShownRow] = useState(shownKey);
-  // Sola kaydırılıp "Sil"i açık satır (kartta aynı anda tek).
-  const [swipeOpen, setSwipeOpen] = useState<string | null>(null);
   if (shownRow !== shownKey) {
     setShownRow(shownKey);
     setOpen(null);
     setWarmOpen(false);
-    setSwipeOpen(null);
   }
-  // Kart kilitlenince ya da açık satır düzenlemeye açılınca "Sil" kapanır (çizimde, `shownRow` gibi): kilit kalkınca ya
-  // da düzenleme bitince kendiliğinden yeniden açılmaz.
-  if (swipeOpen !== null && (locked || swipeOpen === editingSetId)) setSwipeOpen(null);
   const reduced = useReducedMotion();
   // Hareket değişirken çıkan kart başlığın kimliğini bırakır: odak yeni kartın başlığına gider.
   const present = useIsPresent();
-  const currentRef = useRef<HTMLTableRowElement>(null);
-  const tableRef = useRef<HTMLTableElement>(null);
+  const currentRef = useRef<HTMLDivElement>(null);
   const weighted = row.trackingType === 'weight_reps';
   const showTarget = !isStraight(sets.map((set) => set.target));
   const cardio = row.cardio ?? null;
+  // Set tablosunun sütunları (başlık ve satırlar ortak): Set · Önceki · (Hedef) · (kg) · tekrar/süre · (metre) · (eğim) · durum.
+  const columns = [
+    '2.5rem',
+    'minmax(0,1fr)',
+    ...(showTarget ? ['3rem'] : []),
+    ...(weighted ? ['4rem'] : []),
+    '3.5rem',
+    ...(cardio ? ['4rem'] : []),
+    ...(cardio === 'walk' ? ['3rem'] : []),
+    '2.75rem',
+  ].join(' ');
   const walk = cardio === 'walk';
   const valueHead = walk ? 'Dk' : row.trackingType === 'duration' ? 'Süre' : 'Tekrar';
   const reason = row.plan.reason as SuggestionReason;
@@ -299,30 +303,6 @@ export function ExerciseCard({
   useEffect(() => {
     currentRef.current?.scrollIntoView({ block: 'nearest', behavior: reduced ? 'auto' : 'smooth' });
   }, [currentSetIndex, editingSetId, row.rowId, reduced]);
-
-  // Açık "Sil" yalnız hâlâ yapılmış bir satırda geçerli: set silindiyse kapanmış sayılır (yoksa aşağıdaki dinleyici
-  // tablodaki sonraki dokunuşu boşuna yutardı). Kilit ve düzenleme durumu yukarıda sıfırlar.
-  const openRow = swipeOpen !== null && sets.some((set) => set.logged?.id === swipeOpen) ? swipeOpen : null;
-  // Açık "Sil"i dışarı dokunmak ve Esc kapatır (`SwipeGroup` gibi). Tablodaki dokunuş yalnız kapatır: o satırı düzenlemeye
-  // açmaz, ✓'unu kaldırmaz. Açık satırın kendisine dokunmak satırın işi (yalnız kapatır; "Sil"e basmak siler).
-  useEffect(() => {
-    if (!openRow) return;
-    const onPointerDown = (event: PointerEvent) => {
-      const target = event.target instanceof Element ? event.target : null;
-      if (target?.closest(`[data-set-row="${openRow}"]`)) return;
-      setSwipeOpen(null);
-      if (target && tableRef.current?.contains(target)) swallowClick(event);
-    };
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setSwipeOpen(null);
-    };
-    document.addEventListener('pointerdown', onPointerDown, true);
-    document.addEventListener('keydown', onKeyDown);
-    return () => {
-      document.removeEventListener('pointerdown', onPointerDown, true);
-      document.removeEventListener('keydown', onKeyDown);
-    };
-  }, [openRow]);
 
   const title = group ? `${group.members.find((member) => member.rowId === row.rowId)?.letter ?? ''}: ${row.title}` : row.title;
 
@@ -404,66 +384,78 @@ export function ExerciseCard({
 
             {warmups.length > 0 && (!warmDone || warmOpen) ? <WarmupRow warmups={warmups} onToggle={onToggleWarmup} /> : null}
 
-            <Table ref={tableRef} aria-label={`${row.title} setleri`} className="table-fixed tabular-nums">
-              {/* 375 px'te: 40 + Önceki + (48) + 64 + 56 + 44; "Önceki" en az ~90 px kalır. kg kutusu "102,5"i sığdırır.
-                  Kardiyoda kg yerine süreden sonra mesafe (64) ve yürüyüş/koşuda eğim (48); "Önceki" iki satıra sarar. */}
-              <colgroup>
-                <col className="w-10" />
-                <col />
-                {showTarget ? <col className="w-12" /> : null}
-                {weighted ? <col className="w-16" /> : null}
-                <col className="w-14" />
-                {cardio ? <col className="w-16" /> : null}
-                {walk ? <col className="w-12" /> : null}
-                <col className="w-11" />
-              </colgroup>
-              <TableHeader>
-                <TableRow className="border-t hover:bg-transparent">
-                  <TableHead className="h-6 pl-3 text-xs font-medium text-muted-foreground">Set</TableHead>
-                  <TableHead className="h-6 text-xs font-medium text-muted-foreground">Önceki</TableHead>
-                  {showTarget ? <TableHead className="h-6 text-xs font-medium text-muted-foreground">Hedef</TableHead> : null}
-                  {weighted ? <TableHead className="h-6 text-xs font-medium text-muted-foreground">kg</TableHead> : null}
-                  <TableHead className="h-6 text-xs font-medium text-muted-foreground">{valueHead}</TableHead>
-                  {cardio ? <TableHead className="h-6 text-xs font-medium text-muted-foreground">Metre</TableHead> : null}
-                  {walk ? <TableHead className="h-6 text-xs font-medium text-muted-foreground">Eğim %</TableHead> : null}
-                  <TableHead className="h-6">
+            {/* ARIA tablosu: satırlar `SwipeRow` içinde kayabilsin diye `<table>` değil (`SetRow`). 375 px'te: 40 + Önceki +
+                (48) + 64 + 56 + 44; "Önceki" en az ~90 px kalır. kg kutusu "102,5"i sığdırır. Kardiyoda kg yerine süreden sonra
+                mesafe (64) ve yürüyüş/koşuda eğim (48); "Önceki" iki satıra sarar. Başlık ve satırlar aynı şablonu paylaşır. */}
+            <div role="table" aria-label={`${row.title} setleri`} className="text-sm tabular-nums">
+              <div role="rowgroup">
+                <div role="row" style={{ gridTemplateColumns: columns }} className="grid h-6 items-center border-t">
+                  <span role="columnheader" className="pl-3 text-xs font-medium text-muted-foreground">
+                    Set
+                  </span>
+                  <span role="columnheader" className="px-2 text-xs font-medium text-muted-foreground">
+                    Önceki
+                  </span>
+                  {showTarget ? (
+                    <span role="columnheader" className="px-2 text-xs font-medium text-muted-foreground">
+                      Hedef
+                    </span>
+                  ) : null}
+                  {weighted ? (
+                    <span role="columnheader" className="px-2 text-xs font-medium text-muted-foreground">
+                      kg
+                    </span>
+                  ) : null}
+                  <span role="columnheader" className="px-2 text-xs font-medium text-muted-foreground">
+                    {valueHead}
+                  </span>
+                  {cardio ? (
+                    <span role="columnheader" className="px-2 text-xs font-medium text-muted-foreground">
+                      Metre
+                    </span>
+                  ) : null}
+                  {walk ? (
+                    <span role="columnheader" className="px-2 text-xs font-medium text-muted-foreground">
+                      Eğim %
+                    </span>
+                  ) : null}
+                  <span role="columnheader">
                     <span className="sr-only">Durum</span>
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {sets.map((set) => {
-                  const logged = set.logged;
-                  const highlight = editingSetId !== null ? (logged?.id === editingSetId ? 'editing' : null) : set.setIndex === currentSetIndex ? 'current' : null;
-                  return (
-                    <SetRow
-                      key={set.extra ? `extra-${set.setIndex}` : set.setIndex}
-                      set={set}
-                      trackingType={row.trackingType}
-                      cardio={cardio}
-                      bodyMassKg={bodyMassKg}
-                      showTarget={showTarget}
-                      group={group !== null}
-                      highlight={highlight}
-                      currentKg={currentKg}
-                      entry={logged ? null : entryOf(set)}
-                      fresh={logged !== undefined && logged.id === freshSetId}
-                      rowRef={highlight ? currentRef : undefined}
-                      open={logged !== undefined && logged.id === openRow}
-                      locked={locked || highlight === 'editing'}
-                      onOpenChange={(next) => {
-                        if (logged) setSwipeOpen((now) => (next ? logged.id : now === logged.id ? null : now));
-                      }}
-                      onEdit={onEditSet}
-                      onFix={onFixSet}
-                      onUntick={onUntickSet}
-                      onDelete={onDeleteSet}
-                      onDropExtra={onDropExtra}
-                    />
-                  );
-                })}
-              </TableBody>
-            </Table>
+                  </span>
+                </div>
+              </div>
+              <SwipeGroup>
+                <div role="rowgroup">
+                  {sets.map((set) => {
+                    const logged = set.logged;
+                    const highlight = editingSetId !== null ? (logged?.id === editingSetId ? 'editing' : null) : set.setIndex === currentSetIndex ? 'current' : null;
+                    return (
+                      <SetRow
+                        key={set.extra ? `extra-${set.setIndex}` : set.setIndex}
+                        set={set}
+                        trackingType={row.trackingType}
+                        cardio={cardio}
+                        bodyMassKg={bodyMassKg}
+                        showTarget={showTarget}
+                        group={group !== null}
+                        highlight={highlight}
+                        currentKg={currentKg}
+                        entry={logged ? null : entryOf(set)}
+                        fresh={logged !== undefined && logged.id === freshSetId}
+                        rowRef={highlight ? currentRef : undefined}
+                        columns={columns}
+                        locked={locked || highlight === 'editing'}
+                        onEdit={onEditSet}
+                        onFix={onFixSet}
+                        onUntick={onUntickSet}
+                        onDelete={onDeleteSet}
+                        onDropExtra={onDropExtra}
+                      />
+                    );
+                  })}
+                </div>
+              </SwipeGroup>
+            </div>
             {walk && bodyMassKg === undefined ? (
               <p className="border-t px-3 py-2 text-xs text-muted-foreground">Kalori, antrenörünün girdiği vücut ağırlığından hesaplanır.</p>
             ) : null}
