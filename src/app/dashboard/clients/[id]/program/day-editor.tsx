@@ -10,7 +10,8 @@ import type { EditorCare } from '@/lib/constraint-filter';
 import type { BlocksFormStore } from '@/components/block-editor/block-items';
 import type { RowClientTarget } from '@/components/block-editor/editor-context';
 import { keepLineEnter } from '@/components/block-editor/enter-key';
-import { TemplateMuscleMap } from '@/components/muscle-map/template-muscle-map';
+import { MuscleMap } from '@/components/muscle-map/muscle-map';
+import { LOAD_DESCRIPTION, loadMapProps } from '@/lib/muscle-tiers';
 import { Button } from '@/components/ui/button';
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -46,9 +47,6 @@ import type { EditorDevice, PickerExercise } from '@/lib/template-edit';
 import { templateMuscleLoad } from '@/lib/template-plan';
 import { WEEKDAY_SHORT, weekdayNamesText, type Weekday } from '@/lib/training-days';
 import type { PhaseActions, ProgramFormStore } from './program-form';
-
-const LOAD_DESCRIPTION =
-  'Kas başına çalışma seti: hedef 1, yardımcı 0,5, dengeleyici 0,25 sayılır; ısınma ve soğuma hareketleri sayılmaz.';
 
 /**
  * Seçili program (Faz 3: evrenin bir antrenmanı; kodda "gün"): adı, atandığı hafta günleri ("Günleri"), geldiği
@@ -268,7 +266,7 @@ export function DayEditor({
         </CardHeader>
         <CardContent>
           {blocks.length > 0 ? (
-            <TemplateMuscleMap variant="full" bodyClassName="h-56 lg:h-64" load={load} label={`${day.name} kas yükü`} />
+            <MuscleMap layout="split" bodyClassName="h-56 lg:h-64" {...loadMapProps(load, 'session', `${day.name} kas yükü`)} />
           ) : (
             <p className="text-sm text-muted-foreground">Hareket ekleyince kas yükü burada görünür.</p>
           )}

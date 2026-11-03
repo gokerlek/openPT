@@ -1,6 +1,6 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { loadLegend, loadMarks, loadTier, muscleLoadLegend, roleLegend, roleMarks, statusLegend } from './muscle-tiers.ts';
+import { loadLegend, loadMapProps, loadMarks, loadTier, muscleLoadLegend, roleLegend, roleMarks, statusLegend } from './muscle-tiers.ts';
 import { MUSCLE_LABELS } from './schemas/exercise.ts';
 
 describe('loadTier', () => {
@@ -93,5 +93,29 @@ describe('açıklama', () => {
     );
     assert.deepEqual(legend.groups[3]?.rows.map((row) => row.key), ['quadriceps']);
     assert.deepEqual(legend.groups[4], { mark: 'empty', title: 'Veri az ya da çalışılmadı', rows: [] });
+  });
+});
+
+describe('loadMapProps', () => {
+  test('işaret, açıklama, etiket ve üstüne gelince yazı', () => {
+    const props = loadMapProps({ quadriceps: 6, glutes: 1.5, cardio: 2 }, 'session', 'Şablonun kas yükü');
+    assert.deepEqual(props.marks, { quadriceps: 'filled', glutes: 'striped' });
+    assert.equal(props.legend?.cardioSets, 2);
+    assert.equal(props.label, `Şablonun kas yükü: ${MUSCLE_LABELS.quadriceps}, ${MUSCLE_LABELS.glutes}`);
+    assert.equal(props.describe('quadriceps'), `${MUSCLE_LABELS.quadriceps} · 6 set`);
+    assert.equal(props.describe('glutes'), `${MUSCLE_LABELS.glutes} · 1,5 set`);
+  });
+  test('yük yoksa etiket söyler; açıklamasız (küçük kart)', () => {
+    const props = loadMapProps({ cardio: 3 }, 'weekly', 'Bu hafta', { legend: false });
+    assert.equal(props.label, 'Bu hafta: kas yükü yok');
+    assert.equal(props.legend, undefined);
+  });
+  test('verilen satırlar açıklamaya geçer (antrenman özeti)', () => {
+    const props = loadMapProps({ quadriceps: 3 }, 'session', 'Özet', { rows: [{ key: 'legs', label: 'Bacak', sets: 3 }] });
+    assert.deepEqual(props.legend?.groups[0]?.rows.map((row) => row.label), ['Bacak']);
+  });
+  test('satırlar verilince de kardiyo ayrı satırda (haftalık)', () => {
+    const props = loadMapProps({ quadriceps: 12, cardio: 2 }, 'weekly', 'Bu hafta', { rows: [{ key: 'quadriceps', label: 'Ön bacak', sets: 12 }] });
+    assert.equal(props.legend?.cardioSets, 2);
   });
 });

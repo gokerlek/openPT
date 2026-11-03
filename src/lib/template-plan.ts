@@ -374,14 +374,6 @@ export function scaleLoad(load: Readonly<Record<string, number>>, factor: number
   return Object.fromEntries(Object.entries(load).map(([muscle, value]) => [muscle, clean(value * factor)]));
 }
 
-/** Haritanın tonu: şablonun en çok çalışan kası 1; sıfırlar ve kardiyo dışarıda. */
-export function loadIntensity(load: Readonly<Record<string, number>>): Record<string, number> {
-  const body = Object.entries(load).filter(([muscle, value]) => muscle !== 'cardio' && value > 0);
-  const max = Math.max(0, ...body.map(([, value]) => value));
-  if (max <= 0) return {};
-  return Object.fromEntries(body.map(([muscle, value]) => [muscle, clean(value / max)]));
-}
-
 /**
  * Bir setin tahmini süresi (sn): hedefin ortası (AMRAP'ta üst sınır); tekrarda tekrar
  * başına 3 sn, süreli harekette saniye.

@@ -19,7 +19,6 @@ import {
   formatTarget,
   groupSkipNote,
   kindOptions,
-  loadIntensity,
   muscleLoadOf,
   normalizeTemplate,
   previewBlocks,
@@ -412,12 +411,6 @@ describe('şablon kas yükü', () => {
     ];
     for (const [sets, band] of cases) assert.equal(weeklySetBand(sets), band, `${sets} set`);
     assert.deepEqual(WEEKLY_SET_BANDS, { enough: 10, high: 20 });
-  });
-
-  test('harita tonu en çok çalışan kasa göre; kardiyo ve sıfır dışarıda', () => {
-    assert.deepEqual(loadIntensity({ quadriceps: 6, glutes: 3, cardio: 9, biceps: 0 }), { quadriceps: 1, glutes: 0.5 });
-    assert.deepEqual(loadIntensity({ biceps: 0, cardio: 2 }), {});
-    assert.deepEqual(loadIntensity({}), {});
   });
 });
 

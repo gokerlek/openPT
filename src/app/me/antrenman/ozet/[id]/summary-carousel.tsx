@@ -6,7 +6,8 @@ import { animate, motion, useMotionValue, useReducedMotion, useTransform } from 
 import { ArrowDown, ArrowUp, CaretLeft, CaretRight, Sparkle, Trophy } from '@phosphor-icons/react';
 import { CoachButton } from '@/components/coach/coach-button';
 import { Equals } from '@/components/line-icons';
-import { TemplateMuscleMap } from '@/components/muscle-map/template-muscle-map';
+import { MuscleMap } from '@/components/muscle-map/muscle-map';
+import { loadMapProps } from '@/lib/muscle-tiers';
 import { Button } from '@/components/ui/button';
 import { Carousel, CarouselContent, CarouselItem, type CarouselApi } from '@/components/ui/carousel';
 import { formatNumber } from '@/lib/format';
@@ -336,12 +337,12 @@ function MusclesCard({ summary }: { summary: SessionSummary }) {
       <h2 className="-mt-2 font-heading text-2xl font-semibold tabular-nums">{formatNumber(summary.muscles)} kas çalıştı</h2>
       {summary.topMuscle ? <p className="-mt-1 text-sm text-muted-foreground">En çok: {summary.topMuscle.toLocaleLowerCase('tr-TR')}</p> : null}
       {summary.worked.length > 0 ? (
-        <TemplateMuscleMap
-          load={summary.load}
-          legend={summary.worked.map((item) => ({ label: item.label, value: item.sets }))}
-          legendLimit={5}
-          label="Bu antrenmanın kas yükü"
+        <MuscleMap
+          layout="split"
           bodyClassName="h-60"
+          {...loadMapProps(summary.load, 'session', 'Bu antrenmanın kas yükü', {
+            rows: summary.worked.map((item) => ({ key: item.label, label: item.label, sets: item.sets })),
+          })}
         />
       ) : (
         <p className="text-sm text-muted-foreground">Bu antrenmanda sayılan kas yükü yok.</p>

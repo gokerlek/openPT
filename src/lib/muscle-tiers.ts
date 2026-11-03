@@ -1,4 +1,5 @@
-import { BODY_MUSCLES, ROLE_LABELS, isBodyMuscle, type BodyMuscle, type MuscleRole } from './muscles.ts';
+import { formatNumber } from './format.ts';
+import { BODY_MUSCLES, ROLE_LABELS, isBodyMuscle, summarizeMuscles, type BodyMuscle, type MuscleRole } from './muscles.ts';
 import { MUSCLE_LABELS, type Exercise, type Muscle } from './schemas/exercise.ts';
 
 /**
@@ -138,4 +139,24 @@ export function statusLegend(statuses: Partial<Record<BodyMuscle, MuscleStatusTo
     rows: BODY_MUSCLES.filter((muscle) => statuses[muscle] === tone).map((muscle) => ({ key: muscle, label: MUSCLE_LABELS[muscle] })),
   }));
   return { groups: [...groups, { mark: 'empty', title: 'Veri az ya da çalışılmadı', rows: [] }] };
+}
+
+/**
+ * Yük haritasının ortak propları (`MuscleMap`'e yayılır): işaret, açıklama, ekran okuyucu adı ("{önek}: en çok çalışan 6
+ * kas") ve üstüne gelince yazı ("Ön bacak · 6 set"). `rows` verilirse açıklama onlardan kurulur (antrenman özetinin aile
+ * satırları); `legend: false` küçük kart içindir.
+ */
+export function loadMapProps(
+  load: Partial<Record<Muscle, number>>,
+  scale: LoadScale,
+  prefix: string,
+  options: { legend?: boolean; rows?: readonly LoadRow[] } = {},
+): { marks: MuscleMarks; legend?: MuscleLegendData; label: string; describe: (muscle: BodyMuscle) => string } {
+  const worked = BODY_MUSCLES.filter((muscle) => (load[muscle] ?? 0) > 0).sort((a, b) => (load[b] ?? 0) - (load[a] ?? 0));
+  const label = worked.length > 0 ? `${prefix}: ${summarizeMuscles(worked.slice(0, 6)).join(', ')}` : `${prefix}: kas yükü yok`;
+  const describe = (muscle: BodyMuscle) => `${MUSCLE_LABELS[muscle]} · ${formatNumber(load[muscle] ?? 0)} set`;
+  const marks = loadMarks(load, scale);
+  if (options.legend === false) return { marks, label, describe };
+  const legend = options.rows ? loadLegend(options.rows, scale, load.cardio) : muscleLoadLegend(load, scale);
+  return { marks, legend, label, describe };
 }
