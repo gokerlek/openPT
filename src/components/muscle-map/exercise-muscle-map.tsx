@@ -10,7 +10,9 @@ import {
   type BodyMuscle,
   type MuscleRole,
 } from '@/lib/muscles';
-import { MuscleMap, MuscleSwatch } from './muscle-map';
+import { MuscleMap } from './muscle-map';
+import { MuscleSwatch } from './muscle-patterns';
+import { ROLE_TIER } from '@/lib/muscle-tiers';
 
 type ExerciseMuscleMapProps = Pick<Exercise, 'primaryMuscles' | 'secondaryMuscles' | 'stabilizerMuscles'> & {
   bodyClassName?: string;
@@ -50,7 +52,7 @@ export function ExerciseMuscleMap({ primaryMuscles, secondaryMuscles, stabilizer
         {(['primary', 'secondary', 'stabilizer'] as const).map((role) =>
           lists[role].length > 0 ? (
             <div key={role} className="flex items-baseline gap-2">
-              <MuscleSwatch role={role} className="translate-y-0.5 self-start" />
+              <MuscleSwatch mark={ROLE_TIER[role]} className="translate-y-0.5 self-start" />
               <dt className="text-muted-foreground">{ROLE_LABELS[role]}</dt>
               <dd>{summarizeMuscles(lists[role]).join(', ')}</dd>
             </div>
