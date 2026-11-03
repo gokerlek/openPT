@@ -18,7 +18,7 @@ import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui
 import { Input } from '@/components/ui/input';
 import { Item, ItemContent, ItemDescription, ItemMedia, ItemTitle } from '@/components/ui/item';
 import { Drawer, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle } from '@/components/ui/drawer';
-import { showUndoToast } from '@/components/undo-toast';
+import { showGuardedUndo } from '@/components/undo-toast';
 import { UnsavedChangesGuard, type UnsavedChangesGuardHandle } from '@/components/unsaved-changes-guard';
 import { WeekdayToggle } from '@/components/weekday-toggle';
 import type { EditorCare } from '@/lib/constraint-filter';
@@ -227,15 +227,11 @@ export function OwnProgramForm(props: OwnProgramFormProps) {
     const neighbour = target.days[dayIndex - 1] ?? target.days[dayIndex + 1];
     write(removeDay(all as ProgramPhase[], target.id, selectedDay.id) as OwnProgramPhase[]);
     if (neighbour) setSelectedDayId(neighbour.id);
-    const after = JSON.stringify(current());
-    showUndoToast(`${selectedDay.name} kaldırıldı`, () => {
-      if (JSON.stringify(current()) !== after) {
-        toast.error('Sonrasında başka değişiklik yapıldı; geri alınamadı.');
-        return;
-      }
-      write(before);
-      setSelectedDayId(selectedDay.id);
-    });
+    showGuardedUndo(
+      `${selectedDay.name} kaldırıldı`,
+      { locate: () => 'root', read: () => current(), write: (_, value) => write(value), before },
+      { onUndone: () => setSelectedDayId(selectedDay.id) },
+    );
   };
 
   const save = useServiceMutation({

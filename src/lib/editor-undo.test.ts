@@ -238,3 +238,19 @@ describe('"Geri al" şablon formunda (gerçek şablon formu)', () => {
     assert.deepEqual(rows(later), ['r_squat2']);
   });
 });
+
+test('undoAt: sabit yerde de çalışır (program ve kişinin formu); sonrasında değiştiyse yazmaz', () => {
+  let value = { phases: [1] };
+  const locate = () => 'root' as const;
+  const read = () => value;
+  const write = (_: 'root', next: typeof value) => {
+    value = next;
+  };
+  const before = { phases: [1, 2] };
+  const after = value;
+  assert.equal(undoAt(locate, read, write, before, after), true);
+  assert.deepEqual(value, before);
+  value = { phases: [9] };
+  assert.equal(undoAt(locate, read, write, before, after), false);
+  assert.deepEqual(value, { phases: [9] });
+});

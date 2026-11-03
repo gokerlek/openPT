@@ -15,7 +15,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Field, FieldDescription, FieldLabel } from '@/components/ui/field';
-import { showUndoToast } from '@/components/undo-toast';
+import { showGuardedUndo } from '@/components/undo-toast';
 import { UnsavedChangesGuard, type UnsavedChangesGuardHandle } from '@/components/unsaved-changes-guard';
 import { cleanWeekdays, upgradeAssignments } from '@/lib/day-assignments';
 import {
@@ -271,14 +271,7 @@ export function ProgramForm({
    */
   const offerUndo = useCallback(
     (before: Snapshot, message: string) => {
-      const after = JSON.stringify(snapshot());
-      showUndoToast(message, () => {
-        if (JSON.stringify(snapshot()) !== after) {
-          toast.error('Sonrasında başka değişiklik yapıldı; geri alınamadı.');
-          return;
-        }
-        restore(before);
-      });
+      showGuardedUndo(message, { locate: () => 'root', read: () => snapshot(), write: (_, value) => restore(value), before });
     },
     [snapshot, restore],
   );

@@ -6,6 +6,7 @@ import { ArrowsSplit, Bandaids, Barbell, CaretDown, NoteBlank, PersonSimpleTaiCh
 import { ARMED, CardBadge, CardFace, CardGrabber, ExerciseCard, ExerciseCardSection, PLACEHOLDER } from '@/components/exercise-card';
 import { LabeledSelect } from '@/components/labeled-select';
 import { LinkBreak, Plus } from '@/components/line-icons';
+import { MoveButtons } from '@/components/list/move-buttons';
 import { SwipeRow, type SwipeAction } from '@/components/swipe/swipe-row';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -19,7 +20,7 @@ import { cardioKind } from '@/lib/cardio';
 import { deviceChangeMessage, dropTargetLabel, groupWorkText, rowWorkText } from '@/lib/edit-messages';
 import { familyOf } from '@/lib/muscles';
 import { describeRule, describeSetRules, PROGRESSION_LABELS, RIR_LABELS } from '@/lib/progression';
-import type { ReorderTarget } from '@/lib/reorder';
+import { moveTargetOf } from '@/lib/reorder';
 import { isStraight } from '@/lib/set-plan';
 import {
   changeKind,
@@ -62,8 +63,6 @@ const SELECT_TOUCH = {
 
 export const FULL_MESSAGE = 'Şablon dolu: en fazla 40 hareket, 30 blok';
 
-const KEY_TARGETS: Partial<Record<string, ReorderTarget>> = { ArrowUp: 'up', ArrowDown: 'down', Home: 'top', End: 'end' };
-
 const KEY_SHORTCUTS = 'Alt+ArrowUp Alt+ArrowDown Alt+Home Alt+End Alt+ArrowRight Alt+ArrowLeft Delete';
 
 /** Yüzdeki klavye: Alt+↑/↓/Home/End taşır, Alt+→ öncekiyle gruplar, Alt+← ayırır, Delete siler, Esc kapatır. */
@@ -78,7 +77,7 @@ function useFaceKeys(itemId: string, isOpen: boolean): React.KeyboardEventHandle
     }
     if (event.ctrlKey || event.metaKey || event.shiftKey) return;
     if (event.altKey) {
-      const target = KEY_TARGETS[event.key];
+      const target = moveTargetOf(event);
       if (target) {
         event.preventDefault();
         editor.actions.step(itemId, target);
@@ -119,13 +118,7 @@ function MoveStrip({ itemId, kind, title }: { itemId: string; kind: 'single' | '
   const editor = useEditor();
   const button = 'h-9 touch:h-11';
   return (
-    <div role="group" aria-label={`${title}: taşı`} className="sr-only flex flex-wrap gap-1.5 px-3 pb-3 focus-within:not-sr-only">
-      <Button type="button" variant="outline" size="sm" className={button} onClick={() => editor.actions.step(itemId, 'up')}>
-        Yukarı taşı
-      </Button>
-      <Button type="button" variant="outline" size="sm" className={button} onClick={() => editor.actions.step(itemId, 'down')}>
-        Aşağı taşı
-      </Button>
+    <MoveButtons name={title} onStep={(target) => editor.actions.step(itemId, target)}>
       {kind === 'single' ? (
         <Button type="button" variant="outline" size="sm" className={button} onClick={() => editor.actions.groupWithPrevious(itemId)}>
           Öncekiyle grupla
@@ -135,7 +128,7 @@ function MoveStrip({ itemId, kind, title }: { itemId: string; kind: 'single' | '
           Gruptan çıkar
         </Button>
       ) : null}
-    </div>
+    </MoveButtons>
   );
 }
 

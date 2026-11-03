@@ -30,10 +30,10 @@ test('tek canlı bölge: "Geri al" toast\'u çıkan değişikliğin cümlesini y
       .replace(/^\s*\/\/.*$/gm, '');
   const editor = strip('./block-editor.tsx');
   const undo = editor.slice(editor.indexOf("const updateWithUndo = useCallback<Editor['updateWithUndo']>"), editor.indexOf('const openAdd'));
-  assert.ok(undo.includes('showUndoToast(message'));
+  assert.ok(undo.includes('showGuardedUndo(message'));
   assert.doesNotMatch(undo, /announce\(message\)/);
   const program = strip('../../app/dashboard/clients/[id]/program/program-form.tsx');
   const offer = program.slice(program.indexOf('const offerUndo = useCallback('), program.indexOf('const updateWithUndo = useCallback'));
-  assert.ok(offer.includes('showUndoToast(message'));
+  assert.ok(offer.includes('showGuardedUndo(message'));
   assert.doesNotMatch(offer, /setAnnouncement\(message\)/);
 });

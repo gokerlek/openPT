@@ -21,6 +21,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { animate, motion, useDragControls, useMotionValue, useReducedMotion, useTransform, type MotionValue, type PanInfo } from 'motion/react';
+import { vibrate } from '@/lib/haptics';
 import { INSTANT, SWIPE, tween } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 
@@ -52,10 +53,6 @@ const TONES: Record<SwipeTone, string> = {
 /** Tam kaydırmalı tarafta sürükleme sınırı yok sayılacak kadar uzak (px). */
 const FREE = 4000;
 
-function vibrate() {
-  if (typeof navigator !== 'undefined' && 'vibrate' in navigator) navigator.vibrate(8);
-}
-
 // ─── Grup: aynı anda tek panel açık ────────────────────────────────────────────────────
 
 type Group = {
@@ -74,7 +71,7 @@ const CARD = '[data-slot=exercise-card], [data-slot=exercise-group]';
  * açmaz). Basış kaydırmaya dönerse (pointercancel) ya da tıklama gelmezse bırakılır: sonraki
  * dokunuşlar etkilenmez.
  */
-function swallowClick(down: PointerEvent) {
+export function swallowClick(down: PointerEvent) {
   const onClick = (event: MouseEvent) => {
     event.preventDefault();
     event.stopPropagation();
