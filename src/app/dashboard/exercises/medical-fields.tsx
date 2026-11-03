@@ -2,12 +2,9 @@
 
 import { Field as FormField, setInput, type useForm } from '@formisch/react';
 import { GroupedSelect } from '@/components/labeled-select';
-import { X } from '@/components/line-icons';
-import { Button } from '@/components/ui/button';
 import { Field, FieldDescription, FieldError, FieldLabel, FieldSet } from '@/components/ui/field';
 import { Toggle } from '@/components/ui/toggle';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
-import { conditionLabel, parseCondition } from '@/lib/conditions';
 import {
   AXIAL_LOAD_LABELS,
   AXIAL_LOADS,
@@ -28,7 +25,7 @@ import {
   type JointWindow,
 } from '@/lib/exercise-filter';
 import type { exerciseFormSchema } from '@/lib/schemas/exercise';
-import { ConditionSelect } from './constraint-picker';
+import { ConditionPicker } from '@/components/condition-picker';
 
 /**
  * Medikal etiketler: sakatlık süzgeci bunlara bakar (`src/lib/exercise-filter.ts`).
@@ -91,35 +88,10 @@ function ConditionField({
     <FormField of={form} path={[path]}>
       {(field) => {
         const current = (field.input ?? []).filter((item): item is string => typeof item === 'string');
-        const add = (value: string) => {
-          if (!value || current.includes(value) || current.length >= 12) return;
-          setInput(form, { path: [path], input: [...current, value] });
-        };
-
         return (
           <Field data-invalid={Boolean(field.errors) || undefined}>
             <FieldLabel htmlFor={path}>{label}</FieldLabel>
-            {current.length > 0 ? (
-              <div className="flex flex-wrap gap-1.5">
-                {current.map((value) => {
-                  const parsed = parseCondition(value);
-                  const name = parsed ? conditionLabel(parsed) : value;
-                  return (
-                    <Button
-                      key={value}
-                      type="button"
-                      variant="secondary"
-                      size="xs"
-                      aria-label={`${name} kısıtını kaldır`}
-                      onClick={() => setInput(form, { path: [path], input: current.filter((item) => item !== value) })}>
-                      {name}
-                      <X data-icon="inline-end" />
-                    </Button>
-                  );
-                })}
-              </div>
-            ) : null}
-            <ConditionSelect id={path} placeholder="Kısıt seç" onSelect={add} />
+            <ConditionPicker id={path} placeholder="Kısıt seç" value={current} onChange={(next) => setInput(form, { path: [path], input: next })} />
             <FieldDescription>{description}</FieldDescription>
             <FieldError>{field.errors?.[0]}</FieldError>
           </Field>

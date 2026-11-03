@@ -15,10 +15,11 @@ import {
   setInput,
   useForm,
 } from "@formisch/react";
-import { Heartbeat, PushPin, Trash, WarningCircle } from "@phosphor-icons/react";
+import { Heartbeat, Trash, WarningCircle } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import { Plus } from "@/components/line-icons";
 import { SortableList } from "@/components/list/sortable-list";
+import { ToggleTiles } from "@/components/toggle-tiles";
 import { SwipeRow, deleteAction } from "@/components/swipe/swipe-row";
 import { showUndoToast } from "@/components/undo-toast";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -125,28 +126,7 @@ function AlternativesField({
         <FieldDescription>
           Seçmezsen uygulama zaten benzerlerini önerir; seçtiklerin listenin başında çıkar (en fazla 12).
         </FieldDescription>
-        <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-          {options.map((option) => {
-            const isOn = pinned.includes(option.id);
-            return (
-              <li key={option.id}>
-                <Button
-                  type="button"
-                  variant={isOn ? "secondary" : "outline"}
-                  aria-pressed={isOn}
-                  className={`h-auto w-full justify-start gap-3 p-2 text-left ${isOn ? "ring-2 ring-primary-text" : ""}`}
-                  onClick={() => onToggle(option.id)}
-                >
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate font-normal">{option.title}</span>
-                    <span className="block truncate text-xs font-normal text-muted-foreground">{option.detail}</span>
-                  </span>
-                  {isOn ? <PushPin weight="fill" className="text-primary-text" /> : <Plus className="text-muted-foreground" />}
-                </Button>
-              </li>
-            );
-          })}
-        </ul>
+        <ToggleTiles items={options} selected={pinned} onToggle={onToggle} max={12} />
       </Field>
     </FieldSet>
   );

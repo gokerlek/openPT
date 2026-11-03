@@ -29,9 +29,9 @@ import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle }
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { InputGroup, InputGroupAddon, InputGroupInput } from '@/components/ui/input-group';
 import { Toggle } from '@/components/ui/toggle';
-import { ConstraintPicker, formatConstraints, parseConstraints } from './constraint-picker';
+import { ConditionPicker, formatConstraints, parseConstraints } from '@/components/condition-picker';
 import { TOUCH_TARGETS } from './touch-targets';
-import { conditionLabel } from '@/lib/conditions';
+import { conditionLabel, formatCondition } from '@/lib/conditions';
 import { careSummary, type EditorCare } from '@/lib/constraint-filter';
 import {
   CONTEXT_LABELS,
@@ -305,7 +305,13 @@ export function ExerciseList({
                   </div>
                 ) : (
                   <div className="max-w-sm">
-                    <ConstraintPicker value={constraints} onChange={(next) => setParams({ limit: next })} />
+                    <ConditionPicker
+                      id="constraint"
+                      placeholder="Kısıt ekle"
+                      label="Kısıt ekle"
+                      value={constraints.map(formatCondition)}
+                      onChange={(next) => setParams({ limit: parseConstraints(next.join(',')) })}
+                    />
                   </div>
                 )}
 

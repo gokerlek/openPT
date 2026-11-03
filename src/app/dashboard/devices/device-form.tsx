@@ -4,11 +4,11 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Field as FormField, Form, getDeepError, setInput, useForm } from '@formisch/react';
-import { ImageSquare, WarningCircle } from '@phosphor-icons/react';
+import { WarningCircle } from '@phosphor-icons/react';
 import { toast } from 'sonner';
 import { ImageField, KEEP, type ImageChange } from '@/components/image-field';
 import { LabeledSelect } from '@/components/labeled-select';
-import { Check, Plus } from '@/components/line-icons';
+import { ToggleTiles } from '@/components/toggle-tiles';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -122,34 +122,12 @@ function AttachmentPicker({
                 </Link>
                 .
               </FieldDescription>
-              <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                {pool.map((attachment) => {
-                  const imageUrl = attachmentImageUrl(attachment);
-                  const isOn = selected.includes(attachment.id);
-                  return (
-                    <li key={attachment.id}>
-                      <Button
-                        type="button"
-                        variant={isOn ? 'secondary' : 'outline'}
-                        aria-pressed={isOn}
-                        className={`h-auto w-full justify-start gap-3 p-2 text-left ${isOn ? 'ring-2 ring-primary-text' : ''}`}
-                        onClick={() => toggle(attachment.id)}>
-                        <span className="flex size-11 shrink-0 items-center justify-center overflow-hidden rounded-md border bg-background">
-                          {imageUrl ? (
-                            // Özel repo'dan uygulama üzerinden gelir; Next görsel iyileştiricisi oturum çerezini taşımaz.
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img src={imageUrl} alt="" loading="lazy" className="size-full object-cover" />
-                          ) : (
-                            <ImageSquare className="size-5 text-muted-foreground" />
-                          )}
-                        </span>
-                        <span className="flex-1 truncate font-normal">{attachment.name}</span>
-                        {isOn ? <Check className="text-primary-text" /> : <Plus className="text-muted-foreground" />}
-                      </Button>
-                    </li>
-                  );
-                })}
-              </ul>
+              <ToggleTiles
+                items={pool.map((attachment) => ({ id: attachment.id, title: attachment.name, image: attachmentImageUrl(attachment) ?? null }))}
+                selected={selected}
+                onToggle={toggle}
+                max={ATTACHMENTS_MAX}
+              />
               <FieldError>{field.errors?.[0]}</FieldError>
             </Field>
           </FieldSet>
