@@ -8,7 +8,7 @@ import { toast } from 'sonner';
 import { CaretRight, Drop, Trash } from '@phosphor-icons/react';
 import { Minus, Plus } from '@/components/line-icons';
 import { ConfirmDeleteDialog } from '@/components/confirm-delete-dialog';
-import { SwipeGroup, SwipeRow, type SwipeAction } from '@/components/swipe/swipe-row';
+import { SwipeGroup, SwipeRow, deleteAction } from '@/components/swipe/swipe-row';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -46,7 +46,7 @@ type PatchResponse = { doc: SessionDoc };
  * sunucunun birleştirdiği belgeyle yenilenir (`PATCH /api/me/sessions/[id]`; tek commit, index ve rekorlar
  * yeniden hesaplanır).
  *
- * - **Düzenle** kipi her set ve hareket satırına 44 px 🗑 koyar; sola kaydırma (`SwipeRow`) aynı işlemin
+ * - **Düzenle** kipi her set ve hareket satırına 44 px 🗑 koyar; yalnız bu kipte sola kaydırma (`SwipeRow`) aynı işlemin
  *   kısayoludur (panel düğmesi görünür düğmenin kopyası). Her silme onaylıdır (`ConfirmDeleteDialog`: üst üste
  *   düğmeler, Vazgeç en altta); editördeki onaysız silme ve "Geri al" burada yok. Onaydan sonra satır yüzü
  *   dışarı çıkarak kalkar; bildirim yok.
@@ -205,16 +205,11 @@ export function HistoryDetail({ initialDoc, changes, timeZone }: { initialDoc: S
   );
 }
 
-/** Kaydırmanın "Sil" paneli: görünür 🗑'ün kopyası (panel ekran okuyucudan gizli), onayı yine sorar. */
-function trashAction(onPress: () => void): SwipeAction {
-  return { key: 'sil', label: 'Sil', icon: <Trash weight="bold" />, onPress };
-}
-
 function ExerciseCard({ exercise, editing, onDelete }: { exercise: DetailExercise; editing: boolean; onDelete: (target: DeleteTarget) => void }) {
   const removeExercise = () => onDelete({ kind: 'entry', entryId: exercise.entryId });
   return (
     <Card size="sm" className="gap-0 py-0">
-      <SwipeRow id={exercise.entryId} end={[trashAction(removeExercise)]}>
+      <SwipeRow id={exercise.entryId} end={[deleteAction(removeExercise, { removes: false })]} disabled={!editing}>
         <div className="flex min-h-12 items-center gap-2 py-2 pr-1 pl-3.5">
           <div className="flex min-w-0 flex-1 flex-col">
             <span className="font-medium">
@@ -245,7 +240,7 @@ function ExerciseCard({ exercise, editing, onDelete }: { exercise: DetailExercis
 function SetRow({ set, title, editing, onDelete }: { set: DetailSet; title: string; editing: boolean; onDelete: () => void }) {
   const label = set.warmup ? `${title} ısınma setini sil` : `${title} ${set.label}. seti sil`;
   return (
-    <SwipeRow id={set.id} end={[trashAction(onDelete)]}>
+    <SwipeRow id={set.id} end={[deleteAction(onDelete, { removes: false })]} disabled={!editing}>
       <div className="flex min-h-11 items-center gap-3 pr-1 pl-3.5 text-sm tabular-nums">
         <span className={set.warmup ? 'w-14 text-[0.8125rem] text-muted-foreground' : 'w-5 text-muted-foreground'}>{set.label}</span>
         <span className="min-w-0 flex-1 font-medium">

@@ -216,7 +216,7 @@ export function OverrideRemove({ clientId, exerciseId, source, title }: { client
     onSuccess: () => router.refresh(),
   });
   return (
-    <Button size="sm" variant="ghost" aria-label={`${title} iznini kaldır`} disabled={remove.isPending} onClick={() => remove.mutate()}>
+    <Button size="sm" variant="ghost" className="min-h-11" aria-label={`${title} iznini kaldır`} disabled={remove.isPending} onClick={() => remove.mutate()}>
       {remove.isPending ? <Spinner data-icon="inline-start" /> : <X data-icon="inline-start" />}
       Kaldır
     </Button>

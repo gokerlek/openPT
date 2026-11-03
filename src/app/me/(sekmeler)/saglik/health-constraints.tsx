@@ -6,7 +6,7 @@ import { CheckCircle } from '@phosphor-icons/react';
 import { toast } from 'sonner';
 import { ChoiceChips } from '@/components/choice-chips';
 import { ConfirmDeleteDialog } from '@/components/confirm-delete-dialog';
-import { Plus } from '@/components/line-icons';
+import { Plus, X } from '@/components/line-icons';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -125,7 +125,8 @@ function WithdrawButton({ view }: { view: ClientConstraintView }) {
   const [open, setOpen] = useState(false);
   return (
     <>
-      <Button variant="ghost" className="h-11 flex-1" onClick={() => setOpen(true)}>
+      <Button size="sm" variant="ghost" className="min-h-11 flex-1" onClick={() => setOpen(true)}>
+        <X data-icon="inline-start" />
         Geri çek
       </Button>
       <ConfirmDeleteDialog
