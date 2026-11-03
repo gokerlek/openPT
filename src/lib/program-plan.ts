@@ -330,6 +330,18 @@ export function dayFromTemplateForEditing(
 }
 
 /** Günün kopyası aynı evreye: yeni kimlikler, sıradaki ad, kaynak aynı; atamasız (aynı gün iki programa atanmasın). */
+/**
+ * Programların gösterim sırası: ilk atanmış hafta gününe göre (Pazartesi önce); atanmamışlar saklanan sırayla sona. Elle
+ * taşıma yoktur; saklanan dizi değişmez. Hiç atama yoksa saklanan sıra aynen kalır (varsayılan program saklanan ilk).
+ */
+export function displayDays<T extends { weekdays?: readonly number[] | undefined }>(days: readonly T[]): T[] {
+  const first = (day: T) => (day.weekdays && day.weekdays.length > 0 ? Math.min(...day.weekdays) : Infinity);
+  return days
+    .map((day, index) => ({ day, index, key: first(day) }))
+    .sort((a, b) => a.key - b.key || a.index - b.index)
+    .map((item) => item.day);
+}
+
 export function copyDay(phase: Pick<ProgramPhase, 'days'>, day: ProgramDay, ids: ProgramIdSource): ProgramDay {
   return {
     id: ids('d'),

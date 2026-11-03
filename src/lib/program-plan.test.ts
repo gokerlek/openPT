@@ -2,6 +2,7 @@ import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as v from 'valibot';
 import {
+  displayDays,
   addDay,
   addPhase,
   appendLog,
@@ -1063,4 +1064,16 @@ describe('Faz 3: yazımlar', () => {
     // Kayıt yoksa (oluşturma) dokunulmaz.
     assert.equal(keepStoredAssignments(sent, null), sent);
   });
+});
+
+test('displayDays: ilk atanmış güne göre, atanmamışlar saklanan sırayla sonda', () => {
+  const days = [{ id: 'A' }, { id: 'B', weekdays: [3] }, { id: 'C', weekdays: [5, 1] }, { id: 'D', weekdays: [] }, { id: 'E' }];
+  assert.deepEqual(
+    displayDays(days).map((day) => day.id),
+    ['C', 'B', 'A', 'D', 'E'],
+  );
+  assert.deepEqual(
+    displayDays([{ id: 'A' }, { id: 'B' }]).map((day) => day.id),
+    ['A', 'B'],
+  );
 });
