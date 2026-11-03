@@ -2,20 +2,12 @@
 
 import { Field as FormField, setInput, type useForm } from '@formisch/react';
 import { GroupedSelect } from '@/components/labeled-select';
-import { Plus, X } from '@/components/line-icons';
+import { X } from '@/components/line-icons';
 import { Button } from '@/components/ui/button';
 import { Field, FieldDescription, FieldError, FieldLabel, FieldSet } from '@/components/ui/field';
 import { Toggle } from '@/components/ui/toggle';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { conditionLabel, parseCondition } from '@/lib/conditions';
-import {
-  DEEP_MUSCLE_LABELS,
-  DEEP_MUSCLE_NOTES,
-  DEEP_MUSCLE_REGION_LABELS,
-  DEEP_MUSCLE_REGIONS,
-  DEEP_MUSCLES,
-  type DeepMuscle,
-} from '@/lib/deep-muscles';
 import {
   AXIAL_LOAD_LABELS,
   AXIAL_LOADS,
@@ -205,54 +197,6 @@ export function MedicalFields({ form }: { form: Form }) {
             </FieldDescription>
           </Field>
         )}
-      </FormField>
-
-      <FormField of={form} path={['activationTargets']}>
-        {(field) => {
-          const current = (field.input ?? []).filter((item): item is DeepMuscle => typeof item === 'string');
-          const toggle = (muscle: DeepMuscle) =>
-            setInput(form, {
-              path: ['activationTargets'],
-              input: current.includes(muscle) ? current.filter((item) => item !== muscle) : [...current, muscle],
-            });
-
-          return (
-            <Field data-invalid={Boolean(field.errors) || undefined}>
-              <FieldLabel>Aktivasyon hedefleri (derin kaslar)</FieldLabel>
-              <div className="flex flex-col gap-2">
-                {(Object.keys(DEEP_MUSCLE_REGION_LABELS) as (keyof typeof DEEP_MUSCLE_REGION_LABELS)[]).map((region) => {
-                  const group = DEEP_MUSCLES.filter((muscle) => DEEP_MUSCLE_REGIONS[muscle] === region);
-                  if (group.length === 0) return null;
-                  return (
-                    <div key={region} className="flex flex-wrap items-center gap-1.5">
-                      <span className="w-28 shrink-0 text-xs text-muted-foreground">
-                        {DEEP_MUSCLE_REGION_LABELS[region]}
-                      </span>
-                      {group.map((muscle) => (
-                        <Button
-                          key={muscle}
-                          type="button"
-                          variant={current.includes(muscle) ? 'secondary' : 'outline'}
-                          size="xs"
-                          aria-pressed={current.includes(muscle)}
-                          title={DEEP_MUSCLE_NOTES[muscle]}
-                          onClick={() => toggle(muscle)}>
-                          {current.includes(muscle) ? null : <Plus data-icon="inline-start" />}
-                          {DEEP_MUSCLE_LABELS[muscle]}
-                        </Button>
-                      ))}
-                    </div>
-                  );
-                })}
-              </div>
-              <FieldDescription>
-                Haritada çizilmeyen, hacme sayılmayan derin kaslar: “bu hareket şunu uyandırır”. Rotator
-                manşet, multifidus, pelvik taban gibi.
-              </FieldDescription>
-              <FieldError>{field.errors?.[0]}</FieldError>
-            </Field>
-          );
-        }}
       </FormField>
 
       <div className="grid gap-4 lg:grid-cols-2">

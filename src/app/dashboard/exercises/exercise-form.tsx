@@ -47,6 +47,7 @@ import type { Attachment } from "@/lib/schemas/attachment";
 import type { Device } from "@/lib/schemas/device";
 import { isBodyMuscle, ROLE_LABELS, type MuscleRole } from "@/lib/muscles";
 import { roleLegend, roleMarks } from "@/lib/muscle-tiers";
+import type { DeepMuscle } from "@/lib/deep-muscles";
 import {
   defaultRule,
   EQUIPMENT_LOAD_DEFAULTS,
@@ -602,7 +603,9 @@ export function ExerciseForm({
               <FormField of={form} path={["secondaryMuscles"]}>
                 {(secondaryField) => (
                   <FormField of={form} path={["stabilizerMuscles"]}>
-                    {(stabilizerField) => {
+                    {(stabilizerField) => (
+                    <FormField of={form} path={["activationTargets"]}>
+                    {(deepField) => {
                       // Her kas tek seviyede: hedef > yardımcı > dengeleyici.
                       const primary = (primaryField.input ?? []) as Muscle[];
                       const secondary = ((secondaryField.input ?? []) as Muscle[]).filter(
@@ -664,6 +667,17 @@ export function ExerciseForm({
 
                       const errors =
                         primaryField.errors ?? secondaryField.errors ?? stabilizerField.errors;
+                      // Derin kaslar haritanın altındaki bölümde seçilir; hacme sayılmaz.
+                      const deepSelected = (deepField.input ?? []).filter(
+                        (item): item is DeepMuscle => typeof item === "string",
+                      );
+                      const toggleDeep = (muscle: DeepMuscle) =>
+                        setInput(form, {
+                          path: ["activationTargets"],
+                          input: deepSelected.includes(muscle)
+                            ? deepSelected.filter((item) => item !== muscle)
+                            : [...deepSelected, muscle],
+                        });
                       const bodySelected = [...primary, ...secondary, ...stabilizer].filter(
                         isBodyMuscle,
                       );
@@ -679,6 +693,7 @@ export function ExerciseForm({
                             marks={roleMarks(worked)}
                             legend={roleLegend(worked)}
                             onRemoveRow={(muscle) => setRole(muscle as Muscle, null)}
+                            deep={{ selected: deepSelected, onToggle: toggleDeep }}
                             selected={bodySelected}
                             onToggle={cycle}
                             describe={(muscle) => {
@@ -706,10 +721,12 @@ export function ExerciseForm({
                             <Heartbeat data-icon="inline-start" />
                             Kardiyo hareketi
                           </Toggle>
-                          <FieldError>{errors?.[0]}</FieldError>
+                          <FieldError>{errors?.[0] ?? deepField.errors?.[0]}</FieldError>
                         </Field>
                       );
                     }}
+                    </FormField>
+                    )}
                   </FormField>
                 )}
               </FormField>

@@ -3,7 +3,6 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableRow } from '@/components/ui/table';
 import { conditionLabel, parseCondition } from '@/lib/conditions';
-import { DEEP_MUSCLE_LABELS, isDeepMuscle } from '@/lib/deep-muscles';
 import {
   AXIAL_LOAD_LABELS,
   CONTRACTION_TYPE_LABELS,
@@ -35,10 +34,9 @@ export function MedicalCard({ exercise }: { exercise: Exercise }) {
   ];
 
   const windows = exercise.jointWindows ?? [];
-  const activation = (exercise.activationTargets ?? []).filter(isDeepMuscle);
   const avoid = exercise.contraindications ?? [];
   const safe = exercise.safeFor ?? [];
-  const empty = rows.length === 0 && windows.length === 0 && activation.length === 0 && avoid.length === 0 && safe.length === 0;
+  const empty = rows.length === 0 && windows.length === 0 && avoid.length === 0 && safe.length === 0;
 
   const names = (list: readonly string[]) =>
     list.map((value) => {
@@ -86,19 +84,6 @@ export function MedicalCard({ exercise }: { exercise: Exercise }) {
               {windows.map((window) => (
                 <Badge key={window} variant="secondary">
                   {JOINT_WINDOW_LABELS[window]}
-                </Badge>
-              ))}
-            </div>
-          </div>
-        ) : null}
-
-        {activation.length > 0 ? (
-          <div className="flex flex-col gap-2">
-            <span className="text-muted-foreground">Aktivasyon hedefleri (derin kaslar)</span>
-            <div className="flex flex-wrap gap-1.5">
-              {activation.map((muscle) => (
-                <Badge key={muscle} variant="outline">
-                  {DEEP_MUSCLE_LABELS[muscle]}
                 </Badge>
               ))}
             </div>

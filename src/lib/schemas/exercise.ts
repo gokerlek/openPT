@@ -1,6 +1,6 @@
 import * as v from 'valibot';
 import { MOVEMENT_PATTERNS } from '../alternatives.ts';
-import { DEEP_MUSCLES } from '../deep-muscles.ts';
+import { DEEP_MUSCLE_MAX, DEEP_MUSCLES } from '../deep-muscles.ts';
 import { parseCondition } from '../conditions.ts';
 import {
   AXIAL_LOADS,
@@ -165,7 +165,7 @@ export const exerciseSchema = v.object({
    * çalışmada "bu hareket şunu uyandırır" demek için.
    */
   activationTargets: v.optional(
-    v.pipe(v.array(v.picklist(DEEP_MUSCLES, 'Geçerli bir derin kas seç.')), v.maxLength(8, 'En fazla 8 aktivasyon hedefi.')),
+    v.pipe(v.array(v.picklist(DEEP_MUSCLES, 'Geçerli bir derin kas seç.')), v.maxLength(DEEP_MUSCLE_MAX, `En fazla ${DEEP_MUSCLE_MAX} aktivasyon hedefi.`)),
   ),
   /** Tutuş: pronasyon/supinasyon/nötr/karışık ve genişlik (`src/lib/grips.ts`). */
   grip: v.optional(v.picklist(GRIPS, 'Geçerli bir tutuş seç.')),

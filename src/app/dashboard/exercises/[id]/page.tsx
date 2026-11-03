@@ -3,6 +3,7 @@ import { cache } from 'react';
 import { notFound } from 'next/navigation';
 import { MuscleMap } from '@/components/muscle-map/muscle-map';
 import { roleMapProps } from '@/lib/muscle-tiers';
+import { isDeepMuscle } from '@/lib/deep-muscles';
 import { PageHeader } from '@/components/page-header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Item, ItemContent, ItemGroup, ItemMedia, ItemTitle } from '@/components/ui/item';
@@ -158,7 +159,12 @@ export default async function ExerciseDetailPage({ params }: { params: Promise<{
               ) : null}
             </CardHeader>
             <CardContent>
-              <MuscleMap layout="split" bodyClassName="h-72" {...roleMapProps(exercise)} />
+              <MuscleMap
+                layout="split"
+                bodyClassName="h-72"
+                {...roleMapProps(exercise)}
+                deep={{ selected: (exercise.activationTargets ?? []).filter(isDeepMuscle) }}
+              />
             </CardContent>
           </Card>
 

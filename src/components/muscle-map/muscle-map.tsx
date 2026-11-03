@@ -7,6 +7,8 @@ import { MUSCLE_LABELS } from '@/lib/schemas/exercise';
 import type { BodyMuscle } from '@/lib/muscles';
 import { legendText, type MuscleLegendData, type MuscleMark, type MuscleMarks } from '@/lib/muscle-tiers';
 import { cn } from '@/lib/utils';
+import type { DeepMuscle } from '@/lib/deep-muscles';
+import { DeepMuscleSection } from './deep-muscle-section';
 import { MuscleLegend } from './muscle-legend';
 import { DECLINED_STROKE, MusclePatterns, markFill, usePatternId } from './muscle-patterns';
 import { BACK_PATHS, FRONT_PATHS, VIEWBOX, type MusclePath } from './paths';
@@ -69,6 +71,8 @@ type MuscleMapProps = {
   legend?: MuscleLegendData;
   /** Açıklama satırlarını çıkarılabilir çip yapar (egzersiz formu). */
   onRemoveRow?: (key: string) => void;
+  /** Haritanın altındaki "Derin kaslar" bölümü: `onToggle` verilince seçilir (form), verilmezse yalnız seçililer görünür. */
+  deep?: { selected: readonly DeepMuscle[]; onToggle?: (muscle: DeepMuscle) => void };
   /** Seçili kaslar (süzgeç, form, açık grup); ekran okuyucuda basılı. */
   selected?: readonly BodyMuscle[];
   /** Tıklanamayan kaslar; rengi yine `marks`'tan gelir. */
@@ -108,6 +112,7 @@ export function MuscleMap({
   marks,
   legend,
   onRemoveRow,
+  deep,
   selected = [],
   disabled,
   onToggle,
@@ -158,7 +163,7 @@ export function MuscleMap({
     SHAPES[face].groups.some(([muscle]) => selected.includes(muscle));
 
   const figure = (
-    <figure className={cn('flex flex-col items-center gap-3', legend ? 'shrink-0' : className)}>
+    <figure className={cn('flex flex-col items-center gap-3', legend || deep ? 'shrink-0' : className)}>
       {layout === 'flip' ? (
         <div className={cn('relative aspect-[35/93] perspective-distant', bodyClassName)}>
           <motion.div
@@ -216,13 +221,14 @@ export function MuscleMap({
     </figure>
   );
 
-  if (!legend) return figure;
+  if (!legend && !deep) return figure;
   return (
-    <div className={cn('@container w-full', className)}>
+    <div className={cn('@container flex w-full flex-col gap-4', className)}>
       <div className="flex flex-col items-center gap-4 @xl:flex-row @xl:items-start @xl:gap-8">
         {figure}
-        <MuscleLegend data={legend} onRemoveRow={onRemoveRow} />
+        {legend ? <MuscleLegend data={legend} onRemoveRow={onRemoveRow} /> : null}
       </div>
+      {deep ? <DeepMuscleSection selected={deep.selected} onToggle={deep.onToggle} /> : null}
     </div>
   );
 }
