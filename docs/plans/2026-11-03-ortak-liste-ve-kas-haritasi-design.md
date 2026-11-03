@@ -158,12 +158,18 @@ kodu okuyarak verdiğim ayrıntılardır.
 
 **Tek açıklama düzeni**
 
-- Her haritanın yanında ya da altında aynı açıklama kutusu durur:
-  - O kullanımdaki üç kademenin desen örnekleri ve anlamları. Örneğin "Hedef / Yardımcı / Dengeleyici" ya da
-    "10+ set / 5–9 set / 1–4 set".
-  - Altında kas adı ve değer listesi, tek biçimde. "+n kas daha" bugünkü gibi kalır.
-- Kas adları hiçbir genişlikte tek harfe kesilmez. Bugünkü sebep, dar kartta `lg:grid-cols-3`; ad gerekirse alt satıra
-  kayar.
+- Her haritanın yanında ya da altında aynı açıklama kutusu durur. Kutu, haritadaki üç kademeye bölünmüş tek bir listedir;
+  okuyan haritadaki deseni görür, listede aynı desenin başlığını bulur:
+  - Her kademe bir başlıkla açılır: desen örneği ve anlamı. Örneğin "Hedef / Yardımcı / Dengeleyici",
+    "3 set ve üstü / 1,5–2,75 set / 1,5 setten az" ya da "10 set ve üstü / 5–9,75 set / 5 setten az".
+  - Başlığın altında o kademedeki kaslar, adı ve değeriyle: "Ön bacak 6 set". Her değer birimini taşır, çıplak sayı
+    yazılmaz. Hareket haritasında değer yoktur, yalnız kas adları yazılır.
+- Bütün kaslar listelenir, "+n kas daha" kalkar (benim kararım). Bugün gizlenen kasların hangileri olduğu hiçbir yerde
+  görünmüyor; kademeye göre gruplu liste zaten kısa kalır.
+- Kas adları hiçbir genişlikte kesilmez. Bugünkü sebep, dar sütundaki `truncate` ve `lg:grid-cols-3`. Liste dar alanda
+  haritanın altına geçer, ad gerekirse alt satıra kayar.
+- Kardiyo kas değildir: kas listesinden çıkar, kademelerin altında ayrı bir satır olur ("Kardiyo · 3 set") (benim
+  kararım).
 - İstisna: Şablonlar listesindeki küçük şablon kartları yalnız haritayı gösterir, açıklama kutusu şablon detayındadır (benim
   kararım).
 
@@ -202,5 +208,6 @@ kodu okuyarak verdiğim ayrıntılardır.
   - Her listede taşıma, kaydırarak silme, görünür "Sil" ve Geri al çalışır.
   - Kas haritaları tabloda yazan kademelerle çizilir.
   - Derin kaslar egzersiz formunda seçilir ve detayda görünür.
-  - Kas adları kesilmez.
+  - Kas adları kesilmez, her değerin birimi yazılır, gizli kas kalmaz; açıklama listesi haritadaki desenle aynı kademelere
+    bölünür.
 - Düzenleyicinin bugünkü testleri (`template-edit`, `drop-target`, `block-editor` ile ilgili olanlar) geçmeye devam eder.
