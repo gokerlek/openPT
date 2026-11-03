@@ -13,10 +13,14 @@ import { putSession } from './session-files-core.ts';
 import { buildWorkoutDay, swapRowFor } from './workout-plan.ts';
 import { feedbackItems } from './program-feedback.ts';
 import { completion } from './session-finish.ts';
-import { withExtraRounds } from './workout-flow.ts';
+import { withDroppedSets, withExtraRounds } from './workout-flow.ts';
 import { mergeAll } from './session-merge.ts';
 import {
   addExtraRound,
+  boxColumn,
+  canDropSet,
+  droppedWith,
+  syncPlannedCount,
   addWaterTap,
   afterLog,
   clockText,
@@ -711,6 +715,49 @@ describe('antrenman belgesi: zorluk ve "Kolaydı"', () => {
   });
 });
 
+describe('antrenman belgesi: yapılmamış seti silme (sola kaydır)', () => {
+  test('yalnız bekleyen planlı set silinir; satırda en az bir set kalır', () => {
+    const day = workoutDay();
+    const doc = logNext(day, start(day), 1);
+    assert.equal(canDropSet(day, doc, 'r_aaaaaa', 0), false, 'yapılmış set');
+    assert.equal(canDropSet(day, doc, 'r_aaaaaa', 1), true);
+    const two = withDroppedSets(day, { r_aaaaaa: [2] });
+    assert.equal(canDropSet(two, doc, 'r_aaaaaa', 1), true);
+    const one = withDroppedSets(day, { r_aaaaaa: [1, 2] });
+    assert.equal(canDropSet(one, start(one), 'r_aaaaaa', 0), false, 'son set');
+  });
+
+  test('silinen set günden düşer: satırlar yeniden sayılır, sıradaki set atlar, "Önceki" yerini korur', () => {
+    const day = withDroppedSets(workoutDay(), { r_aaaaaa: [1] });
+    let doc = start(day);
+    assert.deepEqual(setViews(day, doc, 'r_aaaaaa').map((view) => [view.position, view.setIndex]), [[0, 0], [1, 2]]);
+    doc = logNext(day, doc, 1);
+    assert.equal(nextSet(day, doc)?.setIndex, 2);
+    assert.equal(nextSet(day, doc)?.total, 2);
+  });
+
+  test('silmede ve geri almada kayıt bugünkü planın sayısıyla: yapılmış setler ve durum (sunucu ve geçmiş setlerden okur)', () => {
+    const full = workoutDay();
+    let doc = logNext(full, start(full), 1);
+    doc = logNext(full, doc, 2);
+    assert.equal(doc.entries[0]?.status, 'partial');
+    const dropped = droppedWith({}, 'r_aaaaaa', 2, true);
+    assert.deepEqual(dropped, { r_aaaaaa: [2] });
+    const day = withDroppedSets(full, dropped);
+    doc = syncPlannedCount(day, doc, 'r_aaaaaa', stamp(3));
+    assert.deepEqual(doc.entries[0]?.sets.map((set) => set.plannedSetCount), [2, 2]);
+    assert.equal(doc.entries[0]?.status, 'done');
+    assert.equal(nextSet(day, doc)?.rowId, 'r_bbbbbb');
+    assert.equal(v.safeParse(sessionDocSchema, doc).success, true);
+    // "Geri al": set geri gelir, hareket yine yarım.
+    const back = droppedWith(dropped, 'r_aaaaaa', 2, false);
+    assert.deepEqual(back, {});
+    doc = syncPlannedCount(withDroppedSets(full, back), doc, 'r_aaaaaa', stamp(4));
+    assert.deepEqual(doc.entries[0]?.sets.map((set) => set.plannedSetCount), [3, 3]);
+    assert.equal(doc.entries[0]?.status, 'partial');
+  });
+});
+
 describe('antrenman belgesi: "+ Set ekle"', () => {
   /** Sıradaki seti (fazladansa işaretiyle) kaydeder. */
   function logAny(day: ReturnType<typeof workoutDay>, doc: SessionDoc, minute: number, values: { kg?: number; value?: number } = {}) {
@@ -996,6 +1043,15 @@ describe('ekran metinleri', () => {
     assert.equal(clockText(5.9), '0:05');
     assert.equal(elapsedText(24 * 60 + 18), '24:18');
     assert.equal(elapsedText(3600 + 4 * 60 + 18), '1:04:18');
+  });
+});
+
+describe('set tablosu: kutulu sütunun genişliği', () => {
+  test('en uzun değer sığar (rakam başına 0,6rem + kutu boşluğu); başlık için alt sınır', () => {
+    assert.equal(boxColumn(['60', '102,5'], 3), '4.4rem');
+    assert.equal(boxColumn(['10000'], 3.5), '4.4rem');
+    assert.equal(boxColumn(['8', '12'], 3.5), '3.5rem');
+    assert.equal(boxColumn([], 3), '3rem');
   });
 });
 

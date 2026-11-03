@@ -54,9 +54,11 @@ import {
   addExtraRound,
   addWaterTap,
   afterLog,
+  canDropSet,
   cursorOf,
   deleteSet,
   dropExtraRound,
+  droppedWith,
   easyShortcut,
   editSet,
   effortQuestions,
@@ -74,6 +76,7 @@ import {
   setEntryEffort,
   setSetEffort,
   setSetupNote,
+  syncPlannedCount,
   setupNoteOf,
   setValueText,
   setViews,
@@ -2242,6 +2245,57 @@ export function WorkoutScreen({
     [saving, commit, guard, announce, later],
   );
 
+  /**
+   * Bekleyen planlı seti bugünden siler (sola kaydırıp "Sil", 8 sn "Geri al"): set günün planından düşer (`withDroppedSets`),
+   * yapılmış setlerin planlanan sayısı ve hareketin durumu belgede güncellenir (`syncPlannedCount`). Geriye bir şey
+   * kalmadıysa bitirme sorusu (fazladan setteki gibi).
+   */
+  const onDropSet = useCallback(
+    (rowId: string, setIndex: number) => {
+      const current = localRef.current;
+      if (!current || saving || performance.now() < guardUntil.current) return;
+      const plan = planOf(current);
+      if (!canDropSet(plan, current.doc, rowId, setIndex)) return;
+      const label = `Set ${(setViews(plan, current.doc, rowId).find((view) => view.setIndex === setIndex)?.position ?? 0) + 1}`;
+      const before = nextSet(plan, current.doc, current.draft, focusRef.current);
+      // Silinen ya da geri gelen setle günün planı ve kaydın planlanan sayısı birlikte yazılır.
+      const apply = (local: LocalWorkout, on: boolean): LocalWorkout => {
+        const next = { ...local, droppedSets: droppedWith(local.droppedSets ?? {}, rowId, setIndex, on) };
+        const doc = syncPlannedCount(planOf(next), local.doc, rowId, stampOf(local));
+        return doc === local.doc ? next : withChange(next, doc, { send: true });
+      };
+      const applied = apply(current, true);
+      // Silinen setin yazılanı düşer (geri gelince boş, önceden dolu değerle gelsin).
+      const drafts = applied.drafts && pendingTyped(planOf(applied), applied.doc, applied.drafts);
+      const next = drafts ? { ...applied, drafts } : applied;
+      const after = nextSet(planOf(next), next.doc, current.draft, focusRef.current);
+      const moved = before?.rowId !== after?.rowId || before?.setIndex !== after?.setIndex;
+      commit(moved ? { ...next, draft: null, timer: null } : next);
+      guard();
+      announce(`${label} silindi`);
+      const sessionId = current.doc.id;
+      showGuardedUndo(
+        `${label} silindi`,
+        {
+          locate: () => {
+            const latest = localRef.current;
+            return latest && mountedRef.current && !pausingRef.current && !finishingRef.current && latest.doc.id === sessionId ? latest : null;
+          },
+          read: (local) => (local.droppedSets?.[rowId] ?? []).includes(setIndex),
+          write: (latest, on) => commit(apply(latest, on)),
+          before: false,
+        },
+        { onUndone: () => announce(`${label} geri geldi`) },
+      );
+      if (before && !after && !nextSet(planOf(next), next.doc)) {
+        later(DURATION.slow + 50, () => {
+          if (!pausingRef.current) setFinishOpen(true);
+        });
+      }
+    },
+    [saving, commit, guard, announce, later],
+  );
+
   /** Bitişte "Geçileni yap": ilk geçilen hareket şimdi. */
   const onDoSkipped = useCallback(() => {
     const current = localRef.current;
@@ -2649,6 +2703,9 @@ export function WorkoutScreen({
                     // Biten harekette "Set ekle" giriş panelinde (ikincil düğme); kartta ikinci kez yok.
                     onAddSet={!saving && next && addable(unitKey) ? () => onAddSet(unitKey) : null}
                     onDropExtra={() => onDropExtra(unitKey)}
+                    dropOf={(set) =>
+                      !saving && !timerRunning && !set.extra && canDropSet(plan, doc, row.rowId, set.setIndex) ? () => onDropSet(row.rowId, set.setIndex) : null
+                    }
                     ownProgram={local.plan.source === 'own'}
                   />
                 </motion.div>

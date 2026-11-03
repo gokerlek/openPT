@@ -91,12 +91,30 @@ export function withExtraRounds(day: WorkoutDay, rounds: Readonly<Record<string,
 }
 
 /**
- * Telefondaki antrenmanın günün etkin hâli verilen belgeyle: başlangıçtaki gün + muadiller + eklenen hareketler
- * (`effectiveDay`) + "+ Set ekle"nin istenen turları (`withExtraRounds`). Antrenman ekranı ve Bugün'ün "Devam et"
- * kartı aynı planla çalışır.
+ * Günün etkin hâlinden bugün silinen (yapılmamış) planlı setler (sola kaydırıp "Sil", `LocalWorkout.droppedSets`):
+ * satırın planından düşer; satırlar, set sayısı, imleç ve kaydın durumu bu planla. Günde olmayan satırın ya da satırı
+ * boşaltacak kaydın etkisi yok; bir şey yoksa aynı gün.
  */
-export function localWorkoutDay(local: Pick<LocalWorkout, 'plan' | 'extras' | 'extraRounds'>, doc: Pick<SessionDoc, 'entries'>): WorkoutDay {
-  return withExtraRounds(effectiveDay(local.plan, doc, local.extras), local.extraRounds);
+export function withDroppedSets(day: WorkoutDay, dropped: Readonly<Record<string, readonly number[]>> | undefined): WorkoutDay {
+  let rows: WorkoutDay['rows'] | null = null;
+  for (const [rowId, indexes] of Object.entries(dropped ?? {})) {
+    const row = day.rows[rowId];
+    if (!row || indexes.length === 0) continue;
+    const gone = new Set(indexes);
+    const sets = row.plan.sets.filter((set) => !gone.has(set.setIndex));
+    if (sets.length === 0 || sets.length === row.plan.sets.length) continue;
+    rows = { ...(rows ?? day.rows), [rowId]: { ...row, plan: { ...row.plan, sets } } };
+  }
+  return rows ? { ...day, rows } : day;
+}
+
+/**
+ * Telefondaki antrenmanın günün etkin hâli verilen belgeyle: başlangıçtaki gün + muadiller + eklenen hareketler
+ * (`effectiveDay`) + "+ Set ekle"nin istenen turları (`withExtraRounds`) − bugün silinen setler (`withDroppedSets`).
+ * Antrenman ekranı ve Bugün'ün "Devam et" kartı aynı planla çalışır.
+ */
+export function localWorkoutDay(local: Pick<LocalWorkout, 'plan' | 'extras' | 'extraRounds' | 'droppedSets'>, doc: Pick<SessionDoc, 'entries'>): WorkoutDay {
+  return withDroppedSets(withExtraRounds(effectiveDay(local.plan, doc, local.extras), local.extraRounds), local.droppedSets);
 }
 
 /* --- liste (Faz 2: liste + odak) --- */

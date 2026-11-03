@@ -75,6 +75,11 @@ export type LocalWorkout = {
    * başına gönderilmez: yapılan fazladan set belgeye `extra` işaretiyle yazılır.
    */
   extraRounds: Record<string, number>;
+  /**
+   * Sola kaydırıp silinen (yapılmamış) planlı setler: satır başına `setIndex`ler (`workout-flow.ts` → `withDroppedSets`).
+   * Kendi başına gönderilmez: yapılmış setlerin planlanan sayısı belgede güncellenir (`syncPlannedCount`).
+   */
+  droppedSets?: Record<string, number[]>;
 };
 
 export function createLocalWorkout(
@@ -232,6 +237,16 @@ function roundsOf(value: unknown): Record<string, number> {
   return Object.fromEntries(Object.entries(value).filter((entry): entry is [string, number] => typeof entry[1] === 'number' && Number.isInteger(entry[1]) && entry[1] > 0));
 }
 
+/** Silinen setler: satır başına geçerli `setIndex`ler; hiçbiri yoksa (önceki sürümün kaydı) yok. */
+function droppedOf(value: unknown): Record<string, number[]> | undefined {
+  if (!isRecord(value)) return undefined;
+  const rows = Object.entries(value).flatMap(([rowId, indexes]) => {
+    const kept = Array.isArray(indexes) ? indexes.filter((index): index is number => Number.isInteger(index) && index >= 0).slice(0, 50) : [];
+    return kept.length > 0 ? [[rowId, kept] as const] : [];
+  });
+  return rows.length > 0 ? Object.fromEntries(rows) : undefined;
+}
+
 /**
  * Yerel kaydın antrenman kimliği, şemaya bakmadan (karşılaştırıp silmek için, `clearLocalWorkout`); kayıt yoksa ya da
  * okunamıyorsa null.
@@ -283,5 +298,6 @@ export function parseLocalWorkout(text: string | null): LocalWorkout | null {
     ...(Array.isArray(raw.drafts) ? { drafts: raw.drafts.filter(isDraft).slice(0, 100) } : {}),
     timer: parseSetTimer(raw.timer),
     extraRounds: roundsOf(raw.extraRounds),
+    ...(droppedOf(raw.droppedSets) ? { droppedSets: droppedOf(raw.droppedSets) } : {}),
   };
 }

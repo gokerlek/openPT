@@ -10,6 +10,7 @@ import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { SwipeGroup } from '@/components/swipe/swipe-row';
 import { rowCareText } from '@/lib/constraint-filter';
+import { minutesOf } from '@/lib/cardio';
 import { formatNumber } from '@/lib/format';
 import { DURATION, EASE, tween, WORKOUT } from '@/lib/motion';
 import { REASON_LABELS, type SuggestionReason } from '@/lib/progression';
@@ -19,7 +20,7 @@ import { isStraight } from '@/lib/set-plan';
 import { cn } from '@/lib/utils';
 import type { GroupMemberStatus, GroupView } from '@/lib/workout-groups';
 import type { WorkoutRow } from '@/lib/workout-plan';
-import { carriesLastTime, type SetView, type WarmupView } from '@/lib/workout-session';
+import { boxColumn, carriesLastTime, lastSetOf, type SetView, type WarmupView } from '@/lib/workout-session';
 import { WorkoutSetRow, type FixSet, type RowEntry } from './set-row';
 
 const UP = new Set<string>(['increase', 'range_increase']);
@@ -218,6 +219,7 @@ export function WorkoutExerciseCard({
   onSwap,
   onAddSet,
   onDropExtra,
+  dropOf,
   ownProgram = false,
   bodyMassKg,
 }: {
@@ -254,6 +256,8 @@ export function WorkoutExerciseCard({
   onAddSet: (() => void) | null;
   /** Bekleyen fazladan seti bırakır. */
   onDropExtra: () => void;
+  /** Bekleyen planlı setin sola kaydırıp silinmesi (`canDropSet`); silinemiyorsa null. */
+  dropOf: (set: SetView) => (() => void) | null;
   /** Kendi programda satır notu danışanın kendi notudur: etiket "Not:" (`docs/design/kendi-program.md` §2.9). */
   ownProgram?: boolean;
   /** Danışanın kilosu (ölçüm onayıyla): yürüyüş/koşu setinin kalorisi; yoksa kalori yok, kartta not. */
@@ -276,18 +280,34 @@ export function WorkoutExerciseCard({
   const weighted = row.trackingType === 'weight_reps';
   const showTarget = !isStraight(sets.map((set) => set.target));
   const cardio = row.cardio ?? null;
+  const walk = cardio === 'walk';
+  // Bekleyen satırların girişi (kutulardaki değerler) bir kez; girişsiz bekleyen satır geçen seferkini (yoksa planı) gösterir.
+  const entries = sets.map((set) => (set.logged ? null : entryOf(set)));
+  const waitingKg = (set: SetView) => lastSetOf(row, set.setIndex)?.kg ?? set.plannedKg;
+  const shown = sets.map((set, index) => {
+    const entry = entries[index];
+    const logged = set.logged;
+    const text = (value: number | undefined) => (value !== undefined ? formatNumber(value) : '');
+    const value = logged ? (logged.reps ?? logged.seconds) : entry?.value;
+    return {
+      kg: text(logged ? logged.kg : (entry?.kg ?? waitingKg(set))),
+      value: text(walk && value !== undefined ? minutesOf(value) : value),
+      distance: text(logged ? logged.distanceM : entry?.distanceM),
+      incline: text(logged ? logged.inclinePct : entry?.inclinePct),
+    };
+  });
   // Set tablosunun sütunları (başlık ve satırlar ortak): Set · Önceki · (Hedef) · (kg) · tekrar/süre · (metre) · (eğim) · durum.
+  // Kutulu sütunlar içlerindeki en uzun değere göre genişler (`boxColumn`); "Önceki" kalanı alır.
   const columns = [
     '2.5rem',
     'minmax(0,1fr)',
     ...(showTarget ? ['3rem'] : []),
-    ...(weighted ? ['4rem'] : []),
-    '3.5rem',
-    ...(cardio ? ['4rem'] : []),
-    ...(cardio === 'walk' ? ['3rem'] : []),
+    ...(weighted ? [boxColumn(shown.map((item) => item.kg), 3)] : []),
+    boxColumn(shown.map((item) => item.value), 3.5),
+    ...(cardio ? [boxColumn(shown.map((item) => item.distance), 3.5)] : []),
+    ...(walk ? [boxColumn(shown.map((item) => item.incline), 3)] : []),
     '2.75rem',
   ].join(' ');
-  const walk = cardio === 'walk';
   const valueHead = walk ? 'Dk' : row.trackingType === 'duration' ? 'Süre' : 'Tekrar';
   const reason = row.plan.reason as SuggestionReason;
   // Öneri katmanının gerekçesi (§5.7): kısa çip ve tamamı; eski anlık görüntüde gerekçenin genel metni.
@@ -386,8 +406,9 @@ export function WorkoutExerciseCard({
             {warmups.length > 0 && (!warmDone || warmOpen) ? <WarmupRow warmups={warmups} onToggle={onToggleWarmup} /> : null}
 
             {/* ARIA tablosu: satırlar `SwipeRow` içinde kayabilsin diye `<table>` değil (`WorkoutSetRow`). 375 px'te: 40 + Önceki +
-                (48) + 64 + 56 + 44; "Önceki" en az ~90 px kalır. kg kutusu "102,5"i sığdırır. Kardiyoda kg yerine süreden sonra
-                mesafe (64) ve yürüyüş/koşuda eğim (48); "Önceki" iki satıra sarar. Başlık ve satırlar aynı şablonu paylaşır. */}
+                (48) + kg (en az 48) + tekrar (en az 56) + 44; kutulu sütunlar içlerindeki en uzun değer kadar genişler ("102,5" 70 px).
+                Kardiyoda kg yerine süreden sonra mesafe ve yürüyüş/koşuda eğim; "Önceki" iki satıra sarar. Başlık ve satırlar aynı
+                şablonu paylaşır. */}
             <div role="table" aria-label={`${row.title} setleri`} className="text-sm tabular-nums">
               <div role="rowgroup">
                 <div role="row" style={{ gridTemplateColumns: columns }} className="grid h-6 items-center border-t">
@@ -427,7 +448,7 @@ export function WorkoutExerciseCard({
               </div>
               <SwipeGroup>
                 <div role="rowgroup">
-                  {sets.map((set) => {
+                  {sets.map((set, index) => {
                     const logged = set.logged;
                     const highlight = editingSetId !== null ? (logged?.id === editingSetId ? 'editing' : null) : set.setIndex === currentSetIndex ? 'current' : null;
                     return (
@@ -441,7 +462,8 @@ export function WorkoutExerciseCard({
                         group={group !== null}
                         highlight={highlight}
                         currentKg={currentKg}
-                        entry={logged ? null : entryOf(set)}
+                        waitingKg={waitingKg(set)}
+                        entry={entries[index] ?? null}
                         fresh={logged !== undefined && logged.id === freshSetId}
                         rowRef={highlight ? currentRef : undefined}
                         columns={columns}
@@ -451,6 +473,7 @@ export function WorkoutExerciseCard({
                         onUntick={onUntickSet}
                         onDelete={onDeleteSet}
                         onDropExtra={onDropExtra}
+                        onDrop={logged ? null : dropOf(set)}
                       />
                     );
                   })}

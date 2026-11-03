@@ -133,9 +133,10 @@ function CellNumber({
  * - Yapılan sete dokunmak onu alttaki panelde düzenlemeye açar (`onEdit`); klavyede set numarası düğmedir ("Set 2, 40 kg ×
  *   6. Düzenle"). ✓ bir anahtardır: dokunmak işareti kaldırır (set silinir, 8 sn "Geri al"; `onUntick`).
  * - Sola kaydırmak her listedeki gibi kırmızı **Sil**'i açar (`SwipeRow`, `deleteAction`); sonuna kadar kaydırmak siler,
- *   onay yok, 8 sn "Geri al". Klavye ve ekran okuyucu için karşılığı panelin "Seti sil"i. Kartta aynı anda tek satır açık
- *   (`SwipeGroup`); dışarı dokunmak ve Esc kapatır, açık satıra dokunmak yalnız kapatır.
- * - `locked` (set kaydedilirken, süreli set sayarken, düzenlenen satırda) ya da bekleyen set: kaydırma yok.
+ *   onay yok, 8 sn "Geri al". Yapılmış sette kayıt silinir (satır bekleyene döner; klavyede panelin "Seti sil"i); bekleyen
+ *   planlı set bugünden düşer (`onDrop`, satırda başka set kalıyorsa), bekleyen fazladan set bırakılır (✕ ile aynı). Kartta
+ *   aynı anda tek satır açık (`SwipeGroup`); dışarı dokunmak ve Esc kapatır, açık satıra dokunmak yalnız kapatır.
+ * - `locked` (set kaydedilirken, süreli set sayarken, düzenlenen satırda): kaydırma yok.
  * - Her bekleyen set `entry` alır: kg ve tekrar/süre hücreleri yazılabilir kutu, son hücrede boş ✓ ("yapıldı" işaretle;
  *   "Set bitti" ile aynı). Setler istenen sırayla yapılır: kutuya ya da satıra dokunmak seti seçer. Bekleyen fazladan setin
  *   ✕'u (sil) o zaman "Önceki" hücresinde ("fazladan ✕").
@@ -150,6 +151,7 @@ export function WorkoutSetRow({
   group,
   highlight,
   currentKg,
+  waitingKg,
   entry,
   fresh,
   rowRef,
@@ -160,6 +162,7 @@ export function WorkoutSetRow({
   onUntick,
   onDelete,
   onDropExtra,
+  onDrop,
 }: {
   set: SetView;
   trackingType: TrackingType;
@@ -174,6 +177,8 @@ export function WorkoutSetRow({
   highlight: 'current' | 'editing' | null;
   /** Şu anki setin önceden dolu (ya da değiştirilmiş) ağırlığı. */
   currentKg: number | undefined;
+  /** Girişsiz bekleyen satırın ağırlığı: geçen seferki aynı set, yoksa plan (`lastSetOf`). */
+  waitingKg: number;
   /** Bekleyen setin satırdan girişi; yapılmış satırda ve düzenleme açıkken null. */
   entry: RowEntry | null;
   /** Az önce kaydedildi: ✓ belirerek gelir. */
@@ -188,11 +193,15 @@ export function WorkoutSetRow({
   onUntick: (setId: string) => void;
   onDelete: (setId: string) => void;
   onDropExtra: () => void;
+  /** Bekleyen planlı seti bugünden siler (sola kaydırıp "Sil"); silinemiyorsa (yapılmış, son set) null. */
+  onDrop: (() => void) | null;
 }) {
   const logged = set.logged;
-  const swipeable = Boolean(logged) && !locked;
+  // Sola kaydırıp "Sil": yapılmış set (kayıt silinir, satır bekleyene döner), bekleyen planlı ya da fazladan set (satır kapanır).
+  const drop = logged ? null : set.extra && entry && !entry.disabled ? onDropExtra : onDrop;
+  const swipeable = (Boolean(logged) || drop !== null) && !locked;
   const weighted = trackingType === 'weight_reps';
-  const kg = logged ? logged.kg : highlight === 'current' ? currentKg : set.plannedKg;
+  const kg = logged ? logged.kg : highlight === 'current' ? currentKg : waitingKg;
   const value = logged ? (logged.reps ?? logged.seconds) : undefined;
   const label = `Set ${set.position + 1}`;
   const amrap = Boolean(set.target.amrap);
@@ -232,7 +241,7 @@ export function WorkoutSetRow({
   return (
     <SwipeRow
       id={logged?.id ?? `set-${set.setIndex}${set.extra ? '-extra' : ''}`}
-      end={logged ? [deleteAction(() => onDelete(logged.id), { removes: false })] : []}
+      end={logged ? [deleteAction(() => onDelete(logged.id), { removes: false })] : drop ? [deleteAction(drop)] : []}
       disabled={!swipeable}>
       <div
         ref={rowRef}

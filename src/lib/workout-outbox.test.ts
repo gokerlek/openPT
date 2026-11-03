@@ -143,6 +143,15 @@ describe('kuyruk: telefondaki kayıt', () => {
     assert.deepEqual(parseLocalWorkout(JSON.stringify(old))?.extraRounds, {});
   });
 
+  test('sola kaydırıp silinen setler korunur; bozuk sıra atlanır, eski kayıtta yok', () => {
+    const local = { ...createLocalWorkout(docWith([]), workoutDay()), droppedSets: { r_aaaaaa: [2] } };
+    assert.deepEqual(parseLocalWorkout(JSON.stringify(local))?.droppedSets, { r_aaaaaa: [2] });
+    const broken = parseLocalWorkout(JSON.stringify({ ...local, droppedSets: { r_aaaaaa: [1, -1, 1.5, 'x'], r_bbbbbb: 'x', r_cccccc: [] } }));
+    assert.deepEqual(broken?.droppedSets, { r_aaaaaa: [1] });
+    const { droppedSets: _dropped, ...old } = local;
+    assert.equal(parseLocalWorkout(JSON.stringify(old))?.droppedSets, undefined);
+  });
+
   test('kaydın kimliği şemasız okunur (karşılaştırıp silmek için); yoksa ya da bozuksa null', () => {
     const local = createLocalWorkout(docWith([]), workoutDay());
     assert.equal(localWorkoutId(JSON.stringify(local)), local.doc.id);

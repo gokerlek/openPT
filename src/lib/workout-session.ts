@@ -946,6 +946,42 @@ export function dropExtraRound(day: Pick<WorkoutDay, 'extraRounds'>, unitKey: st
   return current > 1 ? { ...rest, [unitKey]: current - 1 } : rest;
 }
 
+/**
+ * Bekleyen planlı set sola kaydırılıp bugünden silinebilir mi: yapılmadı, fazladan değil ve satırda başka set kalıyor
+ * (hareketi bırakmak "Atla"nın işi). Silinen setler telefonda durur (`LocalWorkout.droppedSets`, `withDroppedSets`).
+ */
+export function canDropSet(day: WorkoutDay, doc: Pick<SessionDoc, 'entries'>, rowId: string, setIndex: number): boolean {
+  const view = setViews(day, doc, rowId).find((item) => item.setIndex === setIndex && !item.extra);
+  return view !== undefined && !view.logged && (day.rows[rowId]?.plan.sets.length ?? 0) > 1;
+}
+
+/** Bugün silinen planlı setler: satırın listesine ekler (`on`) ya da "Geri al"da çıkarır; boş kalan satır düşer. */
+export function droppedWith(dropped: Readonly<Record<string, readonly number[]>>, rowId: string, setIndex: number, on: boolean): Record<string, number[]> {
+  const rest = (dropped[rowId] ?? []).filter((index) => index !== setIndex);
+  const indexes = on ? [...rest, setIndex].sort((a, b) => a - b) : rest;
+  const { [rowId]: _old, ...others } = dropped;
+  return { ...Object.fromEntries(Object.entries(others).map(([key, value]) => [key, [...value]])), ...(indexes.length > 0 ? { [rowId]: indexes } : {}) };
+}
+
+/**
+ * Satırın kaydı bugünkü planın set sayısıyla (set silindi ya da geri geldi): yapılmış setlerin `plannedSetCount`'u ve
+ * kaydın durumu. Sunucu, geçmiş ve motor planlanan sayıyı setlerden okur; eski sayı kalsa hareket "yarım" görünürdü.
+ */
+export function syncPlannedCount(day: WorkoutDay, doc: SessionDoc, rowId: string, stamp: Stamp): SessionDoc {
+  const row = day.rows[rowId];
+  const entry = entryForRow(doc.entries, rowId);
+  if (!row || !entry) return doc;
+  const count = row.plan.sets.length;
+  const stale = (set: SessionSet) => set.type === 'working' && !set.extra && set.plannedSetCount !== count;
+  if (!entry.sets.some(stale)) {
+    const updated = withStatus(entry, count, stamp);
+    return updated === entry ? doc : normalizeSession({ ...doc, entries: doc.entries.map((item) => (item === entry ? updated : item)) });
+  }
+  const sets = entry.sets.map((set) => (stale(set) ? { ...set, plannedSetCount: count, editedAt: stamp.at, by: stamp.by } : set));
+  const updated = withStatus({ ...entry, sets, updatedAt: stamp.at, by: stamp.by }, count, stamp);
+  return normalizeSession({ ...doc, entries: doc.entries.map((item) => (item === entry ? updated : item)) });
+}
+
 /** Birimin bekleyen fazladan seti var mı (panelin "Kaldır"ı, tablodaki bekleyen satır). */
 export function pendingExtra(day: WorkoutDay, doc: Pick<SessionDoc, 'entries' | 'order'>, unitKey: string): boolean {
   const unit = cursorOf(day, doc).units.find((item) => item.key === unitKey);
@@ -964,6 +1000,15 @@ function range(target: Pick<SetTarget, 'min' | 'max'>): string {
 /** Yürüyüş/koşuda hedef dakikayla anlatılır. */
 function timed(target: SetTarget, cardio: CardioKind | null): SetTarget {
   return cardio === 'walk' ? { ...target, min: minutesOf(target.min), max: minutesOf(target.max) } : target;
+}
+
+/**
+ * Set tablosunda kutulu sütunun genişliği: sütundaki en uzun değer sığar (dokunmatikteki 16 px rakam ~0,6rem; hücre ve
+ * kutu boşluğu, çerçeve 1,4rem), başlık için en az `min` rem. Başlık ve satırlar aynı şablonu paylaştığı için hizalı kalır.
+ */
+export function boxColumn(texts: readonly string[], min: number): string {
+  const chars = Math.max(0, ...texts.map((text) => text.length));
+  return `${Math.max(min, Math.round((chars * 0.6 + 1.4) * 100) / 100)}rem`;
 }
 
 /** Tablodaki "Hedef" sütunu: "12", "10–12", AMRAP'ta "8+", süreli harekette "30 sn", yürüyüş/koşuda "30 dk". */
