@@ -1,8 +1,8 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { emptySessionIndex, type SessionDoc } from './schemas/session.ts';
+import { emptySessionIndex, type SessionDoc, type SessionIndexRow } from './schemas/session.ts';
 import { indexRowOf, upsertIndexRow } from './session-index.ts';
-import { deleteCopy, deletePatch, firstHistoryRows, historyList, sessionDetail, DELETE_BODY, DELETE_DETAIL, type HistoryMonth } from './session-history.ts';
+import { deleteCopy, deletePatch, firstHistoryRows, historyList, lastWorkout, sessionDetail, DELETE_BODY, DELETE_DETAIL, type HistoryMonth } from './session-history.ts';
 import { OWN_DAY_A, OWN_DAY_B, OWN_ID } from './testing/own-fixtures.ts';
 import { at, DAY_A, DAY_B, sessionDoc, sessionEntry, workingSet } from './testing/session-fixtures.ts';
 
@@ -43,8 +43,9 @@ describe('geçmiş listesi', () => {
     assert.deepEqual(list.months[0]?.rows[0], {
       id: 's_bbbbbbbb',
       dayOfMonth: '28',
+      month: 'Eyl',
       weekday: 'Pzt',
-      title: 'Gün B · 52 dk',
+      title: 'Gün B · 11 dk',
       meta: '1 set · 625 kg',
       otherDay: true,
       unfinished: true,
@@ -53,8 +54,42 @@ describe('geçmiş listesi', () => {
   });
 
   test('son 30 günün özeti; eski antrenman girmez', () => {
-    assert.equal(historyList(index, new Date(at(4100)), TZ).recent, 'Son 30 gün · 2 antrenman · 1 sa 44 dk · 2 rekor');
+    assert.equal(historyList(index, new Date(at(4100)), TZ).recent, 'Son 30 gün · 2 antrenman · 1 sa 3 dk · 2 rekor');
     assert.equal(historyList(emptySessionIndex(), new Date(at(0)), TZ).recent, null);
+  });
+
+  test('eski kayıtta şişmiş yarım süre gösterilmez ve özete girmez', () => {
+    const stale = { ...indexRowOf(second, '1'.repeat(40)), durationMin: 672 };
+    const staleIndex = upsertIndexRow(upsertIndexRow(emptySessionIndex(), indexRowOf(first, '0'.repeat(40))), stale);
+    const list = historyList(staleIndex, new Date(at(4100)), TZ);
+    assert.equal(list.months[0]?.rows[0]?.title, 'Gün B');
+    assert.match(list.recent ?? '', /^Son 30 gün · 2 antrenman · 52 dk/);
+  });
+
+  test('sınır yalnız yarım antrenmanda: bitmişin uzun süresi görünür; yarımda 180 dk görünür, 181 görünmez', () => {
+    const listOf = (row: SessionIndexRow) => historyList(upsertIndexRow(emptySessionIndex(), row), new Date(at(4100)), TZ);
+    const long = listOf({ ...indexRowOf(first, '0'.repeat(40)), durationMin: 200 });
+    assert.equal(long.months[0]?.rows[0]?.title, 'Gün A · 3 sa 20 dk');
+    assert.match(long.recent ?? '', /^Son 30 gün · 1 antrenman · 3 sa 20 dk/);
+    assert.equal(listOf({ ...indexRowOf(second, '1'.repeat(40)), durationMin: 180 }).months[0]?.rows[0]?.title, 'Gün B · 3 sa');
+    assert.equal(listOf({ ...indexRowOf(second, '1'.repeat(40)), durationMin: 181 }).months[0]?.rows[0]?.title, 'Gün B');
+  });
+
+  test('son antrenman: bitmişlerin en yenisi, yarım dahil; kayıt yoksa yok', () => {
+    assert.equal(lastWorkout(index)?.id, 's_bbbbbbbb');
+    assert.equal(lastWorkout(index, OWN_ID), null);
+    assert.equal(lastWorkout(emptySessionIndex()), null);
+    assert.equal(lastWorkout(null), null);
+  });
+
+  test('son antrenman program başına: kendi programdaki daha yeni antrenman PT programınınkini değiştirmez', () => {
+    const own = finished('s_eeeeeeee', 3500, {
+      date: '2026-09-28',
+      program: { revision: 1, dayId: OWN_DAY_A, dayName: 'Gün A', programId: OWN_ID, programName: 'Evde' },
+    });
+    const withOwn = upsertIndexRow(index, indexRowOf(own, '4'.repeat(40)));
+    assert.equal(lastWorkout(withOwn)?.id, 's_bbbbbbbb');
+    assert.equal(lastWorkout(withOwn, OWN_ID)?.id, 's_eeeeeeee');
   });
 });
 
@@ -63,7 +98,7 @@ describe('"Daha fazla göster"', () => {
     const month = (key: string, ids: string[]): HistoryMonth => ({
       key,
       label: key,
-      rows: ids.map((id) => ({ id, dayOfMonth: '1', weekday: 'Pzt', title: 'Gün A', meta: '', otherDay: false, unfinished: false, prs: 0 })),
+      rows: ids.map((id) => ({ id, dayOfMonth: '1', month: 'Eyl', weekday: 'Pzt', title: 'Gün A', meta: '', otherDay: false, unfinished: false, prs: 0 })),
     });
     const months = [month('2026-09', ['a', 'b']), month('2026-08', ['c', 'd']), month('2026-07', ['e'])];
     assert.deepEqual(
@@ -118,7 +153,13 @@ describe('antrenmanın detayı', () => {
     assert.equal(detail.subject, 'Gün A · 26 Eylül 2026 · 2 set ve özeti');
   });
 
-  test('kendi programın antrenmanı: başlıkta programın adı; başka gün rozeti yok', () => {
+  test('saatlerce açık kalan yarım antrenmanın saat aralığı son setten 10 dk sonra biter', () => {
+    const open = { ...doc, finishedAt: at(672), notices: [{ kind: 'unfinished' as const, at: at(672), done: 2, planned: 3 }] };
+    // Son set 4. dk + 10 dk (İstanbul, UTC+3): 18:00–05:12 değil.
+    assert.equal(sessionDetail(open, TZ).meta, '18:00–18:14 · 2 set · 1.140 kg');
+  });
+
+  test('kendi programın antrenmanı: başlıkta programın adı; başka program rozeti yok', () => {
     const own = finished('s_bbbbbbbb', 0, { program: { revision: 1, dayId: OWN_DAY_B, dayName: 'Gün B', plannedDayId: OWN_DAY_A, programId: OWN_ID, programName: 'Evde' } });
     const detail = sessionDetail(own, TZ);
     assert.equal(detail.title, 'Evde · Gün B · 26 Eylül 2026');
@@ -145,5 +186,22 @@ describe('antrenmanın detayı', () => {
     const single = sessionDoc({ entries: [sessionEntry('e_aaaaaa', { sets: [workingSet('st_aaaaaaaa', 1)] })] });
     assert.deepEqual(deletePatch(single, { kind: 'set', entryId: 'e_aaaaaa', setId: 'st_aaaaaaaa' }), { deleteEntryIds: ['e_aaaaaa'] });
     assert.deepEqual(deletePatch(doc, { kind: 'entry', entryId: 'e_bbbbbb' }), { deleteEntryIds: ['e_bbbbbb'] });
+  });
+});
+
+describe('kardiyo seti', () => {
+  test('metinde mesafe ve eğim; kilo verilirse kalori', () => {
+    const doc = finished('s_cccccccc', 0, {
+      entries: [
+        sessionEntry('e_aaaaaa', {
+          exerciseId: 'kosu-bandi',
+          title: 'Koşu Bandı',
+          status: 'done',
+          sets: [workingSet('st_aaaaaaaa', 1, { kg: undefined, reps: undefined, seconds: 1800, distanceM: 3000, inclinePct: 5 })],
+        }),
+      ],
+    });
+    assert.equal(sessionDetail(doc, TZ, 75).exercises[0]?.sets[0]?.text, '30:00 · 3 km · %5 · ≈ 253 kcal');
+    assert.equal(sessionDetail(doc, TZ).exercises[0]?.sets[0]?.text, '30:00 · 3 km · %5');
   });
 });

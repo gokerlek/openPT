@@ -1,7 +1,6 @@
 'use client';
 
-import { X } from '@phosphor-icons/react';
-import { Button } from '@/components/ui/button';
+import { RemovableChip } from '@/components/removable-chip';
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   CONDITION_REGIONS,
@@ -17,10 +16,8 @@ import {
 } from '@/lib/conditions';
 
 /**
- * Kısıt seçici: "bu danışanda şu var" deyip listeyi ona göre görmek için.
- *
- * Danışan modülü gelene kadar seçim adres satırında durur (`?limit=…`); danışan
- * kaydı geldiğinde aynı bileşen onun kısıtlarıyla beslenir.
+ * Kısıt seçimi: egzersiz formunda hareketin kısıt etiketleri, egzersiz listesinde "bu danışanda şu var" süzgeci (seçim
+ * adres satırında, `?limit=…`).
  */
 
 const REGION_LABELS: Record<ConditionRegion, string> = {
@@ -125,42 +122,50 @@ export function ConditionSelect({
   );
 }
 
-export function ConstraintPicker({
+/**
+ * Kısıt seçici + seçili kısıt çipleri (egzersiz formunun medikal etiketleri ve egzersiz listesinin kısıt süzgeci ortak):
+ * her seçim bir kısıt ekler (aynısı tekrar eklenmez, en çok `max`), çipin ×'i kaldırır. Değer ham kısıt metnidir
+ * ("knee_pain", "knee_pain:acute"); aynı kimliğin niteliksiz hali her şiddeti kapsar.
+ */
+export function ConditionPicker({
+  id,
   value,
   onChange,
+  placeholder,
+  label,
+  max = 12,
 }: {
-  value: ClientCondition[];
-  onChange: (next: ClientCondition[]) => void;
+  id: string;
+  value: readonly string[];
+  onChange: (next: string[]) => void;
+  placeholder: string;
+  /** Görünür etiketi olmayan seçicinin erişilebilir adı. */
+  label?: string;
+  max?: number;
 }) {
   const add = (raw: string) => {
-    const parsed = parseCondition(raw);
-    if (!parsed || value.length >= 12) return;
-    if (value.some((item) => item.id === parsed.id && item.qualifier === parsed.qualifier)) return;
-    onChange([...value, parsed]);
+    if (!raw || value.includes(raw) || value.length >= max) return;
+    onChange([...value, raw]);
   };
-
   return (
     <div className="flex flex-col gap-3">
       {value.length > 0 ? (
         <div className="flex flex-wrap gap-1.5" aria-label="Seçili kısıtlar">
-          {value.map((condition) => {
-            const key = `${condition.id}:${condition.qualifier ?? ''}`;
+          {value.map((raw) => {
+            const parsed = parseCondition(raw);
+            const name = parsed ? conditionLabel(parsed) : raw;
             return (
-              <Button
-                key={key}
-                variant="secondary"
-                size="xs"
-                aria-label={`${conditionLabel(condition)} kısıtını kaldır`}
-                onClick={() => onChange(value.filter((item) => `${item.id}:${item.qualifier ?? ''}` !== key))}>
-                {conditionLabel(condition)}
-                <X data-icon="inline-end" />
-              </Button>
+              <RemovableChip
+                key={raw}
+                label={name}
+                removeLabel={`${name} kısıtını kaldır`}
+                onRemove={() => onChange(value.filter((item) => item !== raw))}
+              />
             );
           })}
         </div>
       ) : null}
-
-      <ConditionSelect id="constraint" placeholder="Kısıt ekle" label="Kısıt ekle" onSelect={add} />
+      <ConditionSelect id={id} placeholder={placeholder} label={label} onSelect={add} />
     </div>
   );
 }

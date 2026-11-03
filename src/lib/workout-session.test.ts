@@ -5,15 +5,16 @@ import { sessionDocSchema, type SessionDoc } from './schemas/session.ts';
 import { volumeOf, waterOf } from './session-index.ts';
 import { toSetResults } from './session-results.ts';
 import { at, DAY_A, programFile, sessionDoc, sessionEntry, W1, workingSet } from './testing/session-fixtures.ts';
-import { DEVICES, EXERCISES, dayWithBlocks, workoutDay } from './testing/workout-fixtures.ts';
+import { DEVICES, EXERCISES, PLANK, WORKOUT_TODAY, assignedFile, dayWithBlocks, parsedProgram, workoutDay } from './testing/workout-fixtures.ts';
 import { OWN_DAY_B, OWN_ID, ownProgram } from './testing/own-fixtures.ts';
 import { fakeSessionRepo } from './testing/fake-session-repo.ts';
 import { ownProgramPath } from './own-programs.ts';
 import { putSession } from './session-files-core.ts';
-import { buildWorkoutDay } from './workout-plan.ts';
+import { buildWorkoutDay, swapRowFor } from './workout-plan.ts';
 import { feedbackItems } from './program-feedback.ts';
 import { completion } from './session-finish.ts';
 import { withExtraRounds } from './workout-flow.ts';
+import { mergeAll } from './session-merge.ts';
 import {
   addExtraRound,
   addWaterTap,
@@ -29,6 +30,7 @@ import {
   ensureEntries,
   elapsedText,
   findSet,
+  keepTyped,
   logSet,
   logWarmup,
   newEntryId,
@@ -36,7 +38,9 @@ import {
   nextSet,
   nextText,
   overloadState,
+  pendingTyped,
   previousText,
+  restoreSet,
   setEntryEffort,
   setSetEffort,
   setSetupNote,
@@ -47,6 +51,7 @@ import {
   targetText,
   unlogWarmup,
   warmupViews,
+  withoutTyped,
   workoutSummary,
 } from './workout-session.ts';
 
@@ -70,7 +75,7 @@ function logNext(day: ReturnType<typeof workoutDay>, doc: SessionDoc, minute: nu
 }
 
 describe('antrenman belgesi: başlangıç ve sıradaki set', () => {
-  test('yeni belge şemaya uyar; gün ve sıradaki gün programdan', () => {
+  test('yeni belge şemaya uyar; günü ve planlananı programdan', () => {
     const doc = start();
     assert.equal(v.safeParse(sessionDocSchema, doc).success, true);
     assert.match(doc.id, /^s_[a-z0-9]{8}$/);
@@ -115,9 +120,58 @@ describe('antrenman belgesi: başlangıç ve sıradaki set', () => {
     assert.equal(nextSet(day, doc, { rowId: 'r_aaaaaa', setIndex: 1, kg: 25 })?.kg, 20);
   });
 
+  test('odakta taslak seçimdir: tablodan seçilen bekleyen set sıradaki olur, setler istenen sırayla yapılır', () => {
+    const day = workoutDay();
+    let doc = start(day);
+    const chosen = nextSet(day, doc, { rowId: 'r_aaaaaa', setIndex: 2 }, 'b_aaaaaa');
+    assert.deepEqual(
+      chosen && { setIndex: chosen.setIndex, position: chosen.position, kg: chosen.kg, value: chosen.value, rest: chosen.restAfterSeconds, chosen: chosen.chosen },
+      { setIndex: 2, position: 2, kg: 20, value: 8, rest: 90, chosen: true },
+    );
+    assert.equal(nextSet(day, doc, { rowId: 'r_aaaaaa', setIndex: 2, kg: 25 }, 'b_aaaaaa')?.kg, 25);
+    // Odaksız (liste) seçim yok; imlecin kendi seti "seçilmiş" sayılmaz; başka birimin seti seçilemez.
+    assert.equal(nextSet(day, doc, { rowId: 'r_aaaaaa', setIndex: 2 })?.setIndex, 0);
+    assert.equal(nextSet(day, doc, { rowId: 'r_aaaaaa', setIndex: 0 }, 'b_aaaaaa')?.chosen, undefined);
+    assert.equal(nextSet(day, doc, { rowId: 'r_bbbbbb', setIndex: 0 }, 'b_aaaaaa')?.rowId, 'r_aaaaaa');
+
+    const before = doc;
+    doc = logSet(day, doc, { rowId: 'r_aaaaaa', setIndex: 2, kg: 25, value: 8, stamp: stamp(1), random: sequence() }).doc;
+    assert.deepEqual(afterLog(day, before, doc, 'b_aaaaaa', chosen), { kind: 'same', restSeconds: 90 });
+    assert.deepEqual(setViews(day, doc, 'r_aaaaaa').map((view) => view.logged?.kg), [undefined, undefined, 25]);
+    // Sıradaki yine ilk boş set; yapılmış set seçilemez (imleç karar verir).
+    assert.deepEqual(nextSet(day, doc, null, 'b_aaaaaa') && { setIndex: nextSet(day, doc, null, 'b_aaaaaa')?.setIndex }, { setIndex: 0 });
+    assert.equal(nextSet(day, doc, { rowId: 'r_aaaaaa', setIndex: 2 }, 'b_aaaaaa')?.setIndex, 0);
+    doc = logNext(day, doc, 3);
+    doc = logNext(day, doc, 5);
+    assert.deepEqual(doc.entries[0]?.sets.map((set) => set.setIndex), [2, 0, 1]);
+    assert.equal(doc.entries[0]?.status, 'done');
+    assert.equal(nextSet(day, doc, null, 'b_aaaaaa'), null);
+  });
+
+  test("başka sete yazılan ✓'lanmadan da o sette kalır; taslak önce gelir; set yapılınca düşer", () => {
+    const day = workoutDay();
+    let doc = start(day);
+    const typed = keepTyped([], { rowId: 'r_aaaaaa', setIndex: 1, kg: 30, value: 9 });
+    const values = (next: ReturnType<typeof nextSet>) => next && { setIndex: next.setIndex, kg: next.kg, value: next.value };
+    // İmlecin seti (0) öneriyle; seçilen 1. set yazılanıyla; taslak yazılanın önüne geçer.
+    assert.deepEqual(values(nextSet(day, doc, null, 'b_aaaaaa', typed)), { setIndex: 0, kg: 20, value: 8 });
+    assert.deepEqual(values(nextSet(day, doc, { rowId: 'r_aaaaaa', setIndex: 1 }, 'b_aaaaaa', typed)), { setIndex: 1, kg: 30, value: 9 });
+    assert.deepEqual(values(nextSet(day, doc, { rowId: 'r_aaaaaa', setIndex: 1, kg: 32.5 }, 'b_aaaaaa', typed)), { setIndex: 1, kg: 32.5, value: 9 });
+    // İmleç o sete gelince (taslaksız) yazılanı gösterir.
+    doc = logNext(day, doc, 1);
+    assert.deepEqual(values(nextSet(day, doc, null, 'b_aaaaaa', typed)), { setIndex: 1, kg: 30, value: 9 });
+    // Aynı setin eskisinin yerine yazılır; listede olmayanı düşürmek aynı listeyi verir.
+    assert.deepEqual(keepTyped(typed, { rowId: 'r_aaaaaa', setIndex: 1, kg: 35 }), [{ rowId: 'r_aaaaaa', setIndex: 1, kg: 35 }]);
+    assert.equal(withoutTyped(typed, 'r_aaaaaa', 2), typed);
+    // Yapılan setin yazılanı düşer.
+    assert.equal(pendingTyped(day, doc, typed), typed);
+    doc = logSet(day, doc, { rowId: 'r_aaaaaa', setIndex: 1, kg: 30, value: 9, stamp: stamp(3), random: sequence() }).doc;
+    assert.deepEqual(pendingTyped(day, doc, typed), []);
+  });
+
   test('kendi programın belgesi programın kimliğini ve adını taşır; sunucu günü o programda bulur', async () => {
     const owner = { programId: OWN_ID, name: 'Evde' };
-    const day = buildWorkoutDay({ program: ownProgram(), dayId: OWN_DAY_B, exercises: EXERCISES, devices: DEVICES, history: [], owner });
+    const day = buildWorkoutDay({ program: ownProgram(), dayId: OWN_DAY_B, exercises: EXERCISES, devices: DEVICES, history: [], owner, today: '2026-09-26' });
     assert.ok(day);
     const doc = logNext(day, start(day), 1);
     assert.equal(doc.program?.programId, OWN_ID);
@@ -170,6 +224,59 @@ describe('antrenman belgesi: Set bitti, düzelt, sil', () => {
     doc = logNext(day, doc, 7);
     assert.deepEqual(doc.entries[0]?.sets.map((set) => set.setIndex), [0, 2, 1]);
     assert.notEqual(doc.entries[0]?.sets.at(-1)?.id, middle?.id);
+  });
+
+  test('"Geri al": silinen set yeni kimlikle aynı yerine, değerleri ve anıyla döner; durum yeniden hesaplanır', () => {
+    const day = workoutDay();
+    let doc = start(day);
+    for (const minute of [1, 3, 5]) doc = logNext(day, doc, minute, { kg: 22.5 });
+    const middle = doc.entries[0]?.sets.find((set) => set.setIndex === 1);
+    assert.ok(middle);
+    const found = findSet(doc, middle.id);
+    assert.ok(found);
+    const removed = deleteSet(day, doc, middle.id, stamp(6));
+    assert.equal(removed.entries[0]?.status, 'partial');
+    const back = restoreSet(day, removed, found, stamp(7), sequence());
+    assert.ok(back);
+    assert.equal(v.safeParse(sessionDocSchema, back.doc).success, true);
+    assert.notEqual(back.setId, middle.id);
+    assert.deepEqual(back.doc.deletedSetIds, [middle.id]);
+    assert.equal(back.doc.entries[0]?.status, 'done');
+    const set = findSet(back.doc, back.setId)?.set;
+    assert.deepEqual(set && { setIndex: set.setIndex, kg: set.kg, reps: set.reps, at: set.at, target: set.target }, {
+      setIndex: 1,
+      kg: 22.5,
+      reps: middle.reps,
+      at: middle.at,
+      target: middle.target,
+    });
+    // Sıralama yapıldığı ana göre: geri gelen set ortada kalır; hareket bitti, imleç sıradaki harekette.
+    assert.deepEqual(back.doc.entries[0]?.sets.map((item) => item.setIndex), [0, 1, 2]);
+    assert.equal(nextSet(day, back.doc)?.rowId, 'r_bbbbbb');
+  });
+
+  test('"Geri al" yeniden yapılan sete, muadili seçilen harekete yazılmaz; eski kopya birleşimde geri gelmez', () => {
+    const day = workoutDay();
+    let doc = start(day);
+    for (const minute of [1, 3]) doc = logNext(day, doc, minute);
+    const last = doc.entries[0]?.sets.at(-1);
+    const found = last ? findSet(doc, last.id) : null;
+    assert.ok(last && found);
+    const removed = deleteSet(day, doc, last.id, stamp(4));
+    // O arada aynı set yeniden yapıldı: iki set aynı yeri tutmaz.
+    assert.equal(restoreSet(day, logNext(day, removed, 5), found, stamp(6)), null);
+    // Hareket değişti (muadil): set başka harekete yazılmaz.
+    const swapped = { ...removed, entries: removed.entries.map((entry) => ({ ...entry, exerciseId: 'dumbbell-press' })) };
+    assert.equal(restoreSet(day, swapped, found, stamp(6)), null);
+    // Başka cihazın eski kopyasında silinen set durur: birleşimde iz onu siler, yalnız geri gelen kalır.
+    const back = restoreSet(day, removed, found, stamp(6), sequence());
+    assert.ok(back);
+    const merged = mergeAll([doc, back.doc]);
+    assert.ok(merged.status !== 'deleted');
+    assert.deepEqual(merged.entries[0]?.sets.map((set) => [set.setIndex, set.id === back.setId]), [
+      [0, false],
+      [1, true],
+    ]);
   });
 
   test('düzeltme: değer değişir, yapıldığı an kalır, birleştirme editedAt ile', () => {
@@ -615,6 +722,35 @@ describe('antrenman belgesi: "+ Set ekle"', () => {
     assert.equal(capped.extraRounds?.b_aaaaaa, 10);
   });
 
+  test('"Geri al" fazladan sette: silmeden sonra fazladan set yapıldıysa ya da istenen tur dolduysa geri gelmez', () => {
+    const base = workoutDay();
+    let doc = start(base);
+    for (const minute of [1, 3, 5]) doc = logAny(base, doc, minute);
+    // İki fazladan set istendi ve yapıldı (3. ve 4. yerler).
+    const two = withExtraRounds(base, addExtraRound(withExtraRounds(base, addExtraRound(base, doc, 'b_aaaaaa')), doc, 'b_aaaaaa'));
+    for (const minute of [7, 9]) doc = logAny(two, doc, minute);
+    const first = doc.entries[0]?.sets.find((set) => set.extra && set.setIndex === 3);
+    const found = first ? findSet(doc, first.id) : null;
+    assert.ok(first && found);
+    // ✓ kaldırıldı (istenen tur kalır): bekleyen fazladan set arkada, 5. yerde.
+    const removedAt = at(10);
+    const removed = deleteSet(two, doc, first.id, { at: removedAt, by: W1 });
+    assert.ok(restoreSet(two, removed, { ...found, removedAt }, stamp(11), sequence()), 'o arada bir şey yapılmadıysa geri gelir');
+    // Bekleyen set yapıldı (başka yerde): geri gelen set istenmeyen üçüncü fazladan set olurdu.
+    const relogged = logAny(two, removed, 11);
+    assert.equal(relogged.entries[0]?.sets.filter((set) => set.extra).length, 2);
+    assert.equal(restoreSet(two, relogged, { ...found, removedAt }, stamp(12)), null);
+    // Silmenin anı bilinmese de yapılan fazladan setler istenen turu dolduruyor.
+    assert.equal(restoreSet(two, relogged, found, stamp(12)), null);
+    // Tur artırıldıysa sayı dolmasa da silmeden sonra yapılan fazladan set geri getirmeyi engeller.
+    const three = withExtraRounds(base, addExtraRound(two, removed, 'b_aaaaaa'));
+    assert.equal(three.extraRounds?.b_aaaaaa, 3);
+    assert.equal(restoreSet(three, logAny(three, removed, 11), { ...found, removedAt }, stamp(12)), null);
+    // Bu telefonda istek yoksa (fazladan setler başka cihazda yapıldı) sayı denetlenmez.
+    const unrequested = deleteSet(base, doc, first.id, { at: removedAt, by: W1 });
+    assert.ok(restoreSet(base, unrequested, { ...found, removedAt }, stamp(11), sequence()));
+  });
+
   test('fazladan setler bitişte set sayısı önerisine girer: iki antrenmandır 4 set → "3 → 4 set" (antrenörüne)', () => {
     const previous = sessionDoc({
       id: 's_aaaaaaaa',
@@ -800,5 +936,130 @@ describe('ekran metinleri', () => {
     assert.equal(clockText(5.9), '0:05');
     assert.equal(elapsedText(24 * 60 + 18), '24:18');
     assert.equal(elapsedText(3600 + 4 * 60 + 18), '1:04:18');
+  });
+});
+
+describe('kardiyo metinleri', () => {
+  test('kaydın metni: mesafe ve eğimle, kilo verilirse kalori', () => {
+    assert.equal(setValueText({ seconds: 1800, distanceM: 3000, inclinePct: 5 }, 75), '30:00 · 3 km · %5 · ≈ 253 kcal');
+    assert.equal(setValueText({ seconds: 1800, distanceM: 3000, inclinePct: 5 }), '30:00 · 3 km · %5');
+    assert.equal(setValueText({ seconds: 600, distanceM: 4000 }, 75), '10:00 · 4 km');
+    assert.equal(setValueText({ seconds: 45 }), '45 sn');
+  });
+
+  test('"Önceki": yürüyüşte saat, makinede saniye ve mesafe', () => {
+    assert.equal(previousText({ setIndex: 0, value: 1800, distanceM: 3000, inclinePct: 5 }, 'duration', 'walk'), '30:00 · 3 km · %5');
+    assert.equal(previousText({ setIndex: 0, value: 600, distanceM: 4000 }, 'duration', 'machine'), '600 sn · 4 km');
+    assert.equal(previousText({ setIndex: 0, value: 45 }, 'duration'), '45 sn');
+  });
+
+  test('hedef: yürüyüşte dakika; panelde mesafe ve eğim', () => {
+    const target = { min: 1800, max: 1800, distanceM: 3000, inclinePct: 5 };
+    assert.equal(targetCell(target, 'duration', 'walk'), '30 dk');
+    assert.equal(targetText(target, 'duration', 'walk'), 'Hedef 30 dk · 3 km · %5');
+    assert.equal(targetText({ min: 30, max: 45 }, 'duration'), 'Hedef 30–45 sn');
+  });
+});
+
+describe('kardiyo: önceden dolu mesafe ve eğim, kayıt ve düzeltme', () => {
+  const { locomotion: _none, ...plain } = { ...PLANK, locomotion: true };
+  const treadmill = { ...plain, id: 'kosu-bandi', title: 'Koşu Bandı', category: 'warmup' as const, equipment: 'cardio_machine', pattern: 'cardio' as const, locomotion: true, primaryMuscles: ['cardio'] };
+  const cycle = { ...plain, id: 'sabit-bisiklet', title: 'Sabit Bisiklet', category: 'warmup' as const, equipment: 'cardio_machine', pattern: 'cardio' as const, primaryMuscles: ['cardio'] };
+  const exercises = new Map([...EXERCISES, [treadmill.id, treadmill], [cycle.id, cycle]]);
+
+  function cardioDay(walkSets: unknown[], history: SessionDoc[] = []) {
+    const raw = assignedFile();
+    const days = (raw.phases as { days: { blocks: unknown[] }[] }[])[0]?.days;
+    if (days?.[0]) {
+      days[0].blocks = [
+        { id: 'b_card01', kind: 'single', restSeconds: 60, rows: [{ id: 'r_card01', exerciseId: 'kosu-bandi', sets: walkSets }] },
+        { id: 'b_card02', kind: 'single', restSeconds: 60, rows: [{ id: 'r_card02', exerciseId: 'sabit-bisiklet', sets: [{ min: 600, max: 600, distanceM: 4000, inclinePct: 2 }] }] },
+        { id: 'b_card03', kind: 'single', restSeconds: 60, rows: [{ id: 'r_card03', exerciseId: 'bench-press', sets: [{ min: 8, max: 10 }] }] },
+      ];
+    }
+    const day = buildWorkoutDay({ program: parsedProgram(raw), dayId: null, exercises, devices: DEVICES, history, today: WORKOUT_TODAY });
+    if (!day) throw new Error('Gün kurulamadı.');
+    return day;
+  }
+
+  const lastWalk = sessionDoc({
+    id: 's_aaaaaaaa',
+    status: 'finished',
+    startedAt: at(-1000),
+    finishedAt: at(-960),
+    entries: [
+      sessionEntry('e_card01', {
+        rowId: 'r_card01',
+        exerciseId: 'kosu-bandi',
+        title: 'Koşu Bandı',
+        sets: [{ id: 'st_00000000', type: 'working', setIndex: 0, seconds: 1700, distanceM: 2800, inclinePct: 4, at: at(-999), by: W1 }],
+      }),
+    ],
+  });
+
+  test('satırın kardiyo türü: yürüyüş/koşu, makine, kuvvette yok', () => {
+    const day = cardioDay([{ min: 1800, max: 1800 }]);
+    assert.equal(day.rows.r_card01?.cardio, 'walk');
+    assert.equal(day.rows.r_card02?.cardio, 'machine');
+    assert.equal(day.rows.r_card03?.cardio, undefined);
+  });
+
+  test('mesafe ve eğim hedeften; hedefte yoksa geçen seferden; o da yoksa boş', () => {
+    const fromTarget = cardioDay([{ min: 1800, max: 1800, distanceM: 3000, inclinePct: 5 }], [lastWalk]);
+    const next = nextSet(fromTarget, start(fromTarget));
+    assert.deepEqual({ distanceM: next?.distanceM, inclinePct: next?.inclinePct }, { distanceM: 3000, inclinePct: 5 });
+    const fromLast = cardioDay([{ min: 1800, max: 1800 }], [lastWalk]);
+    const again = nextSet(fromLast, start(fromLast));
+    assert.deepEqual({ distanceM: again?.distanceM, inclinePct: again?.inclinePct }, { distanceM: 2800, inclinePct: 4 });
+    const empty = cardioDay([{ min: 1800, max: 1800 }]);
+    const none = nextSet(empty, start(empty));
+    assert.equal(none && 'distanceM' in none, false);
+    assert.equal(none && 'inclinePct' in none, false);
+  });
+
+  test('taslak ve satırda yazılan hedefi ezer; makinede eğim yok', () => {
+    const day = cardioDay([{ min: 1800, max: 1800, distanceM: 3000, inclinePct: 5 }]);
+    const doc = start(day);
+    const drafted = nextSet(day, doc, { rowId: 'r_card01', setIndex: 0, distanceM: 3200 }, 'b_card01');
+    assert.deepEqual({ distanceM: drafted?.distanceM, inclinePct: drafted?.inclinePct }, { distanceM: 3200, inclinePct: 5 });
+    const typed = nextSet(day, doc, null, 'b_card01', [{ rowId: 'r_card01', setIndex: 0, inclinePct: 7.5 }]);
+    assert.equal(typed?.inclinePct, 7.5);
+    const bike = nextSet(day, doc, null, 'b_card02');
+    assert.deepEqual({ distanceM: bike?.distanceM, inclinePct: bike?.inclinePct }, { distanceM: 4000, inclinePct: undefined });
+  });
+
+  test('kayıt: yürüyüşte mesafe ve eğim (girilmediyse 0), makinede yalnız mesafe, kuvvette hiçbiri', () => {
+    const day = cardioDay([{ min: 1800, max: 1800 }]);
+    let doc = start(day);
+    doc = logSet(day, doc, { rowId: 'r_card01', setIndex: 0, value: 1800, distanceM: 3000, stamp: stamp(1), random: sequence() }).doc;
+    doc = logSet(day, doc, { rowId: 'r_card02', setIndex: 0, value: 600, distanceM: 4000, inclinePct: 3, stamp: stamp(2), random: sequence() }).doc;
+    doc = logSet(day, doc, { rowId: 'r_card03', setIndex: 0, kg: 60, value: 10, distanceM: 1, inclinePct: 1, stamp: stamp(3), random: sequence() }).doc;
+    const setOf = (rowId: string) => doc.entries.find((entry) => entry.rowId === rowId)?.sets[0];
+    assert.deepEqual([setOf('r_card01')?.seconds, setOf('r_card01')?.distanceM, setOf('r_card01')?.inclinePct], [1800, 3000, 0]);
+    assert.deepEqual([setOf('r_card02')?.distanceM, setOf('r_card02') && 'inclinePct' in setOf('r_card02')!], [4000, false]);
+    assert.equal(setOf('r_card03') && ('distanceM' in setOf('r_card03')! || 'inclinePct' in setOf('r_card03')!), false);
+    assert.ok(v.safeParse(sessionDocSchema, doc).success);
+  });
+
+  test('yürüyüşte önceden dolu süre tam dakika', () => {
+    const day = cardioDay([{ min: 300, max: 600 }], [lastWalk]);
+    const next = nextSet(day, start(day));
+    assert.equal((next?.value ?? 1) % 60, 0);
+  });
+
+  test('muadil başka kardiyo türündeyse mesafe ve eğim taşınmaz; aynı türde kalır', () => {
+    const row = { id: 'r_card01', exerciseId: 'kosu-bandi', sets: [{ min: 1800, max: 1800, distanceM: 3000, inclinePct: 5 }] };
+    const swap = (original: typeof treadmill | typeof cycle, exercise: typeof treadmill | typeof cycle) =>
+      swapRowFor({ row, blockId: 'b_card01', original, exercise, devices: DEVICES, history: [], firstForMuscle: false }).template.sets;
+    assert.deepEqual(swap(treadmill, cycle), [{ min: 1800, max: 1800 }]);
+    assert.deepEqual(swap(treadmill, { ...treadmill, id: 'kosu-bandi-2' }), row.sets);
+  });
+
+  test('düzeltme: verilen alan değişir, verilmeyen kalır', () => {
+    const day = cardioDay([{ min: 1800, max: 1800 }]);
+    const logged = logSet(day, start(day), { rowId: 'r_card01', setIndex: 0, value: 1800, distanceM: 3000, inclinePct: 5, stamp: stamp(1), random: sequence() });
+    const fixed = editSet(logged.doc, logged.setId, { value: 1800, distanceM: 3200 }, stamp(2));
+    const set = findSet(fixed, logged.setId)?.set;
+    assert.deepEqual([set?.seconds, set?.distanceM, set?.inclinePct], [1800, 3200, 5]);
   });
 });

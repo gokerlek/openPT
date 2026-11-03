@@ -23,16 +23,18 @@ import { exerciseSetWeights } from '@/lib/muscles';
 import { programLine } from '@/lib/own-program-text';
 import { isOwnProgramId, ownSummaryOf } from '@/lib/own-programs';
 import { readOwnProgramOf } from '@/lib/own-programs-store';
-import { missingExerciseDays, nextDayId, phaseMuscleLoad } from '@/lib/program-plan';
+import { displayDays, missingExerciseDays, phaseMuscleLoad } from '@/lib/program-plan';
 import { CLIENT_ID_PATTERN } from '@/lib/schemas/client';
 import { templateSummary } from '@/lib/template-plan';
+import { upcomingAssigned, weekdaysText } from '@/lib/training-days';
 import { cn } from '@/lib/utils';
 
 export const metadata: Metadata = { title: 'Danışanın programı' };
 
 /**
  * Danışanın paylaştığı kendi programı (`docs/design/kendi-program.md` §4): PT program sayfasının evresiz hâli —
- * günler (`DayPlan`), planlanan kas yükü ve değişiklikler (etiketler PT'ye göre, §7.3). Tek eylem [Düzenle]; öneri,
+ * "Haftanın programı" (programlar atandıkları günlerle, `DayPlan`; Faz 3: atamayı danışan yapar, bugünün ya da
+ * haftada sıradaki atanmış program işaretli), planlanan kas yükü ve değişiklikler (etiketler PT'ye göre, §7.3). Tek eylem [Düzenle]; öneri,
  * evre geçişi ve silme yok. Paylaşılmamış dosyanın içeriği gösterilmez. Kısıtlarla çelişen satırlar program
  * sayfasındaki gibi en üstte (`kisit-tarama.md` §3.3; yalnız kısıtların onayı sürdükçe).
  */
@@ -70,12 +72,14 @@ export default async function OwnProgramViewPage({ params }: { params: Promise<{
   const { timeZone } = config;
   const phase = program.phases[0];
   const byId = new Map(exercises.map((exercise) => [exercise.id, exercise]));
-  const nextId = nextDayId(program);
+  const today = todayIn(timeZone);
+  // Bugünün ya da haftada sıradaki atanmış program (dönüş yok, Faz 3); atama yoksa işaret yok.
+  const upcoming = upcomingAssigned(program, today);
   const load = phase ? phaseMuscleLoad(phase, byId, exerciseSetWeights) : null;
   const missingRows = missingExerciseDays(program.phases, new Set(byId.keys())).reduce((sum, item) => sum + item.rowIds.length, 0);
   const description = [programLine(ownSummaryOf(program)), `${formatDate(program.createdAt, timeZone)} tarihinde oluşturuldu`].join(' · ');
-  const careInput = await loadCareInput(loaded.client, todayIn(timeZone));
-  const conflicts = careInput ? programConflicts(program, byId, careInput) : [];
+  const careInput = await loadCareInput(loaded.client, today);
+  const conflicts = careInput ? programConflicts(program, byId, careInput, today) : [];
   const editHref = `/dashboard/clients/${id}/program/own/${pid}/edit`;
 
   return (
@@ -113,21 +117,22 @@ export default async function OwnProgramViewPage({ params }: { params: Promise<{
 
       <Card>
         <CardHeader>
-          <CardTitle>Günler</CardTitle>
-          <CardDescription>Günler sırayla döner (A → B → C); sıradaki gün işaretli.</CardDescription>
+          <CardTitle>Haftanın programı</CardTitle>
+          <CardDescription>Danışan atanan programı o gün Bugün ekranında görür.</CardDescription>
         </CardHeader>
         <CardContent>
           <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {phase?.days.map((day) => {
+            {displayDays(phase?.days ?? []).map((day) => {
               const summary = templateSummary({ blocks: day.blocks }, byId);
-              const isNext = day.id === nextId;
+              const isNext = day.id === upcoming?.dayId;
               return (
                 <li key={day.id} className={cn('flex flex-col gap-3 rounded-lg border p-3', isNext && 'bg-primary/5 ring-2 ring-primary-text')}>
                   <div className="flex flex-col gap-1">
                     <div className="flex items-center justify-between gap-2">
                       <span className="font-medium break-words">{day.name}</span>
-                      {isNext ? <Badge>Sıradaki</Badge> : null}
+                      {isNext ? <Badge>{upcoming?.date === today ? 'Bugün' : 'Sıradaki'}</Badge> : null}
                     </div>
+                    <span className="text-sm text-muted-foreground">{weekdaysText(day.weekdays ?? []) || 'Gün atanmadı'}</span>
                     <span className="text-sm tabular-nums text-muted-foreground">
                       {formatNumber(summary.rows)} hareket · {formatNumber(summary.workingSets)} set · ≈ {formatNumber(summary.minutes)} dk
                     </span>
@@ -154,6 +159,7 @@ export default async function OwnProgramViewPage({ params }: { params: Promise<{
               factor={load.factor}
               daysPerWeek={phase.daysPerWeek}
               dayCount={phase.days.length}
+              assigned={load.assigned}
               label="Programın kas yükü"
               done={null}
             />

@@ -1,7 +1,10 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ArrowSquareOut, Barbell, CaretRight, ListChecks, Plus, QrCode, WarningCircle } from '@phosphor-icons/react/dist/ssr';
+import { Suspense } from 'react';
+import { ArrowSquareOut, Barbell, CaretRight, QrCode, WarningCircle } from '@phosphor-icons/react/dist/ssr';
+import { CoachButton } from '@/components/coach/coach-button';
 import { EditButton } from '@/components/edit-button';
+import { ListChecks, Plus } from '@/components/line-icons';
 import { SectionHeader } from '@/components/section-header';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -9,6 +12,8 @@ import { Card, CardAction, CardContent, CardDescription, CardFooter, CardHeader,
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from '@/components/ui/item';
 import { Table, TableBody, TableCell, TableRow } from '@/components/ui/table';
+import { coachAccess } from '@/lib/ai/coach-contract';
+import { attentionItems, type AttentionItem } from '@/lib/attention';
 import { loadClient, readInvite } from '@/lib/clients';
 import { healthConsentState, healthFieldState } from '@/lib/client-status';
 import { readAppConfig } from '@/lib/config';
@@ -19,10 +24,11 @@ import { formatDate, formatDayShort, formatNumber, todayIn } from '@/lib/format'
 import type { HealthRecord } from '@/lib/schemas/health';
 import { newestFirst, painHistory } from '@/lib/screening';
 import { clientRepoName } from '@/lib/github/client';
-import { countDays, currentPhaseOf, frequencyLabel, nextDayId, phaseStatus, phaseStatusLabel } from '@/lib/program-plan';
+import { displayDays, countDays, currentPhaseOf, frequencyLabel, phaseStatus, phaseStatusLabel } from '@/lib/program-plan';
 import { readProgramFile, type ProgramFile } from '@/lib/programs';
 import { CLIENT_ID_PATTERN, CLIENT_STATUS_LABELS, HEALTH_FIELD_INFO, TRAINING_EXPERIENCE_LABELS, type HealthField } from '@/lib/schemas/client';
 import { templateSummary } from '@/lib/template-plan';
+import { programWeekTarget, upcomingAssigned, weekdaysText } from '@/lib/training-days';
 import { cn } from '@/lib/utils';
 import { HEALTH_STATE_DETAILS, HEALTH_STATE_LABELS } from '../health-state';
 import { AccessBadge, accessDetail, accessOf, passwordOf } from '../invite-state';
@@ -30,13 +36,101 @@ import { requirePt } from '@/lib/guards';
 import { loadMeasurements, readHealthIfAllowed } from '@/lib/health';
 import { loadHistory } from '@/lib/history-store';
 import { readLiveResponse } from '@/lib/live-store';
+import { readClientDigest, type ClientOverview } from '@/lib/notices-store';
 import type { HistoryList } from '@/lib/session-history';
+import { AttentionRow } from '../../attention-row';
 import { LiveSession } from './live-session';
 import { MeasurementsCard } from './measurements-card';
 import { SessionRow } from './sessions/session-list';
 
 /** Genel'in Antrenmanlar kartında en çok bu kadar son antrenman; gerisi sekmesinde. */
 const RECENT_SESSIONS = 3;
+
+/** Genel'in Dikkat kartında açık duran madde sayısı; gerisi altında "+n madde daha" ile katlanır. */
+const ATTENTION_SHOWN = 5;
+
+/**
+ * Genel'in başındaki Dikkat kartı: Genel bakış'taki "Dikkat gerektirenler"in bu danışana düşen maddeleri, en acili
+ * üstte; her madde danışanın ilgili sekmesine götürür. İlk beşi açık, gerisi "+n madde daha" (`details`) altında:
+ * Genel bakış'ın "+n madde daha"sı buraya getirir, hiçbir madde ulaşılmaz kalmaz. Ad sayfanın başında olduğundan
+ * satırlarda yazılmaz (yalnız ekran okuyucuya). Madde yoksa kart da yok.
+ */
+function AttentionSummaryCard({ clientId, name, items }: { clientId: string; name: string; items: readonly AttentionItem[] }) {
+  if (items.length === 0) return null;
+  const shown = items.slice(0, ATTENTION_SHOWN);
+  const rest = items.slice(ATTENTION_SHOWN);
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          Dikkat
+          <Badge variant="secondary" className="tabular-nums">
+            {formatNumber(items.length)}
+            <span className="sr-only"> madde</span>
+          </Badge>
+        </CardTitle>
+        {/* Ünlemin anlamı yalnız kartta ünlem varken. */}
+        {items.some((item) => item.tone === 'danger') ? <CardDescription>Kırmızı ünlem sağlık güvenliği.</CardDescription> : null}
+      </CardHeader>
+      <CardContent className="flex flex-col gap-2">
+        <ul role="list" aria-label="Dikkat maddeleri" className="flex flex-col gap-1">
+          {shown.map((item) => (
+            <li key={item.key}>
+              <AttentionRow clientId={clientId} item={{ ...item, clientName: name }} />
+            </li>
+          ))}
+        </ul>
+        {rest.length > 0 ? (
+          <details className="group/more">
+            <summary className="flex min-h-11 w-fit cursor-pointer list-none items-center gap-1.5 rounded-lg px-3 text-sm text-muted-foreground outline-none select-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 [&::-webkit-details-marker]:hidden">
+              <CaretRight
+                aria-hidden
+                weight="bold"
+                className="size-3.5 shrink-0 motion-safe:transition-transform motion-safe:duration-160 group-open/more:rotate-90"
+              />
+              +{formatNumber(rest.length)} madde daha
+            </summary>
+            <ul role="list" aria-label="Öteki dikkat maddeleri" className="mt-1 flex flex-col gap-1">
+              {rest.map((item) => (
+                <li key={item.key}>
+                  <AttentionRow clientId={clientId} item={{ ...item, clientName: name }} />
+                </li>
+              ))}
+            </ul>
+          </details>
+        ) : null}
+      </CardContent>
+    </Card>
+  );
+}
+
+/**
+ * Dikkat kartı kendi akışında: özet önbellekte değilse birkaç GitHub okuması sürer; sayfa onu beklemeden açılır,
+ * kart hazır olunca gelir. Okuma sayfanın başında, öbür okumalarla birlikte başlar (`digest`); burada yalnız
+ * beklenir. Özet okunamazsa (`null`, sayfanın geri kalanı gibi sessizce) ya da madde yoksa hiçbir şey.
+ */
+async function ClientAttention({
+  clientId,
+  name,
+  timeZone,
+  exercises,
+  digest,
+}: {
+  clientId: string;
+  name: string;
+  timeZone: string;
+  exercises: ReadonlyMap<string, ExerciseWithSource>;
+  digest: Promise<ClientOverview | null>;
+}) {
+  const overview = await digest;
+  if (!overview) return null;
+  const items = attentionItems(overview.attention, {
+    now: new Date(),
+    timeZone,
+    titleOf: (exerciseId) => exercises.get(exerciseId)?.title ?? exerciseId,
+  });
+  return <AttentionSummaryCard clientId={clientId} name={name} items={items} />;
+}
 
 /**
  * Sağlık modülü kartındaki parçanın özeti (tasarım `kisit-tarama.md` §1): "2 etkin · 1 bildirim bekliyor",
@@ -57,7 +151,7 @@ function healthSummary(field: HealthField, record: HealthRecord | null): { text:
   }
   if (field === 'screening') {
     const latest = newestFirst(record.screenings ?? [])[0];
-    if (!latest) return { text: 'henüz tarama yok' };
+    if (!latest) return { text: 'henüz hareket testi yok' };
     // Açık ağrılar (gözden geçirilmemiş, sonra ağrısız test edilmemiş): yeni tarama o testi yapmadıysa eskisininki de.
     const pain = painHistory(record.screenings ?? []).open.length;
     return { text: `son ${formatDayShort(latest.date)}${pain ? ` · ${formatNumber(pain)} ağrı` : ''}` };
@@ -118,8 +212,9 @@ function SessionsCard({ clientId, list }: { clientId: string; list: HistoryList 
 }
 
 /**
- * Programın özeti: şu anki evre, günleri (sıradaki işaretli), son değişiklik. Program
- * yoksa "Program oluştur"; okunamıyorsa sorunu. `undefined`: GitHub'dan okunamadı.
+ * Programın özeti: şu anki evre, programları atandıkları günlerle (Faz 3: bugünün ya da haftada sıradaki atanmış
+ * program işaretli; dönüş yok), son değişiklik. Program yoksa "Program oluştur"; okunamıyorsa sorunu. `undefined`:
+ * GitHub'dan okunamadı.
  */
 function ProgramCard({
   clientId,
@@ -136,7 +231,7 @@ function ProgramCard({
   const openButton = (
     <CardFooter>
       <Button variant="outline" nativeButton={false} render={<Link href={href} />}>
-        <ListChecks data-icon="inline-start" weight="fill" />
+        <ListChecks data-icon="inline-start" />
         Programı aç
       </Button>
     </CardFooter>
@@ -163,7 +258,7 @@ function ProgramCard({
         </CardHeader>
         <CardFooter>
           <Button nativeButton={false} render={<Link href={`${href}/new`} />}>
-            <Plus data-icon="inline-start" weight="fill" />
+            <Plus data-icon="inline-start" />
             Program oluştur
           </Button>
         </CardFooter>
@@ -184,13 +279,16 @@ function ProgramCard({
 
   const program = file.program;
   const current = currentPhaseOf(program);
-  const status = phaseStatus(program, new Date());
-  const next = nextDayId(program);
-  const perWeek = frequencyLabel(current?.phase.daysPerWeek)?.toLocaleLowerCase('tr');
-  // Evresiz programda evreden söz edilmez: gün sayısı ve sıklık.
+  const now = new Date();
+  const status = phaseStatus(program, now);
+  const today = todayIn(timeZone, now);
+  const upcoming = upcomingAssigned(program, today);
+  // Sıklık atanmış gün sayısı, atama yoksa evrenin `daysPerWeek`'i (`programWeekTarget`).
+  const perWeek = frequencyLabel(programWeekTarget(program))?.toLocaleLowerCase('tr');
+  // Evresiz programda evreden söz edilmez: antrenman sayısı ve sıklık.
   const description = program.phased
     ? [current?.phase.name, phaseStatusLabel(status)].filter(Boolean).join(' · ') + (perWeek ? ` · ${perWeek}` : '')
-    : [`${countDays(program.phases)} gün`, perWeek].filter(Boolean).join(' · ');
+    : [`${countDays(program.phases)} antrenman`, perWeek].filter(Boolean).join(' · ');
   return (
     <Card>
       <CardHeader>
@@ -203,15 +301,16 @@ function ProgramCard({
         ) : null}
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
-        <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3" aria-label={program.phased ? 'Şu anki evrenin günleri' : 'Programın günleri'}>
-          {current?.phase.days.map((day) => {
+        <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3" aria-label={program.phased ? 'Şu anki evrenin programları' : 'Programlar'}>
+          {displayDays(current?.phase.days ?? []).map((day) => {
             const summary = templateSummary({ blocks: day.blocks }, exercises);
-            const isNext = day.id === next;
+            const isNext = day.id === upcoming?.dayId;
             return (
               <li key={day.id}>
                 <Item variant="outline" size="sm" className={isNext ? 'bg-primary/5 ring-2 ring-primary-text' : undefined}>
                   <ItemContent>
-                    <ItemTitle>{day.name}</ItemTitle>
+                    <ItemTitle className="break-words">{day.name}</ItemTitle>
+                    <ItemDescription>{weekdaysText(day.weekdays ?? []) || 'Gün atanmadı'}</ItemDescription>
                     <ItemDescription className="tabular-nums">
                       {formatNumber(summary.rows)} hareket · {formatNumber(summary.workingSets)} set · ≈{' '}
                       {formatNumber(summary.minutes)} dk
@@ -219,7 +318,7 @@ function ProgramCard({
                   </ItemContent>
                   {isNext ? (
                     <ItemActions>
-                      <Badge>Sıradaki</Badge>
+                      <Badge>{upcoming?.date === today ? 'Bugün' : 'Sıradaki'}</Badge>
                     </ItemActions>
                   ) : null}
                 </Item>
@@ -262,6 +361,9 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
   }
 
   const { client } = loaded;
+  // Dikkat özeti hemen başlar ama beklenmez (kartı kendi akışında); `.catch` burada: aşağıdaki okumalardan biri
+  // düşse de sahipsiz bir ret kalmasın.
+  const digest = readClientDigest(id).catch(() => null);
   const [invite, programFile, exercises, measurements, history, live, healthRecord] = await Promise.all([
     readInvite(id),
     // undefined: GitHub'dan okunamadı; sayfa yine açılır.
@@ -280,14 +382,26 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
   const consent = client.consents.health;
   // Onay danışanın kendi ekranında verilir; hiç girmemiş danışanda onay kaydı tutarsızdır (elle eklenmiş).
   const consentWithoutJoin = Boolean(consent) && !client.access.joinedAt && !client.access.lastJoinAt;
+  const coach = coachAccess(client) === 'ready';
 
   return (
     <div className="flex flex-col gap-6">
       <SectionHeader
         title="Genel"
         description="Profil, giriş, sağlık modülü ve özetler. Ayrıntılar kendi sekmelerinde."
-        actions={<EditButton href={`/dashboard/clients/${id}/edit`} />}
+        actions={
+          <>
+            {coach ? <CoachButton label="AI'ya sor" detail={{ clientId: id, autoReview: true }} /> : null}
+            <EditButton href={`/dashboard/clients/${id}/edit`} />
+          </>
+        }
       />
+
+      {/* Danışanın dikkat maddeleri en üstte: PT sayfayı açınca önce bakılacakları görür. Madde yoksa kart da
+          olmadığından yer tutucu yok. */}
+      <Suspense fallback={null}>
+        <ClientAttention clientId={id} name={client.name} timeZone={config.timeZone} exercises={exerciseById} digest={digest} />
+      </Suspense>
 
       {/* Açık antrenman canlı (tasarım §4.6); kimse çalışmıyorken satır yok. */}
       <LiveSession clientId={id} initial={live} />

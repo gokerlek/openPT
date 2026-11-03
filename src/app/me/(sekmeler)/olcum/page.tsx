@@ -15,7 +15,35 @@ export default async function ClientCameraPage() {
   return (
     <main className="flex flex-col gap-6">
       <ClientHeader client={client} appName={config.appName} title="Kamera ölçümü" back={{ href: '/me/saglik', label: 'Sağlık' }} />
-      {view.state === 'ok' ? <CameraWizard clientName={client.name} clientId={client.id} backHref="/me/saglik" backLabel="Sağlığa dön" manualHref="/me/saglik" manualLabel="PT sonuçlarını gör" timeZone={config.timeZone} records={view.record.cameraMeasurements ?? []} /> : <Card><CardHeader><CardTitle>{view.state === 'broken' ? 'Ölçüm kaydı okunamadı' : 'Hareket taraması kapalı'}</CardTitle><CardDescription>Modül ve onay durumunu <Link className="underline underline-offset-4" href="/me/ayarlar">ayarlarından</Link> kontrol edebilirsin. Kamera açılmadı.</CardDescription></CardHeader></Card>}
+      {view.state === 'ok' ? (
+        <CameraWizard clientName={client.name} clientId={client.id} backHref="/me/saglik" backLabel="Sağlığa dön" manualHref="/me/saglik" manualLabel="Hareket testi sonuçlarını gör" timeZone={config.timeZone} records={view.record.cameraMeasurements ?? []} />
+      ) : view.state === 'locked' ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Kamera ölçümü kapalı</CardTitle>
+            <CardDescription>
+              Kamera ölçümü, ayarlarındaki “Hareket taraması” onayıyla açılır. Durumunu{' '}
+              <Link className="underline underline-offset-4" href="/me/ayarlar">
+                ayarlarından
+              </Link>{' '}
+              kontrol edebilirsin.
+            </CardDescription>
+          </CardHeader>
+        </Card>
+      ) : (
+        <Card>
+          <CardHeader>
+            <CardTitle>Ölçüm kaydı okunamadı</CardTitle>
+            <CardDescription>
+              Modül ve onay durumunu{' '}
+              <Link className="underline underline-offset-4" href="/me/ayarlar">
+                ayarlarından
+              </Link>{' '}
+              kontrol edebilirsin. Kamera açılmadı.
+            </CardDescription>
+          </CardHeader>
+        </Card>
+      )}
     </main>
   );
 }

@@ -1,7 +1,9 @@
 import type { Metadata } from 'next';
 import { cache } from 'react';
 import { notFound } from 'next/navigation';
-import { ExerciseMuscleMap } from '@/components/muscle-map/exercise-muscle-map';
+import { MuscleMap } from '@/components/muscle-map/muscle-map';
+import { roleMapProps } from '@/lib/muscle-tiers';
+import { isDeepMuscle } from '@/lib/deep-muscles';
 import { PageHeader } from '@/components/page-header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Item, ItemContent, ItemGroup, ItemMedia, ItemTitle } from '@/components/ui/item';
@@ -152,18 +154,16 @@ export default async function ExerciseDetailPage({ params }: { params: Promise<{
           <Card>
             <CardHeader>
               <CardTitle>Çalışan kaslar</CardTitle>
-              <CardDescription>
-                {exercise.primaryMuscles.includes('cardio')
-                  ? 'Kardiyo hareketi; haritada yalnız yardımcı kaslar görünür.'
-                  : 'Hedef dolu, yardımcı çizgili, dengeleyici noktalı.'}
-              </CardDescription>
+              {exercise.primaryMuscles.includes('cardio') ? (
+                <CardDescription>Kardiyo hareketi; haritada yalnız yardımcı kaslar görünür.</CardDescription>
+              ) : null}
             </CardHeader>
             <CardContent>
-              <ExerciseMuscleMap
-                primaryMuscles={exercise.primaryMuscles}
-                secondaryMuscles={exercise.secondaryMuscles}
-                stabilizerMuscles={exercise.stabilizerMuscles}
+              <MuscleMap
+                layout="split"
                 bodyClassName="h-72"
+                {...roleMapProps(exercise)}
+                deep={{ selected: (exercise.activationTargets ?? []).filter(isDeepMuscle) }}
               />
             </CardContent>
           </Card>

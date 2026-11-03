@@ -1,9 +1,9 @@
 import { formatNumber } from './format.ts';
 import type { SessionDoc } from './schemas/session.ts';
 import { BLOCK_KIND_LABELS, type BlockKind } from './template-plan.ts';
-import { slotDone, type CursorUnit } from './workout-cursor.ts';
+import type { CursorUnit } from './workout-cursor.ts';
 import type { WorkoutDay } from './workout-plan.ts';
-import { cursorOf, setViews, type NextSet } from './workout-session.ts';
+import { cursorOf, memberAfter, setViews, type NextSet } from './workout-session.ts';
 
 /**
  * Gruplar (süperset, devre, kompleks; tasarım §2.4 "Gruplar") — saf. Set sırası imlecin `setSlots`
@@ -34,7 +34,7 @@ export type GroupMemberStatus =
   | 'pending'
   /** Setleri bitti: bu turda yok ("sonraki turlarda atlanır"). */
   | 'finished'
-  /** Geçildi (Geçilenler'de); grup kalanlarla sürer. */
+  /** Atlandı (`status: skipped`); grup kalanlarla sürer. */
   | 'skipped';
 
 export type GroupMember = {
@@ -114,15 +114,20 @@ export function groupView(
 
 /**
  * "Set bitti → B": sıradaki setten sonra aynı turda başka bir üye geliyorsa onun harfi (dinlenme yok);
- * tur bitiyorsa ya da grup değilse null.
+ * tur bitiyorsa ya da grup değilse null. `focus`: sıradaki set odaktaki birimden (`cursorOf`). `shown`: paneldeki set
+ * (tablodan seçilen, imlecinkinden başka olabilir); verilmezse imlecin seti.
  */
-export function nextMemberLetter(day: WorkoutDay, doc: Pick<SessionDoc, 'entries' | 'order'>): string | null {
-  const cursor = cursorOf(day, doc);
+export function nextMemberLetter(
+  day: WorkoutDay,
+  doc: Pick<SessionDoc, 'entries' | 'order'>,
+  focus?: string | null,
+  shown?: Pick<NextSet, 'rowId' | 'round'> | null,
+): string | null {
+  const cursor = cursorOf(day, doc, focus);
   const next = cursor.next;
   const unit = next ? cursor.units[next.unit] : undefined;
-  if (!next || !unit || unit.kind === 'single') return null;
-  const at = unit.slots.findIndex((slot) => slot.member === next.member && slot.round === next.round);
-  const following = unit.slots.slice(at + 1).find((slot) => !slotDone(unit, slot));
-  if (!following || following.round !== next.round || following.member === next.member) return null;
-  return memberLetter(following.member);
+  if (!next || !unit) return null;
+  const member = shown ? unit.members.findIndex((item) => item.rowId === shown.rowId) : next.member;
+  const following = memberAfter(unit, member, shown ? shown.round : next.round);
+  return following === null ? null : memberLetter(following);
 }

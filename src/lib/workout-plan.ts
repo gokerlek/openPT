@@ -1,5 +1,6 @@
 import {achievementBaseline,type AchievementBaseline} from './workout-achievements.ts';
 import type { AlternativeCandidate } from './alternatives.ts';
+import { cardioKind, withoutCardio, type CardioKind } from './cardio.ts';
 import { withClientTargets } from './client-targets.ts';
 import type { RowCare } from './constraint-filter.ts';
 import { loadSpecFor, type DeviceLoadSettings } from './device-loads.ts';
@@ -7,12 +8,12 @@ import type { ExerciseTags } from './exercise-filter.ts';
 import { exposureOf, type Stage } from './exposure.ts';
 import { todayIn } from './format.ts';
 import type { SetSuggestion } from './program-feedback.ts';
-import { currentPhaseOf, mondayOf, nextDayId } from './program-plan.ts';
+import { currentPhaseOf, mondayOf } from './program-plan.ts';
 import { planSession, warmupSets, type LoadSpec, type ProgressionRule, type SessionPlan, type SessionResult, type TrackingType } from './progression.ts';
 import { recommend, type Why } from './recommend.ts';
 import type { TrainingExperience } from './schemas/client.ts';
 import type { Program } from './schemas/program.ts';
-import { effectiveSchedule, scheduleSince, weekTarget, type EffectiveSchedule } from './training-days.ts';
+import { effectiveSchedule, programWeekTarget, scheduleSince, todayAssigned, upcomingAssigned, type EffectiveSchedule } from './training-days.ts';
 import type { SessionDoc, SessionEntry, SessionIndex, SessionIndexRow, SkipReason } from './schemas/session.ts';
 import { waterOf } from './session-index.ts';
 import { exerciseHistory } from './session-results.ts';
@@ -35,8 +36,10 @@ import type { PreviousSet } from './workout-cursor.ts';
  * telefon başlangıçta anlık görüntü olarak saklar: antrenman PT o arada programı kaydetse de
  * başladığı günün planıyla sürer.
  *
- * - Gün programdan (şu anki evrede sıradaki ya da istenen gün); kütüphanede olmayan egzersizin
- *   satırı çizilmez, boş kalan blok düşer (geçilmiş sayılmaz).
+ * - Gün programdan: istenen gün, yoksa varsayılan gün (`defaultDayId`, Faz 3: bugüne ya da haftada sıradaki güne
+ *   atanmış program, atama yoksa evrenin ilk günü). Planlanan program (`plannedDayId`) antrenmanın gününe atanmış
+ *   olandır; dönüş sırası yok. Kütüphanede olmayan egzersizin satırı çizilmez, boş kalan blok düşer (geçilmiş
+ *   sayılmaz).
  * - Satır başına plan var olan motordan (`planSession`): satırın kuralı ve setleri (`planInputFor`),
  *   cihazın ağırlık ızgarası (`loadSpecFor`), geçmiş yalnız aynı egzersiz ve aynı cihazla
  *   (`exerciseHistory`, SPEC §7.3). Geçmiş index'ten seçilen son bitmiş antrenmanlardır.
@@ -99,8 +102,8 @@ export type RowPrevious = {
   done: number;
   planned: number;
   /**
-   * Bilerek geçildi: Geçilenler'de ya da sona alınıp yapılmadı ("Hareketi geç"). Erken bitişte yalnız
-   * yapılmadan kalan (nedeni bitişte sorulan) hareket geçilmiş sayılmaz.
+   * Bilerek geçildi: atlandı ("Bu hareketi atla"; listede geri alınıp yapılsa da işaret kalır; eski seanslarda sona
+   * alınıp yapılmadı). Erken bitişte yalnız yapılmadan kalan (nedeni bitişte sorulan) hareket geçilmiş sayılmaz.
    */
   skipped: boolean;
   reason?: SkipReason;
@@ -112,6 +115,8 @@ export type WorkoutRow = {
   exerciseId: string;
   title: string;
   trackingType: TrackingType;
+  /** Kardiyo satırı: mesafe; yürüyüş/koşuda eğim ve kalori (`cardio.ts`). Kardiyo değilse (ya da eski anlık görüntüde) yok. */
+  cardio?: CardioKind;
   deviceId?: string;
   /** Ağırlık ızgarası: öneri de stepper da bununla adımlar. */
   spec: LoadSpec;
@@ -170,15 +175,13 @@ export type WorkoutDay = {
   source?: 'pt' | 'own';
   programId?: string;
   programName?: string;
-  /** Rotasyonda sıradaki gün; `dayId`'den farklıysa başka gün seçildi. */
-  plannedDayId: string | null;
-  /** Sıradaki günün adı (başka gün seçildiyse PT'nin bildirimi için). */
-  plannedDayName?: string;
   /**
-   * Şu anki evrenin günleri, dönüş sırasıyla: bitişteki "Sıradaki antrenman: Gün B" satırı. Eski anlık
-   * görüntüde yok (satır görünmez, sunucu varsayılanı uygular).
+   * Antrenmanın gününe atanmış program; `dayId`'den farklıysa başka program seçildi (Faz 3). Atanmamış günde null:
+   * danışan programı kendisi seçer, bildirim yok.
    */
-  rotationDays?: { id: string; name: string }[];
+  plannedDayId: string | null;
+  /** Planlanan programın adı; yalnız seçilenden farklıyken (PT'nin "Alt vücut yerine Üst vücut yapıldı" bildirimi). */
+  plannedDayName?: string;
   /** Günün blokları (kütüphanede olmayan satırlar çıkmış): imleç bununla yürür. */
   blocks: TemplateBlock[];
   rows: Record<string, WorkoutRow>;
@@ -193,6 +196,11 @@ export type WorkoutDay = {
    * Yalnız telefonda, günün etkin hâlinde (`workout-flow.ts` → `withExtraRounds`); sunucu yazmaz.
    */
   extraRounds?: Record<string, number>;
+  /**
+   * Danışanın en son vücut ağırlığı (kg): yalnız ölçüm onayı sürdükçe, kalori hesabı için (`cardio.ts`). Sağlık verisidir:
+   * seansa yazılmaz, yalnız ekranda kullanılır. Onay ya da ölçüm yoksa yok.
+   */
+  bodyMassKg?: number;
 };
 
 /**
@@ -234,7 +242,13 @@ function findDay(program: PlanProgram, dayId: string): { phase: Program['phases'
 function previousSets(entry: SessionEntry): PreviousSet[] {
   return entry.sets
     .filter((set) => set.type === 'working' && !set.extra)
-    .map((set, position) => ({ setIndex: set.setIndex ?? position, ...(set.kg !== undefined ? { kg: set.kg } : {}), value: set.reps ?? set.seconds ?? 0 }));
+    .map((set, position) => ({
+      setIndex: set.setIndex ?? position,
+      ...(set.kg !== undefined ? { kg: set.kg } : {}),
+      value: set.reps ?? set.seconds ?? 0,
+      ...(set.distanceM !== undefined ? { distanceM: set.distanceM } : {}),
+      ...(set.inclinePct !== undefined ? { inclinePct: set.inclinePct } : {}),
+    }));
 }
 
 /** Seansın programı: kendi programın kimliği, PT'nin programında null. */
@@ -392,12 +406,14 @@ export function workoutRowFor(input: {
   const select = { rowId: row.id, exerciseId: row.exerciseId, deviceId, programId: input.programId };
   const setupNote = setupNoteOf(input.history, select);
   const previous = input.dayId ? previousRowOf(input.history, { dayId: input.dayId, rowId: row.id, exerciseId: row.exerciseId }) : undefined;
+  const cardio = cardioKind(exercise);
   return {
     rowId: row.id,
     blockId: input.blockId,
     exerciseId: row.exerciseId,
     title: exercise.title,
     trackingType: exercise.trackingType,
+    ...(cardio ? { cardio } : {}),
     ...(deviceId ? { deviceId } : {}),
     spec,
     rule,
@@ -426,7 +442,7 @@ function valueKind(trackingType: TrackingType): 'time' | 'count' {
 export function swapRowFor(input: {
   row: TemplateRow;
   blockId: string;
-  original: Pick<PlanExercise, 'trackingType'>;
+  original: Pick<PlanExercise, 'trackingType' | 'pattern' | 'locomotion'>;
   exercise: WorkoutExercise;
   devices: ReadonlyMap<string, WorkoutDevice>;
   history: readonly SessionDoc[];
@@ -435,7 +451,9 @@ export function swapRowFor(input: {
   programId?: string | null | undefined;
 }): ExtraRow {
   const { row, exercise } = input;
-  const sets = valueKind(input.original.trackingType) === valueKind(exercise.trackingType) ? row.sets : defaultSets(exercise, row.sets.length);
+  const kept = valueKind(input.original.trackingType) === valueKind(exercise.trackingType) ? row.sets : defaultSets(exercise, row.sets.length);
+  // Kardiyo hedefi yalnız aynı kardiyo türünde kalır: koşu bandının mesafesi ve eğimi bisiklete ya da plank'a geçmez.
+  const sets = cardioKind(input.original) === cardioKind(exercise) ? kept : kept.map(withoutCardio);
   const template: TemplateRow = { id: row.id, exerciseId: exercise.id, sets, ...(row.rule ? { rule: row.rule } : {}) };
   return {
     exerciseId: exercise.id,
@@ -491,10 +509,19 @@ export function rekeyExtra(extra: ExtraRow, key: string): ExtraRow {
   return { ...extra, row: { ...extra.row, rowId: key, blockId: key }, template: { ...extra.template, id: key } };
 }
 
-/** İstenen gün (programda yoksa) ya da rotasyonda sıradaki gün; program boşsa null. */
-export function resolveDay(program: PlanProgram, dayId?: string | null) {
-  const planned = nextDayId(program);
-  return (dayId ? findDay(program, dayId) : null) ?? (planned ? findDay(program, planned) : null);
+/**
+ * Gün istenmediğinde sunucunun günü (Faz 3, Karar 5): bugüne atanmış program, yoksa haftada sıradaki atanmış program
+ * (`upcomingAssigned`), atama yoksa şu anki evrenin ilk günü; program boşsa null. Kayıttaki eski dönüş sırası okunmaz.
+ * Bugün yanıtının `program.nextDayId`'si de bu (eski telefonun önbellek eşleşmesi bozulmasın).
+ */
+export function defaultDayId(program: Pick<PlanProgram, 'phases' | 'current'>, today: string): string | null {
+  return upcomingAssigned(program, today)?.dayId ?? currentPhaseOf(program)?.phase.days[0]?.id ?? null;
+}
+
+/** İstenen gün; programda yoksa (ya da istenmediyse) varsayılan gün (`defaultDayId`); program boşsa null. */
+export function resolveDay(program: PlanProgram, dayId: string | null | undefined, today: string) {
+  const fallback = defaultDayId(program, today);
+  return (dayId ? findDay(program, dayId) : null) ?? (fallback ? findDay(program, fallback) : null);
 }
 
 /** Gün programda var mı (bütün evrelerde; sıradakine dönmeden). İlk yazımda seansın günü böyle denetlenir. */
@@ -503,19 +530,20 @@ export function hasDay(program: Pick<PlanProgram, 'phases'>, dayId: string): boo
 }
 
 /** Günün egzersizleri: geçmişten yalnız bunları içeren antrenmanlar okunur (`historyRows`). */
-export function dayExerciseIds(program: PlanProgram, dayId?: string | null): Set<string> {
-  const found = resolveDay(program, dayId);
+export function dayExerciseIds(program: PlanProgram, dayId: string | null | undefined, today: string): Set<string> {
+  const found = resolveDay(program, dayId, today);
   return new Set(found?.day.blocks.flatMap((block) => block.rows.map((row) => row.exerciseId)) ?? []);
 }
 
 /** Günün satırları: satır başına geçmiş penceresi (`historyRows`). */
-export function dayRowIds(program: PlanProgram, dayId?: string | null): Set<string> {
-  const found = resolveDay(program, dayId);
+export function dayRowIds(program: PlanProgram, dayId: string | null | undefined, today: string): Set<string> {
+  const found = resolveDay(program, dayId, today);
   return new Set(found?.day.blocks.flatMap((block) => block.rows.map((row) => row.id)) ?? []);
 }
 
 /**
- * Günün planı. `dayId` yoksa (ya da programda yoksa) rotasyonda sıradaki gün; program boşsa null.
+ * Günün planı. `dayId` yoksa (ya da programda yoksa) varsayılan gün (`defaultDayId`); program boşsa null.
+ * `today`: antrenmanın günü (yeni seansın tarihi; özette seansın tarihi): planlanan program ona atanmış olandır.
  * `history` bitmiş antrenmanlar (sıra önemsiz); etkin ve silinmiş belgeler yok sayılır. Satırların
  * setleri danışanın geçerli hedefleriyle (`clientTargets`, tasarım §6.2): antrenman ve bitişin farkı onlarla.
  */
@@ -528,14 +556,17 @@ export function buildWorkoutDay(input: {
   insight?: WorkoutInsight | undefined;
   /** Kendi programda kimliği ve adı (`source: 'own'`); verilmezse ya da null ise PT'nin programı. */
   owner?: PlanOwner | undefined;
+  /** Antrenmanın günü (uygulamanın saat diliminde takvim günü). */
+  today: string;
 }): WorkoutDay | null {
-  const planned = nextDayId(input.program);
-  const found = resolveDay(input.program, input.dayId);
+  const found = resolveDay(input.program, input.dayId, input.today);
   if (!found) return null;
   const { phase, day } = found;
   const history = input.history.filter((doc) => doc.status === 'finished');
   const current = currentPhaseOf(input.program)?.phase;
-  const plannedName = planned ? current?.days.find((item) => item.id === planned)?.name : undefined;
+  // Planlanan: bugüne atanmış program (şu anki evrede); adı yalnız başka program seçildiyse (bildirim metni).
+  const planned = current ? todayAssigned(current.days, input.today) : null;
+  const plannedName = planned && planned.id !== day.id ? planned.name : undefined;
 
   const blocks: TemplateBlock[] = withClientTargets(day.blocks, input.program.clientTargets).flatMap((block) => {
     const kept = block.rows.filter((row) => input.exercises.has(row.exerciseId));
@@ -567,9 +598,8 @@ export function buildWorkoutDay(input: {
     revision: input.program.revision,
     source: owner ? 'own' : 'pt',
     ...(owner ? { programId: owner.programId, programName: owner.name } : {}),
-    plannedDayId: planned,
+    plannedDayId: planned?.id ?? null,
     ...(plannedName ? { plannedDayName: plannedName } : {}),
-    rotationDays: (current?.days ?? []).map((item) => ({ id: item.id, name: item.name })),
     blocks,
     rows,
   };
@@ -626,51 +656,79 @@ export function activeRow(index: SessionIndex): SessionIndexRow | null {
 
 export type WeekCount = {
   done: number;
-  /** Seçili antrenman günü sayısı; gün seçilmemişse şu anki evrenin sıklığı; o da yoksa null. */
+  /** Atanmış gün sayısı (Faz 3: şu anki evrenin atamalarının birleşimi); atama yoksa evrenin sıklığı; o da yoksa null. */
   target: number | null;
   /** Bu hafta antrenman yapılan günler (Bugün'ün gün şeridi). */
   days: string[];
   /** Haftanın pazartesisi. */
   start: string;
+  /**
+   * Bu haftanın bitmiş antrenmanları, `(date, startedAt)` sırasıyla (aynı gün ikisi de): şeridin gün adları
+   * (`assignedWeek`). Bellekteki eski yanıtta yok; okuyan `week.sessions ?? []` der.
+   */
+  sessions?: { date: string; dayName: string }[];
 };
 
 /**
  * "Bu hafta x/y" (tasarım §2.11): bitmiş antrenmanların günlerinden (`date`: başlangıç günü; gece yarısını
  * geçen ya da ertesi gün bitirilen antrenman başladığı günde, Geçmiş'le aynı), pazartesi başlayan hafta,
- * uygulamanın saat diliminde; y seçili gün sayısı, yoksa şu anki evrenin sıklığı.
+ * uygulamanın saat diliminde; y `programWeekTarget` (atanmış gün sayısı, yoksa şu anki evrenin sıklığı): İlerleme'nin
+ * seri hedefi ve haftalık hedeflerin dondurulması da aynı kuraldan.
  */
 export function weekOf(index: SessionIndex, program: PlanProgram | null, now: Date, timeZone: string): WeekCount {
   const today = todayIn(timeZone, now);
   const start = mondayOf(today);
-  const days = [...new Set(index.items.flatMap((row) => (row.finishedAt && row.date >= start && row.date <= today ? [row.date] : [])))].sort();
-  const daysPerWeek = program ? currentPhaseOf(program)?.phase.daysPerWeek : undefined;
-  const weekdays = program ? effectiveSchedule(program).weekdays : [];
-  return { done: days.length, target: weekTarget(weekdays, daysPerWeek), days, start };
+  const rows = index.items
+    .filter((row) => row.finishedAt && row.date >= start && row.date <= today)
+    .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : time(a.startedAt) - time(b.startedAt)));
+  const days = [...new Set(rows.map((row) => row.date))].sort();
+  const sessions = rows.map((row) => ({ date: row.date, dayName: row.dayName || 'Antrenman' }));
+  return { done: days.length, target: (program ? programWeekTarget(program) : undefined) ?? null, days, start, sessions };
 }
 
 /**
  * Bitişten hemen sonra Bugün'ün sayıları, sunucudan taze gelene kadar (iyimser; telefon bitişin yanıtıyla
  * yazar): antrenmanın günü bu haftadaysa "Bu hafta x/y"ye girer (gün başına bir, `weekOf` gibi; aynı gün
- * ikinci antrenman sayıyı değiştirmez), suyu bugünün bitmiş antrenmanlarına geçer, yarım antrenman kartı
- * düşer. Önbellekteki eski sayı bir an bile görünmesin.
+ * ikinci antrenman sayıyı değiştirmez, adı yine şeride eklenir), suyu bugünün bitmiş antrenmanlarına geçer,
+ * yarım antrenman kartı düşer. Önbellekteki eski sayı bir an bile görünmesin.
+ *
+ * `week.sessions` `weekOf` gibi güne göre sıralı kalır (kararlı: aynı günün sırası korunur, yeni bitiş o günün
+ * sonuna). Oturumun kimliği listede olmadığından tekrar kuralı: o günün son oturumu aynı adlıysa yenisi eklenmez
+ * (aynı bitiş iki kez uygulanırsa ya da sunucunun taze yanıtı bitişi zaten içeriyorsa çift satır olmaz; aynı
+ * gün aynı günü ikinci kez yapmak şeritte zaten aynı adı gösterirdi: "aynı gün sonuncusu").
+ *
+ * Program (`program`, `nextDayId` dahil) aynen kalır (Faz 3, Karar 5): bitiş dönüşü ilerletmez, sıradaki program
+ * bugünün atamasından gelir. Eski telefonun belgesindeki `rotation` okunmaz.
  */
-export function afterFinish<T extends { today: string; week: WeekCount; water: { file: number; sessions: number }; active: Pick<SessionDoc, 'id'> | null }>(
-  data: T,
-  doc: Pick<SessionDoc, 'id' | 'date' | 'waterTaps'>,
-): T {
-  const counted = mondayOf(doc.date) === data.week.start && doc.date <= data.today && !data.week.days.includes(doc.date);
+export function afterFinish<
+  T extends {
+    today: string;
+    week: WeekCount;
+    water: { file: number; sessions: number };
+    active: Pick<SessionDoc, 'id'> | null;
+  },
+>(data: T, doc: Pick<SessionDoc, 'id' | 'date' | 'waterTaps'> & Partial<Pick<SessionDoc, 'program'>>): T {
+  const thisWeek = mondayOf(doc.date) === data.week.start && doc.date <= data.today;
+  const counted = thisWeek && !data.week.days.includes(doc.date);
   const days = counted ? [...data.week.days, doc.date].sort() : data.week.days;
+  const previous = data.week.sessions ?? [];
+  const dayName = doc.program?.dayName || 'Antrenman';
+  const repeated = previous.filter((session) => session.date === doc.date).at(-1)?.dayName === dayName;
+  const sessions = (repeated ? [...previous] : [...previous, { date: doc.date, dayName }]).sort((a, b) =>
+    a.date < b.date ? -1 : a.date > b.date ? 1 : 0,
+  );
   const known = data.active?.id === doc.id;
   return {
     ...data,
-    week: counted ? { ...data.week, done: days.length, days } : data.week,
+    week: thisWeek ? { ...data.week, done: days.length, days, sessions } : data.week,
     water: doc.date === data.today ? { ...data.water, sessions: data.water.sessions + waterOf(doc) } : data.water,
     active: known ? null : data.active,
   };
 }
 
 /**
- * Bugün'ün ve Ayarlar'ın "Günlerini değiştir"i için: geçerli günler, PT'ninkiler, danışanınki ve sıklık.
+ * Bugün'ün gün şeridi ve Ayarlar'ın "Antrenman günleri" için: geçerli günler (Faz 3: yalnız PT'nin ya da kendi
+ * programın atamaları; danışanın eski katmanı yok sayılır, `client` hep null) ve sıklık.
  * `since`: kaçan gün penceresinin başladığı takvim günü (uygulamanın saat diliminde; `scheduleSince`, Genel
  * bakış'ın "Kaçan gün"üyle aynı kural): Bugün'ün şeridi o gün ve öncesini "kaçırıldı" diye işaretlemez.
  */
@@ -678,10 +736,10 @@ export type WorkoutSchedule = EffectiveSchedule & { daysPerWeek: number | null; 
 
 export function scheduleOf(
   program: PlanProgram,
-  context: { client: Parameters<typeof scheduleSince>[1]; timeZone: string; activeAt?: string | undefined },
+  context: { client: Parameters<typeof scheduleSince>[1]; timeZone: string; activeAt?: string | undefined; now: Date },
 ): WorkoutSchedule {
   // Kalıcı seçimin anı da pencereyi açar (`docs/design/kendi-program.md` §3.2): seçimden önceki günler kaçmış sayılmaz.
-  const since = latestSince(scheduleSince(program, context.client), context.activeAt);
+  const since = latestSince(scheduleSince(program, context.client, context.now), context.activeAt);
   return {
     ...effectiveSchedule(program),
     daysPerWeek: currentPhaseOf(program)?.phase.daysPerWeek ?? null,
@@ -698,11 +756,12 @@ export function latestSince(a: string | undefined, b: string | undefined): strin
 
 /**
  * Programın o anki sürümünün damgası: telefonda saklanan gün planı bununla karşılaştırılır. PT'nin kaydı
- * (revision, updatedAt), evre, rotasyon (başka cihazda bitirilen antrenman) ve günler değişince değişir;
- * Bugün sunucuda taze okunan programın damgasını verir, eskiyen plan "Antrenmana başla"da kullanılmaz.
+ * (revision, updatedAt), evre, rotasyon (eski kayıt), günler ve şu anki evrenin atamaları değişince değişir: aynı
+ * birleşimde iki program günlerini takas etse de saklanan planın `plannedDayId`'si eskir (Faz 3). Bugün sunucuda
+ * taze okunan programın damgasını verir, eskiyen plan "Antrenmana başla"da kullanılmaz.
  */
 export function programStamp(
-  program: Pick<PlanProgram, 'revision' | 'createdAt' | 'updatedAt' | 'current' | 'rotation' | 'schedule' | 'clientSchedule' | 'clientTargets'>,
+  program: Pick<PlanProgram, 'revision' | 'createdAt' | 'updatedAt' | 'phases' | 'current' | 'rotation' | 'schedule' | 'clientSchedule' | 'clientTargets'>,
   /** Kendi programın kimliği (`docs/design/kendi-program.md` §3.2): seçim değişince saklanan plan eskir. */
   programId?: string | null,
 ): string {
@@ -715,6 +774,7 @@ export function programStamp(
     program.rotation.lastDayId ?? '',
     program.rotation.lastCompletedAt ?? '',
     (program.schedule?.weekdays ?? []).join(''),
+    (currentPhaseOf(program)?.phase.days ?? []).map((day) => `${day.id}:${(day.weekdays ?? []).join('')}`).join(','),
     program.clientSchedule?.at ?? '',
     // Danışanın hedefi değişince (bitişte "Evet, güncelle") saklanan plan eskir.
     Object.entries(program.clientTargets ?? {})
@@ -724,7 +784,7 @@ export function programStamp(
   ].join('|');
 }
 
-/** Günlerin son yapıldığı tarih ("Başka gün seç": "son: 22 Eyl"): bitmiş antrenmanlardan. */
+/** Programların son yapıldığı tarih ("Değiştir" sheet'i ve Bugün'ün listesi: "son: 22 Eyl"): bitmiş antrenmanlardan. */
 export function lastDoneDates(index: SessionIndex): Record<string, string> {
   const last: Record<string, string> = {};
   for (const row of index.items) {

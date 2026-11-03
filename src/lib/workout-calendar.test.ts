@@ -2,7 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {calendarMonth,shiftMonth} from './workout-calendar.ts';
 import type {HistoryMonth,HistoryRow} from './session-history.ts';
-const row=(id:string,day:string):HistoryRow=>({id,dayOfMonth:day,weekday:'',title:'Gün A',meta:'3 set',prs:0,otherDay:false,unfinished:false});
+const row=(id:string,day:string):HistoryRow=>({id,dayOfMonth:day,month:'',weekday:'',title:'Gün A',meta:'3 set',prs:0,otherDay:false,unfinished:false});
 test('calendar keeps multiple sessions on one date and Monday-first leap-year alignment',()=>{
  const months:HistoryMonth[]=[{key:'2024-02',label:'Şubat',rows:[row('one','29'),row('two','29'),row('three','1')]}];
  const result=calendarMonth(months,'2024-02');

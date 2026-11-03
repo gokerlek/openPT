@@ -15,7 +15,7 @@ export function progressReview(rows: readonly SessionIndexRow[], today: string, 
   const finished = rows.filter(r => r.finishedAt && !r.unfinished && r.date <= today).sort((a, b) => b.date.localeCompare(a.date) || (b.startedAt ?? '').localeCompare(a.startedAt ?? ''));
   const cutoff = new Date(`${today}T00:00:00Z`); cutoff.setUTCDate(cutoff.getUTCDate() - 27);
   const recent = finished.filter(r => r.date >= cutoff.toISOString().slice(0, 10));
-  const insights: CoachInsight[] = [{ title: 'Antrenman düzeni', finding: `Son 28 günde ${recent.length} tamamlanmış antrenman kaydı var.`, next: recent.length ? 'Sonraki seansı mevcut programın sıradaki gününden sürdür; gün ve süre sana uymuyorsa programı bu koşullara göre düzenle.' : 'Bir sonraki tamamlanan seansı kaydet; sıklık ve gelişim değerlendirmesini bu kayıtlarla başlatalım.', sources: recent.slice(0, 4).map(r => `${r.date} antrenman kaydı`) }];
+  const insights: CoachInsight[] = [{ title: 'Antrenman düzeni', finding: `Son 28 günde ${recent.length} tamamlanmış antrenman kaydı var.`, next: recent.length ? 'Sonraki seansı mevcut programın sıradaki antrenmanından sürdür; gün ve süre sana uymuyorsa programı bu koşullara göre düzenle.' : 'Bir sonraki tamamlanan seansı kaydet; sıklık ve gelişim değerlendirmesini bu kayıtlarla başlatalım.', sources: recent.slice(0, 4).map(r => `${r.date} antrenman kaydı`) }];
   const seen = new Set<string>();
   for (const row of recent) for (const exercise of row.exercises) {
     const key = JSON.stringify([exercise.exerciseId, exercise.deviceId ?? null]);

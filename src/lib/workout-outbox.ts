@@ -66,6 +66,8 @@ export type LocalWorkout = {
   /** Bu antrenmandaki dinlenme sayısı: kilit uyarısı yalnız ilkinde. */
   restCount: number;
   draft: SetDraft | null;
+  /** Seçili setin dışındaki setlere yazılanlar (`keepTyped`); önceki sürümün kaydında yok. */
+  drafts?: readonly SetDraft[];
   /** Süreli setin sayacı ("Başlat ▶"); sayılmıyorsa null. */
   timer: SetTimer | null;
   /**
@@ -105,6 +107,23 @@ export function createLocalWorkout(
 export function withChange(local: LocalWorkout, doc: SessionDoc, options: { send: boolean }): LocalWorkout {
   const rev = local.rev + 1;
   return { ...local, doc, rev, dueRev: options.send ? rev : local.dueRev };
+}
+
+/**
+ * Telefondaki antrenmanda henüz hiçbir şey yok: hiç gönderilmedi, kayıt ve su yok, yoklama planı değiştirmedi (`adjust`,
+ * bildirim). Plan değişirse sessizce yeniden kurulabilir. Yoklamanın cevaplanıp cevaplanmadığı telefonda ayrı durur
+ * (`check-in-storage.ts`); çağıran ayrıca bakar: cevaplandıysa yeniden kurulan antrenman yoklamayı yeniden sorardı.
+ */
+export function untouchedWorkout(local: Pick<LocalWorkout, 'acked' | 'lastSentAt' | 'doc'>): boolean {
+  const { doc } = local;
+  return (
+    local.acked === null &&
+    local.lastSentAt === null &&
+    doc.entries.length === 0 &&
+    doc.waterTaps.length === 0 &&
+    doc.adjust === undefined &&
+    doc.notices.length === 0
+  );
 }
 
 /** Gönderilmesi gereken bir değişiklik var mı. */
@@ -214,6 +233,21 @@ function roundsOf(value: unknown): Record<string, number> {
 }
 
 /**
+ * Yerel kaydın antrenman kimliği, şemaya bakmadan (karşılaştırıp silmek için, `clearLocalWorkout`); kayıt yoksa ya da
+ * okunamıyorsa null.
+ */
+export function localWorkoutId(text: string | null): string | null {
+  if (!text) return null;
+  try {
+    const raw = JSON.parse(text) as unknown;
+    const id = isRecord(raw) && isRecord(raw.doc) ? raw.doc.id : null;
+    return typeof id === 'string' ? id : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Yerel kaydı okur. Belge şemadan geçer ve etkin olmalı; plan biçimce denetlenir. Okunamayan kayıt
  * yok sayılır (null): üzerine yeni antrenman yazılabilir.
  */
@@ -246,6 +280,7 @@ export function parseLocalWorkout(text: string | null): LocalWorkout | null {
     rest: restOf(raw.rest),
     restCount: count(raw.restCount),
     draft: isDraft(raw.draft) ? raw.draft : null,
+    ...(Array.isArray(raw.drafts) ? { drafts: raw.drafts.filter(isDraft).slice(0, 100) } : {}),
     timer: parseSetTimer(raw.timer),
     extraRounds: roundsOf(raw.extraRounds),
   };

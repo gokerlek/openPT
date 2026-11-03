@@ -4,7 +4,8 @@ import { notFound } from 'next/navigation';
 import { cache } from 'react';
 import { WarningCircle } from '@phosphor-icons/react/dist/ssr';
 import { EditButton } from '@/components/edit-button';
-import { TemplateMuscleMap } from '@/components/muscle-map/template-muscle-map';
+import { MuscleMap } from '@/components/muscle-map/muscle-map';
+import { LOAD_DESCRIPTION, loadMapProps } from '@/lib/muscle-tiers';
 import { PageHeader } from '@/components/page-header';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -20,9 +21,6 @@ import { templateMuscleLoad, templateSummary } from '@/lib/template-plan';
 import { readTemplateFile } from '@/lib/templates';
 import { InvalidTemplateAlert } from '../invalid-template-alert';
 import { TemplateSequence } from '../template-sequence';
-
-const LOAD_DESCRIPTION =
-  'Kas başına çalışma seti: hedef 1, yardımcı 0,5, dengeleyici 0,25 sayılır; ısınma ve soğuma hareketleri sayılmaz.';
 
 /** Sayfa ve başlığı (metadata) aynı isteğin tek okumasını paylaşır. */
 const readTemplate = cache(readTemplateFile);
@@ -136,7 +134,7 @@ export default async function TemplateDetailPage({ params }: { params: Promise<{
           </CardHeader>
           <CardContent>
             {counted ? (
-              <TemplateMuscleMap variant="full" bodyClassName="h-72" load={load} />
+              <MuscleMap layout="split" bodyClassName="h-72" {...loadMapProps(load, 'session', 'Şablonun kas yükü')} />
             ) : (
               <p className="text-sm text-muted-foreground">Bu şablonda sayılan kas yükü yok (ısınma, soğuma ya da kardiyo).</p>
             )}

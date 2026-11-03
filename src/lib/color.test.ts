@@ -381,29 +381,20 @@ describe('her renk için güvenceler', () => {
 
 describe('kas haritası renkleri', () => {
   const EMPTY_SHARE: Record<Theme, number> = { light: 0.08, dark: 0.12 };
-  const LEVEL_SHARE = { secondary: 0.45, stabilizer: 0.2 };
 
-  test('globals.css karışım oranları testteki ile aynı', () => {
+  test('globals.css karışım oranları testteki ile aynı; ara ton yok (kademe desenle)', () => {
     assert.match(css, /--muscle-empty: color-mix\(in oklab, var\(--foreground\) 8%, var\(--card\)\)/);
     assert.match(css, /--muscle-empty: color-mix\(in oklab, var\(--foreground\) 12%, var\(--card\)\)/);
-    assert.match(css, /--muscle-secondary: color-mix\(in oklab, var\(--muscle-target\) 45%, var\(--muscle-empty\)\)/);
-    assert.match(css, /--muscle-stabilizer: color-mix\(in oklab, var\(--muscle-target\) 20%, var\(--muscle-empty\)\)/);
+    assert.doesNotMatch(css, /--muscle-(secondary|stabilizer)/);
   });
 
   for (const theme of THEMES) {
-    test(`${theme}: hedef boş kastan ≥3:1; sıra boş < dengeleyici < yardımcı < hedef`, () => {
+    test(`${theme}: hedef boş kastan ≥3:1 (dolgu, çizgi ve nokta aynı renk)`, () => {
       const card = tokenHex(theme, 'card');
       const empty = mixOklab(tokenHex(theme, 'foreground'), card, EMPTY_SHARE[theme]);
       for (const accent of ALL_ACCENTS) {
         const target = brandShade(accent, theme).strong;
         assert.ok(contrastRatio(target, empty) >= 3, `${accent}: hedef ${target} / boş ${empty}`);
-        const secondary = mixOklab(target, empty, LEVEL_SHARE.secondary);
-        const stabilizer = mixOklab(target, empty, LEVEL_SHARE.stabilizer);
-        // Yüzeyden uzaklık (kontrast) sırayla artar.
-        const steps = [empty, stabilizer, secondary, target].map((color) => contrastRatio(color, card));
-        for (let i = 1; i < steps.length; i++) {
-          assert.ok((steps[i] ?? 0) > (steps[i - 1] ?? 0), `${accent}: ${steps.map(round).join(' < ')}`);
-        }
       }
     });
   }

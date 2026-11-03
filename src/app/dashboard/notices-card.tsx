@@ -12,7 +12,7 @@ import { MarkSeenButton } from './mark-seen-button';
 
 /**
  * Genel bakış'ın "Bildirimler"i (tasarım §4.6): bütün danışanların son 14 gündeki bildirimleri tek
- * listede, en yeniden eskiye: başka gün seçildi, yarım bırakıldı, aşırı yük, hafifletildi, danışanın
+ * listede, en yeniden eskiye: başka program seçildi, yarım bırakıldı, aşırı yük, hafifletildi, danışanın
  * program değişikliği (antrenman günleri), bekleyen öneriler, onay sürdükçe ağrı ayrıntısı. Satır
  * danışana ya da programına götürür. Okunmamışlar noktalı; "Tümünü okundu say" danışanların
  * `inbox.seenAt`'ini yazar (açık soru 7). Arşivdeki danışan listede yok.
@@ -22,7 +22,7 @@ import { MarkSeenButton } from './mark-seen-button';
  */
 export async function NoticesCard({ timeZone }: { timeZone: string }) {
   const { overviews, failed } = await clientOverviews();
-  const feed = noticeFeed(overviews);
+  const feed = noticeFeed(overviews, { now: new Date() });
 
   return (
     <Card>
@@ -32,7 +32,7 @@ export async function NoticesCard({ timeZone }: { timeZone: string }) {
           {feed.unread > 0 ? <Badge className="tabular-nums">{formatNumber(feed.unread)} yeni</Badge> : null}
         </CardTitle>
         <CardDescription>
-          Son {NOTICE_WINDOW_DAYS} gün: danışanların antrenmanlarından ve program değişikliklerinden.
+          Son {NOTICE_WINDOW_DAYS} gün ve bekleyen öneriler: danışanların antrenmanlarından ve program değişikliklerinden.
           {failed > 0 ? ` ${formatNumber(failed)} danışanın kaydı okunamadı.` : ''}
         </CardDescription>
         {feed.unreadClients.length > 0 ? (
@@ -50,7 +50,7 @@ export async function NoticesCard({ timeZone }: { timeZone: string }) {
               </EmptyMedia>
               <EmptyTitle>Bildirim yok</EmptyTitle>
               <EmptyDescription>
-                Danışan başka gün seçtiğinde, antrenmanı yarım bıraktığında ya da günlerini değiştirdiğinde burada görünür.
+                Danışan bugünün programı yerine başka birini yaptığında ya da antrenmanı yarım bıraktığında burada görünür.
               </EmptyDescription>
             </EmptyHeader>
           </Empty>

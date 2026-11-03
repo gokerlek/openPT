@@ -1,16 +1,18 @@
 'use client';
 
 import { motion } from 'motion/react';
-import { ArrowRight, CaretRight, Check, FlagCheckered, Play, Stop, WarningCircle } from '@phosphor-icons/react';
+import { ArrowRight, CaretDown, CaretLeft, CaretRight, CaretUp, CheckCircle, FlagCheckered, Play, Stop, WarningCircle } from '@phosphor-icons/react';
+import { Check, Plus } from '@/components/line-icons';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Stepper } from '@/components/ui/stepper';
+import { CARDIO_LIMITS, minutesOf } from '@/lib/cardio';
 import { formatKg, formatNumber } from '@/lib/format';
 import { gridOf } from '@/lib/progression';
 import { SESSION_LIMITS } from '@/lib/schemas/session';
 import { cn } from '@/lib/utils';
 import type { WorkoutRow } from '@/lib/workout-plan';
-import { clockText, targetText, type NextSet, type OverloadState } from '@/lib/workout-session';
+import { clockText, targetText, type NextSet, type OverloadState, type SetValues } from '@/lib/workout-session';
 import type { SetTimerTick } from '@/lib/workout-timer';
 
 /** Süreli harekette stepper adımı (sn). */
@@ -21,6 +23,100 @@ export type TransitionView = { endsAt: number; total: number };
 
 /** Sayılan süreli set: saniyede bir değişen hâli. */
 export type TimerView = Pick<SetTimerTick, 'seconds' | 'toMin' | 'fraction' | 'phase'>;
+
+/**
+ * Odaktaki hareketin komşusu: sonra açılacak hareket (kendiliğinden geçişin açacağı, `nextUnitAfter`) ya da listede önceki
+ * hareket (`previousUnitBefore`); adı ve açan iş.
+ */
+export type FollowingView = { name: string; onOpen: () => void };
+
+/** "‹ Önceki": kısa (adı yalnız erişilebilir adda), satırın ya da başlığın kenarında. */
+function PreviousButton({ previous, className }: { previous: FollowingView; className?: string }) {
+  return (
+    <Button
+      variant="ghost"
+      aria-label={`Önceki hareket: ${previous.name}`}
+      className={cn('h-11 gap-1 px-2 text-sm font-normal text-muted-foreground', className)}
+      onClick={previous.onOpen}>
+      <CaretLeft data-icon="inline-start" weight="bold" />
+      Önceki
+    </Button>
+  );
+}
+
+/**
+ * Giriş panelinin altında tek satır (8. görev, "Sıradaki her an görünür"): "Sıradaki: Goblet Squat ›" dokununca o hareketi
+ * açar; sonra hareket kalmadıysa "Son hareket". Listede önceki hareket varsa solda kısa "‹ Önceki" (biten bir harekete
+ * dönüp setini düzenlemek için), "Sıradaki" sağa yaslanır ve adı kırpılır; ilk harekette yalnız "Sıradaki", ortada. Ana
+ * düğmenin hemen altında tam genişlikte bir şerit değil: çizgiyle ayrılır ve düğmeler yazıları kadar geniş, "Set bitti"yi
+ * ıskalayan başparmak onları açmasın. `hidden`: süreli set sayarken ve set kaydedilirken satır yok (yanlış dokunuş süren
+ * seti bırakırdı); yeri boş kalır, panel kaymaz.
+ */
+function NextUp({ previous, following, hidden }: { previous: FollowingView | null; following: FollowingView | null; hidden: boolean }) {
+  return (
+    <div className={cn('mt-1 flex min-h-11 items-center gap-2 border-t pt-1', previous && !hidden ? 'justify-between' : 'justify-center')}>
+      {hidden ? null : (
+        <>
+          {previous ? <PreviousButton previous={previous} className="-ml-2 shrink-0" /> : null}
+          {following ? (
+            // Erişilebilir ad görünen metnin kendisi ("Sıradaki: Goblet Squat"; WCAG 2.5.3): sesle komut verilebilsin.
+            <Button
+              variant="ghost"
+              className={cn('h-11 w-auto max-w-full min-w-0 gap-1 px-3 text-sm font-normal text-muted-foreground', previous && '-mr-2 shrink')}
+              onClick={following.onOpen}>
+              <span className="shrink-0">Sıradaki:</span>{' '}
+              <span className="min-w-0 truncate font-medium text-foreground">{following.name}</span>
+              <CaretRight data-icon="inline-end" weight="bold" />
+            </Button>
+          ) : (
+            <p className="text-sm text-muted-foreground">Son hareket</p>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+/** Paneli açıp kapatan düğmenin kimliği: düğme yer değiştirince odak yenisine taşınır. */
+export const ENTRY_PANEL_TOGGLE_ID = 'entry-panel-toggle';
+
+/** Paneli kapatan (açıkken üst satırın sağında) ya da açan (kapalıyken gezinme satırının sağında) küçük düğme. */
+function PanelToggle({ collapsed, onToggle, className }: { collapsed: boolean; onToggle: () => void; className?: string }) {
+  return (
+    <Button
+      id={ENTRY_PANEL_TOGGLE_ID}
+      variant="ghost"
+      aria-label={collapsed ? 'Set panelini aç' : 'Set panelini gizle'}
+      aria-expanded={!collapsed}
+      className={cn('size-11 shrink-0 p-0 text-muted-foreground [&_svg]:size-5', className)}
+      onClick={onToggle}>
+      {collapsed ? <CaretUp weight="bold" /> : <CaretDown weight="bold" />}
+    </Button>
+  );
+}
+
+/**
+ * Kapalı panel: yalnız "‹ Önceki · Sıradaki: <ad> ›" satırı ve sağda paneli açan ⌃. Set tablodaki satırdan girilir (kg ve
+ * tekrar kutuları, ✓). `hidden` (set kaydedilirken): gezinme düğmeleri yok, yeri boş kalır.
+ */
+function CollapsedBar({ previous, following, hidden, onToggle }: { previous: FollowingView | null; following: FollowingView | null; hidden: boolean; onToggle: () => void }) {
+  return (
+    <div className="flex min-h-14 items-center gap-1 pt-1">
+      {!hidden && previous ? <PreviousButton previous={previous} className="-ml-2 shrink-0" /> : null}
+      <div className="flex min-w-0 flex-1 justify-center">
+        {hidden ? null : following ? (
+          <Button variant="ghost" className="h-11 w-auto max-w-full min-w-0 gap-1 px-3 text-sm font-normal text-muted-foreground" onClick={following.onOpen}>
+            <span className="shrink-0">Sıradaki:</span> <span className="min-w-0 truncate font-medium text-foreground">{following.name}</span>
+            <CaretRight data-icon="inline-end" weight="bold" />
+          </Button>
+        ) : (
+          <p className="text-sm text-muted-foreground">Son hareket</p>
+        )}
+      </div>
+      <PanelToggle collapsed onToggle={onToggle} className="-mr-2" />
+    </div>
+  );
+}
 
 function TransitionBar({ transition, now }: { transition: TransitionView; now: number }) {
   const remaining = Math.max(0, transition.endsAt - now);
@@ -56,21 +152,26 @@ function TimerBox({ view, target }: { view: TimerView; target: NextSet['target']
 }
 
 /**
- * Alt giriş paneli (tasarım §2.4), yapışkan: başparmak bölgesinde. Üst satırda "Set 2/3 · Hedef 8–10"
+ * Alt giriş paneli (tasarım §2.4), yapışkan: başparmak bölgesinde; yalnız odakta. Üst satırda "Set 2/3 · Hedef 8–10"
  * (AMRAP'ta rozet ve "En az 8, yapabildiğin kadar"), altında 56 px'lik stepper'lar (ağırlık cihazın
- * ızgarasıyla bir sonraki/önceki ayar; tekrar ya da saniye), en altta tek dokunuşluk "Set bitti"
- * (grupta turun sıradaki üyesi varsa "Set bitti → B"). Kaydedilince düğme panel değişene kadar
- * "Kaydedildi" der ve değerler donar. Dokunuş kilidi paneli saran kapta (`WorkoutScreen`).
+ * ızgarasıyla bir sonraki/önceki ayar; tekrar ya da saniye), sonra tek dokunuşluk "Set bitti"
+ * (grupta turun sıradaki üyesi varsa "Set bitti → B"), en altta "Sıradaki: <ad>" satırı. Kaydedilince düğme panel
+ * değişene kadar "Kaydedildi" der ve değerler donar. Dokunuş kilidi paneli saran kapta (`WorkoutScreen`).
+ *
+ * - Odaktaki harekette set kalmadı (biten hareket açıldı): "Bu hareket bitti", birincil **Sıradaki: <ad>** (yoksa
+ *   **Antrenmanı bitir**), ikincil **Set ekle** (grupta **Tur ekle**; fazladan set). "Sıradaki" satırı burada yok:
+ *   birincil düğme odur; "‹ Önceki" başlığın sağında.
+ * - Kaydedilmiş seti düzenlemek bu panelin işi değil: tablodaki satıra dokununca ekran paneli `SetEditPanel` ile değiştirir.
  *
  * - Süreli set: "Başlat ▶" sayacı kurar (saniye kronometreyle sayılır, alt sınırda tek bip), "Bitir ■"
  *   geçen süreyi yazar; elle stepper ve "Set bitti" de var.
  * - Aşırı yük (hareket başına bir kez): ağırlık planın çok üstündeyse uyarı ve "Onayla · Set bitti";
  *   "Düzelt" önerilen ağırlığa döner. Engellemez.
  * - Devrede istasyon geçişi panelin üst kenarında ince çubuk olarak sayar.
- * - "Hareketi geç ›" üst satırın sağında (§2.6): başparmak erişiminde, başlıktaki "Değiştir"den uzakta;
- *   tek dokunuş, hareket sona alınır.
- * - "+ Set ekle" ile istenen fazladan sette üst satırda "Fazladan" rozeti; "Hareketi geç"in yerinde "Kaldır"
- *   (planın setleri yapıldı, geçilecek bir şey yok; fazladan set bırakılır).
+ * - Hareketi atlamak ve muadil seçmek üst çubuğun ⋯ menüsünde (8. görev; "Hareketi geç ›" kalktı).
+ * - "+ Set ekle" ile istenen fazladan sette üst satırda "Fazladan" rozeti ve sağda "Sil" (fazladan set silinir, 8 sn "Geri al").
+ * - Üst satırın sağındaki ⌄ paneli kapatır (`collapsed`, danışanın bu cihazdaki tercihi): altta yalnız gezinme satırı ve ⌃
+ *   kalır, set tablodaki satırdan girilir. Süreli set sayarken panel açık görünür (sayaç burada).
  */
 export function EntryPanel({
   row,
@@ -87,9 +188,13 @@ export function EntryPanel({
   onStartTimer,
   onStopTimer,
   onCancelTimer,
-  onSkip,
   onDropExtra,
   onFinish,
+  previous,
+  following,
+  addSet,
+  collapsed,
+  onToggleCollapsed,
 }: {
   row: WorkoutRow | null;
   /** Gösterilen set: sıradaki ya da (kaydedilirken) az önce kaydedilen. */
@@ -103,32 +208,65 @@ export function EntryPanel({
   /** Süreli setin sayacı çalışıyorsa hâli. */
   timer: TimerView | null;
   now: number;
-  onChange: (values: { kg?: number | undefined; value?: number | undefined }) => void;
+  onChange: (values: SetValues) => void;
   onResetKg: () => void;
   onDone: () => void;
   onStartTimer: () => void;
   onStopTimer: () => void;
   onCancelTimer: () => void;
-  /** "Hareketi geç ›": şu anki hareket (grupta bütün grup) sona alınır. */
-  onSkip: () => void;
-  /** Fazladan sette "Kaldır": istenen fazladan set (grupta tur) bırakılır. */
+  /** Fazladan sette "Sil": istenen fazladan set (grupta tur) silinir (8 sn "Geri al"). */
   onDropExtra: () => void;
   onFinish: () => void;
+  /** Listede önceki hareket ("‹ Önceki"); ilk harekette null. */
+  previous: FollowingView | null;
+  /** Sıradaki hareket (kendiliğinden geçişin açacağı); sonra hareket kalmadıysa null. */
+  following: FollowingView | null;
+  /** Biten harekette "Set ekle" (grupta "Tur ekle"); sınırdaysa ya da kaydedilirken null. */
+  addSet: { label: string; onAdd: () => void } | null;
+  /** Panel kapalı (danışanın tercihi): yalnız gezinme satırı; süreli set sayarken panel yine açık görünür. */
+  collapsed: boolean;
+  onToggleCollapsed: () => void;
 }) {
+  const counting = next !== null && row?.trackingType === 'duration' && timer !== null && !frozen;
+  if (collapsed && !counting) return <CollapsedBar previous={previous} following={following} hidden={frozen} onToggle={onToggleCollapsed} />;
   if (!next || !row) {
     return (
       <div className="flex flex-col gap-2 pt-2">
-        <p className="flex min-h-11 items-center text-sm font-medium">Hareketler bitti</p>
-        <Button size="lg" className="h-14 w-full text-base" onClick={onFinish}>
-          <FlagCheckered data-icon="inline-start" />
-          Antrenmanı bitir
-        </Button>
+        <div className="flex min-h-11 items-center gap-2">
+          <p className="flex min-w-0 flex-1 items-center gap-2 text-sm font-medium">
+            <CheckCircle weight="fill" className="size-5 shrink-0 text-primary" aria-hidden />
+            Bu hareket bitti
+          </p>
+          {previous ? <PreviousButton previous={previous} className="shrink-0" /> : null}
+          <PanelToggle collapsed={false} onToggle={onToggleCollapsed} className="-mr-2" />
+        </div>
+        {following ? (
+          <Button size="lg" className="h-14 w-full text-base" onClick={following.onOpen}>
+            <span className="min-w-0 truncate">Sıradaki: {following.name}</span>
+            <ArrowRight data-icon="inline-end" weight="bold" />
+          </Button>
+        ) : (
+          <Button size="lg" className="h-14 w-full text-base" onClick={onFinish}>
+            <FlagCheckered data-icon="inline-start" />
+            Antrenmanı bitir
+          </Button>
+        )}
+        {addSet ? (
+          <Button variant="secondary" size="lg" className="h-12 w-full text-base" onClick={addSet.onAdd}>
+            <Plus data-icon="inline-start" weight="bold" />
+            {addSet.label}
+          </Button>
+        ) : null}
       </div>
     );
   }
 
   const weighted = row.trackingType === 'weight_reps';
   const duration = row.trackingType === 'duration';
+  const cardio = row.cardio ?? null;
+  // Yürüyüş/koşuda süre dakikayla girilir (saniye saklanır).
+  const walk = cardio === 'walk';
+  const valueMax = walk ? SESSION_LIMITS.seconds / 60 : duration ? SESSION_LIMITS.seconds : SESSION_LIMITS.reps;
   const grid = weighted ? gridOf(row.spec) : null;
   const { kg, value } = next;
   const running = duration && timer !== null && !frozen;
@@ -183,7 +321,7 @@ export function EntryPanel({
         <span className="text-muted-foreground" aria-hidden>
           ·
         </span>
-        <span className="min-w-0 flex-1 truncate text-muted-foreground">{targetText(next.target, row.trackingType)}</span>
+        <span className="min-w-0 flex-1 truncate text-muted-foreground">{targetText(next.target, row.trackingType, cardio)}</span>
         {inTransition && transition ? (
           <span className="shrink-0 text-[0.8125rem] text-primary">Geçiş {clockText(Math.ceil((transition.endsAt - now) / 1000))}</span>
         ) : running ? (
@@ -191,15 +329,11 @@ export function EntryPanel({
             Vazgeç
           </Button>
         ) : next.extra && !frozen ? (
-          <Button variant="ghost" className="-mr-2 h-11 shrink-0 px-3 text-muted-foreground" aria-label="Fazladan seti kaldır" onClick={onDropExtra}>
-            Kaldır
-          </Button>
-        ) : !frozen ? (
-          <Button variant="ghost" className="-mr-2 h-11 shrink-0 gap-0.5 px-2.5 text-primary hover:text-primary" onClick={onSkip}>
-            Hareketi geç
-            <CaretRight data-icon="inline-end" weight="bold" />
+          <Button variant="ghost" className="h-11 shrink-0 px-3 text-muted-foreground" aria-label="Fazladan seti sil" onClick={onDropExtra}>
+            Sil
           </Button>
         ) : null}
+        {running ? null : <PanelToggle collapsed={false} onToggle={onToggleCollapsed} className="-mr-2" />}
       </div>
       {weighted ? (
         <Stepper
@@ -225,19 +359,56 @@ export function EntryPanel({
       ) : (
         <Stepper
           size="xl"
-          value={value}
+          value={walk ? minutesOf(value) : value}
           onValueChange={(changed) => {
-            if (changed !== null && Number.isFinite(changed)) onChange({ value: Math.min(duration ? SESSION_LIMITS.seconds : SESSION_LIMITS.reps, Math.max(0, Math.round(changed))) });
+            if (changed === null || !Number.isFinite(changed)) return;
+            const shown = Math.min(valueMax, Math.max(0, changed));
+            onChange({ value: walk ? Math.round(shown * 60) : Math.round(shown) });
           }}
           min={0}
-          max={duration ? SESSION_LIMITS.seconds : SESSION_LIMITS.reps}
-          step={duration ? SECONDS_STEP : 1}
-          unit={duration ? 'sn' : 'tekrar'}
+          max={valueMax}
+          step={walk ? 1 : duration ? SECONDS_STEP : 1}
+          inputMode={walk ? 'decimal' : 'numeric'}
+          unit={walk ? 'dk' : duration ? 'sn' : 'tekrar'}
           aria-label={duration ? `Süre, ${row.title}` : next.target.amrap ? `Yaptığın tekrar, ${row.title}` : `Tekrar, ${row.title}`}
           decrementLabel={duration ? 'Süreyi azalt' : 'Tekrarı azalt'}
           incrementLabel={duration ? 'Süreyi artır' : 'Tekrarı artır'}
         />
       )}
+      {cardio && !frozen ? (
+        // Sayaç çalışırken de görünür: bandın ekranındaki mesafe ve eğim "Bitir"den önce yazılır.
+        <div className={cn('grid gap-2', walk && 'grid-cols-[1.4fr_1fr]')}>
+          <Stepper
+            value={next.distanceM ?? null}
+            onValueChange={(changed) => {
+              if (changed !== null && Number.isFinite(changed)) onChange({ distanceM: Math.min(CARDIO_LIMITS.distanceMax, Math.max(0, Math.round(changed))) });
+            }}
+            min={0}
+            max={CARDIO_LIMITS.distanceMax}
+            step={CARDIO_LIMITS.distanceStep}
+            unit="m"
+            aria-label={`Mesafe, ${row.title}`}
+            decrementLabel="Mesafeyi azalt"
+            incrementLabel="Mesafeyi artır"
+          />
+          {walk ? (
+            <Stepper
+              value={next.inclinePct ?? null}
+              onValueChange={(changed) => {
+                if (changed !== null && Number.isFinite(changed)) onChange({ inclinePct: Math.min(CARDIO_LIMITS.inclineMax, Math.max(0, changed)) });
+              }}
+              min={0}
+              max={CARDIO_LIMITS.inclineMax}
+              step={CARDIO_LIMITS.inclineStep}
+              inputMode="decimal"
+              unit="%"
+              aria-label={`Eğim, ${row.title}`}
+              decrementLabel="Eğimi azalt"
+              incrementLabel="Eğimi artır"
+            />
+          ) : null}
+        </div>
+      ) : null}
       {ask ? (
         <div role="alert" className="flex min-h-11 items-center gap-2 text-sm text-destructive-text">
           <WarningCircle weight="fill" className="size-4.5 shrink-0" />
@@ -267,6 +438,7 @@ export function EntryPanel({
       ) : (
         doneButton
       )}
+      <NextUp previous={previous} following={following} hidden={running || frozen} />
     </div>
   );
 }

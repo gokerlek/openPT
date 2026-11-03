@@ -1,5 +1,7 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
+import * as v from 'valibot';
+import { assignWeekdays } from './day-assignments.ts';
 import {
   applyProgramEdit,
   commitMessage,
@@ -16,7 +18,6 @@ import {
   derivePhased,
   mergePhases,
   moveDayToPhase,
-  nextDayId,
   normalizeProgram,
   programIdSource,
   removePhase,
@@ -26,8 +27,10 @@ import {
   type ProgramPhase,
   type ProgramState,
 } from './program-plan.ts';
+import { programSchema } from './schemas/program.ts';
 import { resizeSets, uniformSets } from './set-plan.ts';
 import { roundsOf, type PlanExercise, type TemplateBlock, type TemplateRow } from './template-plan.ts';
+import { DAY_A, DAY_B, PHASE, programFile } from './testing/session-fixtures.ts';
 
 const ctx: DiffContext = {
   exercises: new Map([
@@ -418,32 +421,11 @@ describe('kaydın uygulanması', () => {
     assert.deepEqual(result.program.rotation, { lastCompletedAt: '2026-09-20T10:00:00.000Z' });
   });
 
-  test('son gün silinince rotasyon uzlaşır', () => {
+  // Faz 3 (Karar 5): dönüş okunmaz; eski dosyanın alanı uzlaştırılmadan taşınır.
+  test('son gün silinse de rotasyon olduğu gibi kalır', () => {
     const phases = [{ ...uyum, days: uyum.days.filter((day) => day.id !== 'd_bbbbbb') }, guc];
     const result = applyProgramEdit(stored, { phased: true, currentPhaseId: uyum.id, phases }, ctx, simdi);
-    assert.deepEqual(result?.program.rotation, { lastDayId: 'd_aaaaaa', lastCompletedAt: '2026-09-20T10:00:00.000Z' });
-  });
-
-  test('antrenman günleri: PT değiştirince yazılır, danışanın günleri silinir; göndermeyen eski sekme dokunmaz', () => {
-    const clientSchedule = { weekdays: [2, 4, 6], at: '2026-09-23T10:00:00.000Z' };
-    const withDays: ProgramState = { ...stored, schedule: { weekdays: [1, 3, 5] }, clientSchedule };
-    const same = { phased: true, currentPhaseId: uyum.id, phases: stored.phases };
-    // Eski sekme (günler yok) ve aynı günler: değişiklik yok, danışanın günleri kalır.
-    assert.equal(applyProgramEdit(withDays, same, ctx, simdi), null);
-    assert.equal(applyProgramEdit(withDays, { ...same, weekdays: [5, 1, 3] }, ctx, simdi), null);
-    const changed = applyProgramEdit(withDays, { ...same, weekdays: [1, 4] }, ctx, simdi);
-    assert.ok(changed);
-    assert.deepEqual(changed.program.schedule, { weekdays: [1, 4], at: simdi.toISOString() });
-    assert.equal('clientSchedule' in changed.program, false);
-    assert.equal(changed.program.revision, 6);
-    assert.deepEqual(texts(changed.changes), ['Antrenman günleri: Pzt, Çar, Cum → Pzt, Per', 'Danışanın günleri kaldırıldı (Sal, Per, Cmt)']);
-    // Başka bir değişiklikle kaydedilen program danışanın günlerini korur.
-    const renamed = applyProgramEdit(withDays, { ...same, phases: [{ ...uyum, name: 'Uyum 2' }, guc] }, ctx, simdi);
-    assert.deepEqual(renamed?.program.clientSchedule, clientSchedule);
-    assert.deepEqual(renamed?.program.schedule, { weekdays: [1, 3, 5] });
-    // Günler kaldırılabilir.
-    const cleared = applyProgramEdit(withDays, { ...same, weekdays: [] }, ctx, simdi);
-    assert.equal(cleared && 'schedule' in cleared.program, false);
+    assert.equal(result?.program.rotation, stored.rotation);
   });
 
   test('düzenleyici göndermediyse kayıttaki kaynak korunur', () => {
@@ -478,6 +460,107 @@ describe('kaydın uygulanması', () => {
     const entry = result.program.log[0];
     assert.equal(entry?.changes.length, 60);
     assert.deepEqual(entry?.changes.at(-1), { text: '… ve 6 değişiklik daha' });
+  });
+});
+
+describe('Faz 3: atamalar ve antrenman günleri', () => {
+  const NOW = new Date('2026-09-24T09:00:00.000Z');
+  // Eski dosya Sal, Per → okunurken A: [2], B: [4].
+  const old = (extra: Record<string, unknown> = {}) => v.parse(programSchema, programFile({}, { schedule: { weekdays: [2, 4] }, ...extra }));
+  const edit = (stored: ProgramState, phases: ProgramPhase[]) => applyProgramEdit(stored, { phased: false, currentPhaseId: PHASE, phases }, ctx, NOW);
+
+  test('atama değişince birleşim yazılır, satırlar geçmişe', () => {
+    const stored = old();
+    const phases = stored.phases.map((phase) => ({ ...phase, days: assignWeekdays(phase.days, DAY_B, [4, 5]) }));
+    const result = edit(stored, phases);
+    assert.deepEqual(result?.program.schedule, { weekdays: [2, 4, 5], at: NOW.toISOString() });
+    assert.deepEqual(
+      result?.changes.map((change) => [change.scope ?? null, change.text]),
+      [
+        ['Gün B', 'Günleri: Per → Per, Cum'],
+        [null, 'Antrenman günleri: Sal, Per → Sal, Per, Cum'],
+      ],
+    );
+    assert.equal(result?.program.log[0]?.kind, 'edit');
+  });
+
+  test('yeni eklenen günde "Günleri" yazılmaz', () => {
+    const stored = old();
+    const added = { id: 'd_cccccc', name: 'Gün C', weekdays: [6], blocks: stored.phases[0]?.days[0]?.blocks ?? [] };
+    const result = edit(stored, [{ ...stored.phases[0]!, days: [...stored.phases[0]!.days, added] }]);
+    assert.deepEqual(texts(result?.changes ?? []), ['Gün C eklendi', 'Antrenman günleri: Sal, Per → Sal, Per, Cmt']);
+  });
+
+  test('değişmeyen eski program: sıklıksız kayıt yok; sıklıklıda ilk kayıt yalnız sıklığı düşürür', () => {
+    const plain = old();
+    assert.equal(edit(plain, plain.phases), null);
+    const raw = programFile({}, { schedule: { weekdays: [2, 4], at: '2026-09-05T10:00:00.000Z' } });
+    const withFrequency = v.parse(programSchema, { ...raw, phases: raw.phases.map((phase) => ({ ...phase, daysPerWeek: 2 })) });
+    // Gövde normalizeProgram'ın yapacağı gibi: atamalı evrede sıklık yok.
+    const { daysPerWeek: _dropped, ...phase } = withFrequency.phases[0]!;
+    const result = edit(withFrequency, [phase]);
+    assert.ok(result);
+    assert.deepEqual(result.changes, [{ text: 'Sıklık kaldırıldı (önce haftada 2 gün)' }]);
+    assert.equal(result.program.schedule, withFrequency.schedule, 'birleşim aynı: schedule ve anı aynen');
+    assert.equal(result.program.phases[0]?.daysPerWeek, undefined);
+  });
+
+  test('kayıttaki danışan katmanı ilk PT kaydında düşer: satır geçmişe, schedule.at şimdi', () => {
+    const layered = old({ clientSchedule: { weekdays: [1, 3], at: '2026-09-23T10:00:00.000Z' } });
+    const result = edit(layered, layered.phases);
+    assert.ok(result);
+    assert.equal('clientSchedule' in result.program, false);
+    assert.deepEqual(result.program.schedule, { weekdays: [2, 4], at: NOW.toISOString() });
+    assert.deepEqual(texts(result.changes), ['Danışanın günleri kaldırıldı (Pzt, Çar)']);
+  });
+
+  test('bütün atamalar kalkınca schedule düşer', () => {
+    const stored = old();
+    const phases = stored.phases.map((phase) => ({ ...phase, days: assignWeekdays(assignWeekdays(phase.days, DAY_A, []), DAY_B, []) }));
+    const result = edit(stored, phases);
+    assert.ok(result);
+    assert.equal('schedule' in result.program, false);
+    assert.deepEqual(texts(result.changes), ['Günleri: Sal → yok', 'Günleri: Per → yok', 'Antrenman günleri kaldırıldı (önce Sal, Per)']);
+  });
+
+  test('atamalı evreler arasında düzenleyicide evre geçişi: günlerin satırları da olsa "Evre geçişi"', () => {
+    const at = '2026-09-01T00:00:00.000Z';
+    const uyum = evre1([gun('d_aaaaaa', 'Gün A', [single('b_aaaaaa', goblet)], { weekdays: [1, 3] })], { name: 'Uyum' });
+    const guc: ProgramPhase = {
+      id: 'p_guc001',
+      name: 'Güç',
+      days: [gun('d_bbbbbb', 'Alt vücut', [single('b_bbbbbb', press)], { weekdays: [2] }), gun('d_cccccc', 'Üst vücut', [single('b_cccccc', curl)], { weekdays: [4] })],
+    };
+    const stored: ProgramState = {
+      version: 2,
+      phased: true,
+      revision: 5,
+      createdAt: at,
+      updatedAt: at,
+      phases: [uyum, guc],
+      current: { phaseId: uyum.id, startedAt: at },
+      schedule: { weekdays: [1, 3], at },
+      rotation: {},
+      log: [],
+    };
+    const result = applyProgramEdit(stored, { phased: true, currentPhaseId: guc.id, phases: stored.phases }, ctx, NOW);
+    assert.ok(result);
+    assert.deepEqual(texts(result.changes), ["Şu anki evre: 'Uyum' → 'Güç'", 'Antrenman günleri: Pzt, Çar → Sal, Per']);
+    assert.equal(result.program.log[0]?.kind, 'phase');
+    assert.deepEqual(result.program.schedule, { weekdays: [2, 4], at: NOW.toISOString() });
+    // Kayıttaki danışan katmanının düşmesi de evre geçişini "Düzenlendi" yapmaz.
+    const layered = { ...stored, clientSchedule: { weekdays: [5], at } };
+    const dropped = applyProgramEdit(layered, { phased: true, currentPhaseId: guc.id, phases: stored.phases }, ctx, NOW);
+    assert.equal(dropped?.changes.length, 3);
+    assert.equal(dropped?.program.log[0]?.kind, 'phase');
+    // Evre geçişiyle birlikte bir program değişirse "Düzenlendi".
+    const edited = applyProgramEdit(stored, { phased: true, currentPhaseId: guc.id, phases: [{ ...uyum, name: 'Uyum 2' }, guc] }, ctx, NOW);
+    assert.equal(edited?.program.log[0]?.kind, 'edit');
+  });
+
+  test('gövdenin program düzeyindeki günleri okunmaz: birleşim atamalardan', () => {
+    const stored = old();
+    assert.equal(applyProgramEdit(stored, { phased: false, currentPhaseId: PHASE, phases: stored.phases, weekdays: [1, 6] }, ctx, NOW), null);
   });
 });
 
@@ -675,10 +758,9 @@ describe('evresiz program: gizli evre', () => {
       result.program.phases.map((phase) => [phase.id, phase.name, phase.days.map((day) => day.id)]),
       [['p_evre01', 'Evre 1', ['d_aaaaaa', 'd_bbbbbb']]],
     );
-    // Şu anki evre ve rotasyon aynı: sıradaki gün B kalır (A'ya dönmez).
+    // Şu anki evre ve (eski dosyanın) rotasyonu aynı kalır.
     assert.equal(result.program.current, stored.current);
     assert.deepEqual(result.program.rotation, stored.rotation);
-    assert.equal(nextDayId(result.program), 'd_bbbbbb');
   });
 
   test('gizli evrenin adı (eski dosyada "Uyum") böl → kaldır ile değişse de geçmişe evre cümlesi düşmez', () => {

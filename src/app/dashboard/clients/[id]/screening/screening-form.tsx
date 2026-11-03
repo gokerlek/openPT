@@ -3,8 +3,9 @@ import { DatePicker } from '@/components/date-picker';
 
 import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { useRouter } from 'next/navigation';
-import { Check, CheckCircle, WarningCircle, X } from '@phosphor-icons/react';
+import { CheckCircle, WarningCircle } from '@phosphor-icons/react';
 import { ChoiceChips } from '@/components/choice-chips';
+import { Check, X } from '@/components/line-icons';
 import { SectionHeader } from '@/components/section-header';
 import { UnsavedChangesGuard } from '@/components/unsaved-changes-guard';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -277,7 +278,7 @@ export function ScreeningForm({
       mode.kind === 'new'
         ? fetchJson<{ ok: true }>(`/api/clients/${clientId}/screenings`, { method: 'POST', body: JSON.stringify({ date: state.date, tests, note: state.note }) })
         : fetchJson<{ ok: true }>(`/api/clients/${clientId}/screenings/${mode.date}`, { method: 'PUT', body: JSON.stringify({ tests, note: state.note }) }),
-    notify: { success: mode.kind === 'new' ? 'Tarama kaydedildi.' : 'Tarama güncellendi.' },
+    notify: { success: mode.kind === 'new' ? 'Hareket testi kaydedildi.' : 'Hareket testi güncellendi.' },
     onError: (failure) => setError(Object.values(failure.fields)[0] ?? failure.message),
     onSuccess: () => {
       writeDraft(key, null);
@@ -304,7 +305,7 @@ export function ScreeningForm({
   return (
     <div className="flex flex-col gap-6">
       <SectionHeader
-        back={{ href: base, label: 'PT değerlendirmesi' }}
+        back={{ href: base, label: 'Hareket' }}
         title={title}
         description={description}
         actions={
@@ -345,9 +346,9 @@ export function ScreeningForm({
 
       {mode.kind === 'new' ? (
         <Field className="max-w-xs">
-          <FieldLabel htmlFor="screening-date">Tarama günü</FieldLabel>
+          <FieldLabel htmlFor="screening-date">Test günü</FieldLabel>
           <DatePicker id="screening-date" max={mode.today} value={state.date} onValueChange={value => update({ ...state, date: value })} />
-          {taken ? <FieldDescription>{formatDay(state.date)} tarihinde tarama var: kaydedersen o günün yerine geçer.</FieldDescription> : null}
+          {taken ? <FieldDescription>{formatDay(state.date)} tarihinde hareket testi var: kaydedersen o günün yerine geçer.</FieldDescription> : null}
         </Field>
       ) : null}
 
@@ -428,7 +429,7 @@ export function ScreeningForm({
       })}
 
       <Field>
-        <FieldLabel htmlFor="screening-note">Taramanın notu</FieldLabel>
+        <FieldLabel htmlFor="screening-note">Hareket testinin notu</FieldLabel>
         <Input id="screening-note" maxLength={500} value={state.note} onChange={(event) => update({ ...state, note: event.currentTarget.value })} />
       </Field>
 
@@ -444,7 +445,7 @@ export function ScreeningForm({
         {saveButton('h-11 px-5')}
       </div>
 
-      <UnsavedChangesGuard active={dirty && !save.isPending && !save.isSuccess} description="Çıkarsan girdiğin tarama kaydedilmez; taslak bu sekme kapanana kadar durur." onLeave={() => undefined} />
+      <UnsavedChangesGuard active={dirty && !save.isPending && !save.isSuccess} description="Çıkarsan girdiğin hareket testi kaydedilmez; taslak bu sekme kapanana kadar durur." onLeave={() => undefined} />
     </div>
   );
 }

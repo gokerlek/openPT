@@ -249,3 +249,12 @@ export function healthConsentState(client: Pick<Client, 'modules' | 'consents'>)
 export function canRecordHealth(client: Pick<Client, 'modules' | 'consents'>, field: HealthField): boolean {
   return healthFieldState(client, field) === 'granted';
 }
+
+/**
+ * Danışanın Sağlık bölümü var mı: kısıtlar ya da hareket taraması kaydı yazılabiliyor (`canRecordHealth`). Dock'taki
+ * Sağlık sekmesi ve onay kartındaki "Sağlık sayfan" bağlantısı aynı kuralla görünür; ölçüm ya da ağrı takibi tek
+ * başına açmaz (tasarım `kisit-tarama.md` §5.2).
+ */
+export function hasHealthSection(client: Pick<Client, 'modules' | 'consents'>): boolean {
+  return canRecordHealth(client, 'conditions') || canRecordHealth(client, 'screening');
+}

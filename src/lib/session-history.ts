@@ -2,7 +2,7 @@ import { formatDay, formatKg, formatNumber, todayIn } from './format.ts';
 import { sessionDayText } from './own-program-text.ts';
 import { EFFORT_LABELS } from './progression.ts';
 import type { SessionDoc, SessionIndex, SessionIndexRow, SkipReason } from './schemas/session.ts';
-import { volumeOf, waterOf, workingSetCount } from './session-index.ts';
+import { sessionEnd, volumeOf, waterOf, workingSetCount } from './session-index.ts';
 import { addDays } from './training-days.ts';
 import { FINISH_REASON_LABELS } from './workout-flow.ts';
 import { setValueText } from './workout-session.ts';
@@ -12,7 +12,7 @@ import { clockOf, entriesInOrder, minutesText } from './workout-summary.ts';
  * Danışanın Geçmiş'i (tasarım §2.10, §4.5) — saf. Liste index'ten (tek okuma), detay antrenmanın dosyasından.
  *
  * - **Liste:** bitmiş antrenmanlar en yeniden eskiye, aylara bölünmüş ("EYLÜL 2026"); satırda gün, haftanın
- *   günü, gün adı ve süre, set · toplam ağırlık; rekor, "başka gün" ve "yarım" rozetleri. Üstte son 30 gün.
+ *   günü, programın adı ve süre, set · toplam ağırlık; rekor, "başka program" ve "yarım" rozetleri. Üstte son 30 gün.
  * - **Detay:** hareketler yapılış sırasıyla, setler zorluklarıyla; ısınma ayrı satır; geçilen hareketin nedeni,
  *   danışanın ayar notu. Düzenle kipinde set, hareket ve antrenmanın tamamı onaylı silinir; su ±1 (açık soru 6:
  *   geçmişte set düzeltme yok, yalnız silme ve su).
@@ -27,8 +27,9 @@ export const HISTORY_RECENT_DAYS = 30;
 
 export type HistoryRow = {
   id: string;
-  /** Takvim günü: "26" ve "Cmt". */
+  /** Takvim günü: "26", "Eyl" ve "Cmt". */
   dayOfMonth: string;
+  month: string;
   weekday: string;
   /** "Gün A · 52 dk". */
   title: string;
@@ -44,7 +45,16 @@ export type HistoryMonth = { key: string; label: string; rows: HistoryRow[] };
 export type HistoryList = { recent: string | null; months: HistoryMonth[]; count: number };
 
 const weekdayFormat = new Intl.DateTimeFormat('tr-TR', { weekday: 'short', timeZone: 'UTC' });
+const monthShortFormat = new Intl.DateTimeFormat('tr-TR', { month: 'short', timeZone: 'UTC' });
 const monthFormat = new Intl.DateTimeFormat('tr-TR', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+
+/** Yarım antrenmanın süresi eski index satırlarında ya da setsizse (bitiş son sete göre kısılamaz) şişik olabilir; bundan uzunu gösterilmez. */
+const UNFINISHED_MAX_MIN = 180;
+
+function shownMinutes(row: Pick<SessionIndexRow, 'durationMin' | 'unfinished'>): number | undefined {
+  if (row.durationMin === undefined) return undefined;
+  return row.unfinished && row.durationMin > UNFINISHED_MAX_MIN ? undefined : row.durationMin;
+}
 
 function time(iso: string | undefined): number {
   const at = iso ? Date.parse(iso) : Number.NaN;
@@ -56,11 +66,13 @@ function rowOf(row: SessionIndexRow): HistoryRow {
   const prs = row.prs ?? 0;
   // Kendi programdan antrenman programın adıyla ("Evde · Gün A"): program silinse de anlık görüntü kalır.
   const day = sessionDayText(row);
-  const title = [day, ...(row.durationMin !== undefined ? [minutesText(row.durationMin)] : [])].join(' · ');
+  const minutes = shownMinutes(row);
+  const title = [day, ...(minutes !== undefined ? [minutesText(minutes)] : [])].join(' · ');
   const meta = `${formatNumber(row.sets)} set · ${formatKg(row.volumeKg)}`;
   return {
     id: row.id,
     dayOfMonth: String(date.getUTCDate()),
+    month: monthShortFormat.format(date),
     weekday: weekdayFormat.format(date),
     title,
     meta,
@@ -86,13 +98,19 @@ export function historyList(index: SessionIndex, now: Date, timeZone: string): H
   }
   const since = addDays(todayIn(timeZone, now), -(HISTORY_RECENT_DAYS - 1));
   const recent = rows.filter((row) => row.date >= since);
-  const minutes = recent.reduce((sum, row) => sum + (row.durationMin ?? 0), 0);
+  const minutes = recent.reduce((sum, row) => sum + (shownMinutes(row) ?? 0), 0);
   const prs = recent.reduce((sum, row) => sum + (row.prs ?? 0), 0);
   const summary =
     recent.length > 0
       ? [`Son ${HISTORY_RECENT_DAYS} gün`, `${formatNumber(recent.length)} antrenman`, minutesText(minutes), ...(prs > 0 ? [`${formatNumber(prs)} rekor`] : [])].join(' · ')
       : null;
   return { recent: summary, months, count: rows.length };
+}
+
+/** "Son antrenman": programın (null = PT'nin) bitmişlerinin en yenisi, yarım dahil; own-program-text.ts'teki program başına "son" ile aynı. */
+export function lastWorkout(index: SessionIndex | null, programId: string | null = null): SessionIndexRow | null {
+  const rows = (index?.items ?? []).filter((row) => row.finishedAt && (row.programId ?? null) === programId);
+  return rows.sort((a, b) => time(b.startedAt ?? b.date) - time(a.startedAt ?? a.date))[0] ?? null;
 }
 
 /**
@@ -151,8 +169,11 @@ function skipText(reason: SkipReason | undefined): string {
   return reason ? `geçildi · ${FINISH_REASON_LABELS[reason]}` : 'geçildi';
 }
 
-/** Antrenmanın detayı: setleri olan ya da geçilen hareketler, yapılış sırasıyla. */
-export function sessionDetail(doc: SessionDoc, timeZone: string): SessionDetail {
+/**
+ * Antrenmanın detayı: setleri olan ya da geçilen hareketler, yapılış sırasıyla. `bodyMassKg` (ölçüm onayıyla, seansın
+ * günündeki kilo) verilirse yürüyüş/koşu setinin metninde kalori de (`cardio.ts`).
+ */
+export function sessionDetail(doc: SessionDoc, timeZone: string, bodyMassKg?: number): SessionDetail {
   const exercises: DetailExercise[] = [];
   for (const entry of entriesInOrder(doc)) {
     const working = entry.sets.filter((set) => set.type === 'working');
@@ -169,7 +190,7 @@ export function sessionDetail(doc: SessionDoc, timeZone: string): SessionDetail 
       ...working.map((set, position) => ({
         id: set.id,
         label: formatNumber(position + 1),
-        text: setValueText(set),
+        text: setValueText(set, bodyMassKg),
         effort: set.effort ? EFFORT_LABELS[set.effort] : null,
         warmup: false,
         extra: Boolean(set.extra),
@@ -178,7 +199,8 @@ export function sessionDetail(doc: SessionDoc, timeZone: string): SessionDetail 
     exercises.push({ entryId: entry.id, title: entry.title, note, ...(entry.setupNote ? { setupNote: entry.setupNote } : {}), sets });
   }
   const sets = workingSetCount(doc);
-  const end = doc.finishedAt ?? doc.startedAt;
+  // Yarım bırakılan antrenmanın saat aralığı son setten en çok 10 dk sonra biter (`sessionEnd`).
+  const end = sessionEnd(doc) ?? doc.startedAt;
   const dayName = sessionDayText(doc.program);
   const title = `${dayName} · ${formatDay(doc.date)}`;
   return {

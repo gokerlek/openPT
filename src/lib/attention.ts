@@ -70,7 +70,7 @@ export type AttentionKind = (typeof ATTENTION_KINDS)[number];
 export const ATTENTION_LABELS: Record<AttentionKind, string> = {
   constraint: 'Kısıt',
   missed: 'Kaçan gün',
-  screening: 'Tarama',
+  screening: 'Hareket testi',
   stalled: 'İlerleme',
   phase: 'Evre',
   proposals: 'Öneri',
@@ -92,12 +92,12 @@ export const ATTENTION_URGENCY = {
   redFlag: 95,
   /**
    * Danışan "şiddetli" dedi (onaylı kısıtta kötüleşti ya da şiddetli bildirim), PT bakmadı: günlük hayatı etkileyen
-   * bir değişiklik her antrenmanı ilgilendirir (sıradaki gündeki tek çelişkiden, 85, geniş); yönlendirme
+   * bir değişiklik her antrenmanı ilgilendirir (sıradaki programdaki tek çelişkiden, 85, geniş); yönlendirme
    * beklemeyen bir sağlık profesyoneli kararının (95) altında, kaçan günlerin (90) üstünde.
    */
   constraintSevere: 92,
   missedMany: 90,
-  /** Kısıtla çelişen satır danışanın sıradaki gününde. */
+  /** Kısıtla çelişen satır danışanın sıradaki programında (bugüne ya da haftada sıradaki güne atanmış, `upcomingAssigned`). */
   conflictNext: 85,
   /** Danışan kısıt bildirdi, karar bekliyor. */
   report: 80,
@@ -109,7 +109,7 @@ export const ATTENTION_URGENCY = {
   deload: 70,
   declining: 65,
   phase: 65,
-  /** Programda kısıtla çelişen hareket (sıradaki günde değil). */
+  /** Programda kısıtla çelişen hareket (sıradaki programda değil). */
   conflict: 66,
   missedOne: 60,
   inviteBlocked: 55,
@@ -156,7 +156,7 @@ export type ConstraintFacts = {
    * vardı (süzgeçteki dikkati PT'nin kararına kadar sürer).
    */
   changes: { id: string; label: string; kind: 'worse' | 'better'; from?: Severity; to?: Severity; wasSevere?: true }[];
-  /** İzinsiz yasaklar (şu anki evre); `next`: danışanın sıradaki gününde. */
+  /** İzinsiz yasaklar (şu anki evre); `next`: danışanın sıradaki programında. */
   conflicts: { dayName: string; title: string; next: boolean }[];
 };
 
@@ -358,12 +358,13 @@ export function attentionFactsOf(input: {
   let schedule: AttentionFacts['schedule'] = null;
   if (selected) {
     // Kendi program: günleri index satırında; pencere programın kurulduğu, günlerin değiştiği ve seçildiği andan sonra.
-    const since = later(scheduleSince({ createdAt: selected.createdAt, schedule: { weekdays: selected.weekdays, at: selected.weekdaysAt } }, client), activeAt);
+    const since = later(scheduleSince({ createdAt: selected.createdAt, schedule: { weekdays: selected.weekdays, at: selected.weekdaysAt } }, client, now), activeAt);
     if (selected.weekdays.length > 0 && since) schedule = { weekdays: normalizeWeekdays(selected.weekdays), since };
   } else if (program) {
     const days = effectiveSchedule(program);
-    // Günler programdan, günlerin son değişmesinden, ilk girişten, duraklatmadan dönüşten ve PT'nin programına dönüşten önce sayılmaz (Bugün'ün şeridiyle aynı kural).
-    const since = later(scheduleSince(program, client), activeAt);
+    // Günler programdan, günlerin son değişmesinden, ilk girişten, duraklatmadan dönüşten ve PT'nin programına dönüşten önce sayılmaz
+    // (Bugün'ün şeridiyle aynı kural); kayıtta danışanın eski katmanı durdukça bugünden.
+    const since = later(scheduleSince(program, client, now), activeAt);
     if (days.weekdays.length > 0 && since) schedule = { weekdays: days.weekdays, since };
   }
 
@@ -662,43 +663,59 @@ export function constraintItems(facts: ConstraintFacts, today: string): Attentio
 export function screeningItems(facts: ScreeningFacts, today: string): AttentionItem[] {
   const items: AttentionItem[] = [];
   if (facts.pain.length > 0) {
-    items.push({ key: 'screening:pain', kind: 'screening', urgency: ATTENTION_URGENCY.screeningPain, text: `Taramada ağrı: ${listText(facts.pain)}`, target: 'screening' });
+    items.push({ key: 'screening:pain', kind: 'screening', urgency: ATTENTION_URGENCY.screeningPain, text: `Hareket testinde ağrı: ${listText(facts.pain)}`, target: 'screening' });
   }
   if (facts.asymmetry && facts.date >= addDays(today, -SCREENING_ALERT_DAYS)) {
     items.push({
       key: 'screening:asymmetry',
       kind: 'screening',
       urgency: ATTENTION_URGENCY.asymmetry,
-      text: `Taramada büyük asimetri: ${facts.asymmetry}`,
+      text: `Hareket testinde büyük asimetri: ${facts.asymmetry}`,
       target: 'screening',
     });
   }
   return items;
 }
 
-/** Genel bakış listesinin uzunluğu. */
-export const ATTENTION_FEED_LIMIT = 15;
+/** Genel bakış'ta en çok bu kadar danışan ve danışan başına bu kadar madde gösterilir. */
+export const ATTENTION_GROUP_LIMIT = { groups: 8, perGroup: 3 } as const;
 
-export type AttentionFeedItem = AttentionItem & { clientId: string; clientName: string };
+export type AttentionGroup = {
+  clientId: string;
+  clientName: string;
+  /** En acil maddeler, `perGroup` kadar. */
+  items: AttentionItem[];
+  /** Grupta görünmeyen madde sayısı. */
+  more: number;
+  /** Sağlık güvenliği maddesi var (kırmızı). */
+  urgent: boolean;
+};
 
 /**
- * Bütün danışanların maddeleri tek listede: aciliyet, sonra danışanın adı. `total` listede görünmeyenler dahil,
- * `clients` maddesi olan danışan sayısı.
+ * "Dikkat gerektirenler" danışana göre: her danışanın maddeleri aciliyet sırasıyla, gruplar en acil maddelerine,
+ * sonra ada göre. `total` maddesi olan danışan sayısı, `hidden` sınır yüzünden görünmeyen danışan sayısı.
  */
-export function attentionFeed(
+export function attentionGroups(
   clients: readonly { id: string; name: string; facts: AttentionFacts | null | undefined }[],
   ctx: { now: Date; timeZone: string; titleOf: (exerciseId: string) => string },
-  limit = ATTENTION_FEED_LIMIT,
-): { items: AttentionFeedItem[]; total: number; clients: number } {
-  const all = clients.flatMap((client) =>
-    client.facts ? attentionItems(client.facts, ctx).map((item) => ({ ...item, clientId: client.id, clientName: client.name })) : [],
-  );
+  limit: { groups: number; perGroup: number } = ATTENTION_GROUP_LIMIT,
+): { groups: AttentionGroup[]; total: number; hidden: number } {
+  const all = clients.flatMap((client) => {
+    const items = client.facts ? attentionItems(client.facts, ctx) : [];
+    return items.length > 0 ? [{ clientId: client.id, clientName: client.name, items }] : [];
+  });
   all.sort(
     (a, b) =>
-      b.urgency - a.urgency ||
+      (b.items[0]?.urgency ?? 0) - (a.items[0]?.urgency ?? 0) ||
       a.clientName.localeCompare(b.clientName, 'tr') ||
-      a.clientId.localeCompare(b.clientId) ||
-      ATTENTION_KINDS.indexOf(a.kind) - ATTENTION_KINDS.indexOf(b.kind),
+      a.clientId.localeCompare(b.clientId),
   );
-  return { items: all.slice(0, limit), total: all.length, clients: new Set(all.map((item) => item.clientId)).size };
+  const groups = all.slice(0, limit.groups).map((group) => ({
+    clientId: group.clientId,
+    clientName: group.clientName,
+    items: group.items.slice(0, limit.perGroup),
+    more: Math.max(0, group.items.length - limit.perGroup),
+    urgent: group.items.some((item) => item.tone === 'danger'),
+  }));
+  return { groups, total: all.length, hidden: Math.max(0, all.length - groups.length) };
 }

@@ -5,17 +5,25 @@ import { cn } from '@/lib/utils';
 import { normalizeWeekdays, WEEKDAY_NAMES, WEEKDAY_SHORT, WEEKDAYS, type Weekday } from '@/lib/training-days';
 
 /**
- * Haftanın yedi günü, çoklu seçim (tasarım §2.11): PT'nin program düzenleyicisinde ve danışanın
- * "Günlerini değiştir" sheet'inde aynı parça. Her gün 44 px (375 px'te yedisi yan yana sığar); basılı
- * gün dolu ve halkalı (`toggle.tsx`), ekran okuyucu günün tam adını duyar. Değer pazartesiden sıralı.
+ * Haftanın yedi günü, çoklu seçim (tasarım §2.11; Faz 3): programın (antrenmanın) atandığı günler, PT'nin program
+ * düzenleyicisinde ve kendi program formunda aynı parça (AI koçunun gün seçimi de). Her gün 44 px (375 px'te yedisi
+ * yan yana sığar); basılı gün dolu ve halkalı (`toggle.tsx`), ekran okuyucu günün tam adını duyar. Değer pazartesiden
+ * sıralı.
+ *
+ * `taken`: evrede başka programa atanmış günler → o programın adı. Bir gün evrede en çok bir programa atanır; alınmış
+ * gün kapalıdır, nedeni erişilebilir adında ("Perşembe, Üst vücut programında"). Görünen satırı ("Başka programda: …")
+ * çağıran yazar ve `describedBy` ile gruba bağlar: kapalı düğme odak almaz, ekran okuyucu nedeni grupta duysun.
+ * `title` yok: kapalı düğmede imleç olayı yok (`pointer-events-none`), hiç görünmezdi.
  */
 export function WeekdayToggle({
   value,
   onChange,
   label,
   id,
+  describedBy,
   disabled,
   invalid,
+  taken,
   className,
 }: {
   value: readonly number[];
@@ -24,8 +32,12 @@ export function WeekdayToggle({
   label?: string;
   /** Görünen etiketin `id`'si (`aria-labelledby`). */
   id?: string;
+  /** Altındaki açıklamanın `id`'si (`aria-describedby`): alınmış günlerin nedeni ("Başka programda: …"). */
+  describedBy?: string;
   disabled?: boolean;
   invalid?: boolean;
+  /** Başka programa atanmış günler → sahibinin adı (`takenWeekdays`); bunlar seçilemez. */
+  taken?: ReadonlyMap<number, string>;
   className?: string;
 }) {
   return (
@@ -35,15 +47,25 @@ export function WeekdayToggle({
       spacing={1}
       disabled={disabled}
       {...(id ? { 'aria-labelledby': id } : { 'aria-label': label ?? 'Antrenman günleri' })}
+      aria-describedby={describedBy}
       aria-invalid={invalid || undefined}
       value={normalizeWeekdays(value).map(String)}
       onValueChange={(next) => onChange(normalizeWeekdays(next.map(Number)))}
       className={cn('grid w-full grid-cols-7', className)}>
-      {WEEKDAYS.map((day) => (
-        <ToggleGroupItem key={day} value={String(day)} aria-label={WEEKDAY_NAMES[day]} className="h-11 min-w-0 px-0 text-sm">
-          {WEEKDAY_SHORT[day]}
-        </ToggleGroupItem>
-      ))}
+      {WEEKDAYS.map((day) => {
+        const owner = taken?.get(day);
+        const name = owner === undefined ? WEEKDAY_NAMES[day] : `${WEEKDAY_NAMES[day]}, ${owner} programında`;
+        return (
+          <ToggleGroupItem
+            key={day}
+            value={String(day)}
+            disabled={owner !== undefined}
+            aria-label={name}
+            className="h-11 min-w-0 px-0 text-sm">
+            {WEEKDAY_SHORT[day]}
+          </ToggleGroupItem>
+        );
+      })}
     </ToggleGroup>
   );
 }

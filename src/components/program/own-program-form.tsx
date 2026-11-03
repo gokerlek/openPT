@@ -3,7 +3,7 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Form, getInput, setErrors, setInput, useField, useForm } from '@formisch/react';
-import { ArrowClockwise, Bandaids, CopySimple, FileText, Plus, Square, Trash, UserCircle, WarningCircle } from '@phosphor-icons/react';
+import { ArrowClockwise, Bandaids, CopySimple, FileText, Square, Trash, UserCircle, WarningCircle } from '@phosphor-icons/react';
 import { toast } from 'sonner';
 import { BlockEditor } from '@/components/block-editor/block-editor';
 import type { BlocksFormStore } from '@/components/block-editor/block-items';
@@ -11,20 +11,23 @@ import { DraftAutosave, DraftNotice, useEditorDraft } from '@/components/block-e
 import { keepLineEnter } from '@/components/block-editor/enter-key';
 import { EditorSaveProvider, FloatingSaveButton, SaveButton } from '@/components/block-editor/editor-save';
 import { LabeledSelect } from '@/components/labeled-select';
+import { Plus } from '@/components/line-icons';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Item, ItemContent, ItemDescription, ItemMedia, ItemTitle } from '@/components/ui/item';
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
-import { showUndoToast } from '@/components/undo-toast';
+import { Drawer, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle } from '@/components/ui/drawer';
+import { showGuardedUndo } from '@/components/undo-toast';
 import { UnsavedChangesGuard, type UnsavedChangesGuardHandle } from '@/components/unsaved-changes-guard';
 import { WeekdayToggle } from '@/components/weekday-toggle';
 import type { EditorCare } from '@/lib/constraint-filter';
+import { assignWeekdays, hasAssignments, takenWeekdays, upgradeAssignments, weekdaysInput } from '@/lib/day-assignments';
 import { dayBlocksPath } from '@/lib/editor-undo';
 import { formatNumber } from '@/lib/format';
 import { copyPtDays, OWN_PROGRAM_LIMITS, ownNameProblem, type OwnProgramDay, type OwnProgramPhase } from '@/lib/own-programs';
 import {
+  displayDays,
   addDay,
   blankDay,
   copyDay,
@@ -46,12 +49,10 @@ import { useServiceMutation } from '@/lib/query/use-service';
 import { ownProgramFormSchema, type OwnProgramFormInput, type OwnProgramFormValues } from '@/lib/schemas/own-program';
 import type { EditorDevice, PickerExercise } from '@/lib/template-edit';
 import { countRows, type TemplateBlock } from '@/lib/template-plan';
-import { normalizeWeekdays } from '@/lib/training-days';
+import { WEEKDAY_SHORT, weekdayNamesText, weekdaysText, type Weekday } from '@/lib/training-days';
 import { cn } from '@/lib/utils';
 import { ownProgramDraftKey, PROGRAM_DRAFT_BASE } from '@/lib/unsaved-changes';
 
-/** Sheet'ler telefonda alttan; dokunma hedefleri 44 px. */
-const BOTTOM = 'gap-0 rounded-t-2xl pb-[env(safe-area-inset-bottom)] max-h-[calc(100dvh-max(1rem,env(safe-area-inset-top)))]';
 const FREQUENCY_LABELS: Record<string, string> = {
   none: 'Belirtme',
   ...Object.fromEntries(Array.from({ length: PROGRAM_LIMITS.daysPerWeek }, (_, index) => [String(index + 1), `${index + 1} gün`])),
@@ -76,14 +77,15 @@ export type OwnProgramFormProps = {
   programId: string;
   creating: boolean;
   draftIdentity?: string;
-  initial: { name: string; currentPhaseId: string; phases: OwnProgramPhase[]; weekdays: number[] };
+  /** Atamalar programlarda (`weekdays`); program düzeyinde gün yok (eski AI taslağını çağıran `bodyWithAssignments`'tan geçirir). */
+  initial: { name: string; currentPhaseId: string; phases: OwnProgramPhase[] };
   /** Yüklenen sürüm (revision ve oluşturulma anı); oluştururken null. */
   base: ProgramBase | null;
   exercises: PickerExercise[];
   devices: EditorDevice[];
-  /** "+ Gün → Antrenörünün programından" (danışan): PT'nin programının günleri ve danışanın hedefleri. */
+  /** "+ Program → Antrenörünün programından" (danışan): PT'nin programları ve danışanın hedefleri; kopya atamasız gelir. */
   ptProgram?: { phases: ProgramPhase[]; clientTargets?: ClientTargets | undefined } | null;
-  /** "+ Gün → Hazır şablondan": danışanda yalnız açık şablonlar, PT'de hepsi. */
+  /** "+ Program → Hazır şablondan": danışanda yalnız açık şablonlar, PT'de hepsi. */
   templates: TemplateOption[];
   /** Danışanın öteki programlarının adları (ad benzersiz olmalı). */
   otherNames: string[];
@@ -91,7 +93,7 @@ export type OwnProgramFormProps = {
   saveUrl: string;
   /** Kaydedince gidilecek sayfa (`{id}` programın kimliğiyle değişir). */
   doneHref: string;
-  /** Açılışta eklenecek günler (Antrenörünün programından "Kendi programına kopyala"). */
+  /** Açılışta eklenecek programlar (Antrenörünün programından "Kendi programına kopyala"; atamasız). */
   addPtDayIds?: string[];
   /**
    * PT (`own-pt`): danışanın kısıtları, PT'nin program düzenleyicisiyle aynı (`kisit-tarama.md` §3.2: sheet'te işaret,
@@ -102,12 +104,15 @@ export type OwnProgramFormProps = {
 };
 
 /**
- * Kendi program düzenleyicisi (`docs/design/kendi-program.md` §2.5, §4) — oluşturma ve düzenleme, evresiz tek gün
- * listesi. Danışanda (`own`) telefon öncelikli ve sade (`BlockEditor` `simple`: kural, RIR ve yüzdeli set düzeni yok);
- * PT'de (`own-pt`) tam düzenleyici, ad salt okuma. Günler: 7 günlük seçim, hiç gün seçilmemişse "Gün seçmezsen
- * haftada kaç gün"; çipler ve "+ Gün" sheet'i (boş, antrenörünün programından, hazır şablondan, bu programdan kopya).
- * Kaydet, yüzen Kaydet, yerel taslak (`pulsecoach.draft.own.<danışan>.<program>`), çıkış uyarısı ve 412 / 403 / 404
- * uyarıları PT'nin program düzenleyicisiyle aynı desen.
+ * Kendi program düzenleyicisi (`docs/design/kendi-program.md` §2.5, §4) — oluşturma ve düzenleme, evresiz tek program
+ * listesi (kodda "gün"). Danışanda (`own`) telefon öncelikli ve sade (`BlockEditor` `simple`: kural, RIR ve yüzdeli
+ * set düzeni yok); PT'de (`own-pt`) tam düzenleyici, ad salt okuma. Faz 3 (Karar 10): her program haftanın günlerine
+ * atanır, kendi programda atamayı danışan yapar (yazar o); seçili programın altında "Günleri" çipleri, başka programın
+ * günü kapalı. Program düzeyinde gün seçici yok; hiç atama yokken "Gün atamazsan haftada kaç gün". Çipler (ad ve
+ * atandığı günler) ve "+ Program" sheet'i (boş, antrenörünün programından, hazır şablondan, bu programdan kopya; hepsi
+ * atamasız gelir). Kayıt program düzeyinde gün göndermez: sunucu `schedule`'ı atamalardan yazar. Kaydet, yüzen Kaydet,
+ * yerel taslak (`pulsecoach.draft.own.<danışan>.<program>`), çıkış uyarısı ve 412 / 403 / 404 uyarıları PT'nin program
+ * düzenleyicisiyle aynı desen.
  */
 export function OwnProgramForm(props: OwnProgramFormProps) {
   const { mode, clientId, programId, creating, initial, exercises, devices, templates, timeZone } = props;
@@ -129,16 +134,18 @@ export function OwnProgramForm(props: OwnProgramFormProps) {
       name: initial.name,
       currentPhaseId: initial.currentPhaseId,
       phases: toInput(phases),
-      weekdays: initial.weekdays,
     };
     const added = phases[0]?.days.length !== initial.phases[0]?.days.length;
-    return { input, dropped: prepared.droppedDeviceRowIds, added, firstDayId: (added ? phases[0]?.days.at(-1)?.id : phases[0]?.days[0]?.id) ?? '' };
+    return { input, dropped: prepared.droppedDeviceRowIds, added, firstDayId: (added ? phases[0]?.days.at(-1)?.id : displayDays(phases[0]?.days ?? [])[0]?.id) ?? '' };
   });
   const form = useForm({ schema: ownProgramFormSchema, initialInput: start.input });
+  // Açılışta gün alanı olan programlar: boş seçim onlarda boş dizi, ötekilerde alansız (`weekdaysInput`; form kirli kalmasın).
+  const startedWithDays = useMemo(
+    () => new Set(start.input.phases.flatMap((phase) => phase.days.filter((day) => day.weekdays !== undefined).map((day) => day.id))),
+    [start],
+  );
   const phasesInput = useField(form, { path: ['phases'] }).input;
   const phases = useMemo(() => (phasesInput ?? []) as unknown as OwnProgramPhase[], [phasesInput]);
-  const weekdaysField = useField(form, { path: ['weekdays'] });
-  const weekdays = normalizeWeekdays(weekdaysField.input ?? []);
   const nameField = useField(form, { path: ['name'] });
   const frequencyField = useField(form, { path: ['phases', 0, 'daysPerWeek'] });
   const phase = phases[0];
@@ -149,7 +156,20 @@ export function OwnProgramForm(props: OwnProgramFormProps) {
   const [problem, setProblem] = useState<'stale' | 'unshared' | 'missing' | null>(null);
   const guard = useRef<UnsavedChangesGuardHandle>(null);
   const draftKey = ownProgramDraftKey(clientId, props.draftIdentity ?? (creating ? null : programId));
-  const draft = useEditorDraft({ form, schema: ownProgramFormSchema, storageKey: draftKey, base: props.base, baseSchema: PROGRAM_DRAFT_BASE });
+  // Faz 3'ten önceki taslak gün başına atama taşımaz, program düzeyinde `weekdays` taşır: programlar o günlere sırayla
+  // atanır (okunan eski dosyanın kuralı) ve program düzeyindeki alan düşer (form onu artık göndermez).
+  const prepareDraft = useCallback((input: OwnProgramFormInput): OwnProgramFormInput => {
+    const { weekdays, ...rest } = input;
+    return { ...rest, phases: upgradeAssignments(rest.phases, weekdays) as OwnProgramFormInput['phases'] };
+  }, []);
+  const draft = useEditorDraft({
+    form,
+    schema: ownProgramFormSchema,
+    storageKey: draftKey,
+    base: props.base,
+    baseSchema: PROGRAM_DRAFT_BASE,
+    prepare: prepareDraft,
+  });
 
   const dayIndex = Math.max(0, days.findIndex((day) => day.id === selectedDayId));
   const selectedDay = days[dayIndex];
@@ -208,15 +228,11 @@ export function OwnProgramForm(props: OwnProgramFormProps) {
     const neighbour = target.days[dayIndex - 1] ?? target.days[dayIndex + 1];
     write(removeDay(all as ProgramPhase[], target.id, selectedDay.id) as OwnProgramPhase[]);
     if (neighbour) setSelectedDayId(neighbour.id);
-    const after = JSON.stringify(current());
-    showUndoToast(`${selectedDay.name} silindi`, () => {
-      if (JSON.stringify(current()) !== after) {
-        toast.error('Sonrasında başka değişiklik yapıldı; geri alınamadı.');
-        return;
-      }
-      write(before);
-      setSelectedDayId(selectedDay.id);
-    });
+    showGuardedUndo(
+      `${selectedDay.name} silindi`,
+      { locate: () => 'root', read: () => current(), write: (_, value) => write(value), before },
+      { onUndone: () => setSelectedDayId(selectedDay.id) },
+    );
   };
 
   const save = useServiceMutation({
@@ -226,10 +242,8 @@ export function OwnProgramForm(props: OwnProgramFormProps) {
         body: JSON.stringify({
           ...(own ? { name: values.name } : {}),
           currentPhaseId: values.currentPhaseId,
+          // Atamalar programlarda; program düzeyinde gün gönderilmez (sunucu `schedule`'ı atamalardan yazar).
           phases: values.phases,
-          weekdays: values.weekdays ?? [],
-          // Açılıştaki günler: arada Bugün'den değişen günler ezilmesin (§3.6).
-          baseWeekdays: initial.weekdays,
           baseRevision: draft.saveBase?.revision ?? null,
           baseCreatedAt: draft.saveBase?.createdAt,
         }),
@@ -266,7 +280,7 @@ export function OwnProgramForm(props: OwnProgramFormProps) {
                   toast.success(`Bugün ${name} ile açılır`);
                   router.refresh();
                 },
-                () => toast.error("Seçilemedi; Programlar'dan yeniden dene."),
+                () => toast.error("Seçilemedi; Program'dan yeniden dene."),
               );
             },
           },
@@ -329,6 +343,8 @@ export function OwnProgramForm(props: OwnProgramFormProps) {
   const ptDays = (props.ptProgram?.phases ?? []).flatMap((item) => item.days.map((day) => ({ day, phase: item })));
   const multiPhase = (props.ptProgram?.phases.length ?? 0) > 1;
   const programLabel = own ? 'Programı' : 'Danışanın programı';
+  // Sıklık yalnız hiç atama yokken: atamalı programda haftalık hedef atanmış gün sayısıdır, `daysPerWeek` kaydedilmez.
+  const anyAssigned = hasAssignments(days);
 
   return (
     <EditorSaveProvider
@@ -378,61 +394,70 @@ export function OwnProgramForm(props: OwnProgramFormProps) {
           </Field>
         ) : null}
 
-        <Field>
-          <FieldLabel id="own-weekdays">Antrenman günleri</FieldLabel>
-          <WeekdayToggle id="own-weekdays" value={weekdays} onChange={(next) => setInput(form, { path: ['weekdays'], input: next })} />
-          {weekdays.length === 0 ? (
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 pt-1">
-              <span className="text-sm text-muted-foreground" id="own-frequency-label">
-                Gün seçmezsen haftada kaç gün:
-              </span>
-              <div className="w-32">
-                <LabeledSelect
-                  id="own-frequency"
-                  value={frequencyField.input === undefined ? 'none' : String(frequencyField.input)}
-                  labels={FREQUENCY_LABELS}
-                  triggerClassName="h-11"
-                  onChange={(value) => setInput(form, { path: ['phases', 0, 'daysPerWeek'], input: value === 'none' ? undefined : Number(value) })}
-                />
-              </div>
+        {anyAssigned ? null : (
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+            <label className="text-sm text-muted-foreground" htmlFor="own-frequency">
+              {own ? 'Gün atamazsan haftada kaç gün:' : 'Gün atanmazsa haftada kaç gün:'}
+            </label>
+            <div className="w-32">
+              <LabeledSelect
+                id="own-frequency"
+                value={frequencyField.input === undefined ? 'none' : String(frequencyField.input)}
+                labels={FREQUENCY_LABELS}
+                triggerClassName="h-11"
+                onChange={(value) => setInput(form, { path: ['phases', 0, 'daysPerWeek'], input: value === 'none' ? undefined : Number(value) })}
+              />
             </div>
-          ) : (
-            <FieldDescription>Bu hafta sayacın seçtiğin gün sayısı kadar.</FieldDescription>
-          )}
-        </Field>
+          </div>
+        )}
 
         <div className="flex flex-col gap-1.5">
           <span className="text-xs text-muted-foreground" id="own-days-label">
-            Günler
+            Programlar
           </span>
           <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none]" role="group" aria-labelledby="own-days-label">
-            {days.map((day) => {
+            {displayDays(days).map((day) => {
               const selected = day.id === selectedDay?.id;
               const failing = missing.some((item) => item.dayId === day.id);
+              const assigned = weekdaysText(day.weekdays ?? []);
               return (
                 <Button
                   key={day.id}
                   type="button"
                   variant={selected ? 'default' : 'outline'}
                   aria-pressed={selected}
+                  aria-label={`${day.name}, ${weekdayNamesText(day.weekdays ?? []) || 'gün atanmadı'}${failing ? ', hatalı' : ''}`}
                   className={cn('h-11 shrink-0 px-4', failing && 'ring-2 ring-destructive')}
                   onClick={() => setSelectedDayId(day.id)}>
                   {failing ? <WarningCircle data-icon="inline-start" className="text-destructive" /> : null}
                   {day.name}
+                  {assigned ? (
+                    // Seçili (dolu) çipte soluk gri okunmaz: yazının kendi rengi biraz açılır.
+                    <span className={cn('text-xs font-normal', selected ? 'opacity-80' : 'text-muted-foreground')} aria-hidden>
+                      {assigned}
+                    </span>
+                  ) : null}
                 </Button>
               );
             })}
-            <Button type="button" variant="outline" className="h-11 shrink-0 border-dashed px-4" disabled={!canAdd} onClick={() => setAddOpen(true)}>
+            <Button
+              type="button"
+              variant="outline"
+              className="h-11 shrink-0 border-dashed px-4"
+              aria-label="Program ekle"
+              disabled={!canAdd}
+              onClick={() => setAddOpen(true)}>
               <Plus data-icon="inline-start" />
-              Gün
+              Program
             </Button>
           </div>
-          {!canAdd ? <p className="text-xs text-muted-foreground">En fazla {OWN_PROGRAM_LIMITS.days} gün.</p> : null}
+          {!canAdd ? <p className="text-xs text-muted-foreground">En fazla {OWN_PROGRAM_LIMITS.days} antrenman.</p> : null}
         </div>
 
         {selectedDay && phase ? (
           <>
             <DayName form={form} dayIndex={dayIndex} dayId={selectedDay.id} />
+            <DayWeekdays form={form} days={days} dayIndex={dayIndex} day={selectedDay} own={own} current={current} startedWithDays={startedWithDays.has(selectedDay.id)} />
             <BlockEditor
               key={`${selectedDay.id}.${draft.generation}`}
               form={form as unknown as BlocksFormStore}
@@ -442,7 +467,7 @@ export function OwnProgramForm(props: OwnProgramFormProps) {
               devices={devices}
               newIds={() => programIdSource(current() as ProgramPhase[])}
               noteHint={own ? 'Antrenmanda görürsün.' : 'Danışan antrenmanda görür.'}
-              libraryDescription={own ? 'Antrenörünün kütüphanesinden hareket ekle.' : 'Ada ya da kasa göre ara; dokununca günün sonuna eklenir.'}
+              libraryDescription={own ? 'Antrenörünün kütüphanesinden hareket ekle.' : 'Ada ya da kasa göre ara; dokununca programın sonuna eklenir.'}
               listLabel={`${selectedDay.name} hareketleri`}
               addLabel={`Hareket ekle: ${selectedDay.name}`}
               variant={own ? 'simple' : 'full'}
@@ -453,10 +478,10 @@ export function OwnProgramForm(props: OwnProgramFormProps) {
                 type="button"
                 variant="ghost"
                 className="h-11 self-start px-2 text-destructive hover:text-destructive"
-                aria-label={`Günü sil: ${selectedDay.name}`}
+                aria-label={`Sil: ${selectedDay.name}`}
                 onClick={removeSelectedDay}>
                 <Trash data-icon="inline-start" />
-                Günü sil
+                Sil
               </Button>
             ) : null}
           </>
@@ -466,14 +491,15 @@ export function OwnProgramForm(props: OwnProgramFormProps) {
           </div>
         )}
 
-        <Sheet open={addOpen} onOpenChange={setAddOpen}>
-          <SheetContent side="bottom" showCloseButton={false} className={BOTTOM}>
-            <SheetHeader className="gap-1.5 pt-5">
-              <SheetTitle className="text-lg font-semibold">Gün ekle</SheetTitle>
-              <SheetDescription>
-                {programLabel} {formatNumber(days.length)}/{formatNumber(OWN_PROGRAM_LIMITS.days)} gün. Eklenen gün listenin sonuna gelir.
-              </SheetDescription>
-            </SheetHeader>
+        <Drawer open={addOpen} onOpenChange={setAddOpen}>
+          <DrawerContent showCloseButton={false} className="gap-0">
+            <DrawerHeader className="gap-1.5 pt-5">
+              <DrawerTitle className="text-lg font-semibold">Program ekle</DrawerTitle>
+              <DrawerDescription>
+                {programLabel} {formatNumber(days.length)}/{formatNumber(OWN_PROGRAM_LIMITS.days)} antrenman. Eklenen program listenin sonuna
+                gelir.
+              </DrawerDescription>
+            </DrawerHeader>
             <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overscroll-contain px-4 pb-4">
               <ul className="flex flex-col gap-2">
                 <li>
@@ -482,7 +508,7 @@ export function OwnProgramForm(props: OwnProgramFormProps) {
                       <Square />
                     </ItemMedia>
                     <ItemContent>
-                      <ItemTitle>Boş gün</ItemTitle>
+                      <ItemTitle>Boş program</ItemTitle>
                     </ItemContent>
                   </Item>
                 </li>
@@ -490,7 +516,7 @@ export function OwnProgramForm(props: OwnProgramFormProps) {
 
               {selectedDay ? (
                 <section className="flex flex-col gap-2">
-                  <h3 className="text-sm font-medium">Bu programdaki bir günü kopyala</h3>
+                  <h3 className="text-sm font-medium">Bu programdakilerden kopyala</h3>
                   <ul className="flex flex-col gap-2">
                     {days.map((day) => (
                       <li key={day.id}>
@@ -592,8 +618,8 @@ export function OwnProgramForm(props: OwnProgramFormProps) {
                 Vazgeç
               </Button>
             </div>
-          </SheetContent>
-        </Sheet>
+          </DrawerContent>
+        </Drawer>
 
         <FloatingSaveButton />
       </Form>
@@ -608,23 +634,72 @@ export function OwnProgramForm(props: OwnProgramFormProps) {
   );
 }
 
-/** Seçili günün adı (programda benzersiz). */
-function DayName({ form, dayIndex, dayId }: { form: ReturnType<typeof useForm<typeof ownProgramFormSchema>>; dayIndex: number; dayId: string }) {
+type OwnFormStore = ReturnType<typeof useForm<typeof ownProgramFormSchema>>;
+
+/** Seçili programın adı (listede benzersiz). */
+function DayName({ form, dayIndex, dayId }: { form: OwnFormStore; dayIndex: number; dayId: string }) {
   const field = useField(form, { path: ['phases', 0, 'days', dayIndex, 'name'] });
   return (
     <Field data-invalid={Boolean(field.errors) || undefined}>
-      <FieldLabel htmlFor={`own-day-${dayId}`}>Gün adı</FieldLabel>
+      <FieldLabel htmlFor={`own-day-${dayId}`}>Program adı</FieldLabel>
       <Input
         {...field.props}
         id={`own-day-${dayId}`}
         className="h-11 text-base"
         maxLength={PROGRAM_LIMITS.dayName}
         value={field.input ?? ''}
-        placeholder="Ör. Gün A"
+        placeholder="Ör. Alt vücut"
         aria-invalid={Boolean(field.errors) || undefined}
         onKeyDown={keepLineEnter}
       />
       <FieldError>{field.errors?.[0]}</FieldError>
+    </Field>
+  );
+}
+
+/**
+ * Seçili programın günleri (Faz 3, Karar 10): hafta günü çipleri, PT'nin düzenleyicisindekiyle aynı kural. Bir gün
+ * listede en çok bir programa: başka programın günü kapalı, nedeni çipin adında ve altındaki satırda ("Başka programda:
+ * Per · Üst vücut"). Güncel liste olay anında okunur (ardışık dokunuşlar birbirini ezmesin); yalnız bu programın
+ * alanı yazılır, hareket düzenleyicisi yeniden kurulmaz.
+ */
+function DayWeekdays({
+  form,
+  days,
+  dayIndex,
+  day,
+  own,
+  current,
+  startedWithDays,
+}: {
+  form: OwnFormStore;
+  days: readonly OwnProgramDay[];
+  dayIndex: number;
+  day: OwnProgramDay;
+  own: boolean;
+  current: () => OwnProgramPhase[];
+  /** Programın formdaki başlangıç değerinde gün alanı var mı (`weekdaysInput`). */
+  startedWithDays: boolean;
+}) {
+  const taken = takenWeekdays(days, day.id);
+  const takenText = [...taken].map(([weekday, name]) => `${WEEKDAY_SHORT[weekday as Weekday]} · ${name}`).join(', ');
+  const labelId = `own-day-weekdays-${day.id}`;
+  const assign = (next: readonly number[]) => {
+    const assigned = assignWeekdays(current()[0]?.days ?? [], day.id, next).find((item) => item.id === day.id);
+    if (!assigned) return;
+    setInput(form, { path: ['phases', 0, 'days', dayIndex, 'weekdays'], input: weekdaysInput(assigned.weekdays, startedWithDays) });
+  };
+  return (
+    <Field className="gap-1.5">
+      <FieldLabel id={labelId}>Günleri</FieldLabel>
+      <WeekdayToggle id={labelId} describedBy={`${labelId}-hint`} value={day.weekdays ?? []} taken={taken} onChange={assign} />
+      <FieldDescription id={`${labelId}-hint`}>
+        {taken.size > 0
+          ? `Başka programda: ${takenText}`
+          : own
+            ? 'Bu günlerde Bugün ekranında bu programı görürsün.'
+            : 'Danışan bu günlerde Bugün ekranında bu programı görür.'}
+      </FieldDescription>
     </Field>
   );
 }

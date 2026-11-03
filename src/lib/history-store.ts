@@ -80,7 +80,12 @@ export async function loadDetail(
  * (hafta hedefi, değişiklikler). "Gelecek sefer" yalnız en yeni bitmiş antrenmanda: öneri motorunun o günün
  * bu antrenman dahil planı (`buildWorkoutDay`, antrenman ekranıyla aynı).
  */
-export async function loadSummary(clientId: string, id: string, timeZone: string): Promise<SessionLoad<SessionSummary>> {
+export async function loadSummary(
+  clientId: string,
+  id: string,
+  timeZone: string,
+  options: { bodyMass?: (date: string) => Promise<number | undefined> } = {},
+): Promise<SessionLoad<SessionSummary>> {
   const repo = sessionRepo(clientId);
   const [loaded, repaired, exercises] = await Promise.all([readFinished(clientId, id), readIndex(repo), listExercises()]);
   if (loaded.status !== 'ok') return loaded;
@@ -97,15 +102,28 @@ export async function loadSummary(clientId: string, id: string, timeZone: string
     .sort((a, b) => Date.parse(b.startedAt ?? b.date) - Date.parse(a.startedAt ?? a.date))[0];
   const dayId = doc.program?.dayId;
   if (program && dayId && latest?.id === doc.id) {
-    const window = { exerciseIds: new Set(doc.entries.map((entry) => entry.exerciseId)), rowIds: dayRowIds(program, dayId), programId: own };
+    // Antrenmanın günü seansın tarihi: planlanan program o güne atanmış olan (Faz 3).
+    const window = { exerciseIds: new Set(doc.entries.map((entry) => entry.exerciseId)), rowIds: dayRowIds(program, dayId, doc.date), programId: own };
     const [devices, history] = await Promise.all([listDevices(), readHistory(repo, index, window)]);
     const owner = own ? { programId: own, name: doc.program?.programName ?? '' } : null;
-    const day = buildWorkoutDay({ program, dayId, exercises: byId, devices: new Map(devices.map((device) => [device.id, device])), history, owner });
+    const day = buildWorkoutDay({
+      program,
+      dayId,
+      exercises: byId,
+      devices: new Map(devices.map((device) => [device.id, device])),
+      history,
+      owner,
+      today: doc.date,
+    });
     if (day?.dayId === dayId) next = nextTimeLines(day, doc);
   }
 
+  // Kilo (sağlık verisi) yalnız yürüyüş/koşu seti varken okunur: kalorinin tek girdisi.
+  const walked = doc.entries.some((entry) => entry.sets.some((set) => set.type === 'working' && set.inclinePct !== undefined));
+  const bodyMassKg = walked && options.bodyMass ? await options.bodyMass(doc.date) : undefined;
   const summary = sessionSummary({
     doc,
+    bodyMassKg,
     index,
     timeZone,
     exercises: byId,

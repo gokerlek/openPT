@@ -1,7 +1,9 @@
 'use client';
 
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Check, Plus, Trash } from '@phosphor-icons/react';
+import { Trash } from '@phosphor-icons/react';
+import { Check, Plus } from '@/components/line-icons';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -13,6 +15,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
+import { ConfirmDeleteDialog } from '@/components/confirm-delete-dialog';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
 import type { ConstraintForm } from '@/lib/schemas/constraint';
@@ -75,7 +78,7 @@ export function PainActions({
             <AlertDialogHeader>
               <AlertDialogTitle>{title}: kısıt eklensin mi?</AlertDialogTitle>
               <AlertDialogDescription>
-                {suggestion ?? 'Hareket kısıtı'} · tanısız, taramadan. Kaydedince kısıtın sayfası açılır; bölgeyi, tarafı ve kaçınmaları orada düzelt.
+                {suggestion ?? 'Hareket kısıtı'} · tanısız, hareket testinden. Kaydedince kısıtın sayfası açılır; bölgeyi, tarafı ve kaçınmaları orada düzelt.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
@@ -94,36 +97,30 @@ export function PainActions({
 
 /** Düzenleme sayfasının yıkıcı eylemi: o günün taramasını siler. */
 export function ScreeningDelete({ clientId, date, dateLabel }: { clientId: string; date: string; dateLabel: string }) {
+  const [open, setOpen] = useState(false);
   const router = useRouter();
   const remove = useServiceMutation({
     fn: () => fetchJson<{ ok: true }>(`/api/clients/${clientId}/screenings/${date}`, { method: 'DELETE' }),
-    notify: { success: 'Tarama silindi.' },
+    notify: { success: 'Hareket testi silindi.' },
     onSuccess: () => {
       router.push(`/dashboard/clients/${clientId}/screening`);
       router.refresh();
     },
   });
   return (
-    <AlertDialog>
-      <AlertDialogTrigger render={<Button variant="outline" className="text-destructive-text" />}>
+    <>
+      <Button variant="outline" className="text-destructive-text" onClick={() => setOpen(true)}>
         <Trash data-icon="inline-start" />
         Sil
-      </AlertDialogTrigger>
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>{dateLabel} taraması silinsin mi?</AlertDialogTitle>
-          <AlertDialogDescription>
-            O günün bütün testleri kayıttan çıkar. Danışanın kaydının değişiklik geçmişinde bir kopyası kalır.
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel>Vazgeç</AlertDialogCancel>
-          <AlertDialogAction variant="destructive" disabled={remove.isPending} onClick={() => remove.mutate()}>
-            {remove.isPending ? <Spinner data-icon="inline-start" /> : null}
-            Sil
-          </AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
+      </Button>
+      <ConfirmDeleteDialog
+        open={open}
+        onOpenChange={setOpen}
+        title={`${dateLabel} hareket testi silinsin mi?`}
+        body="O günün bütün testleri kayıttan çıkar. Danışanın kaydının değişiklik geçmişinde bir kopyası kalır."
+        busy={remove.isPending}
+        onConfirm={() => remove.mutate()}
+      />
+    </>
   );
 }

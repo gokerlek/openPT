@@ -17,10 +17,10 @@ import { HealthConstraints } from './health-constraints';
 export const metadata: Metadata = { title: 'Sağlık' };
 
 /**
- * Danışanın Sağlık sayfası (tasarım `kisit-tarama.md` §5.2; avatar menüsünden, dock'ta etkin sekme yok). Yalnız
- * telefon, 375 px. Kısıtlar (onaylıysa): bildir, düzelt, geri çek, kötüleşti, düzeldi. Hareket taraması (onaylıysa):
- * sözcük, taraf, önceki taramaya göre ok ve odak; sayı ve toplam yok. Onay yoksa ilgili bölüm hiç yok, dosya
- * okunmaz.
+ * Danışanın Sağlık sekmesi (tasarım `kisit-tarama.md` §5.2; dock'un 4. sekmesi, yalnız kısıt ya da tarama
+ * onaylıyken görünür; geri bağlantısı yok). Yalnız telefon, 375 px. Kısıtlar (onaylıysa): bildir, düzelt, geri
+ * çek, kötüleşti, düzeldi. Hareket taraması (onaylıysa): sözcük, taraf, önceki taramaya göre ok ve odak; sayı ve
+ * toplam yok. Onay yoksa ilgili bölüm hiç yok, dosya okunmaz.
  */
 export default async function ClientHealthPage() {
   const [client, config] = await Promise.all([currentClient(), readAppConfig()]);
@@ -40,7 +40,7 @@ export default async function ClientHealthPage() {
 
   return (
     <main className="flex flex-col gap-6">
-      <ClientHeader client={client} appName={config.appName} title="Sağlık" back={{ href: '/me', label: 'Bugün' }} />
+      <ClientHeader client={client} appName={config.appName} title="Sağlık" />
 
       {!conditions && !screening ? (
         <Card size="sm">
@@ -71,23 +71,23 @@ export default async function ClientHealthPage() {
         <section aria-labelledby="screening-heading" className="flex flex-col gap-3">
           <div className="flex flex-col gap-1">
             <h2 id="screening-heading" className="font-heading text-lg font-semibold">
-              {latest ? `PT değerlendirmesi · ${formatDay(latest.date)}` : 'PT değerlendirmesi'}
+              {latest ? `Hareket testi · ${formatDay(latest.date)}` : 'Hareket testi'}
             </h2>
             <p className="text-sm text-muted-foreground">
-              {latest ? 'Antrenörün temel hareketlerine baktı. Not değil; nereden başlayacağınızın haritası.' : 'Antrenörün henüz tarama yapmadı.'}
+              {latest ? 'Antrenörün temel hareketlerine baktı. Not değil; nereden başlayacağınızın haritası.' : 'Antrenörün henüz hareket testi yapmadı.'}
             </p>
           </div>
           {latest ? (
             <Card size="sm">
               <CardContent className="flex flex-col gap-2 px-0">
                 <ScreeningRows rows={clientScreeningRows(latest, screenings[1] ?? null)} />
-                {screenings[1] ? <p className="px-3 text-xs text-muted-foreground">↑ ↓: bir önceki taramaya göre ({formatDay(screenings[1].date)}).</p> : null}
+                {screenings[1] ? <p className="px-3 text-xs text-muted-foreground">↑ ↓: bir önceki hareket testine göre ({formatDay(screenings[1].date)}).</p> : null}
               </CardContent>
             </Card>
           ) : null}
           {screenings.length > 1 ? (
             <details className="rounded-lg border p-3 text-sm">
-              <summary className="flex min-h-11 cursor-pointer items-center font-medium">Önceki taramalar ({screenings.length - 1})</summary>
+              <summary className="flex min-h-11 cursor-pointer items-center font-medium">Önceki hareket testleri ({screenings.length - 1})</summary>
               <div className="mt-2 flex flex-col gap-4">
                 {screenings.slice(1).map((item, index) => (
                   <div key={item.date} className="flex flex-col gap-2">

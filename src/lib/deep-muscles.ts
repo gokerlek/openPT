@@ -97,6 +97,22 @@ export const DEEP_MUSCLE_NOTES: Partial<Record<DeepMuscle, string>> = {
   diaphragm: 'Nefes paterni: bracing ve IAP’nin temeli.',
 };
 
+/** Bir harekette en çok bu kadar derin kas (şema da bunu kullanır). */
+export const DEEP_MUSCLE_MAX = 8;
+
+export type DeepMuscleRegion = keyof typeof DEEP_MUSCLE_REGION_LABELS;
+
+/** Derin kaslar bölge bölge (bölge sırası `DEEP_MUSCLE_REGION_LABELS`), her bölgede `DEEP_MUSCLES` sırasıyla; boş bölge yok. */
+export function deepMusclesByRegion(muscles: readonly DeepMuscle[]): { region: DeepMuscleRegion; label: string; muscles: DeepMuscle[] }[] {
+  return (Object.keys(DEEP_MUSCLE_REGION_LABELS) as DeepMuscleRegion[])
+    .map((region) => ({
+      region,
+      label: DEEP_MUSCLE_REGION_LABELS[region],
+      muscles: DEEP_MUSCLES.filter((muscle) => DEEP_MUSCLE_REGIONS[muscle] === region && muscles.includes(muscle)),
+    }))
+    .filter((group) => group.muscles.length > 0);
+}
+
 export function isDeepMuscle(value: string): value is DeepMuscle {
   return (DEEP_MUSCLES as readonly string[]).includes(value);
 }

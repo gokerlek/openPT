@@ -1,4 +1,5 @@
-import { ChartLineUp, WarningCircle } from '@phosphor-icons/react/dist/ssr';
+import { WarningCircle } from '@phosphor-icons/react/dist/ssr';
+import { ChartLineUp } from '@/components/line-icons';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Card, CardContent } from '@/components/ui/card';
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
@@ -17,7 +18,7 @@ export function ProgressEmpty({ viewer, name }: { viewer: ProgressViewer; name?:
     <Empty className="border">
       <EmptyHeader>
         <EmptyMedia variant="icon">
-          <ChartLineUp weight="fill" />
+          <ChartLineUp />
         </EmptyMedia>
         <EmptyTitle>{copy.emptyTitle}</EmptyTitle>
         <EmptyDescription>{copy.emptyText}</EmptyDescription>

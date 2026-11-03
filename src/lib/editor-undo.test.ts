@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import * as v from 'valibot';
 import { createFormStore, getFieldInput, getFieldStore, setFieldInput, type FormSchema } from '@formisch/react/internals';
 import { dayBlocksPath, undoAt } from './editor-undo.ts';
-import { addDay, copyDay, moveDay, moveDayToPhase, programIdSource, removeDay, type ProgramPhase } from './program-plan.ts';
+import { addDay, copyDay, moveDayToPhase, programIdSource, removeDay, type ProgramPhase } from './program-plan.ts';
 import { programFormSchema } from './schemas/program.ts';
 import { templateFormSchema } from './schemas/template.ts';
 import { uniformSets } from './set-plan.ts';
@@ -121,7 +121,7 @@ function programForm(phases: ProgramPhase[]) {
 
 /** Toast açıkken yapılan gün işlemleri: hepsi program yazımından (`toInput`) geçer. */
 const DAY_OPERATIONS: [string, (all: ProgramPhase[]) => ProgramPhase[]][] = [
-  ['Sola taşı', (all) => moveDay(all, 'p_aaaaaa', 'd_gunbbb', -1)],
+  ['Önceki günü sil (gün sola kayar)', (all) => removeDay(all, 'p_aaaaaa', 'd_gunaaa')],
   ['Evreye taşı', (all) => moveDayToPhase(all, 'd_gunbbb', 'p_bbbbbb')],
   [
     'Kopyala (Gün A)',
@@ -140,12 +140,13 @@ describe('"Geri al" gün kimliğiyle (program günü, gerçek program formu)', (
     assert.equal(dayBlocksPath(program(), 'd_yokyok'), null);
   });
 
-  test('toast açıkken gün sola taşınsa da silinen hareket kendi gününe döner (boş Gün A ile karışmaz)', () => {
+  test('toast açıkken önceki gün silinip gün sola kaysa da silinen hareket kendi gününe döner', () => {
     const editor = programForm(program());
     const undo = editor.dayB.editWithUndo((blocks) => removeRow(blocks, 'r_squat1', lookup));
-    editor.update((all) => moveDay(all, 'p_aaaaaa', 'd_gunbbb', -1));
+    editor.update((all) => removeDay(all, 'p_aaaaaa', 'd_gunaaa'));
+    assert.deepEqual(dayBlocksPath(editor.current(), 'd_gunbbb'), ['phases', 0, 'days', 0, 'blocks']);
     assert.equal(undo(), true);
-    assert.deepEqual(editor.rows(), { d_gunbbb: ['r_squat1'], d_gunaaa: [], d_gunccc: ['r_squat2'] });
+    assert.deepEqual(editor.rows(), { d_gunbbb: ['r_squat1'], d_gunccc: ['r_squat2'] });
   });
 
   test('araya gün girse (kopya) ya da gün başka evreye taşınsa da kendi gününe döner', () => {
@@ -197,7 +198,7 @@ describe('"Geri al" gün kimliğiyle (program günü, gerçek program formu)', (
     const typed = programForm(program());
     typed.dayB.edit((blocks) => appendExercise(blocks, curl, curlIds));
     const first = typed.dayB.editWithUndo((blocks) => removeRow(blocks, 'r_squat1', lookup));
-    typed.update((all) => moveDay(all, 'p_aaaaaa', 'd_gunbbb', -1));
+    typed.update((all) => removeDay(all, 'p_aaaaaa', 'd_gunaaa'));
     typed.dayB.writeNote('r_curl01', 'Yavaş');
     assert.equal(first(), false);
     assert.deepEqual(typed.rows().d_gunbbb, ['r_curl01']);
@@ -237,4 +238,20 @@ describe('"Geri al" şablon formunda (gerçek şablon formu)', () => {
     assert.equal(second(), false);
     assert.deepEqual(rows(later), ['r_squat2']);
   });
+});
+
+test('undoAt: sabit yerde de çalışır (program ve kişinin formu); sonrasında değiştiyse yazmaz', () => {
+  let value = { phases: [1] };
+  const locate = () => 'root' as const;
+  const read = () => value;
+  const write = (_: 'root', next: typeof value) => {
+    value = next;
+  };
+  const before = { phases: [1, 2] };
+  const after = value;
+  assert.equal(undoAt(locate, read, write, before, after), true);
+  assert.deepEqual(value, before);
+  value = { phases: [9] };
+  assert.equal(undoAt(locate, read, write, before, after), false);
+  assert.deepEqual(value, { phases: [9] });
 });

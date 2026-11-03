@@ -22,9 +22,9 @@ import {
  * Taramanın program düzenleyicisindeki izi (tasarım `docs/design/kisit-tarama.md` §4.6, faz 6) — saf, yalnız PT.
  *
  * - **Ağrı:** açık (gözden geçirilmemiş, sonra ağrısız test edilmemiş; `painHistory`) ağrının testinin kalıbındaki
- *   hareketler düzenleyicide **dikkat** alır: "Taramada ağrı: Kol kaldırma (sağ)". Egzersiz etiketleri taraf ayırmaz:
+ *   hareketler düzenleyicide **dikkat** alır: "Hareket testinde ağrı: Kol kaldırma (sağ)". Egzersiz etiketleri taraf ayırmaz:
  *   sağ kolun ağrısı iki taraflı hareketi de işaretler (kısıtlarla aynı sınır).
- * - **Rozet (bilgi):** son taramada testin sonucu, hareketin kalıbı testin kalıplarındaysa: "Tarama: Squat ·
+ * - **Rozet (bilgi):** son taramada testin sonucu, hareketin kalıbı testin kalıplarındaysa: "Hareket testi: Squat ·
  *   Telafiyle"; ayrıntısı PT'nin ipucu (`screeningHints`).
  *
  * Tarama hiçbir hareketi yasaklamaz (§4.6): burada `block` yoktur, "Değiştir" ve danışanın kartı taramayı hiç okumaz.
@@ -32,17 +32,17 @@ import {
  */
 
 export type ScreeningMark = {
-  /** Açık ağrılar ("Taramada ağrı: Kol kaldırma (sağ)"): dikkat, yasak değil. */
+  /** Açık ağrılar ("Hareket testinde ağrı: Kol kaldırma (sağ)"): dikkat, yasak değil. */
   pain: string[];
   /** Bilgi rozeti: kısa ad ve ipucunun tamamı (`title`, ekran okuyucu). */
   info?: { label: string; detail: string };
 };
 
-/** Taramanın ağrısı dikkat verir; bu kalıptaki hareketler ("Taramada ağrı: …"). */
+/** Taramanın ağrısı dikkat verir; bu kalıptaki hareketler ("Hareket testinde ağrı: …"). */
 export function painWarnings(screenings: readonly Screening[]): Map<MovementPattern, string[]> {
   const byPattern = new Map<MovementPattern, string[]>();
   for (const pain of painHistory(screenings).open) {
-    const text = `Taramada ağrı: ${cellTitle(pain.testId, pain.side)}`;
+    const text = `Hareket testinde ağrı: ${cellTitle(pain.testId, pain.side)}`;
     for (const pattern of SCREENING_TESTS[pain.testId].painPatterns) {
       const list = byPattern.get(pattern) ?? [];
       if (!list.includes(text)) list.push(text);
@@ -113,7 +113,7 @@ export function screeningMarks(
     const first = tests[0];
     const info = first
       ? {
-          label: `Tarama: ${first.label}${tests.length > 1 ? ` · +${tests.length - 1}` : ''}`,
+          label: `Hareket testi: ${first.label}${tests.length > 1 ? ` · +${tests.length - 1}` : ''}`,
           detail: tests.map((test) => test.detail || `${test.label}.`).join(' '),
         }
       : undefined;

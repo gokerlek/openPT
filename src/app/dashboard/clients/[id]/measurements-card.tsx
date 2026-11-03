@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { ChartLineUp, Plus } from '@phosphor-icons/react/dist/ssr';
+import { ChartLineUp, Plus } from '@/components/line-icons';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -49,7 +49,7 @@ export function MeasurementsCard({
         {view ? (
           <CardFooter>
             <Button variant="outline" nativeButton={false} render={<Link href={href} />}>
-              <ChartLineUp data-icon="inline-start" weight="fill" />
+              <ChartLineUp data-icon="inline-start" />
               Ayrıntı
             </Button>
           </CardFooter>
@@ -98,11 +98,11 @@ export function MeasurementsCard({
       ) : null}
       <CardFooter className="flex flex-wrap gap-2">
         <Button variant="outline" nativeButton={false} render={<Link href={href} />}>
-          <ChartLineUp data-icon="inline-start" weight="fill" />
+          <ChartLineUp data-icon="inline-start" />
           Grafikler
         </Button>
         <Button variant="outline" nativeButton={false} render={<Link href={`${href}/new`} />}>
-          <Plus data-icon="inline-start" weight="fill" />
+          <Plus data-icon="inline-start" />
           Ölçüm gir
         </Button>
       </CardFooter>

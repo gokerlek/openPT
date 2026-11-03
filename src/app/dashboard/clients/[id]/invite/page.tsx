@@ -31,6 +31,7 @@ export default async function InvitePage({ params }: { params: Promise<{ id: str
   return (
     <div className="flex flex-col gap-6">
       <SectionHeader
+        back={{ href: `/dashboard/clients/${id}`, label: 'Genel' }}
         title="Davet"
         description={`${client.name} ilk kez kare kodla girer ve şifresini belirler; sonra şifresiyle girer. GitHub hesabı gerekmez.`}
       />

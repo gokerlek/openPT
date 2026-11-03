@@ -33,12 +33,13 @@ function isActive(pathname: string, item: NavItem): boolean {
   return (item.sections ?? [item.href]).some((href) => matches(pathname, href));
 }
 
-/** PT gezinmesi: masaüstünde büyüyen dock, telefonda aynı dock etiketli alt çubuk görevi görür. */
+/** PT gezinmesi: her genişlikte etiketli dock (ikonun altında kısa ad; büyüme ve ipucu yok). */
 export function DashboardDock() {
   const pathname = usePathname();
   return (
     <Dock
       ariaLabel="Ana menü"
+      labels
       items={ITEMS.map(({ sections, ...item }) => ({ ...item, active: isActive(pathname, { ...item, sections }) }))}
     />
   );

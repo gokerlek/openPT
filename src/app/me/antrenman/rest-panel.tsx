@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
-import { ArrowUp, CaretDown, CaretRight, Check, LockSimple } from '@phosphor-icons/react';
+import { ArrowUp, CaretDown, CaretRight, LockSimple } from '@phosphor-icons/react';
+import { Check } from '@/components/line-icons';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Stepper } from '@/components/ui/stepper';
@@ -280,7 +281,7 @@ export function RestPanel({
             </span>
             <span className="min-w-0 flex-1 truncate">{saved.text}</span>
             <Button variant="ghost" className="-mr-2 h-11 px-3" onClick={() => onEditSaved(saved.setId)}>
-              Düzelt
+              Düzenle
             </Button>
           </div>
         ) : null}
@@ -371,7 +372,10 @@ export function RestPanel({
   );
 }
 
-/** Küçültülmüş dinlenme: 48 px şerit, tablo ve giriş paneli geri gelir; "Set bitti" dinlenmeyi bitirir. */
+/**
+ * Küçültülmüş dinlenme: 48 px şerit, tablo ve giriş paneli geri gelir; "Set bitti" dinlenmeyi bitirir. Listede alt
+ * çubuğun üstünde ("‹ Liste" ve geri tuşu tam paneli küçültür; listeden harekete dokunmak dinlenmeyi bitirmez).
+ */
 export function RestStrip({ view, onExpand, onSkip }: { view: RestView; onExpand: () => void; onSkip: () => void }) {
   const ended = view.state === 'ended';
   return (

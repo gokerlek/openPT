@@ -18,7 +18,7 @@ import { templateNameSchema } from '@/lib/schemas/template';
 import { TEMPLATE_LIMITS, countRows, type TemplateBlock } from '@/lib/template-plan';
 
 /**
- * Programın bir günü yeni şablon olur. Şablonlar uygulama repo'sunda durur ve başka
+ * Bir program (antrenman) yeni şablon olur. Şablonlar uygulama repo'sunda durur ve başka
  * danışanlarda da kullanılır: kişisel veri girmesin diye satır notları kopyalanmaz
  * (sunucu da siler), adı PT verir. Bloklar düzenleyicideki hâliyle gider.
  */
@@ -30,7 +30,7 @@ export function SaveTemplateDialog({
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** Dialog açılırken günün blokları. */
+  /** Dialog açılırken programın blokları. */
   blocks: TemplateBlock[];
   /** Yeni şablon: "Şablondan…" hemen kullanabilsin. */
   onCreated: (template: TemplateOption) => void;
@@ -76,7 +76,7 @@ export function SaveTemplateDialog({
         <DialogHeader>
           <DialogTitle>Şablon olarak kaydet</DialogTitle>
           <DialogDescription>
-            Bu günün hareketleri ({countRows(blocks)} hareket) yeni bir şablona kopyalanır; şablonu başka danışanlarda da
+            Bu programın hareketleri ({countRows(blocks)} hareket) yeni bir şablona kopyalanır; şablonu başka danışanlarda da
             kullanabilirsin.
           </DialogDescription>
         </DialogHeader>
@@ -102,13 +102,13 @@ export function SaveTemplateDialog({
           <Info />
           <AlertDescription>
             Satır notları kopyalanmaz: şablonda kişisel bilgi bulunmamalı.
-            {droppedNotes > 0 ? ` Bu günde ${droppedNotes} not var.` : null}
+            {droppedNotes > 0 ? ` Bu programda ${droppedNotes} not var.` : null}
           </AlertDescription>
         </Alert>
         {valid ? null : (
           <Alert variant="destructive">
             <WarningCircle />
-            <AlertDescription>Bu günde düzeltilmesi gereken alanlar var; önce onları düzelt.</AlertDescription>
+            <AlertDescription>Bu programda düzeltilmesi gereken alanlar var; önce onları düzelt.</AlertDescription>
           </Alert>
         )}
         {failure ? <p className="text-sm text-destructive">{failure}</p> : null}

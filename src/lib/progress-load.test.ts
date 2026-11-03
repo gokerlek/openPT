@@ -266,6 +266,44 @@ describe('grafik bölümünün okumaları', () => {
     assert.equal(result.view.workouts, 3);
   });
 
+  test("Rekorlar (`scope: 'records'`): rekor, başarı ve seri var; sağlık kaydı, su ve plan okunmaz, grafik bölümü yok", async () => {
+    const gh = repoWith(withEffort);
+    let healthReads = 0;
+    let plannedReads = 0;
+    let goalReads = 0;
+    const result = await loadProgressWith(
+      deps(gh, {
+        health: async () => {
+          healthReads += 1;
+          return record;
+        },
+        plannedDays: async () => {
+          plannedReads += 1;
+          return 3;
+        },
+        weeklyGoals: async () => {
+          goalReads += 1;
+          return {};
+        },
+      }),
+      { id: 'c_test', health: all },
+      now,
+      today,
+      'Europe/Istanbul',
+      { scope: 'records' },
+    );
+    assert.equal(result.status, 'ok');
+    if (result.status !== 'ok') return;
+    assert.deepEqual([healthReads, plannedReads, goalReads], [0, 0, 1]);
+    assert.equal(gh.calls.includes('read water.json'), false);
+    assert.equal('insights' in result, false);
+    assert.equal(blobReads(gh), 3);
+    assert.equal(result.view.records, 2);
+    assert.equal(result.view.recentRecords.length, 2);
+    assert.equal(result.view.streak.target, 2);
+    assert.equal(result.view.achievements.find((item) => item.id === 'first_record')?.achievedOn, '2026-09-08');
+  });
+
   test('plan okunamazsa düzen plansız', async () => {
     const gh = repoWith(withEffort);
     const result = await loadProgressWith(deps(gh, { plannedDays: () => Promise.reject(new Error('yok')) }), { id: 'c_test' }, now, today);

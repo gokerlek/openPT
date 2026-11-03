@@ -5,7 +5,7 @@ import { ownIndexActiveSchema, ownIndexEventSchema, ownIndexItemSchema, ownProgr
 
 /**
  * `own-programs-index.json` (`docs/design/kendi-program.md` §5.3) — saf. Programlar listesi, Bugün'ün programı
- * (kalıcı seçim, `active`) ve paylaşılmış programların olayları tek dosyada: Bugün, Programlar, PT'nin Program
+ * (kalıcı seçim, `active`) ve paylaşılmış programların olayları tek dosyada: Bugün, iki tarafın Program
  * sekmesi ve Genel bakış'ın özeti programları dosya açmadan bilir.
  *
  * - Index türetilmiş veridir: satır satır okunur, uymayan satır düşer. Okunurken `own-programs/` ağacıyla

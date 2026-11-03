@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { Badge } from '@/components/ui/badge';
 import { Item, ItemContent, ItemMedia, ItemTitle } from '@/components/ui/item';
 import type { DeviceWithSource } from '@/lib/devices';
+import { cardioKind } from '@/lib/cardio';
 import { groupWorkText, rowWorkText } from '@/lib/edit-messages';
 import type { ExerciseWithSource } from '@/lib/exercises';
 import { PROGRESSION_LABELS, RIR_LABELS } from '@/lib/progression';
@@ -69,7 +70,7 @@ function RowItem({ row, block, label, exercises, devices }: { row: TemplateRow; 
     );
   }
 
-  const work = rowWorkText(row.sets, exercise.trackingType, block.kind === 'single' ? block.restSeconds : undefined);
+  const work = rowWorkText(row.sets, exercise.trackingType, block.kind === 'single' ? block.restSeconds : undefined, cardioKind(exercise));
   const overridden = row.deviceId ? devices.get(row.deviceId) : undefined;
   const own = exercise.deviceId ? devices.get(exercise.deviceId) : undefined;
 

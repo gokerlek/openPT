@@ -1,5 +1,5 @@
-import { rankAlternatives, type AlternativeCandidate } from '@/lib/alternatives';
-import { MUSCLE_FAMILIES, MUSCLE_LABELS, MUSCLES, type Exercise, type Muscle } from '@/lib/schemas/exercise';
+import { rankAlternatives, type AlternativeCandidate } from './alternatives.ts';
+import { MUSCLE_FAMILIES, MUSCLE_LABELS, MUSCLES, type Exercise, type Muscle } from './schemas/exercise.ts';
 
 /**
  * Kas yardımcıları — kas haritası ve kas süzgeci ortak kullanır.
@@ -15,9 +15,6 @@ export function isBodyMuscle(muscle: Muscle): muscle is BodyMuscle {
   return muscle !== 'cardio';
 }
 
-/** Haritada yoğunluk: 0 hiç, 1 tam. */
-export type MuscleIntensity = Partial<Record<BodyMuscle, number>>;
-
 /** Kasın bir hareketteki payı. */
 export const MUSCLE_ROLES = ['primary', 'secondary', 'stabilizer'] as const;
 export type MuscleRole = (typeof MUSCLE_ROLES)[number];
@@ -28,17 +25,11 @@ export const ROLE_LABELS: Record<MuscleRole, string> = {
   stabilizer: 'Dengeleyici',
 };
 
-/** Haritadaki tonu (0–1): hedef tam, yardımcı orta, dengeleyici açık. */
-export const ROLE_INTENSITY: Record<MuscleRole, number> = { primary: 1, secondary: 0.45, stabilizer: 0.1 };
-
 /**
  * Haftalık yükte bir setin kasa düşen payı ("kesirli set"): hedef 1, yardımcı 0,5,
  * dengeleyici 0,25. Şablon ve program haritası (Faz 4) bununla toplanır.
  */
 export const ROLE_SET_WEIGHT: Record<MuscleRole, number> = { primary: 1, secondary: 0.5, stabilizer: 0.25 };
-
-/** Geriye uyumluluk: yardımcı tonu. */
-export const SECONDARY_INTENSITY = ROLE_INTENSITY.secondary;
 
 type Worked = Pick<Exercise, 'primaryMuscles' | 'secondaryMuscles'> & { stabilizerMuscles?: readonly Muscle[] };
 
@@ -48,17 +39,6 @@ export function roleOf(exercise: Worked, muscle: Muscle): MuscleRole | null {
   if (exercise.secondaryMuscles.includes(muscle)) return 'secondary';
   if (exercise.stabilizerMuscles?.includes(muscle)) return 'stabilizer';
   return null;
-}
-
-/** Bir egzersizin çalıştırdığı kaslar, haritadaki tonlarıyla. */
-export function exerciseIntensity(exercise: Worked): MuscleIntensity {
-  const intensity: MuscleIntensity = {};
-  // Düşükten yükseğe: bir kas iki listede kalmışsa yüksek seviye kazanır.
-  for (const role of ['stabilizer', 'secondary', 'primary'] as const) {
-    const list = role === 'primary' ? exercise.primaryMuscles : role === 'secondary' ? exercise.secondaryMuscles : (exercise.stabilizerMuscles ?? []);
-    for (const muscle of list) if (isBodyMuscle(muscle)) intensity[muscle] = ROLE_INTENSITY[role];
-  }
-  return intensity;
 }
 
 /** Bir setin kaslara düşen payı (kesirli set). Haftalık yük bunların toplamıdır. */

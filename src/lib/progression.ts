@@ -115,6 +115,9 @@ export type SetTarget = {
   loadPct?: number;
   /** "Yapabildiği kadar": aralık yine hedeftir; zorluk düğmesi tıkanma sayılmaz. */
   amrap?: boolean;
+  /** Kardiyo hedefi: mesafe (m) ve yürüyüş/koşuda eğim (%) (`src/lib/cardio.ts`). İlerleme motoru bakmaz. */
+  distanceM?: number;
+  inclinePct?: number;
 };
 
 /** Bir set: ağırlık ve tekrar ya da saniye (`value`). */

@@ -18,14 +18,14 @@ async function target(context: Context): Promise<{ id: string; date: string } | 
 export async function PUT(request: Request, context: Context) {
   if (!(await isPt())) return forbidden();
   const day = await target(context);
-  if (!day) return notFound('Tarama bulunamadı.');
+  if (!day) return notFound('Hareket testi bulunamadı.');
   const parsed = v.safeParse(screeningPutSchema, await readBody(request));
   if (!parsed.success) return invalid(parsed.issues);
   try {
-    await updateHealth(day.id, 'screening', (record) => withScreening(record, { date: day.date, ...parsed.output }, { replace: true }), 'Tarama güncellendi');
+    await updateHealth(day.id, 'screening', (record) => withScreening(record, { date: day.date, ...parsed.output }, { replace: true }), 'Hareket testi güncellendi');
     return NextResponse.json({ ok: true, date: day.date });
   } catch (error) {
-    return failed(error, 'Tarama kaydedilemedi.');
+    return failed(error, 'Hareket testi kaydedilemedi.');
   }
 }
 
@@ -33,11 +33,11 @@ export async function PUT(request: Request, context: Context) {
 export async function DELETE(_request: Request, context: Context) {
   if (!(await isPt())) return forbidden();
   const day = await target(context);
-  if (!day) return notFound('Tarama bulunamadı.');
+  if (!day) return notFound('Hareket testi bulunamadı.');
   try {
-    await updateHealth(day.id, 'screening', (record) => withoutScreening(record, day.date), 'Tarama silindi');
+    await updateHealth(day.id, 'screening', (record) => withoutScreening(record, day.date), 'Hareket testi silindi');
     return NextResponse.json({ ok: true });
   } catch (error) {
-    return failed(error, 'Tarama silinemedi.');
+    return failed(error, 'Hareket testi silinemedi.');
   }
 }

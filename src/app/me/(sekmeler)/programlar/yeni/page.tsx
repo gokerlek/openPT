@@ -18,7 +18,7 @@ export const metadata: Metadata = { title: 'Yeni program' };
  */
 export default async function NewOwnProgramPage({ searchParams }: { searchParams: Promise<{ gunler?: string | string[]; sablon?: string | string[] }> }) {
   const [client, config, query] = await Promise.all([currentClient(), readAppConfig(), searchParams]);
-  const back = { href: '/me/programlar', label: 'Programlar' };
+  const back = { href: '/me/programlar', label: 'Program' };
   const overview = await readOwnOverview(client.id).catch(() => null);
 
   if (!overview) {
@@ -40,7 +40,7 @@ export default async function NewOwnProgramPage({ searchParams }: { searchParams
         <ClientHeader client={client} appName={config.appName} title="Yeni program" back={back} />
         <Alert>
           <AlertTitle>En fazla {OWN_PROGRAM_LIMITS.programs} program</AlertTitle>
-          <AlertDescription>Yenisi için Programlar&apos;dan birini sil.</AlertDescription>
+          <AlertDescription>Yenisi için kendi programlarından birini sil.</AlertDescription>
         </Alert>
       </main>
     );

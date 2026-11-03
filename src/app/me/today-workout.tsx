@@ -1,73 +1,46 @@
 'use client';
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import Link from 'next/link';
 import { AnimatePresence, motion } from 'motion/react';
 import { useQueryClient } from '@tanstack/react-query';
-import { Play } from '@phosphor-icons/react';
+import { FlagCheckered, Play } from '@phosphor-icons/react';
 import { WaterGlass } from '@/components/water-glass';
+import { UNIT_STATE_TEXT, UnitStateIcon } from '@/components/workout/unit-state';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { formatNumber, formatRecent, todayIn } from '@/lib/format';
 import { DURATION, tween, WORKOUT } from '@/lib/motion';
 import { fetchJson } from '@/lib/query/errors';
-import { useServiceQuery } from '@/lib/query/use-service';
 import type { SessionDoc, WaterTap } from '@/lib/schemas/session';
 import { waterOf, workingSetCount } from '@/lib/session-index';
 import { randomId } from '@/lib/template-plan';
+import { cn } from '@/lib/utils';
 import { WATER_BATCH_MS, WATER_LIMITS } from '@/lib/water';
 import { parseLocalWorkout } from '@/lib/workout-outbox';
-import { effectiveDay } from '@/lib/workout-flow';
+import { effectiveDay, itemName, listView, listWindow, localWorkoutDay } from '@/lib/workout-flow';
 import type { WorkoutDay } from '@/lib/workout-plan';
 import type { WorkoutResponse } from '@/lib/workout-routes';
-import { cursorOf } from '@/lib/workout-session';
-import { localWorkoutText, readPendingWater, savePendingWater, saveWorkoutCache, subscribeLocalWorkout } from './workout-storage';
+import { WeekStrip } from './training-week';
+import { useWorkoutOverview, WORKOUT_OVERVIEW_KEY } from './workout-overview';
+import { localWorkoutText, readPendingWater, savePendingWater, subscribeLocalWorkout } from './workout-storage';
 
 /**
  * Bugün'ün antrenman parçaları (tasarım §0, §2.1, §4.4) — istemcide:
  * - `GET /api/me/workout` bir kez çekilir ve telefonda saklanır: "Antrenmana başla" ağ beklemez.
  * - Yarım antrenman (telefonda ya da sunucuda) varsa sıradaki antrenman kartının yerine "Yarım kalan
- *   antrenman" kartı: "Kaldığın yerden devam et" ve "Antrenmanı bitir".
+ *   antrenman" kartı: "Devam et: <şu anki hareket>", "Antrenmanı bitir", hareketlerin listesi ve hafta şeridi.
  * - "Bu hafta x/y" (y seçili antrenman günü sayısı, yoksa sıklık) ve bugünkü su (+1): dokunuşlar 10 sn
  *   biriktirilip tek istekte `water.json`'a gider;
  *   gönderilene kadar telefonda durur. Günün toplamı = `water.json` + bitmiş antrenmanlar + yarım
  *   antrenmanın suyu (çift sayılmaz).
  */
 
-export const WORKOUT_KEY = ['me', 'workout'] as const;
-/** Bugün'ün yanıtları (programa göre); `setQueriesData` ile hepsi birden güncellenir, muadil sorguları değil. */
-export const WORKOUT_OVERVIEW_KEY = [...WORKOUT_KEY, 'overview'] as const;
-
-/**
- * Bugün'ün tek seferlik program seçimi (`?program=op_…|pt`, `docs/design/kendi-program.md` §2.6): Bugün'ün
- * parçaları yanıtı o programla çeker; yoksa kalıcı seçim (sunucu karar verir).
- */
-const WorkoutProgramContext = createContext<string | null>(null);
-
-export function WorkoutProgramProvider({ program, children }: { program: string | null; children: React.ReactNode }) {
-  return <WorkoutProgramContext.Provider value={program}>{children}</WorkoutProgramContext.Provider>;
-}
-
-/** Tek seferlik seçimin adres parçası (`program=…`); yoksa boş. */
-export function useWorkoutProgram(): string | null {
-  return useContext(WorkoutProgramContext);
-}
-
-export function useWorkoutOverview(clientId: string) {
-  const program = useWorkoutProgram();
-  return useServiceQuery<WorkoutResponse>({
-    key: [...WORKOUT_OVERVIEW_KEY, program ?? 'default'],
-    fn: async ({ signal }) => {
-      const data = await fetchJson<WorkoutResponse>(`/api/me/workout${program ? `?program=${encodeURIComponent(program)}` : ''}`, { signal });
-      saveWorkoutCache(clientId, data);
-      return data;
-    },
-    // Bugün'ün sayıları olmasa da sayfa çalışır; hata bildirimi kartın kendisinde.
-    notify: 'none',
-  });
-}
+// Sorgu ve program seçimi `workout-overview.tsx`'te (şerit de oradan okur); buradan yalnız `WorkoutProgramProvider`
+// verilir (`(sekmeler)/page.tsx` onu Bugün'ün parçalarıyla birlikte buradan alır).
+export { WorkoutProgramProvider } from './workout-overview';
 
 /** Telefondaki yarım antrenman (aynı ve öteki sekmelerdeki değişiklikleri izler). */
 function useLocalWorkout(clientId: string) {
@@ -81,7 +54,9 @@ function useLocalWorkout(clientId: string) {
 
 /** "Bu hafta 1/3" (sıklık yoksa "Bu hafta 1"); yüklenirken yer tutucu. */
 export function WeekBadge({ clientId }: { clientId: string }) {
-  const { data, isPending } = useWorkoutOverview(clientId);
+  const { data, isPending, fetchStatus } = useWorkoutOverview(clientId);
+  // Çevrimdışı (sorgu duraklatıldı): yer tutucu sonsuza dek dönmesin.
+  if (isPending && fetchStatus === 'paused') return null;
   if (isPending) return <Skeleton className="h-5 w-20 rounded-full" />;
   if (!data) return null;
   const { done, target } = data.week;
@@ -94,30 +69,98 @@ export function WeekBadge({ clientId }: { clientId: string }) {
 
 type InProgress = { doc: SessionDoc; plan: WorkoutDay | null };
 
-function ResumeCard({ progress, timeZone, clientWater }: { progress: InProgress; timeZone: string; clientWater: React.ReactNode }) {
+/** "Devam et" kartının listesi en çok bu kadar birim; şu an hep içinde (`listWindow`). */
+const RESUME_LIST_LIMIT = 8;
+
+/**
+ * Yarım antrenmanın kartı (Faz 2): "Yarım kalan antrenman · Gün A", birincil "Devam et: <şu anki hareket>" (antrenman
+ * ekranı o hareketin odağıyla açılır) ve "Antrenmanı bitir"; hepsi bittiyse birincil "Antrenmanı bitir". Plan
+ * biliniyorsa hareketlerin listesi (`listView`: durum, ad, "2/4 set"; en çok 8 birim, şu an hep içinde: üstte
+ * "Önceki n hareket", altta "+n hareket daha"), bilinmiyorsa yapılan set sayısı; en altta hafta şeridi (`strip`).
+ */
+function ResumeCard({ progress, timeZone, strip, clientWater }: { progress: InProgress; timeZone: string; strip: React.ReactNode; clientWater: React.ReactNode }) {
   const { doc, plan } = progress;
-  const counts = plan ? cursorOf(plan, doc).progress : null;
-  const done = counts ? counts.doneSets : workingSetCount(doc);
+  const view = plan ? listView(plan, doc) : null;
+  const items = view && view.items.length > 0 ? view.items : null;
+  const list = items && view ? listWindow(items, view.current, RESUME_LIST_LIMIT) : null;
+  const current = view?.current ? view.items.find((item) => item.key === view.current) : undefined;
+  const currentName = current ? itemName(current) : '';
+  // Kalan yalnız plan dışı kayıtsa (`current` null; açılamaz) da tek iş bitirmek.
+  const allDone = view != null && (view.allDone || view.current === null);
+  const dayName = doc.program?.dayName ?? plan?.dayName;
   const lastAt = doc.entries.flatMap((entry) => entry.sets.map((set) => set.at)).sort().at(-1) ?? doc.startedAt;
   return (
     <>
       <Card>
         <CardHeader>
-          <CardDescription>Yarım kalan antrenman</CardDescription>
-          <CardTitle className="text-xl tabular-nums">
-            {doc.program?.dayName ?? 'Antrenman'} · {counts ? `${done}/${counts.plannedSets}` : done} set
-          </CardTitle>
-          <CardDescription>Kaldığın yerden sürer; kayıtların telefonunda saklı. Son kayıt {formatRecent(lastAt, timeZone)}.</CardDescription>
+          <CardTitle className="text-xl">{dayName ? `Yarım kalan antrenman · ${dayName}` : 'Yarım kalan antrenman'}</CardTitle>
+          <CardDescription>
+            {items ? null : (
+              <span className="block">
+                <span className="tabular-nums">{view ? `${view.doneSets}/${view.plannedSets}` : workingSetCount(doc)}</span> set yapıldı
+              </span>
+            )}
+            Kaldığın yerden sürer; kayıtların telefonunda saklı. Son kayıt {formatRecent(lastAt, timeZone)}.
+          </CardDescription>
         </CardHeader>
-        <CardFooter className="flex flex-col items-stretch gap-2">
-          <Button size="lg" className="h-12 w-full" nativeButton={false} render={<Link href="/me/antrenman" />}>
-            <Play data-icon="inline-start" weight="fill" />
-            Kaldığın yerden devam et
-          </Button>
-          <Button variant="ghost" className="h-11 w-full text-muted-foreground" nativeButton={false} render={<Link href="/me/antrenman?bitir=1" />}>
-            Antrenmanı bitir
-          </Button>
-        </CardFooter>
+        <CardContent className="flex flex-col gap-4">
+          {allDone ? (
+            // Hepsi bitti: tek iş bitirmek (antrenman ekranı bitiş sheet'iyle açılır; kapatınca liste).
+            <Button size="lg" className="h-12 w-full" nativeButton={false} render={<Link href="/me/antrenman?bitir=1" />}>
+              <FlagCheckered data-icon="inline-start" weight="fill" />
+              Antrenmanı bitir
+            </Button>
+          ) : (
+            <div className="flex flex-col gap-2">
+              <Button size="lg" className="h-12 w-full" nativeButton={false} render={<Link href="/me/antrenman" />}>
+                <Play data-icon="inline-start" weight="fill" />
+                <span className="min-w-0 truncate">{currentName ? `Devam et: ${currentName}` : 'Kaldığın yerden devam et'}</span>
+              </Button>
+              <Button variant="ghost" className="h-11 w-full text-muted-foreground" nativeButton={false} render={<Link href="/me/antrenman?bitir=1" />}>
+                Antrenmanı bitir
+              </Button>
+            </div>
+          )}
+          {list ? (
+            <div className="flex flex-col gap-1">
+              {list.before > 0 ? (
+                <p className="pl-7.5 text-sm text-muted-foreground">
+                  Önceki <span className="tabular-nums">{list.before}</span> hareket
+                </p>
+              ) : null}
+              <ol className="flex flex-col gap-1" aria-label="Antrenmanın hareketleri">
+                {list.shown.map((item) => {
+                  const isCurrent = item.state === 'current';
+                  return (
+                    <li
+                      key={item.key}
+                      aria-current={isCurrent ? 'step' : undefined}
+                      className={cn(
+                        'flex items-start gap-2.5 py-1 text-sm',
+                        isCurrent && 'font-semibold',
+                        (item.state === 'done' || item.state === 'skipped') && 'text-muted-foreground',
+                      )}>
+                      <UnitStateIcon state={item.state} />
+                      <span className="min-w-0 flex-1 break-words">
+                        <span className="sr-only">{UNIT_STATE_TEXT[item.state]}: </span>
+                        {itemName(item)}
+                      </span>
+                      <span className={cn('shrink-0 tabular-nums', isCurrent ? 'text-foreground' : 'text-muted-foreground')}>
+                        {item.done}/{item.planned} set
+                      </span>
+                    </li>
+                  );
+                })}
+              </ol>
+              {list.after > 0 ? (
+                <p className="pl-7.5 text-sm text-muted-foreground">
+                  +<span className="tabular-nums">{list.after}</span> hareket daha
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+          {strip}
+        </CardContent>
       </Card>
       {clientWater}
     </>
@@ -132,22 +175,31 @@ function ResumeCard({ progress, timeZone, clientWater }: { progress: InProgress;
 export function TodayWorkout({ clientId, children }: { clientId: string; children: React.ReactNode }) {
   const local = useLocalWorkout(clientId);
   const { data } = useWorkoutOverview(clientId);
-  // Sayılar günün etkin planından: muadiller ve eklenen hareketler dahil (`effectiveDay`).
+  // Liste ve sayılar günün etkin planından: muadiller ve eklenen hareketler (`effectiveDay`). Telefondaki antrenmanda
+  // ekranın planıyla aynı (`localWorkoutDay`, "+ Set ekle" turları dahil; listenin sayılarını değiştirmez).
   const progress: InProgress | null = local
-    ? { doc: local.doc, plan: effectiveDay(local.plan, local.doc, local.extras) }
+    ? { doc: local.doc, plan: localWorkoutDay(local, local.doc) }
     : data?.active
       ? { doc: data.active, plan: data.day && data.day.dayId === data.active.program?.dayId ? effectiveDay(data.day, data.active, data.extras ?? {}) : null }
       : null;
   if (!progress) return <>{children}</>;
   const timeZone = data?.timeZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
-  return <ResumeCard progress={progress} timeZone={timeZone} clientWater={<WaterCard clientId={clientId} />} />;
+  // Şerit atamalardan (Faz 3): yarım antrenman şeridin adlarını değiştirmez, dönüş yok.
+  return (
+    <ResumeCard
+      progress={progress}
+      timeZone={timeZone}
+      strip={<WeekStrip clientId={clientId} />}
+      clientWater={<WaterCard clientId={clientId} />}
+    />
+  );
 }
 
 const JSON_HEADERS = { 'Content-Type': 'application/json' };
 
 /** Bugünkü su: "Su · bugün 3 bardak [+1]" (44 px); +1'den sonra 3 sn "Geri al". */
 export function WaterCard({ clientId }: { clientId: string }) {
-  const { data, isPending } = useWorkoutOverview(clientId);
+  const { data, isPending, fetchStatus } = useWorkoutOverview(clientId);
   const local = useLocalWorkout(clientId);
   const queryClient = useQueryClient();
   const [pending, setPending] = useState<WaterTap[]>([]);
@@ -255,7 +307,8 @@ export function WaterCard({ clientId }: { clientId: string }) {
       <WaterGlass count={total} />
       <p className="min-w-0 flex-1 text-sm">
         <span className="mb-1 block text-muted-foreground">Su · bugün</span>
-        {isPending && !data ? (
+        {/* Çevrimdışıyken sorgu bekler (`paused`): telefondaki toplam gösterilir, iskelet sonsuza dek yanıp sönmez. */}
+        {isPending && fetchStatus !== 'paused' ? (
           <span aria-hidden className="inline-block h-4 w-4 animate-pulse rounded-md bg-muted align-middle" />
         ) : (
           <motion.b key={total} initial={{ scale: 1.15 }} animate={{ scale: 1 }} transition={tween(DURATION.fast)} className="inline-block text-3xl font-semibold tabular-nums">

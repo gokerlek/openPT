@@ -34,6 +34,10 @@ function createRunner(get: () => Options, report: (problem: OutboxProblem) => vo
   let halted = false;
   let attempt = 0;
   let notBefore = 0;
+  // Kuyruğun kuşağı: `reset()` (başka antrenmana geçildi) artırır. Yoldaki istek dönünce kuşak değiştiyse yanıtı yok
+  // sayılır: eski antrenmanın PUT'unun 410/409'u (o antrenman bitirildi ya da silindi) yeni antrenmana uygulanmaz
+  // (`onGone`, `onFinishedElsewhere`, sorun ve bekleme), `inFlight` da yeni antrenmanın isteğine dokunmaz.
+  let generation = 0;
 
   const wait = () => {
     notBefore = Date.now() + backoffMs(attempt);
@@ -52,6 +56,7 @@ function createRunner(get: () => Options, report: (problem: OutboxProblem) => vo
     const local = get().localRef.current;
     if (stopped || halted || inFlight || !local || !sendPending(local)) return;
     inFlight = true;
+    const sentGeneration = generation;
     const sentRev = local.rev;
     const doc = local.doc;
     get().commit({ ...local, lastSentAt: Date.now() });
@@ -59,15 +64,17 @@ function createRunner(get: () => Options, report: (problem: OutboxProblem) => vo
     try {
       response = await fetch(url(doc.id), { method: 'PUT', headers: JSON_HEADERS, body: JSON.stringify(doc) });
     } catch {
+      if (sentGeneration !== generation) return;
       inFlight = false;
       wait();
       report('offline');
       schedule();
       return;
     }
+    if (sentGeneration !== generation) return;
     inFlight = false;
     const body = (await response.json().catch(() => null)) as { doc?: SessionDoc; slow?: boolean; reason?: string } | null;
-    if (stopped) return;
+    if (stopped || sentGeneration !== generation) return;
     if (response.ok && body?.doc) {
       attempt = 0;
       notBefore = 0;
@@ -137,6 +144,20 @@ function createRunner(get: () => Options, report: (problem: OutboxProblem) => vo
     resume() {
       stopped = false;
       schedule();
+    },
+    /**
+     * Başka antrenmana geçildi ("Antrenmanı değiştir"): eski kuyruğun durması (`halted`), beklemesi ve sorunu yeni
+     * antrenmana taşınmaz; yoldaki isteği yeni kuşağı beklemez, yanıtı geldiğinde yok sayılır (`generation`). Kuyruğu
+     * başlatmaz (`resume`).
+     */
+    reset() {
+      generation += 1;
+      clearTimeout(timer);
+      inFlight = false;
+      halted = false;
+      attempt = 0;
+      notBefore = 0;
+      report(null);
     },
     dispose() {
       clearTimeout(timer);

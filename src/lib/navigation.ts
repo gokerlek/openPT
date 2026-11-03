@@ -89,21 +89,34 @@ export function notFoundBackLink(pathname: string): { href: string; label: strin
 const LIBRARY_LISTS = ['/dashboard/templates', '/dashboard/exercises', '/dashboard/devices', '/dashboard/attachments'];
 
 /**
+ * Ayarlar bölümünün sayfaları, sekme sırasıyla (tek yer): sekmeleri `settings/settings-tabs.tsx` çizer, geçiş
+ * iskeleti (`skeletonKind`) buradan tanır. Avatar menüsündeki tek "Ayarlar" öğesi bölümün girişine (Görünüm) açılır.
+ */
+export const SETTINGS_SECTIONS = [
+  { href: '/dashboard/settings', label: 'Görünüm' },
+  { href: '/dashboard/settings/ai', label: 'Yapay zekâ' },
+  { href: '/dashboard/settings/updates', label: 'Sürüm' },
+] as const;
+
+const SETTINGS_PAGES: readonly string[] = SETTINGS_SECTIONS.map((section) => section.href);
+
+/**
  * Sayfa geçişinde yüklenirken gösterilecek iskeletin biçimi; hedef sayfanın yerleşimine benzer
  * (`dashboard/route-skeleton.tsx`).
  * - `overview`: genel bakış · `library`: Kütüphane listesi (sekmeler + kart ızgarası)
- * - `list`: danışan listesi · `form`: oluşturma, düzenleme ve ayarlar
+ * - `list`: danışan listesi · `form`: oluşturma ve düzenleme · `settings`: Ayarlar (sekmeler + form)
  * - `client`: danışanın sayfası (başlık + sekmeler) · `detail`: kaydın detayı
  */
-export type SkeletonKind = 'overview' | 'library' | 'list' | 'form' | 'client' | 'detail';
+export type SkeletonKind = 'overview' | 'library' | 'list' | 'form' | 'settings' | 'client' | 'detail';
 
 export function skeletonKind(pathname: string): SkeletonKind {
   const path = pathname.length > 1 ? pathname.replace(/\/+$/, '') : pathname;
   if (path === PT_AREA) return 'overview';
   if (LIBRARY_LISTS.includes(path)) return 'library';
+  if (SETTINGS_PAGES.includes(path)) return 'settings';
   if (path === '/dashboard/clients') return 'list';
   // Danışanın bütün sayfaları (düzenleme dahil) aynı başlık ve sekmelerin altında açılır.
   if (path.startsWith('/dashboard/clients/') && path !== '/dashboard/clients/new') return 'client';
-  if (path === '/dashboard/settings' || path.endsWith('/new') || path.endsWith('/edit')) return 'form';
+  if (path.endsWith('/new') || path.endsWith('/edit')) return 'form';
   return 'detail';
 }

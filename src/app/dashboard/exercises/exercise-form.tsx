@@ -10,12 +10,18 @@ import {
   getDeepError,
   getInput,
   insert,
+  move,
   remove,
   setInput,
   useForm,
 } from "@formisch/react";
-import { Heartbeat, Plus, PushPin, WarningCircle, X } from "@phosphor-icons/react";
+import { Heartbeat, Trash, WarningCircle } from "@phosphor-icons/react";
 import { toast } from "sonner";
+import { Plus } from "@/components/line-icons";
+import { SortableList } from "@/components/list/sortable-list";
+import { ToggleTiles } from "@/components/toggle-tiles";
+import { SwipeRow, deleteAction } from "@/components/swipe/swipe-row";
+import { showUndoToast } from "@/components/undo-toast";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -44,13 +50,9 @@ import { DEVICE_KIND_LABELS, DEVICE_KINDS, KIND_EQUIPMENT } from "@/lib/device-l
 import { GRIP_LABELS, GRIP_WIDTH_LABELS } from "@/lib/grips";
 import type { Attachment } from "@/lib/schemas/attachment";
 import type { Device } from "@/lib/schemas/device";
-import {
-  isBodyMuscle,
-  ROLE_INTENSITY,
-  ROLE_LABELS,
-  type MuscleIntensity,
-  type MuscleRole,
-} from "@/lib/muscles";
+import { isBodyMuscle, ROLE_LABELS, type MuscleRole } from "@/lib/muscles";
+import { roleLegend, roleMarks } from "@/lib/muscle-tiers";
+import type { DeepMuscle } from "@/lib/deep-muscles";
 import {
   defaultRule,
   EQUIPMENT_LOAD_DEFAULTS,
@@ -124,28 +126,7 @@ function AlternativesField({
         <FieldDescription>
           Seçmezsen uygulama zaten benzerlerini önerir; seçtiklerin listenin başında çıkar (en fazla 12).
         </FieldDescription>
-        <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-          {options.map((option) => {
-            const isOn = pinned.includes(option.id);
-            return (
-              <li key={option.id}>
-                <Button
-                  type="button"
-                  variant={isOn ? "secondary" : "outline"}
-                  aria-pressed={isOn}
-                  className={`h-auto w-full justify-start gap-3 p-2 text-left ${isOn ? "ring-2 ring-primary-text" : ""}`}
-                  onClick={() => onToggle(option.id)}
-                >
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate font-normal">{option.title}</span>
-                    <span className="block truncate text-xs font-normal text-muted-foreground">{option.detail}</span>
-                  </span>
-                  {isOn ? <PushPin weight="fill" className="text-primary-text" /> : <Plus className="text-muted-foreground" />}
-                </Button>
-              </li>
-            );
-          })}
-        </ul>
+        <ToggleTiles items={options} selected={pinned} onToggle={onToggle} max={12} />
       </Field>
     </FieldSet>
   );
@@ -319,32 +300,63 @@ export function ExerciseForm({
             <FieldArray of={form} path={["cues"]}>
               {(array) => (
                 <div className="flex flex-col gap-2">
-                  {array.items.map((item, index) => (
-                    <div key={item} className="flex gap-2">
-                      <FormField of={form} path={["cues", index]}>
-                        {(field) => (
-                          <Input
-                            {...field.props}
-                            value={field.input ?? ""}
-                            placeholder="Kürek kemiklerini sıkıştır"
-                            aria-label={`${index + 1}. ipucu`}
-                          />
-                        )}
-                      </FormField>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="touch:size-11"
-                        aria-label={`${index + 1}. ipucunu sil`}
-                        onClick={() =>
-                          remove(form, { path: ["cues"], at: index })
-                        }
-                      >
-                        <X />
-                      </Button>
-                    </div>
-                  ))}
+                  <SortableList
+                    items={array.items}
+                    keyOf={(item) => item}
+                    nameOf={(item) => `${array.items.indexOf(item) + 1}. ipucu`}
+                    label="İpuçları"
+                    className={array.items.length === 0 ? "hidden" : undefined}
+                    onStep={(item, target) => {
+                      const from = array.items.indexOf(item);
+                      const to = target === "up" ? from - 1 : from + 1;
+                      if (to >= 0 && to < array.items.length) move(form, { path: ["cues"], from, to });
+                    }}
+                    onTapItem={(item) => document.getElementById(`cue-${item}`)?.focus()}
+                    onDrop={(item, over) =>
+                      move(form, { path: ["cues"], from: array.items.indexOf(item), to: array.items.indexOf(over) })
+                    }
+                    renderItem={(item, slot) => {
+                      const index = array.items.indexOf(item);
+                      const removeCue = () => {
+                        const value = getInput(form, { path: ["cues", index] }) ?? "";
+                        remove(form, { path: ["cues"], at: index });
+                        showUndoToast("İpucu silindi", () =>
+                          insert(form, { path: ["cues"], at: index, initialInput: value }),
+                        );
+                      };
+                      // Tutamaç kaydırma satırının dışında: dokunma alanı kartın üstüne taşar (`SwipeRow` kırpar).
+                      return (
+                        <>
+                        {slot.grabber}
+                        <SwipeRow id={item} end={[deleteAction(removeCue)]}>
+                          <div className="relative flex gap-2 rounded-lg border bg-card px-2 pt-3 pb-2">
+                            <FormField of={form} path={["cues", index]}>
+                              {(field) => (
+                                <Input
+                                  {...field.props}
+                                  id={`cue-${item}`}
+                                  value={field.input ?? ""}
+                                  placeholder="Kürek kemiklerini sıkıştır"
+                                  aria-label={`${index + 1}. ipucu`}
+                                />
+                              )}
+                            </FormField>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="touch:size-11"
+                              aria-label={`${index + 1}. ipucunu sil`}
+                              onClick={removeCue}
+                            >
+                              <Trash />
+                            </Button>
+                          </div>
+                        </SwipeRow>
+                        </>
+                      );
+                    }}
+                  />
                   {array.items.length < 6 ? (
                     <Button
                       type="button"
@@ -606,7 +618,9 @@ export function ExerciseForm({
               <FormField of={form} path={["secondaryMuscles"]}>
                 {(secondaryField) => (
                   <FormField of={form} path={["stabilizerMuscles"]}>
-                    {(stabilizerField) => {
+                    {(stabilizerField) => (
+                    <FormField of={form} path={["activationTargets"]}>
+                    {(deepField) => {
                       // Her kas tek seviyede: hedef > yardımcı > dengeleyici.
                       const primary = (primaryField.input ?? []) as Muscle[];
                       const secondary = ((secondaryField.input ?? []) as Muscle[]).filter(
@@ -617,11 +631,6 @@ export function ExerciseForm({
                       ).filter(
                         (muscle) => !primary.includes(muscle) && !secondary.includes(muscle),
                       );
-                      const lists: Record<MuscleRole, Muscle[]> = {
-                        primary,
-                        secondary,
-                        stabilizer,
-                      };
                       const roleOf = (muscle: Muscle): MuscleRole | null =>
                         primary.includes(muscle)
                           ? "primary"
@@ -631,12 +640,11 @@ export function ExerciseForm({
                               ? "stabilizer"
                               : null;
 
-                      const intensity: MuscleIntensity = {};
-                      for (const role of ["stabilizer", "secondary", "primary"] as const) {
-                        for (const muscle of lists[role]) {
-                          if (isBodyMuscle(muscle)) intensity[muscle] = ROLE_INTENSITY[role];
-                        }
-                      }
+                      const worked = {
+                        primaryMuscles: primary,
+                        secondaryMuscles: secondary,
+                        stabilizerMuscles: stabilizer,
+                      };
 
                       // Kaslar sabit sırada saklanır.
                       const save = (next: Record<MuscleRole, Muscle[]>) => {
@@ -674,6 +682,17 @@ export function ExerciseForm({
 
                       const errors =
                         primaryField.errors ?? secondaryField.errors ?? stabilizerField.errors;
+                      // Derin kaslar haritanın altındaki bölümde seçilir; hacme sayılmaz.
+                      const deepSelected = (deepField.input ?? []).filter(
+                        (item): item is DeepMuscle => typeof item === "string",
+                      );
+                      const toggleDeep = (muscle: DeepMuscle) =>
+                        setInput(form, {
+                          path: ["activationTargets"],
+                          input: deepSelected.includes(muscle)
+                            ? deepSelected.filter((item) => item !== muscle)
+                            : [...deepSelected, muscle],
+                        });
                       const bodySelected = [...primary, ...secondary, ...stabilizer].filter(
                         isBodyMuscle,
                       );
@@ -686,7 +705,10 @@ export function ExerciseForm({
                           </FieldDescription>
                           <MuscleMap
                             layout="split"
-                            intensity={intensity}
+                            marks={roleMarks(worked)}
+                            legend={roleLegend(worked)}
+                            onRemoveRow={(muscle) => setRole(muscle as Muscle, null)}
+                            deep={{ selected: deepSelected, onToggle: toggleDeep }}
                             selected={bodySelected}
                             onToggle={cycle}
                             describe={(muscle) => {
@@ -714,36 +736,12 @@ export function ExerciseForm({
                             <Heartbeat data-icon="inline-start" />
                             Kardiyo hareketi
                           </Toggle>
-                          {(["primary", "secondary", "stabilizer"] as const).map((role) =>
-                            lists[role].length > 0 ? (
-                              <div
-                                key={role}
-                                className="flex flex-wrap items-center gap-1.5"
-                                aria-label={`${ROLE_LABELS[role]} kaslar`}
-                              >
-                                <span className="w-20 text-xs text-muted-foreground">
-                                  {ROLE_LABELS[role]}
-                                </span>
-                                {lists[role].map((muscle) => (
-                                  <Button
-                                    key={muscle}
-                                    type="button"
-                                    variant="secondary"
-                                    size="xs"
-                                    onClick={() => setRole(muscle, null)}
-                                    aria-label={`${MUSCLE_LABELS[muscle]} kasını kaldır`}
-                                  >
-                                    {MUSCLE_LABELS[muscle]}
-                                    <X data-icon="inline-end" />
-                                  </Button>
-                                ))}
-                              </div>
-                            ) : null,
-                          )}
-                          <FieldError>{errors?.[0]}</FieldError>
+                          <FieldError>{errors?.[0] ?? deepField.errors?.[0]}</FieldError>
                         </Field>
                       );
                     }}
+                    </FormField>
+                    )}
                   </FormField>
                 )}
               </FormField>

@@ -1,4 +1,5 @@
 // Göreli ve uzantılı içe aktarma: bu yardımcılar `node --test` ile de sınanır (`exercise-form-logic.test.ts`).
+import { cardioKind } from '../../../lib/cardio.ts';
 import { describeDeviceLoads, loadSpecFor, type DeviceLoadSettings } from '../../../lib/device-loads.ts';
 import { defaultRule, PROGRESSION_LABELS, RIR_LABELS, type ProgressionRule, type TrackingType } from '../../../lib/progression.ts';
 import { CATEGORY_LABELS, type Category, type ExerciseInput } from '../../../lib/schemas/exercise.ts';
@@ -59,10 +60,12 @@ export function toExercisePayload(
   values: ExerciseInput,
   options: { editingId?: string; attachmentIds: readonly string[] },
 ) {
-  const { videoUrl: link, attachmentId, ...rest } = values;
+  const { videoUrl: link, attachmentId, locomotion, ...rest } = values;
   const video = link ? (parseVideoUrl(link) ?? undefined) : undefined;
   const attachment = attachmentId && options.attachmentIds.includes(attachmentId) ? attachmentId : undefined;
-  return { ...rest, attachmentId: attachment, video, ...(options.editingId ? { id: options.editingId } : {}) };
+  // Yürüyüş/koşu yalnız süreli kardiyo harekette ve açıkken yazılır (gizli kalmış anahtar düşer).
+  const walk = locomotion === true && cardioKind(values) !== null;
+  return { ...rest, attachmentId: attachment, video, ...(walk ? { locomotion: true } : {}), ...(options.editingId ? { id: options.editingId } : {}) };
 }
 
 /** Kütüphane değişikliğinin şablon ve programlara yansıdığını söyleyen satır (kullanılabilirlik 16). */

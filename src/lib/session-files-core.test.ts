@@ -120,18 +120,19 @@ describe('PUT', () => {
 });
 
 describe('bitiş', () => {
-  test('TEK commit: seans + index + program; index sha dosyanınki; yeniden deneme no-op', async () => {
+  test('TEK commit: seans + index (dönüş yok, program yazılmaz); index sha dosyanınki; yeniden deneme no-op', async () => {
     const gh = fakeSessionRepo({ 'program.json': programFile() });
     await putSession(gh.repo, ctx, doc([s1, s2, s3], [l1]));
     const before = gh.commitCount();
     const result = await finishSession(gh.repo, { ...ctx, client }, { doc: { ...doc([s1, s2, s3], [l1, l2]), status: 'finished', finishedAt: at(55) } });
     assert.equal(result.status, 'finished');
     assert.equal(gh.commitCount(), before + 1);
-    assert.deepEqual(gh.lastChanged(), [PATH, 'program.json', INDEX].sort());
+    assert.deepEqual(gh.lastChanged(), [PATH, INDEX].sort());
     assert.equal(gh.messages().at(-1), 'Antrenman bitti · Gün A · 5 set');
     const index = gh.get(INDEX) as SessionIndex;
     assert.equal(index.items[0]?.sha, gh.sha(PATH));
-    assert.equal((gh.get('program.json') as ReturnType<typeof programFile>).rotation.lastDayId, DAY_A);
+    assert.deepEqual((gh.get('program.json') as ReturnType<typeof programFile>).rotation, {});
+    assert.equal((gh.get(PATH) as SessionDoc).rotation, undefined);
 
     const again = await finishSession(gh.repo, { ...ctx, client }, { doc: doc([s1, s2, s3], [l1, l2]) });
     assert.equal(again.status, 'already');
@@ -157,7 +158,7 @@ describe('bitiş', () => {
     assert.equal(result.status, 'finished');
     const program = gh.get('program.json') as ReturnType<typeof programFile>;
     assert.equal(program.revision, 8);
-    assert.equal(program.rotation.lastDayId, DAY_A);
+    assert.deepEqual(program.rotation, {});
     assert.deepEqual(gh.messages().slice(-2), ['Program düzenlendi', 'Antrenman bitti · Gün A · 5 set']);
   });
 
@@ -256,8 +257,8 @@ describe('bitiş', () => {
     const gh = fakeSessionRepo({ 'program.json': programFile() });
     const result = await finishSession(gh.repo, { ...ctx, client }, { doc: doc([s1, s2, s3], [l1, l2]), feedback: algo() });
     if (result.status === 'finished') assert.deepEqual(result.plan.feedback, { direct: 0, proposals: 1, converted: 0 });
-    // Program yalnız rotasyon için değişir: danışan kaydı yok, setler aynı.
-    assert.deepEqual(gh.lastChanged(), [PATH, 'program.json', 'proposals.json', INDEX].sort());
+    // Program yazılmaz: danışan kaydı yok, setler aynı, dönüş de yok (Faz 3).
+    assert.deepEqual(gh.lastChanged(), [PATH, 'proposals.json', INDEX].sort());
     assert.deepEqual((gh.get('program.json') as { log: unknown[] }).log, []);
     const proposals = gh.get('proposals.json') as { items: { kind: string; text: string; why: string; from: number; to: number }[] };
     assert.deepEqual(proposals.items.map((item) => [item.kind, item.text, item.from, item.to, item.why]), [
@@ -276,7 +277,7 @@ describe('bitiş', () => {
     const dropped = await finishSession(low.repo, { ...ctx, client: consenting }, { doc: doc([s1, s2, s3], [l1, l2]), feedback: algo() });
     if (dropped.status === 'finished') assert.deepEqual(dropped.plan.feedback, { direct: 0, proposals: 0, converted: 0 });
     assert.equal(low.get('proposals.json'), undefined);
-    assert.deepEqual(low.lastChanged(), [PATH, 'program.json', INDEX].sort());
+    assert.deepEqual(low.lastChanged(), [PATH, INDEX].sort());
   });
 
   test('bozuk proposals.json ezilmez: öneri yazılmaz, danışan kaydı yine yazılır', async () => {
@@ -432,7 +433,7 @@ describe('kendi program (kendi-program.md §3.4, §5.4)', () => {
     assert.equal(gh.sha(PATH), before);
   });
 
-  test('bitiş kendi programa yazar (program.json\'a değil): satır, rotasyon, index tek commit; yarım/başka gün bildirimi yok', async () => {
+  test('bitiş kendi programa yazar (program.json\'a değil): satır ve index tek commit (dönüş yok); yarım/başka program bildirimi yok', async () => {
     const gh = repo();
     await putSession(gh.repo, ctx, ownDoc([s1]));
     const feedback: FinishFeedback = {
@@ -459,7 +460,7 @@ describe('kendi program (kendi-program.md §3.4, §5.4)', () => {
     const stored = gh.get(OWN_PATH) as OwnProgram;
     assert.equal(stored.phases[0]?.days[0]?.blocks[0]?.rows[0]?.sets.length, 4);
     assert.equal(stored.revision, 2);
-    assert.equal(stored.rotation.lastDayId, OWN_DAY_A);
+    assert.deepEqual(stored.rotation, ownProgram().rotation, 'dönüş ilerlemez');
     const index = gh.get(OWN_INDEX_PATH) as OwnIndex;
     assert.equal(index.items[0]?.sha, gh.sha(OWN_PATH));
     assert.equal(index.items[0]?.revision, 2);

@@ -1,7 +1,7 @@
 import { todayIn } from './format.ts';
 import { gitBlobSha, jsonText } from './github/blob.ts';
 import { E1RM_MAX_REPS } from './personal-records.ts';
-import { completeDay, currentPhaseOf, mondayOf, nextDayId } from './program-plan.ts';
+import { currentPhaseOf, mondayOf, type ProgramDay } from './program-plan.ts';
 import { deloadWeight, gridOf, LIGHTEN_FACTOR, isOverload, percentOfTop, type Effort } from './progression.ts';
 import { seriesKey } from './progress.ts';
 import { LOWER_BODY_PATTERNS } from './recommend.ts';
@@ -13,7 +13,7 @@ import { adjustDay, checkContextOf, checkParts, evaluateStart, startCheckInBody,
 import { applyPatch, planFinish } from './session-finish.ts';
 import { durationOf, indexRowOf, upsertIndexRow } from './session-index.ts';
 import { normalizeSession } from './session-merge.ts';
-import { addDays, effectiveSchedule, isoWeekdayOf, normalizeWeekdays } from './training-days.ts';
+import { addDays, effectiveSchedule, isoWeekdayOf, normalizeWeekdays, todayAssigned } from './training-days.ts';
 import { dropAt, withFinishReason } from './workout-flow.ts';
 import { buildWorkoutDay, type WorkoutDevice, type WorkoutDay, type WorkoutExercise, type WorkoutRow } from './workout-plan.ts';
 import { addWaterTap, cursorOf, logSet, logWarmup, newSessionDoc, nextSet, setEntryEffort, templateRowOf } from './workout-session.ts';
@@ -25,10 +25,11 @@ import { addWaterTap, cursorOf, logSet, logWarmup, newSessionDoc, nextSet, setEn
  *
  * Uydurma yalnız danışanın bedeni ve cevaplarıdır; gerisi uygulamanın kendi saf işleridir, ayrı bir mantık
  * yazılmaz. Her antrenman için sırasıyla:
- * - gün planı motorla (`buildWorkoutDay`, öneri katmanı dahil) o güne kadar üretilmiş geçmişten;
+ * - gün planı motorla (`buildWorkoutDay`, öneri katmanı dahil) o güne kadar üretilmiş geçmişten; tarihin programı
+ *   o güne atanmış program (Faz 3), atamasız programda programlar sırayla (`demoDayOf`; dönüş programa yazılmaz);
  * - yoklama (onay varsa) `evaluateStart` → `adjustDay` ile; cevaplar `startCheckInBody` → `withCheckIn`;
  * - setler telefonun işleriyle (`nextSet` → `logSet`, `logWarmup`, `setEntryEffort`, `dropAt`, `addWaterTap`);
- * - bitiş sunucunun hesabıyla (`planFinish`: tarih, bildirimler, rotasyon), seans zorluğu `PATCH`'in
+ * - bitiş sunucunun hesabıyla (`planFinish`: tarih, bildirimler), seans zorluğu `PATCH`'in
  *   hesabıyla (`applyPatch`), index satırı `indexRowOf` + `upsertIndexRow` ile.
  *
  * Danışanın bedeni [sentez]: her hareket (ve cihaz) için gizli bir kapasite. Ağırlıkta tahmini maksimum
@@ -41,8 +42,9 @@ import { addWaterTap, cursorOf, logSet, logWarmup, newSessionDoc, nextSet, setEn
  * Kapasite her antrenmanla büyür, başta hızlı, sonra yavaş (antrenmansızda kazanım daha büyük: Rhea 2003
  * meta-analizi; Kraemer & Ratamess 2004); oranlar [sentez].
  *
- * Senaryo (hepsi tohumdan): danışanın antrenman günlerinde (programdaki geçerli günler, yoksa haftalık
- * sıklığa göre yayılmış, o da yoksa Pzt/Çar/Cum), bugünden önceki `weeks` haftada; yolun ~%40'ında bir
+ * Senaryo (hepsi tohumdan): danışanın antrenman günlerinde (programın atanmış günleri, yoksa haftalık
+ * sıklığa göre yayılmış, o da yoksa Pzt/Çar/Cum), bugünden önceki `weeks` haftada; her antrenman o gün planlanan
+ * programla yapılır (başka program bildirimi yok); yolun ~%40'ında bir
  * hafta hiç antrenman yok; ağırlıklı bir bileşik harekette ortalarda üç antrenman üst üste tıkanma (son
  * setler alt sınırın altında) ve motorun kendi hafifletmesi (`deload`), sonra toparlanma; ~%72'den sonra,
  * tıkanan hareketin olmadığı bir günde hafif gün (hazır oluşluk onayı varsa düşük yoklama ve "Evet,
@@ -142,7 +144,10 @@ const SPREAD: Record<number, number[]> = {
   7: [1, 2, 3, 4, 5, 6, 7],
 };
 
-/** Antrenman günleri: programdaki geçerli günler (danışanınki ?? PT'ninki), yoksa sıklığa göre, o da yoksa 3 gün. */
+/**
+ * Antrenman günleri: programın geçerli günleri (Faz 3: şu anki evrenin atamalarının birleşimi; danışanın eski katmanı
+ * yok sayılır), yoksa sıklığa göre, o da yoksa 3 gün.
+ */
 export function demoWeekdays(program: Program): number[] {
   const chosen = effectiveSchedule(program).weekdays;
   if (chosen.length > 0) return [...chosen];
@@ -345,16 +350,13 @@ export function clampWeeks(weeks: number | undefined): number {
 }
 
 /**
- * Rotasyonun başı: son üretilen antrenman programdaki sıradaki günden hemen önceki gün olsun (hepsi
- * ilerlerse), programa yazmadan geçmiş gerçek rotasyonla tutarlı kalır.
+ * Tarihin programı (Faz 3, Karar 12): o güne atanmış program; atanmamışsa (atamasız program, sıklığa göre yayılmış
+ * takvim) programlar sırayla, `n`: antrenmanın sırası. Dönüş programa yazılmaz; antrenman o gün planlananla yapılır,
+ * PT'ye "başka program" bildirimi düşmez. Evrede gün yoksa null.
  */
-function startingRotation(program: Program, sessions: number): Program {
-  const days = currentPhaseOf(program)?.phase.days ?? [];
-  if (days.length === 0) return program;
-  const next = Math.max(0, days.findIndex((day) => day.id === nextDayId(program)));
-  const before = (((next - sessions - 1) % days.length) + days.length) % days.length;
-  const lastDayId = days[before]?.id;
-  return { ...program, rotation: lastDayId ? { lastDayId } : {} };
+function demoDayOf(days: readonly ProgramDay[], date: string, n: number): ProgramDay | null {
+  if (days.length === 0) return null;
+  return todayAssigned(days, date) ?? days[n % days.length] ?? null;
 }
 
 /**
@@ -378,15 +380,14 @@ function stallCandidate(program: Program, exercises: ReadonlyMap<string, Workout
 
 /**
  * Hafif gün: yolun ~%72'sinden sonra, tıkanan hareketin olmadığı ilk gün (tıkanma hafifletmesiyle aynı
- * güne düşmesin; hepsi ilerlediği için sıradaki günler rotasyondan bellidir). 6'dan az antrenmanda yok.
+ * güne düşmesin; her tarihin programı bellidir: `demoDayOf`). 6'dan az antrenmanda yok.
  */
-function lighterSession(program: Program, sessions: number, stallExercise: string | null): number {
+function lighterSession(days: readonly ProgramDay[], dates: readonly string[], stallExercise: string | null): number {
+  const sessions = dates.length;
   if (sessions < 6) return -1;
   const start = Math.round(sessions * 0.72);
-  const days = currentPhaseOf(program)?.phase.days ?? [];
-  const first = Math.max(0, days.findIndex((day) => day.id === nextDayId(program)));
   for (let n = start; n < sessions; n++) {
-    const day = days[(first + n) % Math.max(1, days.length)];
+    const day = demoDayOf(days, dates[n]!, n);
     if (!day?.blocks.some((block) => block.rows.some((row) => row.exerciseId === stallExercise))) return n;
   }
   return start;
@@ -413,11 +414,12 @@ export function generateDemoHistory(input: DemoInput): DemoHistory {
   const parts = checkParts(client);
   const experience = client.training?.experience;
 
-  let program = startingRotation(input.program, dates.length);
-  const stallExercise = stallCandidate(input.program, exercises);
-  const lighterAt = lighterSession(program, dates.length, stallExercise);
+  const program = input.program;
+  const days = currentPhaseOf(program)?.phase.days ?? [];
+  const stallExercise = stallCandidate(program, exercises);
+  const lighterAt = lighterSession(days, dates, stallExercise);
   const stallFrom = Math.floor(dates.length * 0.4);
-  const declineExercise = input.declining ? stallCandidate(input.program, exercises, stallExercise) : null;
+  const declineExercise = input.declining ? stallCandidate(program, exercises, stallExercise) : null;
   const decline: Decline | null =
     declineExercise && dates.length > 0
       ? {
@@ -450,20 +452,15 @@ export function generateDemoHistory(input: DemoInput): DemoHistory {
     const stamp = (at: number) => ({ at: new Date(at).toISOString(), by: DEMO_WRITER });
     let day: WorkoutDay | null = buildWorkoutDay({
       program,
+      dayId: demoDayOf(days, date, n)?.id ?? null,
       exercises,
       devices,
       history: sessions,
       insight: { index, now: startedAt, experience },
+      today: date,
     });
     if (!day) break;
-    const dayId = day.dayId;
-    const advance = (at: Date) => {
-      program = completeDay(program, dayId, at);
-    };
-    if (day.blocks.length === 0) {
-      advance(startedAt);
-      continue;
-    }
+    if (day.blocks.length === 0) continue;
 
     // Yoklama (onaylı parçalar): hafif günde düşük hazır oluşluk ve "Evet, hafiflet"; arada bir "Bugün atla".
     const lightDay = n === lighterAt;
@@ -479,10 +476,7 @@ export function generateDemoHistory(input: DemoInput): DemoHistory {
       if (random.chance(0.3)) answers.symptomDirection = 'stable';
     }
     const outcome = evaluateStart({ context, answers });
-    if (outcome.stop) {
-      advance(startedAt);
-      continue;
-    }
+    if (outcome.stop) continue;
     const adjusted = parts.readiness || parts.pain ? adjustDay(day, { outcome, lighten: lightDay && outcome.low, mode: context.mode }) : null;
     if (adjusted) day = adjusted.day;
     const readinessLighter = Boolean(adjusted?.lighter && adjusted.adjustReason === 'readiness');
@@ -674,7 +668,6 @@ export function generateDemoHistory(input: DemoInput): DemoHistory {
 
     index = upsertIndexRow(index, indexRowOf(finished, gitBlobSha(jsonText(finished))));
     sessions.push(finished);
-    if (finish.rotation.choice === 'advance') advance(finishedAt);
     if (finished.adjust === 'lighter' || finished.entries.some((entry) => entry.lighter)) {
       lighter = { sessionId: finished.id, date, via: finished.adjust === 'lighter' ? 'readiness' : 'weight' };
     }

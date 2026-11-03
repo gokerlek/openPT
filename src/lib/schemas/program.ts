@@ -1,4 +1,5 @@
 import * as v from 'valibot';
+import { weekdayConflicts } from '../day-assignments.ts';
 import {
   DAY_ID_PATTERN,
   LOG_KINDS,
@@ -17,15 +18,17 @@ import { rowSetsSchema, templateBlockSchema } from './template.ts';
 /**
  * Danışana özel program şeması — sunucu ve istemci ortak (SPEC §4, §7.4).
  *
- * Program danışanın kendi repo'sunda `program.json`'dur: evreler → günler → bloklar.
- * Evreler isteğe bağlıdır: `phased: false` programda tek, süresiz, gizli bir evre olur.
+ * Program danışanın kendi repo'sunda `program.json`'dur: evreler → günler (programlar: "Alt vücut"…) → bloklar.
+ * Evreler isteğe bağlıdır: `phased: false` programda tek, süresiz, gizli bir evre olur. Faz 3: her program
+ * evresinde hafta günlerine atanır (`weekdays`); bir hafta günü evrede en çok bir programa.
  * Günün blokları şablonla aynı yapıdadır (`templateBlockSchema`). Yapı kuralları ve
  * sabitler `src/lib/program-plan.ts`'te. Node'un test aracı doğrudan çalıştırdığı için
  * çalışma zamanı içe aktarmaları göreli ve `.ts` uzantılıdır.
  *
  * Sürüm 1 dosyalar (ve eski sekmeden gelen kayıtlar) okunurken sürüm 2'ye çevrilir
- * (`upgradeProgram`): `phased` evrelerden çıkarılır, satırlar set başına hedefe geçer.
- * Düzenleyicinin şeması yalnız yeni biçimi kabul eder.
+ * (`upgradeProgram`): `phased` evrelerden çıkarılır, satırlar set başına hedefe geçer. Gün başına
+ * ataması olmayan eski dosya ve eski gövde de okunurken `schedule.weekdays`'ten (gövdede `weekdays`)
+ * atanır. Düzenleyicinin şeması yalnız yeni biçimi kabul eder.
  */
 
 const timestamp = v.pipe(v.string(), v.isoTimestamp());
@@ -44,7 +47,7 @@ export const dayIdSchema = v.pipe(v.string(), v.regex(DAY_ID_PATTERN, 'Gün kiml
 /** Günün blokları: şablonla aynı yapı; boş gün kaydedilmez. */
 export const dayBlocksSchema = v.pipe(
   v.array(templateBlockSchema),
-  v.minLength(1, 'Güne en az bir hareket ekle.'),
+  v.minLength(1, 'Programa en az bir hareket ekle.'),
   v.maxLength(TEMPLATE_LIMITS.blocks, `Bir günde en fazla ${TEMPLATE_LIMITS.blocks} blok olur.`),
   v.check((blocks) => countRows(blocks) <= TEMPLATE_LIMITS.rows, `Bir günde en fazla ${TEMPLATE_LIMITS.rows} hareket olur.`),
 );
@@ -56,9 +59,29 @@ export const daySourceSchema = v.object({
   at: timestamp,
 });
 
+/**
+ * Hafta günleri: ISO, 1 = Pazartesi … 7 = Pazar; her gün bir kez. Programlar günlere atanır (Faz 3);
+ * `schedule.weekdays` şu anki evrenin atamalarının birleşimi.
+ */
+export const weekdaysSchema = v.pipe(
+  v.array(v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(7)), 'Günleri seç.'),
+  v.maxLength(7),
+  v.check((days) => new Set(days).size === days.length, 'Bir gün iki kez seçilmiş.'),
+);
+/**
+ * Danışanın eski gün katmanı (`clientSchedule`): en az bir gün. Faz 3'te danışan günleri değiştirmez (Karar 3);
+ * şema yalnız eski dosyalar okunabilsin diye kalır.
+ */
+export const clientWeekdaysSchema = v.pipe(weekdaysSchema, v.minLength(1, 'En az bir gün seç.'));
+
+/** Evrede bir hafta günü en çok bir programa: Bugün o günün tek programını gösterir. */
+export const DAY_CONFLICT = 'Aynı gün iki programa atanmış.';
+
 export const programDaySchema = v.object({
   id: dayIdSchema,
-  name: v.pipe(v.string('Gün adı gir.'), v.trim(), v.minLength(1, 'Gün adı gir.'), v.maxLength(L.dayName, `En fazla ${L.dayName} karakter.`)),
+  name: v.pipe(v.string('Program adı gir.'), v.trim(), v.minLength(1, 'Program adı gir.'), v.maxLength(L.dayName, `En fazla ${L.dayName} karakter.`)),
+  /** Programın atandığı hafta günleri (Faz 3; ISO, 1 = Pazartesi); yoksa atanmamış. Evrede bir gün en çok bir programa. */
+  weekdays: v.optional(weekdaysSchema),
   blocks: dayBlocksSchema,
   source: v.optional(daySourceSchema),
 });
@@ -77,9 +100,10 @@ export const programPhaseSchema = v.object({
   daysPerWeek: v.optional(int(1, L.daysPerWeek, ' gün')),
   days: v.pipe(
     v.array(programDaySchema),
-    v.minLength(1, 'Evrede en az bir gün olmalı.'),
-    v.maxLength(L.daysPerPhase, `Bir evrede en fazla ${L.daysPerPhase} gün olur.`),
-    v.check((days) => duplicateNames(days).length === 0, 'Bu evrede aynı adda iki gün var.'),
+    v.minLength(1, 'Evrede en az bir program olmalı.'),
+    v.maxLength(L.daysPerPhase, `Bir evrede en fazla ${L.daysPerPhase} antrenman olur.`),
+    v.check((days) => duplicateNames(days).length === 0, 'Bu evrede aynı adda iki program var.'),
+    v.check((days) => weekdayConflicts(days).length === 0, DAY_CONFLICT),
   ),
 });
 
@@ -92,23 +116,11 @@ export const programPhasesSchema = v.pipe(
   v.check((phases) => duplicateProgramIds(phases).length === 0, 'Evre, gün, blok ve satır kimlikleri benzersiz olmalı.'),
 );
 
-/**
- * Antrenman günleri (tasarım §2.11): ISO hafta günü, 1 = Pazartesi … 7 = Pazar; her gün bir kez.
- * Boş dizi = seçilmedi. Program günlere çakılmaz: A → B → C sırası seçilen günlere dağılır.
- */
-export const weekdaysSchema = v.pipe(
-  v.array(v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(7)), 'Günleri seç.'),
-  v.maxLength(7),
-  v.check((days) => new Set(days).size === days.length, 'Bir gün iki kez seçilmiş.'),
-);
-/** Danışanın seçimi: en az bir gün (hiç gün seçmemek "antrenman yok" olurdu). */
-export const clientWeekdaysSchema = v.pipe(weekdaysSchema, v.minLength(1, 'En az bir gün seç.'));
-
 const bodyFields = {
   phased: v.boolean('Evre seçimi okunamadı.'),
   currentPhaseId: phaseIdSchema,
   phases: programPhasesSchema,
-  /** Göndermeyen eski sekme ve taslak kayıttaki günleri değiştirmez. */
+  /** Eski sekme ve taslak: gün başına atama yoksa günler buradan türetilir (`upgradeProgramBody`). */
   weekdays: v.optional(weekdaysSchema),
 };
 const CURRENT_MISSING = 'Şu anki evre programda yok.';
@@ -142,12 +154,6 @@ export const programSaveSchema = v.pipe(
   v.forward(v.partialCheck([['currentPhaseId'], ['phases']], currentExists, CURRENT_MISSING), ['currentPhaseId']),
   v.forward(v.partialCheck([['phased'], ['phases']], unphasedOk, UNPHASED_PROBLEM), ['phases']),
 );
-
-/** Danışanın "Günlerini değiştir"i (Bugün ya da Ayarlar). */
-export const clientScheduleBodySchema = v.object({ weekdays: clientWeekdaysSchema });
-
-/** PT: "PT'nin günlerine dön" (danışanın katmanını siler; revision artmaz, düzenleyici 412 almaz). */
-export const programScheduleActionSchema = v.object({ action: v.literal('reset') });
 
 /** Evre geçişi (program sayfasındaki öneri): sürüm kayıttaki gibi (`baseRevision`, `baseCreatedAt`). */
 export const programPhaseSwitchSchema = v.object({ phaseId: phaseIdSchema, baseRevision: positive, baseCreatedAt: v.optional(timestamp) });
@@ -207,11 +213,16 @@ export const programSchema = v.pipe(
     updatedAt: timestamp,
     phases: programPhasesSchema,
     current: v.object({ phaseId: phaseIdSchema, startedAt: timestamp }),
-    /** Antrenman ekranı yazar (revision artmaz). */
+    /** Dönüş (A → B → C): Faz 3'te kalkar; eski dosyalar okunabilsin diye şemada kalır, yeni kararlar ona bakmaz. */
     rotation: v.object({ lastDayId: v.optional(dayIdSchema), lastCompletedAt: v.optional(timestamp) }),
-    /** PT'nin antrenman günleri; yoksa seçilmemiş. `at`: geçerli günlerin son değiştiği an (kaçan gün penceresi). */
+    /**
+     * Antrenman günleri: şu anki evrenin atamalarının birleşimi (türetilmiş; PT kaydı ve evre geçişi yeniden yazar),
+     * yoksa atama yok. Okuyan her yer (kaçan gün, "Bu hafta x/y", Genel bakış) değişmeden çalışsın diye durur. Gün
+     * başına ataması olmayan eski dosyada okunurken atamalar buradan türetilir. `at`: birleşimin son değiştiği an
+     * (kaçan gün penceresi).
+     */
     schedule: v.optional(v.object({ weekdays: weekdaysSchema, at: v.optional(timestamp) })),
-    /** Danışanın değiştirdiği günler: revision artmaz, PT günleri değiştirince silinir. Geçerli = bu ?? PT'ninki. */
+    /** Danışanın eski gün katmanı: okunur ama yok sayılır (danışan günleri değiştirmez); PT'nin ilk kaydı siler. */
     clientSchedule: v.optional(v.object({ weekdays: clientWeekdaysSchema, at: timestamp })),
     /** Danışanın satır hedefleri (bitişte "Evet, güncelle"): revision artmaz, PT satırı değiştirince düşer. */
     clientTargets: v.optional(clientTargetsSchema),

@@ -2,14 +2,16 @@
 
 import { useMemo } from 'react';
 import Link from 'next/link';
-import { getInput, useField } from '@formisch/react';
-import { ArrowLeft, ArrowRight, ArrowSquareRight, Copy, DotsThreeVertical, FloppyDisk, Trash } from '@phosphor-icons/react';
+import { getInput, setInput, useField } from '@formisch/react';
+import { ArrowSquareRight, Copy, FloppyDisk, Trash } from '@phosphor-icons/react';
 import { BlockEditor, useBlocks } from '@/components/block-editor/block-editor';
+import { DotsThreeVertical } from '@/components/line-icons';
 import type { EditorCare } from '@/lib/constraint-filter';
 import type { BlocksFormStore } from '@/components/block-editor/block-items';
 import type { RowClientTarget } from '@/components/block-editor/editor-context';
 import { keepLineEnter } from '@/components/block-editor/enter-key';
-import { TemplateMuscleMap } from '@/components/muscle-map/template-muscle-map';
+import { MuscleMap } from '@/components/muscle-map/muscle-map';
+import { LOAD_DESCRIPTION, loadMapProps } from '@/lib/muscle-tiers';
 import { Button } from '@/components/ui/button';
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -22,8 +24,10 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Field, FieldError, FieldLabel } from '@/components/ui/field';
+import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
+import { WeekdayToggle } from '@/components/weekday-toggle';
+import { assignWeekdays, takenWeekdays, weekdaysInput } from '@/lib/day-assignments';
 import { dayBlocksPath } from '@/lib/editor-undo';
 import { formatDate } from '@/lib/format';
 import { exerciseSetWeights } from '@/lib/muscles';
@@ -33,7 +37,6 @@ import {
   canAddDay,
   canMoveDay,
   copyDay,
-  moveDay,
   programIdSource,
   removeDay,
   type ProgramDay,
@@ -41,15 +44,17 @@ import {
 } from '@/lib/program-plan';
 import type { EditorDevice, PickerExercise } from '@/lib/template-edit';
 import { templateMuscleLoad } from '@/lib/template-plan';
+import { WEEKDAY_SHORT, weekdayNamesText, type Weekday } from '@/lib/training-days';
 import type { PhaseActions, ProgramFormStore } from './program-form';
 
-const LOAD_DESCRIPTION =
-  'Kas başına çalışma seti: hedef 1, yardımcı 0,5, dengeleyici 0,25 sayılır; ısınma ve soğuma hareketleri sayılmaz.';
-
 /**
- * Seçili gün: adı, geldiği şablon, gün menüsü (sıra, başka evreye taşı, kopyala, şablon
- * olarak kaydet, sil); hareketleri şablonlarla ortak hareket düzenleyicide, hemen altında formun
- * uyarıları (`footer`), en altta günün kas yükü. Evresiz programda evreden söz edilmez.
+ * Seçili program (Faz 3: evrenin bir antrenmanı; kodda "gün"): adı, atandığı hafta günleri ("Günleri"), geldiği
+ * şablon, program menüsü (sıra, başka evreye taşı, kopyala, şablon olarak kaydet, kaldır); hareketleri şablonlarla
+ * ortak hareket düzenleyicide, hemen altında formun uyarıları (`footer`), en altta programın kas yükü. Evresiz
+ * programda evreden söz edilmez.
+ *
+ * Gün çipleri: evrede bir hafta günü en çok bir programa atanır; başka programın günü kapalı, nedeni çipin adında ve
+ * altındaki satırda ("Başka programda: Per · Üst vücut"). Danışan atanan programı o gün Bugün ekranında görür.
  */
 export function DayEditor({
   form,
@@ -59,7 +64,6 @@ export function DayEditor({
   phaseIndex,
   day,
   dayIndex,
-  isNext,
   templateIds,
   exercises,
   devices,
@@ -68,6 +72,7 @@ export function DayEditor({
   footer,
   clientTargets,
   care = null,
+  startedWithDays = false,
 }: {
   form: ProgramFormStore;
   phases: ProgramPhase[];
@@ -76,7 +81,6 @@ export function DayEditor({
   phaseIndex: number;
   day: ProgramDay;
   dayIndex: number;
-  isNext: boolean;
   /** Hâlâ var olan şablonlar (kaynağa bağlantı için). */
   templateIds: ReadonlySet<string>;
   exercises: PickerExercise[];
@@ -89,6 +93,8 @@ export function DayEditor({
   clientTargets?: Readonly<Record<string, RowClientTarget>> | undefined;
   /** Danışanın kısıtları: sheet'te işaret, kartta rozet. */
   care?: EditorCare | null;
+  /** Programın formdaki başlangıç değerinde gün alanı var mı (`weekdaysInput`: boş seçim alanı yazar mı). */
+  startedWithDays?: boolean;
 }) {
   const nameField = useField(form, { path: ['phases', phaseIndex, 'days', dayIndex, 'name'] });
   const path = ['phases', phaseIndex, 'days', dayIndex, 'blocks'] as const;
@@ -100,6 +106,21 @@ export function DayEditor({
   const neighbour = phase.days[dayIndex - 1] ?? phase.days[dayIndex + 1];
   const otherPhases = phased ? phases.filter((item) => item.id !== phase.id) : [];
   const onlyDay = phase.days.length <= 1;
+  const weekdays = day.weekdays ?? [];
+  // Bu programın dışında atanmış günler (sahibinin adıyla): çipte kapalı, altta satır.
+  const taken = takenWeekdays(phase.days, day.id);
+  const takenText = [...taken].map(([weekday, name]) => `${WEEKDAY_SHORT[weekday as Weekday]} · ${name}`).join(', ');
+  const weekdaysLabelId = `day-weekdays-${day.id}`;
+
+  // Güncel evre olay anında okunur (ardışık dokunuşlar birbirini ezmesin); `assignWeekdays` başka programın gününü
+  // yine de dışarıda bırakır. Yalnız bu programın alanı yazılır: bütün evreleri yazmak hareket düzenleyicisini
+  // yeniden kurardı.
+  const assign = (next: readonly number[]) => {
+    const days = actions.current().find((item) => item.id === phase.id)?.days ?? [];
+    const assigned = assignWeekdays(days, day.id, next).find((item) => item.id === day.id);
+    if (!assigned) return;
+    setInput(form, { path: ['phases', phaseIndex, 'days', dayIndex, 'weekdays'], input: weekdaysInput(assigned.weekdays, startedWithDays) });
+  };
 
   const copy = () => {
     const all = actions.current();
@@ -118,38 +139,24 @@ export function DayEditor({
       <Card>
         <CardHeader>
           <CardTitle>{phased ? `${phase.name} · ${day.name}` : day.name}</CardTitle>
-          <CardDescription>
-            {phased ? 'Evrenin' : 'Programın'} {dayIndex + 1}. günü{isNext ? ' · danışanın sıradaki günü' : ''}
-          </CardDescription>
+          <CardDescription>{weekdayNamesText(weekdays) || 'Gün atanmadı'}</CardDescription>
           <CardAction>
             <DropdownMenu>
-              <DropdownMenuTrigger render={<Button type="button" variant="ghost" size="icon" aria-label={`Gün işlemleri: ${day.name}`} />}>
+              <DropdownMenuTrigger render={<Button type="button" variant="ghost" size="icon" aria-label={`Program işlemleri: ${day.name}`} />}>
                 <DotsThreeVertical weight="bold" />
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="min-w-52 touch:**:data-[slot=dropdown-menu-item]:min-h-11 touch:**:data-[slot=dropdown-menu-sub-trigger]:min-h-11">
-                <DropdownMenuItem
-                  disabled={dayIndex === 0}
-                  onClick={() => actions.update((all) => moveDay(all, phase.id, day.id, -1), { announce: `${day.name} sola taşındı` })}>
-                  <ArrowLeft />
-                  Sola taşı
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  disabled={dayIndex === phase.days.length - 1}
-                  onClick={() => actions.update((all) => moveDay(all, phase.id, day.id, 1), { announce: `${day.name} sağa taşındı` })}>
-                  <ArrowRight />
-                  Sağa taşı
-                </DropdownMenuItem>
                 {otherPhases.length > 0 ? (
                   <DropdownMenuSub>
                     <DropdownMenuSubTrigger disabled={onlyDay}>
                       <ArrowSquareRight />
-                      {onlyDay ? 'Evreye taşı (evrenin tek günü)' : 'Evreye taşı'}
+                      {onlyDay ? 'Evreye taşı (evrenin tek programı)' : 'Evreye taşı'}
                     </DropdownMenuSubTrigger>
                     <DropdownMenuSubContent className="min-w-48 touch:**:data-[slot=dropdown-menu-item]:min-h-11 touch:**:data-[slot=dropdown-menu-sub-trigger]:min-h-11">
                       {otherPhases.map((target) => {
                         const full = !canMoveDay(phases, day.id, target.id);
                         return (
-                          <DropdownMenuItem key={target.id} disabled={full} onClick={() => actions.moveDay(day.id, target.id)}>
+                          <DropdownMenuItem key={target.id} disabled={full} onClick={() => actions.moveToPhase(day.id, target.id)}>
                             &apos;{target.name}&apos; evresine{full ? ' (dolu)' : ''}
                           </DropdownMenuItem>
                         );
@@ -175,7 +182,7 @@ export function DayEditor({
                     })
                   }>
                   <Trash />
-                  Günü sil
+                  Sil
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -183,18 +190,25 @@ export function DayEditor({
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
           <Field data-invalid={Boolean(nameField.errors) || undefined}>
-            <FieldLabel htmlFor={`day-name-${day.id}`}>Gün adı</FieldLabel>
+            <FieldLabel htmlFor={`day-name-${day.id}`}>Program adı</FieldLabel>
             <Input
               {...nameField.props}
               id={`day-name-${day.id}`}
               className="max-w-sm"
               maxLength={PROGRAM_LIMITS.dayName}
               value={nameField.input ?? ''}
-              placeholder="Ör. Gün A"
+              placeholder="Ör. Alt vücut"
               aria-invalid={Boolean(nameField.errors) || undefined}
               onKeyDown={keepLineEnter}
             />
             <FieldError>{nameField.errors?.[0]}</FieldError>
+          </Field>
+          <Field className="gap-1.5">
+            <FieldLabel id={weekdaysLabelId}>Günleri</FieldLabel>
+            <WeekdayToggle id={weekdaysLabelId} describedBy={`${weekdaysLabelId}-hint`} value={weekdays} taken={taken} onChange={assign} className="max-w-sm" />
+            <FieldDescription id={`${weekdaysLabelId}-hint`}>
+              {taken.size > 0 ? `Başka programda: ${takenText}` : 'Danışan bu günlerde Bugün ekranında bu programı görür.'}
+            </FieldDescription>
           </Field>
           {source ? (
             <p className="text-sm text-muted-foreground">
@@ -223,7 +237,7 @@ export function DayEditor({
         devices={devices}
         newIds={() => programIdSource((getInput(form, { path: ['phases'] }) ?? []) as unknown as ProgramPhase[])}
         noteHint="Danışan antrenmanda görür; yalnız bu programda durur."
-        libraryDescription="Ada ya da kasa göre ara; dokununca günün sonuna eklenir."
+        libraryDescription="Ada ya da kasa göre ara; dokununca programın sonuna eklenir."
         listLabel={`${day.name} hareketleri`}
         addLabel={`Hareket ekle: ${day.name}`}
         {...(clientTargets ? { clientTargets } : {})}
@@ -239,7 +253,7 @@ export function DayEditor({
         </CardHeader>
         <CardContent>
           {blocks.length > 0 ? (
-            <TemplateMuscleMap variant="full" bodyClassName="h-56 lg:h-64" load={load} label={`${day.name} kas yükü`} />
+            <MuscleMap layout="split" bodyClassName="h-56 lg:h-64" {...loadMapProps(load, 'session', `${day.name} kas yükü`)} />
           ) : (
             <p className="text-sm text-muted-foreground">Hareket ekleyince kas yükü burada görünür.</p>
           )}

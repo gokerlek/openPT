@@ -11,7 +11,7 @@ import { firstHistoryRows, HISTORY_PAGE, type HistoryMonth, type HistoryRow } fr
 
 /**
  * PT'nin Antrenmanlar sekmesindeki liste: danışanın Geçmiş'iyle aynı satırlar (`historyList`: gün, süre, set,
- * toplam ağırlık; rekor, "başka gün", "yarım" rozetleri), aylara bölünmüş; masaüstünde iki sütun. İlk 20
+ * toplam ağırlık; rekor, "başka program", "yarım" rozetleri), aylara bölünmüş; masaüstünde iki sütun. İlk 20
  * antrenman, altında "Daha fazla göster (n)". Satır antrenmanın detayını açar (yalnız okuma).
  */
 export function SessionList({ clientId, months }: { clientId: string; months: HistoryMonth[] }) {
@@ -46,14 +46,16 @@ export function SessionList({ clientId, months }: { clientId: string; months: Hi
 export function SessionRow({ clientId, row }: { clientId: string; row: HistoryRow }) {
   return (
     <Item variant="outline" size="sm" className="h-full touch:min-h-11" render={<Link href={`/dashboard/clients/${clientId}/sessions/${row.id}`} />}>
-      <ItemMedia className="w-9 flex-col gap-0 leading-tight" aria-hidden>
+      <ItemMedia className="w-14 flex-col gap-0 leading-tight" aria-hidden>
         <span className="font-heading text-lg font-semibold tabular-nums">{row.dayOfMonth}</span>
-        <span className="text-xs text-muted-foreground">{row.weekday}</span>
+        <span className="text-xs whitespace-nowrap text-muted-foreground">
+          {row.month} {row.weekday}
+        </span>
       </ItemMedia>
       <ItemContent className="min-w-0">
         <ItemTitle className="line-clamp-none flex-wrap gap-1.5">
           <span className="sr-only">
-            {row.dayOfMonth} {row.weekday} ·{' '}
+            {row.dayOfMonth} {row.month} {row.weekday} ·{' '}
           </span>
           {row.title}
           {row.prs > 0 ? (
@@ -64,7 +66,7 @@ export function SessionRow({ clientId, row }: { clientId: string; row: HistoryRo
           ) : null}
           {/* Danışanın kendi programından (adı başlıkta, "Evde · Gün A"). */}
           {row.program ? <Badge variant="outline">Kendi programı</Badge> : null}
-          {row.otherDay ? <Badge variant="secondary">başka gün</Badge> : null}
+          {row.otherDay ? <Badge variant="secondary">başka program</Badge> : null}
           {row.unfinished ? <Badge variant="outline">yarım</Badge> : null}
         </ItemTitle>
         <ItemDescription className="tabular-nums">{row.meta}</ItemDescription>

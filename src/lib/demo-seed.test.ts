@@ -66,6 +66,7 @@ describe('deneme geçmişi: kapı', () => {
     }
   });
 
+  // `/api/dev/seed-program` (deneme programı) da bu kapıyı kullanır: aynı sıra, aynı ad kuralı.
   test('sıra: üretimde her şey 404, sonra PT oturumu, sonra danışan, sonra ad', () => {
     const cases = [
       { input: { production: true, pt: true, client: { name: 'Test Ali' } }, expected: { ok: false, status: 404 } },

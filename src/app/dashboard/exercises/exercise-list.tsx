@@ -5,20 +5,21 @@ import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { AnimatePresence, motion } from 'motion/react';
 import {
+  CaretDown,
   CheckCircle,
-  CircleDashed,
   Heartbeat,
   Lightbulb,
   MagnifyingGlass,
-  Plus,
   Prohibit,
   Question,
   Warning,
   WarningCircle,
-  X,
   YoutubeLogo,
   type Icon,
 } from '@phosphor-icons/react';
+import { CircleDashed } from '@/components/line-icons';
+import { Plus } from '@/components/line-icons';
+import { RemovableChip } from '@/components/removable-chip';
 import { MuscleMap } from '@/components/muscle-map/muscle-map';
 import { PageHeader } from '@/components/page-header';
 import { TrainingTabs } from '../training-tabs';
@@ -28,9 +29,9 @@ import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle }
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { InputGroup, InputGroupAddon, InputGroupInput } from '@/components/ui/input-group';
 import { Toggle } from '@/components/ui/toggle';
-import { ConstraintPicker, formatConstraints, parseConstraints } from './constraint-picker';
+import { ConditionPicker, formatConstraints, parseConstraints } from '@/components/condition-picker';
 import { TOUCH_TARGETS } from './touch-targets';
-import { conditionLabel } from '@/lib/conditions';
+import { conditionLabel, formatCondition } from '@/lib/conditions';
 import { careSummary, type EditorCare } from '@/lib/constraint-filter';
 import {
   CONTEXT_LABELS,
@@ -44,6 +45,8 @@ import {
   type FilterGroup,
   type FilterView,
 } from '@/lib/exercise-filter';
+import { searchExercises } from '@/lib/exercise-search';
+import { muscleSearchNames } from '@/lib/muscle-names';
 import { countByMuscle, isBodyMuscle, parseMuscles, summarizeMuscles, works } from '@/lib/muscles';
 import { fetchJson } from '@/lib/query/errors';
 import { useServiceQuery } from '@/lib/query/use-service';
@@ -125,11 +128,9 @@ export function ExerciseList({
   }
 
   const visible = useMemo(() => {
-    const query = search.trim().toLocaleLowerCase('tr');
-    const matched = exercises.filter(
-      (item) =>
-        (!query || item.title.toLocaleLowerCase('tr').includes(query)) &&
-        (selected.length === 0 || selected.some((muscle) => works(item, muscle))),
+    // Ada ve kas adına göre, Türkçe harfler katlanarak (düzenleyicinin seçicisiyle aynı arama).
+    const matched = searchExercises(exercises, search, muscleSearchNames).filter(
+      (item) => selected.length === 0 || selected.some((muscle) => works(item, muscle)),
     );
     if (selected.length === 0) return matched;
     // Seçili kası hedef alanlar önce, yalnız yardımcı olarak çalıştıranlar sonra.
@@ -146,6 +147,11 @@ export function ExerciseList({
   );
   const clearance = requiresClearance(constraints);
   const filterOn = clientMode || constraints.length > 0;
+  // Katlanan kartın başlık rozeti: danışan bağlamında kayıtlı kısıtlar, değilse adresteki seçim.
+  const constraintCount = clientMode && clientCare ? clientCare.care.summary.length : constraints.length;
+  // Kısıtlar kartı danışan bağlamında ya da kısıt seçiliyken açık gelir; sonrası PT'nin elinde.
+  // Prop'a bağlı olsaydı son kısıt kaldırılınca kart seçicinin altından kapanırdı.
+  const [constraintsOpen, setConstraintsOpen] = useState(filterOn || Boolean(clientCare));
 
   const selectedBody = selected.filter(isBodyMuscle);
   // Görünüm yalnız listeyi daraltır; sayım hep tam liste üstünden. Kısıt yoksa süzgeç yok.
@@ -173,6 +179,28 @@ export function ExerciseList({
         }
       />
       {notice}
+
+      {/* Arama en üstte: telefonda büyük haritanın ve kısıt kartının altında kalmasın. */}
+      <div role="search" className={`flex flex-col gap-2 ${TOUCH_TARGETS}`}>
+        <InputGroup>
+          <InputGroupAddon>
+            <MagnifyingGlass />
+          </InputGroupAddon>
+          <InputGroupInput
+            type="search"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Egzersiz ara"
+            aria-label="Egzersiz ara"
+          />
+        </InputGroup>
+
+        {filtering ? (
+          <p className="text-sm text-muted-foreground" aria-live="polite">
+            <span className="tabular-nums">{shown.length}</span> sonuç
+          </p>
+        ) : null}
+      </div>
 
       <div className={`grid gap-5 lg:grid-cols-[16rem_minmax(0,1fr)] lg:items-start ${TOUCH_TARGETS}`}>
         <Card className="lg:sticky lg:top-6">
@@ -208,15 +236,12 @@ export function ExerciseList({
               {selectedBody.length > 0 ? (
                 <div className="flex flex-wrap gap-1.5" aria-label="Seçili kaslar">
                   {selectedBody.map((muscle) => (
-                    <Button
+                    <RemovableChip
                       key={muscle}
-                      variant="secondary"
-                      size="xs"
-                      onClick={() => toggle(muscle)}
-                      aria-label={`${MUSCLE_LABELS[muscle]} süzgecini kaldır`}>
-                      {MUSCLE_LABELS[muscle]}
-                      <X data-icon="inline-end" />
-                    </Button>
+                      label={MUSCLE_LABELS[muscle]}
+                      removeLabel={`${MUSCLE_LABELS[muscle]} süzgecini kaldır`}
+                      onRemove={() => toggle(muscle)}
+                    />
                   ))}
                 </div>
               ) : null}
@@ -231,132 +256,137 @@ export function ExerciseList({
         </Card>
 
         <div className="flex flex-col gap-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Kısıtlar</CardTitle>
-              <CardDescription>
-                Danışanın kısıtlarını seç; uygun olmayan hareketler işaretlenir, etiketi olmayanlar “kontrol
-                edilmedi” diye görünür. “Eksik bilgi”: hareketin etiketi ya da kısıtın şiddeti gibi bir bilgi
-                eksik, bazı kurallar değerlendirilemedi.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-3">
-              {clientCare ? (
-                <div className="flex flex-col gap-1 text-sm">
-                  <p>
-                    <span className="font-medium">{clientCare.name}</span>
-                    {clientCare.care.unavailable
-                      ? ` · ${clientCare.care.unavailable}`
-                      : clientCare.care.summary.length > 0
-                        ? ` · kayıtlı kısıtları: ${clientCare.care.summary.join(' · ')}`
-                        : ' · etkin kısıt yok'}
-                    {clientCare.care.pending.length > 0 ? ` · karar bekleyen bildirim: ${clientCare.care.pending.join(' · ')}` : ''}
-                  </p>
-                  <div className="flex flex-wrap gap-3">
-                    <Link href={`/dashboard/clients/${clientCare.care.clientId}/constraints`} className="underline-offset-4 hover:underline">
-                      Kısıtlar ›
-                    </Link>
-                    <Link href="/dashboard/exercises" className="text-muted-foreground underline-offset-4 hover:underline">
-                      Danışansız göster
-                    </Link>
+          {/* Katlanır kısıt kartı, başlık satırı `summary`. Kartın kendi boşluğu sıfır: üst boşluğu ve başlık-gövde
+              aralığını summary'nin dolgusu verir, açıkken düzen eski kartla aynı. */}
+          <Card className="gap-0 py-0">
+            <details
+              open={constraintsOpen}
+              onToggle={(event) => setConstraintsOpen(event.currentTarget.open)}
+              className="group/constraints">
+              <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-xl p-(--card-spacing) outline-none select-none hover:bg-muted/40 focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:ring-inset motion-safe:transition-colors motion-safe:duration-100 [&::-webkit-details-marker]:hidden">
+                {/* `summary` içinde blok öğe geçersiz: CardTitle'ın görünümü bir `span`'de. */}
+                <span className="font-heading text-base leading-snug font-medium">Kısıtlar</span>
+                {constraintCount > 0 ? (
+                  <Badge variant="secondary">
+                    <span className="tabular-nums">{constraintCount}</span>
+                    <span className="sr-only">{clientMode ? ' kayıtlı kısıt' : ' seçili kısıt'}</span>
+                  </Badge>
+                ) : null}
+                <CaretDown
+                  aria-hidden
+                  className="ml-auto size-4 shrink-0 text-muted-foreground motion-safe:transition-transform motion-safe:duration-160 group-open/constraints:rotate-180"
+                />
+              </summary>
+              <CardContent className="flex flex-col gap-3 pb-(--card-spacing)">
+                <CardDescription>
+                  Danışanın kısıtlarını seç; uygun olmayan hareketler işaretlenir, etiketi olmayanlar “kontrol
+                  edilmedi” diye görünür. “Eksik bilgi”: hareketin etiketi ya da kısıtın şiddeti gibi bir bilgi
+                  eksik, bazı kurallar değerlendirilemedi.
+                </CardDescription>
+                {clientCare ? (
+                  <div className="flex flex-col gap-1 text-sm">
+                    <p>
+                      <span className="font-medium">{clientCare.name}</span>
+                      {clientCare.care.unavailable
+                        ? ` · ${clientCare.care.unavailable}`
+                        : clientCare.care.summary.length > 0
+                          ? ` · kayıtlı kısıtları: ${clientCare.care.summary.join(' · ')}`
+                          : ' · etkin kısıt yok'}
+                      {clientCare.care.pending.length > 0 ? ` · karar bekleyen bildirim: ${clientCare.care.pending.join(' · ')}` : ''}
+                    </p>
+                    <div className="flex flex-wrap gap-3">
+                      <Link href={`/dashboard/clients/${clientCare.care.clientId}/constraints`} className="underline-offset-4 hover:underline">
+                        Kısıtlar ›
+                      </Link>
+                      <Link href="/dashboard/exercises" className="text-muted-foreground underline-offset-4 hover:underline">
+                        Danışansız göster
+                      </Link>
+                    </div>
                   </div>
-                </div>
-              ) : (
-                <div className="max-w-sm">
-                  <ConstraintPicker value={constraints} onChange={(next) => setParams({ limit: next })} />
-                </div>
-              )}
+                ) : (
+                  <div className="max-w-sm">
+                    <ConditionPicker
+                      id="constraint"
+                      placeholder="Kısıt ekle"
+                      label="Kısıt ekle"
+                      value={constraints.map(formatCondition)}
+                      onChange={(next) => setParams({ limit: parseConstraints(next.join(',')) })}
+                    />
+                  </div>
+                )}
 
-              {filterOn ? (
-                <div className="flex flex-col gap-3 text-sm">
-                  {/* Her hareket tek kümede; çipe dokununca liste o kümeye süzülür, yeniden dokununca hepsi. */}
-                  <div className="flex flex-wrap gap-1.5" role="group" aria-label="Kısıt özeti: dokununca liste o kümeye süzülür">
-                    {FILTER_GROUPS.map((group) => {
-                      const GroupIcon = GROUP_ICONS[group];
-                      return (
-                        <Toggle
-                          key={group}
-                          variant="outline"
-                          size="sm"
-                          className={group === 'blocked' ? 'text-destructive' : undefined}
-                          pressed={activeView === group}
-                          onPressedChange={showOnly(group)}
-                          disabled={summary.counts[group] === 0 && activeView !== group}>
-                          <GroupIcon data-icon="inline-start" aria-hidden />
-                          <span className="tabular-nums">{summary.counts[group]}</span> {FILTER_GROUP_LABELS[group]}
-                        </Toggle>
-                      );
-                    })}
-                  </div>
-                  <div className="flex flex-col gap-1 text-muted-foreground" aria-live="polite">
-                    {/* Kısıt değişince sayılar duyurulsun (çipler düğme; canlı bölgede değiller). */}
-                    <p className="sr-only">
-                      {FILTER_GROUPS.map((group) => `${summary.counts[group]} ${FILTER_GROUP_LABELS[group]}`).join(', ')}
-                    </p>
-                    {summary.warnedUnassessed > 0 ? (
-                      <p>
-                        Uyarılı <span className="tabular-nums">{summary.warnedUnassessed}</span> harekette bazı kurallar
-                        eksik bilgi yüzünden değerlendirilemedi.
+                {filterOn ? (
+                  <div className="flex flex-col gap-3 text-sm">
+                    {/* Her hareket tek kümede; çipe dokununca liste o kümeye süzülür, yeniden dokununca hepsi. */}
+                    <div className="flex flex-wrap gap-1.5" role="group" aria-label="Kısıt özeti: dokununca liste o kümeye süzülür">
+                      {FILTER_GROUPS.map((group) => {
+                        const GroupIcon = GROUP_ICONS[group];
+                        return (
+                          <Toggle
+                            key={group}
+                            variant="outline"
+                            size="sm"
+                            className={group === 'blocked' ? 'text-destructive' : undefined}
+                            pressed={activeView === group}
+                            onPressedChange={showOnly(group)}
+                            disabled={summary.counts[group] === 0 && activeView !== group}>
+                            <GroupIcon data-icon="inline-start" aria-hidden />
+                            <span className="tabular-nums">{summary.counts[group]}</span> {FILTER_GROUP_LABELS[group]}
+                          </Toggle>
+                        );
+                      })}
+                    </div>
+                    <div className="flex flex-col gap-1 text-muted-foreground" aria-live="polite">
+                      {/* Kısıt değişince sayılar duyurulsun (çipler düğme; canlı bölgede değiller). */}
+                      <p className="sr-only">
+                        {FILTER_GROUPS.map((group) => `${summary.counts[group]} ${FILTER_GROUP_LABELS[group]}`).join(', ')}
+                      </p>
+                      {summary.warnedUnassessed > 0 ? (
+                        <p>
+                          Uyarılı <span className="tabular-nums">{summary.warnedUnassessed}</span> harekette bazı kurallar
+                          eksik bilgi yüzünden değerlendirilemedi.
+                        </p>
+                      ) : null}
+                      {summary.pending.rules > 0 ? (
+                        <p>
+                          Danışan bağlamı olmadan <span className="tabular-nums">{summary.pending.rules}</span> kural
+                          değerlendirilemedi (eksik: {summary.pending.needs.map((need) => CONTEXT_LABELS[need]).join(', ')});
+                          “uygun” sayılanlar bu kurallara göre kontrol edilmedi.
+                        </p>
+                      ) : null}
+                    </div>
+                    {clearance.length > 0 ? (
+                      <p className="flex items-start gap-1.5 text-destructive">
+                        <WarningCircle aria-hidden className="mt-0.5 size-4 shrink-0" />
+                        <span>
+                          Kırmızı bayrak: {clearance.map((condition) => conditionLabel(condition)).join(', ')} için program
+                          yazmadan önce danışanı bir sağlık profesyoneline yönlendir ve görüşünü al.
+                        </span>
                       </p>
                     ) : null}
-                    {summary.pending.rules > 0 ? (
-                      <p>
-                        Danışan bağlamı olmadan <span className="tabular-nums">{summary.pending.rules}</span> kural
-                        değerlendirilemedi (eksik: {summary.pending.needs.map((need) => CONTEXT_LABELS[need]).join(', ')});
-                        “uygun” sayılanlar bu kurallara göre kontrol edilmedi.
-                      </p>
-                    ) : null}
+                    <div className="flex flex-wrap gap-2">
+                      <Toggle
+                        variant="outline"
+                        size="sm"
+                        pressed={activeView === 'notBlocked'}
+                        onPressedChange={showOnly('notBlocked')}
+                        disabled={summary.counts.blocked === 0 && activeView !== 'notBlocked'}>
+                        Yasakları gizle
+                      </Toggle>
+                      <Toggle
+                        variant="outline"
+                        size="sm"
+                        pressed={activeView === 'clear'}
+                        onPressedChange={showOnly('clear')}
+                        disabled={summary.counts.clear === 0 && activeView !== 'clear'}>
+                        Yalnız uygunları göster
+                      </Toggle>
+                    </div>
                   </div>
-                  {clearance.length > 0 ? (
-                    <p className="flex items-start gap-1.5 text-destructive">
-                      <WarningCircle aria-hidden className="mt-0.5 size-4 shrink-0" />
-                      <span>
-                        Kırmızı bayrak: {clearance.map((condition) => conditionLabel(condition)).join(', ')} için program
-                        yazmadan önce danışanı bir sağlık profesyoneline yönlendir ve görüşünü al.
-                      </span>
-                    </p>
-                  ) : null}
-                  <div className="flex flex-wrap gap-2">
-                    <Toggle
-                      variant="outline"
-                      size="sm"
-                      pressed={activeView === 'notBlocked'}
-                      onPressedChange={showOnly('notBlocked')}
-                      disabled={summary.counts.blocked === 0 && activeView !== 'notBlocked'}>
-                      Yasakları gizle
-                    </Toggle>
-                    <Toggle
-                      variant="outline"
-                      size="sm"
-                      pressed={activeView === 'clear'}
-                      onPressedChange={showOnly('clear')}
-                      disabled={summary.counts.clear === 0 && activeView !== 'clear'}>
-                      Yalnız uygunları göster
-                    </Toggle>
-                  </div>
-                </div>
-              ) : null}
-            </CardContent>
+                ) : null}
+              </CardContent>
+            </details>
           </Card>
-
-          <InputGroup>
-            <InputGroupAddon>
-              <MagnifyingGlass />
-            </InputGroupAddon>
-            <InputGroupInput
-              type="search"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Egzersiz ara"
-              aria-label="Egzersiz ara"
-            />
-          </InputGroup>
-
-          {filtering ? (
-            <p className="text-sm text-muted-foreground" aria-live="polite">
-              <span className="tabular-nums">{shown.length}</span> sonuç
-            </p>
-          ) : null}
 
           {shown.length === 0 ? (
             <Empty className="border">

@@ -72,7 +72,7 @@ export function PhaseTransition({
             <AlertDialogHeader>
               <AlertDialogTitle>&apos;{next.name}&apos; evresine geçilsin mi?</AlertDialogTitle>
               <AlertDialogDescription>
-                Danışanın sıradaki antrenmanı bu evrenin ilk günü olur. Geçiş program geçmişine yazılır.
+                Danışan bu evrenin programlarını atandıkları günlerde görür. Geçiş program geçmişine yazılır.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>

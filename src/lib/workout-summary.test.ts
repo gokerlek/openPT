@@ -56,8 +56,9 @@ function groups(muscles: readonly string[]) {
   return result;
 }
 
-function sets(prefix: string, values: [number | undefined, number][], overrides: Partial<SessionEntry['sets'][number]> = {}) {
-  return values.map(([kg, reps], i) => workingSet(`st_${prefix}${String(i).padStart(2, '0')}`, i + 1, { kg, reps, plannedSetCount: 3, ...overrides }));
+/** Setler `start` dakikasından sonra birer dakika arayla. */
+function sets(prefix: string, values: [number | undefined, number][], overrides: Partial<SessionEntry['sets'][number]> = {}, start = 0) {
+  return values.map(([kg, reps], i) => workingSet(`st_${prefix}${String(i).padStart(2, '0')}`, start + i + 1, { kg, reps, plannedSetCount: 3, ...overrides }));
 }
 
 function finished(id: string, minute: number, entries: SessionEntry[], overrides: Partial<SessionDoc> = {}): SessionDoc {
@@ -214,9 +215,10 @@ describe('özet', () => {
   const second = finished(
     's_bbbbbbbb',
     3000,
+    // Yarım: setler antrenmanın içinde, son set 3043. dk (süre son setten hesaplanır, `durationOf`).
     [
-      sessionEntry('e_bbbbbb', { rowId: 'r_aaaaaa', status: 'done', sets: sets('bbbbbb', [[62.5, 10], [62.5, 9], [62.5, 8]]) }),
-      sessionEntry('e_cccccc', { exerciseId: 'barbell-row', title: 'Barbell Row', status: 'partial', sets: sets('cccccc', [[50, 10]]) }),
+      sessionEntry('e_bbbbbb', { rowId: 'r_aaaaaa', status: 'done', sets: sets('bbbbbb', [[62.5, 10], [62.5, 9], [62.5, 8]], {}, 3040) }),
+      sessionEntry('e_cccccc', { exerciseId: 'barbell-row', title: 'Barbell Row', status: 'partial', sets: sets('cccccc', [[50, 10]], {}, 3040) }),
       sessionEntry('e_dddddd', { exerciseId: 'plank', title: 'Plank', status: 'skipped', skip: { reason: 'busy', moved: false } }),
     ],
     {
@@ -286,6 +288,20 @@ describe('özet', () => {
     assert.equal(summary.muscles, summary.worked.length);
   });
 
+  test("süre ve saat aralığı Geçmiş'teki gibi: saatlerce açık kalan yarım antrenman son setten 10 dk sonra biter; bitmiş antrenman bitiş anına göre", () => {
+    const input = { index, timeZone: TZ, exercises: LIBRARY, setWeightsOf, muscleGroups: groups, week: null, changes: [], next: null };
+    const open = finished('s_eeeeeeee', 0, [sessionEntry('e_ffffff', { sets: sets('ffffff', [[60, 10], [60, 10]]) })], {
+      finishedAt: at(672),
+      notices: [{ kind: 'unfinished', at: at(672), done: 2, planned: 9 }],
+    });
+    // Son set 2. dk + 10 dk; 11 sa 12 dk değil.
+    assert.equal(sessionSummary({ ...input, doc: open }).minutes, 12);
+    assert.equal(sessionSummary({ ...input, doc: first }).minutes, 52);
+    // Saat aralığı da aynı bitişle (İstanbul, UTC+3): 18:00–05:12 değil.
+    assert.equal(sessionSummary({ ...input, doc: open }).when, '26 Eyl Cmt · 18:00–18:12');
+    assert.equal(sessionSummary({ ...input, doc: first }).when, '26 Eyl Cmt · 18:00–18:52');
+  });
+
   test('index satırı yoksa belgeden eklenir; ilk antrenmanda rekor ve karşılaştırma yok, "Gelecek sefer" boşsa null', () => {
     const summary = sessionSummary({
       doc: first,
@@ -332,5 +348,24 @@ describe('gelecek sefer', () => {
     assert.equal(lines.length, 1);
     assert.equal(lines[0]?.title, 'Bench Press');
     assert.match(lines[0]?.text ?? '', /^62,5 kg × \d+$/);
+  });
+});
+
+describe('kardiyo kalorisi', () => {
+  const walk = (id: string, minute: number) => workingSet(id, minute, { kg: undefined, reps: undefined, seconds: 1800, distanceM: 3000, inclinePct: 5 });
+  const doc = sessionDoc({
+    status: 'finished',
+    finishedAt: at(70),
+    entries: [
+      sessionEntry('e_aaaaaa', { exerciseId: 'kosu-bandi', title: 'Koşu Bandı', sets: [walk('st_aaaaaaaa', 30), walk('st_bbbbbbbb', 65)] }),
+      sessionEntry('e_bbbbbb', { sets: [workingSet('st_cccccccc', 68)] }),
+    ],
+  });
+  const index = upsertIndexRow(emptySessionIndex(), indexRowOf(doc, '0'.repeat(40)));
+  const input = { doc, index, timeZone: TZ, exercises: LIBRARY, setWeightsOf, muscleGroups: groups, week: null, changes: [], next: null };
+
+  test('yürüyüş/koşu setlerinin toplamı; kilo yoksa 0', () => {
+    assert.equal(sessionSummary({ ...input, bodyMassKg: 75 }).kcal, 506);
+    assert.equal(sessionSummary(input).kcal, 0);
   });
 });

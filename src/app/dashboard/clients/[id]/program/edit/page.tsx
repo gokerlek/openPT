@@ -20,7 +20,7 @@ import { ProgramForm } from '../program-form';
 export const metadata: Metadata = { title: 'Programı düzenle' };
 
 /**
- * Program düzenleme — evreler, günler, hareketler. Şablon düzenleyicisiyle aynı desen: başlığın üstünde
+ * Program düzenleme — evreler, programlar (günlerine atanmış), hareketler. Şablon düzenleyicisiyle aynı desen: başlığın üstünde
  * "‹ Program", Kaydet ("Programı kaydet") "Hareketler" başlığında, yıkıcı eylem ("Programı sil") başlıkta
  * ikincil görünümde.
  */
@@ -75,15 +75,14 @@ export default async function EditProgramPage({ params }: { params: Promise<{ id
       <ProgramForm
         clientId={id}
         mode="edit"
-        initial={{ phased: program.phased, currentPhaseId: program.current.phaseId, phases: program.phases, weekdays: program.schedule?.weekdays ?? [] }}
+        initial={{ phased: program.phased, currentPhaseId: program.current.phaseId, phases: program.phases }}
         base={{ revision: program.revision, createdAt: program.createdAt }}
-        stored={{ current: program.current, rotation: program.rotation }}
+        stored={{ current: program.current }}
         templates={templates}
         exercises={pickerExercises(exercises)}
         devices={pickerDevices(devices)}
         now={new Date().toISOString()}
         timeZone={config.timeZone}
-        clientDays={program.clientSchedule ?? null}
         clientTargets={clientTargets}
         care={care}
       />

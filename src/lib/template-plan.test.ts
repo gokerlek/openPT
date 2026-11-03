@@ -1,5 +1,7 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
+import * as v from 'valibot';
+import { setSpecSchema } from './schemas/template.ts';
 import {
   BLOCK_ID_PATTERN,
   BLOCK_KINDS,
@@ -17,9 +19,9 @@ import {
   formatTarget,
   groupSkipNote,
   kindOptions,
-  loadIntensity,
   muscleLoadOf,
   normalizeTemplate,
+  previewBlocks,
   randomId,
   roundsOf,
   rowLabels,
@@ -410,12 +412,6 @@ describe('şablon kas yükü', () => {
     for (const [sets, band] of cases) assert.equal(weeklySetBand(sets), band, `${sets} set`);
     assert.deepEqual(WEEKLY_SET_BANDS, { enough: 10, high: 20 });
   });
-
-  test('harita tonu en çok çalışan kasa göre; kardiyo ve sıfır dışarıda', () => {
-    assert.deepEqual(loadIntensity({ quadriceps: 6, glutes: 3, cardio: 9, biceps: 0 }), { quadriceps: 1, glutes: 0.5 });
-    assert.deepEqual(loadIntensity({ biceps: 0, cardio: 2 }), {});
-    assert.deepEqual(loadIntensity({}), {});
-  });
 });
 
 describe('süre tahmini', () => {
@@ -529,6 +525,32 @@ describe('etiketler ve özet', () => {
     assert.equal(summary.rows, 2);
     assert.equal(summary.workingSets, 6);
     assert.deepEqual(summary.missingRowIds, [lost.id]);
+  });
+});
+
+describe('Bugün önizlemesi', () => {
+  test('önizleme: ilk 3 hareketi dolduran bloklar, kalanı ayrı', () => {
+    const blocks = [
+      block('single', [row('bench')], { id: 'b1' }),
+      block('superset', [row('a'), row('b')], { id: 'b2' }),
+      block('single', [row('c')], { id: 'b3' }),
+      block('single', [row('d')], { id: 'b4' }),
+    ];
+    const { head, rest, restRows } = previewBlocks(blocks, 3);
+    assert.deepEqual(head.map((block) => block.id), ['b1', 'b2']);
+    assert.deepEqual(rest.map((block) => block.id), ['b3', 'b4']);
+    assert.equal(restRows, 2);
+  });
+
+  test('önizleme: grup bölünmez; az hareketli günde kalan yok', () => {
+    const circuit = block('circuit', [row('a'), row('b'), row('c'), row('d')], { id: 'c1' });
+    const after = block('single', [row('e')], { id: 's1' });
+    const grouped = previewBlocks([circuit, after], 3);
+    assert.deepEqual(grouped.head.map((block) => block.id), ['c1']);
+    assert.equal(grouped.restRows, 1);
+    const short = previewBlocks([block('single', [row('a')], { id: 'x' })], 3);
+    assert.deepEqual([short.head.length, short.rest.length, short.restRows], [1, 0, 0]);
+    assert.deepEqual(previewBlocks([], 3), { head: [], rest: [], restRows: 0 });
   });
 });
 
@@ -712,5 +734,39 @@ describe('sunucuda denetim ve sadeleştirme', () => {
     );
     assert.equal('transitionSeconds' in (blocks[0] ?? {}), false);
     assert.equal(blocks[1]?.transitionSeconds, 15);
+  });
+});
+
+describe('kardiyo hedefleri', () => {
+  const treadmill = exercise('kosu-bandi', { category: 'warmup', trackingType: 'duration', pattern: 'cardio', locomotion: true, primaryMuscles: ['cardio'] });
+  const cycle = exercise('sabit-bisiklet', { category: 'warmup', trackingType: 'duration', pattern: 'cardio', primaryMuscles: ['cardio'] });
+  const ctx = { exercises: new Map([treadmill, cycle, plank].map((item) => [item.id, item])), deviceIds: new Set<string>() };
+  const walk = { min: 1800, max: 1800, distanceM: 3000, inclinePct: 5 };
+
+  test('mesafe kardiyoda, eğim yalnız yürüyüş/koşuda kalır', () => {
+    const { blocks, errors } = normalizeTemplate(
+      {
+        blocks: [
+          block('single', [row('kosu-bandi', { sets: [walk] })]),
+          block('single', [row('sabit-bisiklet', { sets: [walk] })]),
+          block('single', [row('plank', { sets: [walk] })]),
+        ],
+      },
+      ctx,
+    );
+    assert.deepEqual(errors, {});
+    assert.deepEqual(
+      blocks.map((item) => item.rows[0]?.sets[0]),
+      [walk, { min: 1800, max: 1800, distanceM: 3000 }, { min: 1800, max: 1800 }],
+    );
+  });
+
+  test('şema mesafe ve eğimi denetler; alansız eski set aynen geçer', () => {
+    assert.deepEqual(v.parse(setSpecSchema, walk), walk);
+    assert.deepEqual(v.parse(setSpecSchema, { min: 30, max: 60 }), { min: 30, max: 60 });
+    assert.deepEqual(v.parse(setSpecSchema, { min: 1800, max: 1800, inclinePct: 2.5 }), { min: 1800, max: 1800, inclinePct: 2.5 });
+    for (const bad of [{ distanceM: 0 }, { distanceM: 1.5 }, { distanceM: 100_001 }, { inclinePct: 0.3 }, { inclinePct: 31 }]) {
+      assert.equal(v.safeParse(setSpecSchema, { min: 1800, max: 1800, ...bad }).success, false, JSON.stringify(bad));
+    }
   });
 });

@@ -2,14 +2,9 @@
 
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import {
-  AutoScrollActivator,
   DndContext,
   DragOverlay,
   MeasuringStrategy,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  type Announcements,
   type CollisionDetection,
   type DragMoveEvent,
   type DragStartEvent,
@@ -17,6 +12,8 @@ import {
 } from '@dnd-kit/core';
 import { dropAction, hitTest, isJoining, resolveHit, type DropBlock, type DropHit, type DropLayout, type DropResolution } from '@/lib/drop-target';
 import { DRAG } from '@/lib/motion';
+import { vibrate } from '@/lib/haptics';
+import { LIST_ACCESSIBILITY, autoScrollEdge, listAutoScroll, setReordering, useListSensors } from '@/components/list/dnd-base';
 import type { TemplateBlock } from '@/lib/template-plan';
 import { useEditor } from '../editor-context';
 import type { DropData } from './drag-node';
@@ -56,22 +53,10 @@ type Session = {
 
 const NOTHING: DropResolution = { line: null, candidate: null, refusal: null };
 
-/** dnd-kit'in kendi duyuruları kapalı: tutamak ekran okuyucuya kapalı, düzenleyicinin canlı bölgesi var. */
-const SILENT: Announcements = {
-  onDragStart: () => undefined,
-  onDragOver: () => undefined,
-  onDragEnd: () => undefined,
-  onDragCancel: () => undefined,
-};
-
 const REFUSALS: Record<'limit' | 'full', string> = {
   limit: 'Şablon dolu: en fazla 40 hareket, 30 blok',
   full: 'Grup dolu (8)',
 };
-
-function vibrate() {
-  if (typeof navigator !== 'undefined' && 'vibrate' in navigator) navigator.vibrate(8);
-}
 
 function pageSpan(element: Element) {
   const rect = element.getBoundingClientRect();
@@ -128,7 +113,7 @@ export function EditorDnd({
   const editor = useEditor();
   const id = useId();
   const [store] = useState(createDragStore);
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: DRAG.activationDistance } }));
+  const sensors = useListSensors();
   const session = useRef<Session | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [edge, setEdge] = useState(0.1);
@@ -173,7 +158,7 @@ export function EditorDnd({
     const current = session.current;
     if (current) clearDwell(current);
     session.current = null;
-    delete document.documentElement.dataset.reordering;
+    setReordering(false);
     setActiveId(null);
     store.set(IDLE);
   }, [store]);
@@ -192,8 +177,8 @@ export function EditorDnd({
       dwell: null,
       refusal: null,
     };
-    document.documentElement.dataset.reordering = '';
-    setEdge(Math.min(0.45, DRAG.autoScrollEdge / Math.max(1, window.innerHeight)));
+    setReordering(true);
+    setEdge(autoScrollEdge());
     setActiveId(itemId);
     store.set({ activeId: itemId, line: null, armed: null });
   };
@@ -245,8 +230,8 @@ export function EditorDnd({
         sensors={sensors}
         collisionDetection={collisionDetection}
         measuring={{ droppable: { strategy: MeasuringStrategy.BeforeDragging } }}
-        autoScroll={{ threshold: { x: 0, y: edge }, activator: AutoScrollActivator.Pointer }}
-        accessibility={{ announcements: SILENT, restoreFocus: false, screenReaderInstructions: { draggable: '' } }}
+        autoScroll={listAutoScroll(edge)}
+        accessibility={LIST_ACCESSIBILITY}
         onDragStart={onDragStart}
         onDragMove={onDragMove}
         onDragEnd={onDragEnd}

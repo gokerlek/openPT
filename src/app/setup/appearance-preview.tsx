@@ -26,7 +26,7 @@ export function AppearancePreview({ appName }: { appName: string }) {
           </div>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
-          <div className="flex items-start justify-between gap-3"><div><p className="text-xs text-muted-foreground">SIRADAKİ ANTRENMAN</p><p className="mt-1 text-lg font-semibold">Üst vücut · Gün A</p><p className="mt-1 text-sm text-muted-foreground">6 hareket · 18 set · ≈ 45 dk</p></div><Badge>Hazırsın</Badge></div>
+          <div className="flex items-start justify-between gap-3"><div><p className="text-xs text-muted-foreground">SIRADAKİ ANTRENMAN</p><p className="mt-1 text-lg font-semibold">Salı · Üst vücut</p><p className="mt-1 text-sm text-muted-foreground">6 hareket · 18 set · ≈ 45 dk</p></div><Badge>Hazırsın</Badge></div>
           <div className="flex flex-wrap gap-2"><Button type="button" onClick={() => toast.info('Antrenman kartı', { description: 'Bu kart tema önizlemesinin bir parçası.' })}>Antrenmana başla <ArrowUpRight /></Button><Button type="button" variant="outline" onClick={() => toast('Geçmiş', { description: 'Tamamlanan antrenmanlar burada görünür.' })}>Geçmiş</Button></div>
         </CardContent>
       </Card>
@@ -61,7 +61,7 @@ export function AppearancePreview({ appName }: { appName: string }) {
         <CardHeader><CardTitle className="flex items-center gap-2"><Bell className="size-4 text-primary" />Bildirimler</CardTitle><CardDescription>Seçtiğin renkle ekranda nasıl göründüğünü dene.</CardDescription></CardHeader>
         <CardContent className="flex flex-wrap gap-2">
           <Button type="button" size="sm" onClick={() => toast.success('Program kaydedildi', { description: 'Danışanın güncel programını görebilir.', id: 'theme-preview', action: { label: 'Tamam', onClick: () => undefined } })}>Başarılı bildirim</Button>
-          <Button type="button" size="sm" variant="outline" onClick={() => toast.info('Antrenman zamanı', { description: 'Gün A seni bekliyor.', id: 'theme-preview' })}>Bilgi</Button>
+          <Button type="button" size="sm" variant="outline" onClick={() => toast.info('Antrenman zamanı', { description: 'Alt vücut seni bekliyor.', id: 'theme-preview' })}>Bilgi</Button>
           <Button type="button" size="sm" variant="outline" onClick={() => toast.error('Kayıt tamamlanamadı', { description: 'Bağlantını kontrol edip tekrar dene.', id: 'theme-preview' })}>Hata</Button>
         </CardContent>
       </Card>

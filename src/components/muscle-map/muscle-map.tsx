@@ -1,11 +1,16 @@
 'use client';
 
-import { useId, useState } from 'react';
+import { useState } from 'react';
 import { motion } from 'motion/react';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { MUSCLE_LABELS } from '@/lib/schemas/exercise';
-import { ROLE_INTENSITY, type BodyMuscle, type MuscleIntensity, type MuscleRole } from '@/lib/muscles';
+import type { BodyMuscle } from '@/lib/muscles';
+import { legendText, type MuscleLegendData, type MuscleMark, type MuscleMarks } from '@/lib/muscle-tiers';
 import { cn } from '@/lib/utils';
+import type { DeepMuscle } from '@/lib/deep-muscles';
+import { DeepMuscleSection } from './deep-muscle-section';
+import { MuscleLegend } from './muscle-legend';
+import { DECLINED_STROKE, MusclePatterns, markFill, usePatternId } from './muscle-patterns';
 import { BACK_PATHS, FRONT_PATHS, VIEWBOX, type MusclePath } from './paths';
 import { muscleOfPath } from './regions';
 
@@ -36,147 +41,41 @@ function shape(paths: readonly MusclePath[]): SideShape {
 const SHAPES: Record<MuscleSide, SideShape> = { front: shape(FRONT_PATHS), back: shape(BACK_PATHS) };
 
 /**
- * Renk kodu (SPEC §6: hedef / yardımcı / dengeleyici). Renkler `globals.css`'teki `--muscle-*`
- * token'larından; hedef `--primary-strong` olduğu için PT'nin rengini izler ve boş kastan ≥3:1'dir.
- * Parlaklık sırası iki temada da boş < dengeleyici < yardımcı < hedef. Renk körlüğü için seviye
- * ayrıca desenle çizilir: hedef dolu, yardımcı çizgili, dengeleyici noktalı.
- *
- * `tone="role"`: yoğunluk seviyeye çevrilir (egzersiz detayı, form, süzgeç). Eşikler
- * `ROLE_INTENSITY` değerlerinin ortası: 1 → hedef, 0,45 → yardımcı, 0,1 → dengeleyici.
- * `tone="load"`: sürekli ton (şablon ve program yükü); boş kastan hedef rengine açıklık rampası.
+ * Kas başına işaret (`marks`, `src/lib/muscle-tiers.ts`): dolu, çizgili, noktalı ya da gerileme; desenler
+ * `muscle-patterns.tsx`'te. `marks` verilmeyen haritada (süzgeç, koç paneli) seçili kas dolu. Renkler `globals.css`'teki
+ * `--muscle-*` token'larından; hedef `--primary-strong` olduğu için PT'nin rengini izler ve boş kastan ≥3:1'dir.
  */
-const TIER_PRIMARY = (ROLE_INTENSITY.primary + ROLE_INTENSITY.secondary) / 2;
-const TIER_SECONDARY = (ROLE_INTENSITY.secondary + ROLE_INTENSITY.stabilizer) / 2;
-
-export function tierOf(level: number): MuscleRole | null {
-  if (level <= 0) return null;
-  if (level >= TIER_PRIMARY) return 'primary';
-  if (level >= TIER_SECONDARY) return 'secondary';
-  return 'stabilizer';
-}
-
-export type MuscleTone = 'role' | 'load' | 'status';
-
-/**
- * `tone="status"` (İlerleme'nin Gelişim bölümü): güç gelişiminin kararı. Belirgin gelişme tam ton, gelişme
- * orta ton, sabit gri, gerileme çizgili desen ve kalın kenar; kararı olmayan kas boş. Renk tek başına
- * bilgi taşımaz: gerileme desenle ve kenarla da ayrılır, listede ikon ve sözcükle yazılır.
- */
-export type MuscleStatusTone = 'strong' | 'improved' | 'stable' | 'declined';
-
-const STATUS_FILLS: Record<Exclude<MuscleStatusTone, 'declined'>, string> = {
-  strong: 'var(--muscle-target)',
-  improved: 'var(--muscle-secondary)',
-  stable: 'color-mix(in oklab, var(--foreground) 30%, var(--card))',
-};
-
-function statusFill(status: MuscleStatusTone, patternId: string): string {
-  return status === 'declined' ? `url(#${patternId}-declined)` : STATUS_FILLS[status];
-}
-
-/** Desen kimliği `url(#…)` içinde güvenle kullanılabilsin. */
-function usePatternId() {
-  return `mm${useId().replace(/[^a-zA-Z0-9_-]/g, '')}`;
-}
-
-function roleFill(role: MuscleRole, patternId: string) {
-  return role === 'primary' ? 'var(--muscle-target)' : `url(#${patternId}-${role})`;
-}
-
-/** Yardımcı: hedef renginde çapraz çizgiler; dengeleyici: hedef renginde noktalar (SVG kullanıcı birimi). */
-const TILE = 1.5;
-
-function MusclePatterns({ id }: { id: string }) {
-  const none = { stroke: 'none' } as const;
-  return (
-    <defs>
-      <pattern id={`${id}-secondary`} patternUnits="userSpaceOnUse" width={TILE} height={TILE} patternTransform="rotate(45)">
-        <rect width={TILE} height={TILE} style={{ ...none, fill: 'var(--muscle-secondary)' }} />
-        <rect width={TILE * 0.45} height={TILE} style={{ ...none, fill: 'var(--muscle-target)' }} />
-      </pattern>
-      <pattern id={`${id}-stabilizer`} patternUnits="userSpaceOnUse" width={TILE} height={TILE}>
-        <rect width={TILE} height={TILE} style={{ ...none, fill: 'var(--muscle-stabilizer)' }} />
-        <circle cx={TILE / 2} cy={TILE / 2} r={TILE * 0.26} style={{ ...none, fill: 'var(--muscle-target)' }} />
-      </pattern>
-      {/* Gerileme: boş kas üstünde koyu çizgiler (ters yönde; yardımcının çizgisiyle karışmasın). */}
-      <pattern id={`${id}-declined`} patternUnits="userSpaceOnUse" width={TILE} height={TILE} patternTransform="rotate(-45)">
-        <rect width={TILE} height={TILE} style={{ ...none, fill: 'var(--muscle-empty)' }} />
-        <rect width={TILE * 0.35} height={TILE} style={{ ...none, fill: 'color-mix(in oklab, var(--foreground) 60%, var(--card))' }} />
-      </pattern>
-    </defs>
-  );
-}
-
-/** Açıklama kutusundaki örnek: haritadaki dolgunun ve desenin aynısı. */
-export function MuscleSwatch({ role, className }: { role: MuscleRole; className?: string }) {
-  const id = usePatternId();
-  return (
-    <svg viewBox="0 0 3 3" className={cn('size-3.5 shrink-0 rounded-[3px]', className)} aria-hidden>
-      <MusclePatterns id={id} />
-      <rect width={3} height={3} style={{ fill: roleFill(role, id) }} />
-    </svg>
-  );
-}
-
-/** Gelişim açıklamasındaki örnek: haritadaki dolgunun ve desenin aynısı. */
-export function MuscleStatusSwatch({ status, className }: { status: MuscleStatusTone; className?: string }) {
-  const id = usePatternId();
-  return (
-    <svg viewBox="0 0 3 3" className={cn('size-3.5 shrink-0 rounded-[3px]', className)} aria-hidden>
-      <MusclePatterns id={id} />
-      <rect
-        width={3}
-        height={3}
-        style={{ fill: statusFill(status, id) }}
-        className={status === 'declined' ? 'stroke-foreground [stroke-width:0.5]' : undefined}
-      />
-    </svg>
-  );
-}
 
 /** Bir kasın dolgusu. */
 function muscleFill({
-  level,
-  tone,
-  status,
+  mark,
   patternId,
   disabled,
   highlighted,
 }: {
-  level: number;
-  tone: MuscleTone;
-  status: MuscleStatusTone | undefined;
+  mark: MuscleMark | undefined;
   patternId: string;
   disabled: boolean;
   highlighted: boolean;
 }): string {
-  if (tone === 'status') {
-    if (status) return statusFill(status, patternId);
-  } else if (level > 0) {
-    if (tone === 'load') {
-      const share = Math.round(25 + 75 * Math.min(1, level));
-      return `color-mix(in oklab, var(--muscle-target) ${share}%, var(--muscle-empty))`;
-    }
-    return roleFill(tierOf(level) ?? 'stabilizer', patternId);
-  }
+  if (mark) return markFill(mark, patternId);
   if (disabled) return 'var(--muscle-neutral)';
   if (highlighted) return 'color-mix(in oklab, var(--foreground) 22%, var(--card))';
   return 'var(--muscle-empty)';
 }
 
 type MuscleMapProps = {
-  /** Kasın ne kadar çalıştığı (0–1). Ör. hedef 1, yardımcı 0,45, ya da haftalık set yükü. Rengi bu belirler. */
-  intensity?: MuscleIntensity;
-  /**
-   * `role` (varsayılan): yoğunluk hedef/yardımcı/dengeleyici seviyesine çevrilir (dolu/çizgili/noktalı).
-   * `load`: sürekli ton. `status`: güç gelişiminin kararı (`statuses`), yoğunluğa bakılmaz.
-   */
-  tone?: MuscleTone;
-  /** `tone="status"` için kas başına karar; olmayan kas boş çizilir. */
-  statuses?: Partial<Record<BodyMuscle, MuscleStatusTone>>;
-  /** Seçili kaslar (süzgeç, form). `intensity`'de tonu yoksa hedef gibi (dolu) çizilir. */
+  /** Kas başına işaret (dolu / çizgili / noktalı / gerileme). Verilmezse seçili kaslar dolu çizilir. */
+  marks?: MuscleMarks;
+  /** Açıklama kutusu: verilince harita ve açıklama `@container` içinde, dar alanda alt alta, geniş alanda yan yana. */
+  legend?: MuscleLegendData;
+  /** Açıklama satırlarını çıkarılabilir çip yapar (egzersiz formu). */
+  onRemoveRow?: (key: string) => void;
+  /** Haritanın altındaki "Derin kaslar" bölümü: `onToggle` verilince seçilir (form), verilmezse yalnız seçililer görünür. */
+  deep?: { selected: readonly DeepMuscle[]; onToggle?: (muscle: DeepMuscle) => void };
+  /** Seçili kaslar (süzgeç, form, açık grup); ekran okuyucuda basılı. */
   selected?: readonly BodyMuscle[];
-  /** Tıklanamayan kaslar (ör. formda hedef kas); rengi yine `intensity`'den gelir. */
+  /** Tıklanamayan kaslar; rengi yine `marks`'tan gelir. */
   disabled?: readonly BodyMuscle[];
   /** Verilirse kaslar tıklanabilir olur (klavyeyle de). */
   onToggle?: (muscle: BodyMuscle) => void;
@@ -210,9 +109,10 @@ type MuscleMapProps = {
  * haritaya da yansır.
  */
 export function MuscleMap({
-  intensity,
-  tone = 'role',
-  statuses,
+  marks,
+  legend,
+  onRemoveRow,
+  deep,
   selected = [],
   disabled,
   onToggle,
@@ -239,15 +139,15 @@ export function MuscleMap({
 
   const describeMuscle =
     describe ??
-    ((muscle: BodyMuscle) => (counts ? `${MUSCLE_LABELS[muscle]} · ${counts[muscle] ?? 0} egzersiz` : MUSCLE_LABELS[muscle]));
+    ((muscle: BodyMuscle) =>
+      (legend ? legendText(legend, muscle) : null) ??
+      (counts ? `${MUSCLE_LABELS[muscle]} · ${counts[muscle] ?? 0} egzersiz` : MUSCLE_LABELS[muscle]));
 
   const body = (face: MuscleSide) => (
     <Body
       side={face}
       label={layout === 'flip' ? label : `${label} — ${SIDE_LABELS[face]}`}
-      intensity={intensity}
-      tone={tone}
-      statuses={statuses}
+      marks={marks}
       selected={selected}
       disabled={disabled}
       counts={counts}
@@ -262,8 +162,8 @@ export function MuscleMap({
   const selectedOn = (face: MuscleSide) =>
     SHAPES[face].groups.some(([muscle]) => selected.includes(muscle));
 
-  return (
-    <figure className={cn('flex flex-col items-center gap-3', className)}>
+  const figure = (
+    <figure className={cn('flex flex-col items-center gap-3', legend || deep ? 'shrink-0' : className)}>
       {layout === 'flip' ? (
         <div className={cn('relative aspect-[35/93] perspective-distant', bodyClassName)}>
           <motion.div
@@ -320,14 +220,23 @@ export function MuscleMap({
       ) : null}
     </figure>
   );
+
+  if (!legend && !deep) return figure;
+  return (
+    <div className={cn('@container flex w-full flex-col gap-4', className)}>
+      <div className="flex flex-col items-center gap-4 @xl:flex-row @xl:items-start @xl:gap-8">
+        {figure}
+        {legend ? <MuscleLegend data={legend} onRemoveRow={onRemoveRow} /> : null}
+      </div>
+      {deep ? <DeepMuscleSection selected={deep.selected} onToggle={deep.onToggle} /> : null}
+    </div>
+  );
 }
 
 type BodyProps = {
   side: MuscleSide;
   label: string;
-  intensity?: MuscleIntensity;
-  tone: MuscleTone;
-  statuses?: Partial<Record<BodyMuscle, MuscleStatusTone>> | undefined;
+  marks?: MuscleMarks | undefined;
   labelOf?: ((muscle: BodyMuscle) => string) | undefined;
   selected: readonly BodyMuscle[];
   disabled?: readonly BodyMuscle[];
@@ -363,7 +272,7 @@ function nearestMuscle(x: number, y: number, svg: SVGSVGElement): BodyMuscle | n
 }
 
 /** Tek yüzün SVG'si. Her kas bir `g`; sol ve sağ birlikte yanar. */
-function Body({ side, label, intensity, tone, statuses, labelOf, selected, disabled: locked, counts, onToggle, highlighted, onHighlight }: BodyProps) {
+function Body({ side, label, marks, labelOf, selected, disabled: locked, counts, onToggle, highlighted, onHighlight }: BodyProps) {
   const { neutral, groups } = SHAPES[side];
   const interactive = Boolean(onToggle);
   const patternId = usePatternId();
@@ -398,12 +307,11 @@ function Body({ side, label, intensity, tone, statuses, labelOf, selected, disab
 
       {groups.map(([muscle, paths]) => {
         const isSelected = selected.includes(muscle);
-        const level = intensity?.[muscle] ?? (isSelected ? 1 : 0);
         const disabled = interactive && ((counts !== undefined && !counts[muscle]) || Boolean(locked?.includes(muscle)));
         const clickable = interactive && !disabled;
         const isHighlighted = highlighted === muscle;
         const count = counts?.[muscle];
-        const status = tone === 'status' ? statuses?.[muscle] : undefined;
+        const mark: MuscleMark | undefined = marks ? marks[muscle] : isSelected ? 'filled' : undefined;
 
         return (
           <g
@@ -417,15 +325,14 @@ function Body({ side, label, intensity, tone, statuses, labelOf, selected, disab
             aria-label={
               interactive ? (labelOf?.(muscle) ?? `${MUSCLE_LABELS[muscle]}${count === undefined ? '' : `, ${count} egzersiz`}`) : undefined
             }
-            data-tier={tone === 'role' ? (tierOf(level) ?? 'empty') : undefined}
-            data-status={tone === 'status' ? (status ?? 'empty') : undefined}
+            data-mark={mark ?? 'empty'}
             className={cn(
               'outline-none transition-[fill,stroke,stroke-width] duration-160',
-              status === 'declined' && 'stroke-foreground [stroke-width:0.22]',
+              mark === 'declined' && DECLINED_STROKE,
               isHighlighted && 'stroke-foreground [stroke-width:0.3]',
               clickable && 'cursor-pointer',
             )}
-            style={{ fill: muscleFill({ level, tone, status, patternId, disabled, highlighted: isHighlighted }) }}
+            style={{ fill: muscleFill({ mark, patternId, disabled, highlighted: isHighlighted }) }}
             onPointerEnter={() => onHighlight(muscle)}
             onPointerLeave={(event) => {
               // Dokunmatikte parmak kalkınca da "leave" gelir; son dokunulan kas alt satırda kalsın.

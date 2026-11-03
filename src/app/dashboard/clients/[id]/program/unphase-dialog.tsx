@@ -10,12 +10,15 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { PROGRAM_LIMITS, frequencyLabel, mergePhases, mergePhasesCheck, type ProgramPhase } from '@/lib/program-plan';
+import { hasAssignments } from '@/lib/day-assignments';
+import { displayDays, PROGRAM_LIMITS, frequencyLabel, mergePhases, mergePhasesCheck, type ProgramPhase } from '@/lib/program-plan';
 
 /**
- * Evreleri kaldırma onayı (birden çok evrede): günler program sırasıyla tek listede
- * birleşir, aynı adlı gün "… 2" olur, evre adları ve süreleri silinir, sıklık şu anki
- * evreden kalır. Birleşince 7 günü aşacaksa kaldırılamaz.
+ * Evreleri kaldırma onayı (birden çok evrede): programlar sırasıyla tek listede birleşir, aynı adlı program "… 2"
+ * olur, evre adları ve süreleri silinir. Yalnız şu anki evrenin gün atamaları kalır (`mergePhases`): öteki evrelerin
+ * programları onların günleriyle çakışabilirdi, atanmamış gelir; pencere bunu söyler (herhangi bir evrede atama
+ * varken). Sıklık şu anki evreden kalır; o evre atamalıysa sıklık atanmış gün sayısıdır, cümlesi yazılmaz.
+ * Birleşince 7 antrenmanı aşacaksa kaldırılamaz.
  */
 export function UnphaseDialog({
   open,
@@ -33,9 +36,11 @@ export function UnphaseDialog({
   const check = mergePhasesCheck(phases);
   const { phases: merged, renamed } = mergePhases(phases, currentPhaseId);
   const current = phases.find((phase) => phase.id === currentPhaseId) ?? phases[0];
-  const names = merged[0]?.days.map((day) => day.name).join(', ') ?? '';
+  const names = displayDays(merged[0]?.days ?? []).map((day) => day.name).join(', ');
   const phaseOf = (dayId: string) => phases.find((phase) => phase.days.some((day) => day.id === dayId))?.name ?? '';
   const frequency = frequencyLabel(current?.daysPerWeek)?.toLocaleLowerCase('tr');
+  const currentAssigned = current ? hasAssignments(current.days) : false;
+  const anyAssigned = phases.some((phase) => hasAssignments(phase.days));
 
   return (
     <AlertDialog open={open} onOpenChange={(next) => onOpenChange(next)}>
@@ -45,21 +50,23 @@ export function UnphaseDialog({
           <AlertDialogDescription>
             {check.ok ? (
               <>
-                {phases.length} evredeki {check.days} gün tek listede birleşir ve sırayla döner: {names}. Evre adları ve süreleri
-                silinir; sıklık &apos;{current?.name}&apos; evresinden kalır
-                {frequency ? ` (${frequency})` : ' (belirtilmemiş)'}.
+                {phases.length} evredeki {check.days} antrenman tek listede birleşir: {names}. Evre adları ve süreleri silinir
+                {currentAssigned ? '.' : `; sıklık '${current?.name ?? ''}' evresinden kalır (${frequency ?? 'belirtilmemiş'}).`}
+                {anyAssigned
+                  ? ` Yalnız '${current?.name ?? ''}' evresinin gün atamaları kalır; öteki evrelerden gelen programlar atanmamış olur.`
+                  : null}
               </>
             ) : (
               <>
-                Birleşince {check.days} gün olur; tek listede en fazla {PROGRAM_LIMITS.daysPerPhase} gün olabilir. Önce bazı günleri
-                sil.
+                Birleşince {check.days} antrenman olur; tek listede en fazla {PROGRAM_LIMITS.daysPerPhase} olabilir. Önce bazı
+                programları kaldır.
               </>
             )}
           </AlertDialogDescription>
         </AlertDialogHeader>
         {check.ok && renamed.length > 0 ? (
           <div className="flex flex-col gap-1 text-sm">
-            <span className="text-muted-foreground">Aynı adlı günler yeniden adlanır:</span>
+            <span className="text-muted-foreground">Aynı adlı programlar yeniden adlanır:</span>
             <ul className="flex flex-col gap-0.5">
               {renamed.map((item) => (
                 <li key={item.dayId}>

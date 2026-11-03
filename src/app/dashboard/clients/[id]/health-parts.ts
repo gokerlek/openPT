@@ -1,12 +1,43 @@
 import type { HealthField } from '@/lib/schemas/client';
 
+export type HealthPart = {
+  field: HealthField;
+  path: string;
+  label: string;
+  /** Parçanın kendi adresinin dışında onu etkin gösteren alt adresler (danışan sayfasına göre). */
+  also?: readonly string[];
+};
+
 /**
- * Danışan sayfasındaki "Sağlık" sekmesinin parçaları (tasarım `kisit-tarama.md` §1), şeritteki sırayla: sekmenin
- * bağlantısı modülde seçili ilk parçadır.
+ * Danışan sayfasındaki "Sağlık" sekmesinin parçaları (tasarım `kisit-tarama.md` §1), şeritteki sırayla; her biri
+ * bir onay parçasıdır. Sekmenin bağlantısı modülde seçili ilk parçadır. Kamera ölçümü sihirbazının adresi
+ * ölçümlerin altında kalır (`measurements/camera`) ama Hareket'in eylemidir: aynı `screening` onayı.
  */
-export const HEALTH_PARTS: readonly { field: HealthField; path: string; label: string }[] = [
+export const HEALTH_PARTS: readonly HealthPart[] = [
   { field: 'conditions', path: 'constraints', label: 'Kısıtlar' },
   { field: 'measurements', path: 'measurements', label: 'Ölçümler' },
-  { field: 'screening', path: 'measurements/camera', label: 'Kamera ölçümü' },
-  { field: 'screening', path: 'screening', label: 'PT değerlendirmesi' },
+  { field: 'screening', path: 'screening', label: 'Hareket', also: ['measurements/camera'] },
 ];
+
+/** `prefix`'in kendisi ya da alt adresi; `measurements-x` `measurements`'ın altı değildir. */
+function isUnder(path: string, prefix: string): boolean {
+  return path === prefix || path.startsWith(`${prefix}/`);
+}
+
+/**
+ * Adresin şeritteki etkin parçası; parça dışında (Genel, Program) null. `base` danışan sayfasının kökü
+ * (`/dashboard/clients/c_…`). En uzun eşleşen önek kazanır: `measurements/camera` Ölçümler'in değil Hareket'in.
+ * Sondaki eğik çizgi yok sayılır.
+ */
+export function activeHealthPart(pathname: string, base: string): HealthPart | null {
+  const path = pathname.replace(/\/+$/, '');
+  if (!path.startsWith(`${base}/`)) return null;
+  const rest = path.slice(base.length + 1);
+  let best: { part: HealthPart; length: number } | null = null;
+  for (const part of HEALTH_PARTS) {
+    for (const prefix of [part.path, ...(part.also ?? [])]) {
+      if (isUnder(rest, prefix) && (!best || prefix.length > best.length)) best = { part, length: prefix.length };
+    }
+  }
+  return best?.part ?? null;
+}

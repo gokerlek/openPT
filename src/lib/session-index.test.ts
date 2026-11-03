@@ -2,7 +2,7 @@ import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { gitBlobSha, jsonText } from './github/blob.ts';
 import { emptySessionIndex, sessionPath, type SessionDoc } from './schemas/session.ts';
-import { durationOf, indexRowOf, removeIndexRow, repairIndex, upsertIndexRow, volumeOf, waterOf } from './session-index.ts';
+import { durationOf, indexRowOf, removeIndexRow, repairIndex, sessionEnd, upsertIndexRow, volumeOf, waterOf } from './session-index.ts';
 import { tombstoneOf } from './session-merge.ts';
 import { OWN_DAY_A, OWN_DAY_B, OWN_ID } from './testing/own-fixtures.ts';
 import { at, DAY_A, DAY_B, sessionDoc, sessionEntry, workingSet } from './testing/session-fixtures.ts';
@@ -14,7 +14,7 @@ function finished(id: string, minute: number, overrides: Partial<SessionDoc> = {
 }
 
 describe('index satırı: PT bildirimlerinin ayrıntısı', () => {
-  test('başka gün: sıradaki günün adı; yarım: yapılan/planlanan set; aşırı yük: hareket başına en ağır set', () => {
+  test('başka program: planlanan programın adı; yarım: yapılan/planlanan set; aşırı yük: hareket başına en ağır set', () => {
     const doc = finished('s_aaaaaaaa', 0, {
       program: { revision: 3, dayId: DAY_B, dayName: 'Gün B', plannedDayId: DAY_A, plannedDayName: 'Gün A' },
       entries: [
@@ -35,12 +35,12 @@ describe('index satırı: PT bildirimlerinin ayrıntısı', () => {
     assert.deepEqual(row.overloads, [{ title: 'Bench Press', kg: 85, plannedKg: 62.5 }]);
   });
 
-  test('sıradaki gün aynıysa ad yazılmaz; bildirim yoksa ayrıntı da yok', () => {
+  test('planlanan program yapıldıysa ad yazılmaz; bildirim yoksa ayrıntı da yok', () => {
     const row = indexRowOf(finished('s_aaaaaaaa', 0, { program: { revision: 3, dayId: DAY_A, dayName: 'Gün A', plannedDayId: DAY_A } }), 'f'.repeat(40));
     assert.equal('plannedDayName' in row || 'progress' in row || 'overloads' in row, false);
   });
 
-  test('kendi programda başka gün yok (plan danışanın): sıradaki gün farklı olsa da bayrak ve ad yazılmaz', () => {
+  test('kendi programda başka program yok (plan danışanın): planlanan farklı olsa da bayrak ve ad yazılmaz', () => {
     const program = { revision: 1, dayId: OWN_DAY_B, dayName: 'Gün B', plannedDayId: OWN_DAY_A, plannedDayName: 'Gün A', programId: OWN_ID, programName: 'Evde' };
     const row = indexRowOf(finished('s_aaaaaaaa', 0, { program }), 'f'.repeat(40));
     assert.equal(row.otherDay, false);
@@ -83,7 +83,8 @@ describe('index satırı', () => {
       dayName: 'Gün B',
       otherDay: true,
       unfinished: true,
-      durationMin: 52,
+      // Yarım: son set (8. dk) + 10 dk; bitiş anı (52. dk) değil.
+      durationMin: 18,
       // 62,5×10 + 62,5×9 + 50×12; ısınma ve süreli set yok.
       volumeKg: 1787.5,
       sets: 4,
@@ -111,6 +112,39 @@ describe('index satırı', () => {
     assert.equal(waterOf({ waterTaps: [{ id: 'wt_aaaaaaaa', d: -1, at: at(1) }] }), 0);
     assert.equal(durationOf({ startedAt: at(0), finishedAt: at(80), effort: { durationMin: 55, updatedAt: at(90) } }), 55);
     assert.equal(volumeOf({ entries: [sessionEntry('e_aaaaaa', { sets: [workingSet('st_aaaaaaaa', 1, { reps: 3, effort: 'fail' })] })] }), 180);
+  });
+
+  test('yarım antrenman: süre son setten en çok 10 dk sonra biter (uygulama açık kalsa da)', () => {
+    const doc = finished('s_aaaaaaaa', 0, {
+      finishedAt: at(672),
+      entries: [sessionEntry('e_aaaaaa', { sets: [workingSet('st_aaaaaaaa', 3), workingSet('st_bbbbbbbb', 5)] })],
+      notices: [{ kind: 'unfinished', at: at(672), done: 2, planned: 9 }],
+    });
+    assert.equal(durationOf(doc), 15);
+    // Son setten 10 dk dolmadan kapatıldıysa bitiş anı.
+    const quick = finished('s_cccccccc', 0, {
+      finishedAt: at(7),
+      entries: [sessionEntry('e_aaaaaa', { sets: [workingSet('st_aaaaaaaa', 5)] })],
+      notices: [{ kind: 'unfinished', at: at(7), done: 1, planned: 9 }],
+    });
+    assert.equal(durationOf(quick), 7);
+  });
+
+  test('bitiş: yarımda son set + 10 dk (erken kapatıldıysa bitiş anı); bitmiş antrenmanda ve set yoksa bitiş anı; bitmemişte yok', () => {
+    const entries = [sessionEntry('e_aaaaaa', { sets: [workingSet('st_aaaaaaaa', 3), workingSet('st_bbbbbbbb', 5)] })];
+    const unfinished = [{ kind: 'unfinished' as const, at: at(672), done: 2, planned: 9 }];
+    assert.equal(sessionEnd({ finishedAt: at(672), entries, notices: unfinished }), at(15));
+    assert.equal(sessionEnd({ finishedAt: at(7), entries, notices: unfinished }), at(7));
+    assert.equal(sessionEnd({ finishedAt: at(672), entries, notices: [] }), at(672));
+    assert.equal(sessionEnd({ finishedAt: at(672), entries: [], notices: unfinished }), at(672));
+    assert.equal(sessionEnd({ entries, notices: unfinished }), undefined);
+  });
+
+  test('bitmiş antrenman bitiş anına göre; yarımda hiç set yoksa da bitiş anı', () => {
+    const doc = finished('s_aaaaaaaa', 0, { entries: [sessionEntry('e_aaaaaa', { sets: [workingSet('st_aaaaaaaa', 3)] })] });
+    assert.equal(durationOf(doc), 52);
+    const empty = finished('s_bbbbbbbb', 0, { notices: [{ kind: 'unfinished', at: at(52), done: 0, planned: 9 }] });
+    assert.equal(durationOf(empty), 52);
   });
 
   test('ekleme en yeni üstte; silme satırı çıkarır, kimliği bir kez silinenlere yazar', () => {

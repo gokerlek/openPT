@@ -4,8 +4,9 @@ import { DatePicker } from '@/components/date-picker';
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowCounterClockwise, Check, CheckCircle, PencilSimple, Trash, X } from '@phosphor-icons/react';
+import { ArrowCounterClockwise, CheckCircle, PencilSimple, Trash } from '@phosphor-icons/react';
 import { ChoiceChips } from '@/components/choice-chips';
+import { Check, X } from '@/components/line-icons';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -17,6 +18,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
+import { ConfirmDeleteDialog } from '@/components/confirm-delete-dialog';
 import { Button } from '@/components/ui/button';
 import { Field, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
@@ -214,7 +216,7 @@ export function OverrideRemove({ clientId, exerciseId, source, title }: { client
     onSuccess: () => router.refresh(),
   });
   return (
-    <Button size="sm" variant="ghost" aria-label={`${title} iznini kaldır`} disabled={remove.isPending} onClick={() => remove.mutate()}>
+    <Button size="sm" variant="ghost" className="min-h-11" aria-label={`${title} iznini kaldır`} disabled={remove.isPending} onClick={() => remove.mutate()}>
       {remove.isPending ? <Spinner data-icon="inline-start" /> : <X data-icon="inline-start" />}
       Kaldır
     </Button>
@@ -236,6 +238,7 @@ export function ConstraintEditActions({
   label: string;
 }) {
   const router = useRouter();
+  const [confirming, setConfirming] = useState(false);
   const base = `/dashboard/clients/${clientId}/constraints`;
   const toggle = usePatch(clientId, id, status === 'closed' ? 'Kısıt yeniden açıldı.' : 'Kısıt kapatıldı.', () => router.push(base));
   const remove = useServiceMutation({
@@ -257,28 +260,18 @@ export function ConstraintEditActions({
           {status === 'closed' ? 'Yeniden aç' : 'Kapat'}
         </Button>
       ) : null}
-      <AlertDialog>
-        <AlertDialogTrigger render={<Button variant="outline" className="text-destructive-text" />}>
-          <Trash data-icon="inline-start" />
-          Sil
-        </AlertDialogTrigger>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>{label} silinsin mi?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Yanlış kayıt içindir; geçmişi kalsın istiyorsan “Kapat”. Bu kısıta verilen izinler de silinir. Danışanın kaydının değişiklik
-              geçmişinde bir kopyası kalır.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Vazgeç</AlertDialogCancel>
-            <AlertDialogAction variant="destructive" disabled={remove.isPending} onClick={() => remove.mutate()}>
-              {remove.isPending ? <Spinner data-icon="inline-start" /> : null}
-              Sil
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <Button variant="outline" className="text-destructive-text" onClick={() => setConfirming(true)}>
+        <Trash data-icon="inline-start" />
+        Sil
+      </Button>
+      <ConfirmDeleteDialog
+        open={confirming}
+        onOpenChange={setConfirming}
+        title={`${label} silinsin mi?`}
+        body="Yanlış kayıt içindir; geçmişi kalsın istiyorsan “Kapat”. Bu kısıta verilen izinler de silinir. Danışanın kaydının değişiklik geçmişinde bir kopyası kalır."
+        busy={remove.isPending}
+        onConfirm={() => remove.mutate()}
+      />
     </>
   );
 }

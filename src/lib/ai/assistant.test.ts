@@ -11,7 +11,7 @@ import { saveOwnProgram } from '../own-program-files.ts';
 import { saveResponse } from '../own-program-routes.ts';
 import { OWN_INDEX_PATH } from '../own-programs.ts';
 import type { OwnIndex } from '../own-program-index.ts';
-import { assistantProgram } from './assistant-engine.ts';
+import { assistantAttention, assistantProgram } from './assistant-engine.ts';
 import { ASSISTANT_PATH, selectionSchema, type AssistantSelection, type AssistantView, type AssistantStore } from './assistant-contract.ts';
 import { getAssistant, requestAssistant, saveAssistantDraft, permissionHash, type AssistantDeps } from './assistant-routes.ts';
 import { interpretGoal } from './assistant-gemini.ts';
@@ -111,12 +111,28 @@ test('punishment/body distress and medical wording cannot create a draft through
 });
 test('catalog muscle/equipment filters and unavailable health are respected; one workout has one day', () => {
   const f = setup();
-  const chest = assistantProgram(f.context, { ...selection, fullBody: false, muscles: ['chest_lower'] }, 'workout', f.deps.id);
+  const chest = assistantProgram(f.context, { ...selection, fullBody: false, muscles: ['chest_lower'] }, 'workout', f.deps.id, 'client');
   assert.ok('body' in chest); assert.equal(chest.body!.phases[0]?.days.length, 1);
   const ids = chest.body!.phases.flatMap(p => p.days.flatMap(d => d.blocks.flatMap(b => b.rows.map(r => r.exerciseId))));
   assert.ok(ids.every(id => EXERCISES.get(id)!.primaryMuscles.includes('chest_lower')));
-  assert.ok('error' in assistantProgram({ ...f.context, healthUnavailable: true }, selection, 'program', f.deps.id));
-  assert.ok('error' in assistantProgram(f.context, { ...selection, conditions: { ...selection.conditions, equipment: ['cardio_machine'] } }, 'program', f.deps.id));
+  assert.ok('error' in assistantProgram({ ...f.context, healthUnavailable: true }, selection, 'program', f.deps.id, 'client'));
+  assert.ok('error' in assistantProgram(f.context, { ...selection, conditions: { ...selection.conditions, equipment: ['cardio_machine'] } }, 'program', f.deps.id, 'client'));
+  // Uygun hareket yoksa danışana PT'den alternatif istemesi, PT'ye kütüphaneyi genişletmesi söylenir.
+  const none = { ...selection, conditions: { ...selection.conditions, equipment: ['cardio_machine' as const] } };
+  const forClient = assistantProgram(f.context, none, 'program', f.deps.id, 'client'), forPt = assistantProgram(f.context, none, 'program', f.deps.id, 'pt');
+  assert.match('error' in forClient ? forClient.error! : '', /PT’den alternatif iste/);
+  assert.ok('error' in forPt && !forPt.error!.includes('PT’den') && forPt.error!.includes('kütüphaneye'));
+});
+test('mobility without warm-up/cool-down moves: the PT extends the library, the client hears the PT will', () => {
+  const f = setup();
+  // Fikstür kataloğunda ısınma/soğuma hareketi yok: hareketlilik hedefinin havuzu boş kalır.
+  const mobility: AssistantSelection = { ...selection, goal: 'mobility' };
+  const forPt = assistantProgram(f.context, mobility, 'program', f.deps.id, 'pt'), forClient = assistantProgram(f.context, mobility, 'program', f.deps.id, 'client');
+  assert.ok('error' in forPt && 'error' in forClient);
+  assert.match(forPt.error!, /kütüphaneye uygun ısınma\/soğuma hareketleri ekle/);
+  // PT'ye danışana yazılmış metin gösterilmez: "PT … eklemeli" PT'nin kendisinden üçüncü kişi olarak söz ederdi.
+  assert.ok(!/\bPT\b|antrenörün/.test(forPt.error!), forPt.error!);
+  assert.match(forClient.error!, /PT uygun hareketleri kütüphaneye eklemeli/);
 });
 test('Gemini gets only current goal/labels, not records or history; fabricated values are rejected', async () => {
   const expected = { intent: 'fitness', goal: 'general_fitness', fullBody: true, muscles: [], weekdays: null, minutes: null, equipment: null };
@@ -156,13 +172,52 @@ test('drafts older than three days cannot be applied; invalid changed catalog ro
 });
 test('editing an AI draft updates saved preview and attention to the actual weekdays', async () => {
   const f = setup(), draft = await generate(f);
-  const body = { ...draft.body, name: 'Düzenlediğim program', weekdays: [1, 2], baseRevision: null };
+  // Faz 3: form program düzeyinde gün göndermez; danışan programların günlerini değiştirir (Pzt, Per → Pzt, Sal).
+  const { weekdays: _program, ...rest } = draft.body;
+  const phases = rest.phases.map((phase) => ({ ...phase, days: phase.days.map((day, index) => ({ ...day, weekdays: [index + 1] })) }));
+  const body = { ...rest, phases, name: 'Düzenlediğim program', baseRevision: null };
   assert.equal((await saveAssistantDraft(f.deps, headers, ORIGIN, f.client().id, draft.id, body, 'client')).status, 201);
   const saved = view(await getAssistant(f.deps, f.client().id)).drafts[0]!;
-  assert.equal(saved.name, body.name); assert.deepEqual(saved.body.weekdays, [1, 2]); assert.ok(saved.attention.some(t => /Ardışık/.test(t)));
+  assert.equal(saved.name, body.name);
+  assert.deepEqual(saved.body.phases[0]?.days.map((day) => day.weekdays), [[1], [2]]);
+  assert.ok(saved.attention.some(t => /Ardışık/.test(t)));
   const own = f.gh.get(OWN_INDEX_PATH) as OwnIndex;
   const edited = { ...own, items: own.items.map(i => ({ ...i, clientEditedAt: '2026-10-06T12:00:00.000Z' })) };
   assert.deepEqual(assistantNotices(f.gh.get(ASSISTANT_PATH), permissionHash(f.deps, f.client()), edited, new Date('2026-10-06T12:00:00.000Z')), []);
+});
+test('taslak programları "Program A…" adlandırır ve her birini kendi gününe atar', () => {
+  const f = setup();
+  const picked = { ...selection, conditions: { ...selection.conditions, weekdays: [5, 1, 3] } };
+  const result = assistantProgram(f.context, picked, 'program', f.deps.id, 'client');
+  assert.ok('body' in result && result.body);
+  const [phase] = result.body.phases;
+  assert.deepEqual(phase?.days.map((day) => [day.name, day.weekdays]), [['Program A', [1]], ['Program B', [3]], ['Program C', [5]]]);
+  assert.deepEqual(result.body.weekdays, [1, 3, 5]);
+  assert.equal(phase?.daysPerWeek, undefined);
+  const workout = assistantProgram(f.context, picked, 'workout', f.deps.id, 'client');
+  assert.ok('body' in workout && workout.body);
+  assert.deepEqual(workout.body.phases[0]?.days.map((day) => [day.name, day.weekdays]), [['Program A', [1]]]);
+  // Program düzeyinde gün yoksa dikkat notları atamalardan: Pzt ve Sal ardışık.
+  const { weekdays: _program, ...bare } = result.body;
+  const consecutive = { ...bare, phases: [{ ...phase!, days: phase!.days.slice(0, 2).map((day, index) => ({ ...day, weekdays: [index + 1] })) }] };
+  assert.ok(assistantAttention(f.context, picked, consecutive).some((text) => /Ardışık/.test(text)));
+});
+test('dikkat notları şu anki evrenin atamalarından; program düzeyindeki eski günler yalnız atama yokken', () => {
+  const f = setup();
+  const result = assistantProgram(f.context, selection, 'program', f.deps.id, 'client');
+  assert.ok('body' in result && result.body);
+  // Form artık program düzeyinde gün göndermez: kalan eski `weekdays` (Pzt, Sal) atamaları (Pzt, Per) ezmez.
+  const stale = { ...result.body, weekdays: [1, 2] };
+  assert.equal(assistantAttention(f.context, selection, stale).some((text) => /Ardışık/.test(text)), false);
+  // Atamasız gövdede eski günler okunur.
+  const bare = { ...stale, phases: stale.phases.map((phase) => ({ ...phase, days: phase.days.map(({ weekdays: _days, ...day }) => day) })) };
+  assert.ok(assistantAttention(f.context, selection, bare).some((text) => /Ardışık/.test(text)));
+  // Şu anki evre ilk evre değilse onun atamaları: öteki evrenin ardışık günleri sayılmaz.
+  const [phase] = result.body.phases;
+  assert.ok(phase);
+  const other = { ...phase, id: 'p_zzzzzz', name: 'Evre 2', days: phase.days.map((day, index) => ({ ...day, id: `d_zzzzz${index}`, weekdays: [index + 1] })) };
+  const phased = { ...result.body, phased: true, currentPhaseId: phase.id, phases: [other, phase] };
+  assert.equal(assistantAttention(f.context, selection, phased).some((text) => /Ardışık/.test(text)), false);
 });
 test('ordinary fitness goal wording tanımla is not classified as a diagnosis', async () => {
   const f = setup(); f.deps.connection = async () => 'client';

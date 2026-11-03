@@ -11,9 +11,9 @@ import type { PickerExercise } from '@/lib/template-edit';
 import { templateSummary } from '@/lib/template-plan';
 
 /**
- * Şablondan gün ekleme: şablonun blokları yeni kimlikle kopyalanır; gün şablona bağlı
- * kalmaz (burada yapılan değişiklik şablonu, şablonda sonradan yapılan değişiklik günü
- * etkilemez).
+ * Şablondan program ekleme: şablonun blokları yeni kimlikle kopyalanır; program şablona bağlı
+ * kalmaz (burada yapılan değişiklik şablonu, şablonda sonradan yapılan değişiklik programı
+ * etkilemez). Yeni program atamasız gelir; günleri kartındaki çiplerle seçilir.
  */
 export function AddDayDialog({
   open,
@@ -41,9 +41,9 @@ export function AddDayDialog({
     <Dialog open={open} onOpenChange={(next) => onOpenChange(next)}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Şablondan gün ekle</DialogTitle>
+          <DialogTitle>Şablondan program ekle</DialogTitle>
           <DialogDescription>
-            {phaseName === null ? 'Programa' : `'${phaseName}' evresine`} yeni gün olarak eklenir; şablonla bağı kalmaz, burada
+            {phaseName === null ? 'Programa' : `'${phaseName}' evresine`} yeni program olarak eklenir; şablonla bağı kalmaz, burada
             yaptığın değişiklik şablonu etkilemez.
           </DialogDescription>
         </DialogHeader>

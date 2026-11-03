@@ -20,12 +20,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   if (!parsed.success) return invalid(parsed.issues);
   const { timeZone } = await readAppConfig();
   if (parsed.output.date > todayIn(timeZone)) {
-    return NextResponse.json({ error: 'Bilgileri kontrol et.', fields: { date: 'Gelecek bir güne tarama girilemez.' } }, { status: 400 });
+    return NextResponse.json({ error: 'Bilgileri kontrol et.', fields: { date: 'Gelecek bir güne hareket testi girilemez.' } }, { status: 400 });
   }
   try {
-    await updateHealth(id, 'screening', (record) => withScreening(record, parsed.output), 'Tarama kaydedildi');
+    await updateHealth(id, 'screening', (record) => withScreening(record, parsed.output), 'Hareket testi kaydedildi');
     return NextResponse.json({ ok: true, date: parsed.output.date }, { status: 201 });
   } catch (error) {
-    return failed(error, 'Tarama kaydedilemedi.');
+    return failed(error, 'Hareket testi kaydedilemedi.');
   }
 }

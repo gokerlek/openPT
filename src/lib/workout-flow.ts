@@ -1,18 +1,18 @@
 import { formatKg, formatNumber } from './format.ts';
-import type { EntryStatus, RotationChoice, SessionDoc, SessionEntry, SkipReason } from './schemas/session.ts';
+import type { EntryStatus, SessionDoc, SessionEntry, SkipReason } from './schemas/session.ts';
 import { normalizeSession, withDeletions } from './session-merge.ts';
 import { isStraight } from './set-plan.ts';
 import { BLOCK_KIND_LABELS, FALLBACK_REST_SECONDS, ROW_ID_PATTERN, type BlockKind, type TemplateBlock } from './template-plan.ts';
-import { defaultRotation, doNow, dropUnit, entryForRow, entryStatusOf, remaining, restoreUnit, skipUnit, type CursorUnit, type Stamp } from './workout-cursor.ts';
+import { dropUnit, entryForRow, entryStatusOf, remaining, restoreUnit, type CursorUnit, type Stamp } from './workout-cursor.ts';
+import type { LocalWorkout } from './workout-outbox.ts';
 import { dayBody, entryPlanOf, extraKey, type ExtraRow, type ExtraRows, type WorkoutDay, type WorkoutRow } from './workout-plan.ts';
 import { cursorOf, cursorOverrides, ensureEntries, newRowEntryId } from './workout-session.ts';
 
 /**
- * Antrenman akışı ve geçme (tasarım §2.6) — saf: ☰ akış sheet'inin listesi, "Hareketi geç ›" (sona al,
- * gerekirse Geçilenler), "Bugün yapma", toast'taki "Geri al", Geçilenler'den geri alma, "Şimdi yap",
- * "Değiştir" (muadil), "Hareket ekle" ve bitişteki isteğe bağlı neden. Sıra değişiklikleri imlecin
- * işleridir (`workout-cursor.ts`: birim tek hareket ya da grubun tamamı); burası onları günün etkin
- * planıyla çağırır.
+ * Antrenmanın listesi ve atlama (tasarım §2.6) — saf: liste + odak ekranının listesi, taşıma,
+ * "Bu hareketi atla" ve toast'taki "Geri al", atlananı geri alma, "Muadil seç" (muadil), "Hareket ekle" ve
+ * bitişteki isteğe bağlı neden. Sıra değişiklikleri imlecin işleridir (`workout-cursor.ts`: birim tek hareket
+ * ya da grubun tamamı); burası onları günün etkin planıyla çağırır.
  *
  * - Günün etkin planı (`effectiveDay`): başlangıçtaki gün + belgedeki muadiller (satır yerinde yeni
  *   hareketle) + eklenen hareketler (sonda, kendi kaydının kimliğiyle tek hareketlik blok). Planları
@@ -21,7 +21,7 @@ import { cursorOf, cursorOverrides, ensureEntries, newRowEntryId } from './worko
  *   açar (`ensureEntries`); kaydı olmayan hareket sırada yer tutamazdı.
  * - "Değiştir" hareketin kaydını yerinde çevirir (kimlik aynı, sıra bozulmaz): `swappedFrom` yerini
  *   aldığı satır, başlık ve cihaz muadilinki; asıl harekete dönmek de aynı iştir. Çalışma seti
- *   kaydedilmiş harekette açılmaz ("Geç" var); eski hareketin ısınma setleri silinir.
+ *   kaydedilmiş harekette açılmaz ("Bu hareketi atla" var); eski hareketin ısınma setleri silinir.
  * - Neden antrenman ortasında sorulmaz; bitişte, yapılmayan her harekete bir kez. "Ağrı" yalnız sağlık
  *   onayı varken çıkar: seansa `other`, ayrıntı (`skippedRows`) `health.json`'a (SPEC §4).
  */
@@ -32,7 +32,8 @@ type Random = (n: number) => Uint8Array;
 
 /** Muadilin planı gelmediyse: asıl satırın düzeni ve ağırlıkları, muadilin adı ve cihazıyla ("Önceki" yok). */
 function fallbackSwapRow(original: WorkoutRow, entry: SessionEntry): WorkoutRow {
-  const { warmups: _warmups, setupNote: _setupNote, note: _note, deviceId: _deviceId, ...rest } = original;
+  // Kardiyo türü asıl hareketin: muadil başka hareket olabilir, mesafe ve eğim sütunları taşınmaz.
+  const { warmups: _warmups, setupNote: _setupNote, note: _note, deviceId: _deviceId, cardio: _cardio, ...rest } = original;
   return { ...rest, exerciseId: entry.exerciseId, title: entry.title, ...(entry.deviceId ? { deviceId: entry.deviceId } : {}), lastTime: [] };
 }
 
@@ -89,23 +90,21 @@ export function withExtraRounds(day: WorkoutDay, rounds: Readonly<Record<string,
   return { ...day, extraRounds: Object.fromEntries(kept) };
 }
 
-/* --- akış sheet'i --- */
+/**
+ * Telefondaki antrenmanın günün etkin hâli verilen belgeyle: başlangıçtaki gün + muadiller + eklenen hareketler
+ * (`effectiveDay`) + "+ Set ekle"nin istenen turları (`withExtraRounds`). Antrenman ekranı ve Bugün'ün "Devam et"
+ * kartı aynı planla çalışır.
+ */
+export function localWorkoutDay(local: Pick<LocalWorkout, 'plan' | 'extras' | 'extraRounds'>, doc: Pick<SessionDoc, 'entries'>): WorkoutDay {
+  return withExtraRounds(effectiveDay(local.plan, doc, local.extras), local.extraRounds);
+}
 
-export type FlowState =
-  /** Bütün setleri yapıldı. */
-  | 'done'
-  /** Sıradaki set bu birimde. */
-  | 'current'
-  /** Sona alındı (hâlâ yapılacak). */
-  | 'moved'
-  | 'pending'
-  /** Geçilenler'de. */
-  | 'skipped';
+/* --- liste (Faz 2: liste + odak) --- */
 
+/** Birimin satırı, durumsuz: numaralar, adlar, set sayıları. `ListItem` durumu ve son ağırlığı ekler. */
 export type FlowItem = {
   /** Birimin anahtarı (blok ya da eklenen hareketin kaydı). */
   key: string;
-  state: FlowState;
   kind: BlockKind;
   /** Grupta "Süperset", "Devre", "Kompleks". */
   kindLabel: string | null;
@@ -114,16 +113,15 @@ export type FlowItem = {
   /** Yapılan ve planlanan çalışma setleri ("2/3"). */
   done: number;
   planned: number;
+  /** Antrenmanda eklenen hareket (planda yok): seti yazılmamışsa silinebilir (`canRemoveAdded`). */
   added: boolean;
 };
-
-export type FlowView = { active: FlowItem[]; skipped: FlowItem[]; doneSets: number; plannedSets: number };
 
 function isSkipped(unit: CursorUnit): boolean {
   return unit.members.length > 0 && unit.members.every((member) => member.skipped);
 }
 
-/** Planın bütün setleri yapıldı (bekleyen fazladan set birimi "şimdi"de tutmaz). */
+/** Planın bütün setleri yapıldı (bekleyen fazladan set birimi "şu an"da tutmaz). */
 function isFinished(unit: CursorUnit): boolean {
   return !remaining(unit);
 }
@@ -140,48 +138,179 @@ export function unitTitle(day: WorkoutDay, doc: Pick<SessionDoc, 'entries'>, uni
     .join(' + ');
 }
 
-/** Akış sheet'i: yapılış sırasında birimler (Geçilenler ayrı), durumları ve set sayıları. */
-export function flowView(day: WorkoutDay, doc: Pick<SessionDoc, 'entries' | 'order'>): FlowView {
-  const cursor = cursorOf(day, doc);
-  const numbers = new Map(day.blocks.map((block, index) => [block.id, index + 1]));
-  const current = cursor.next ? cursor.units[cursor.next.unit] : undefined;
-  const items = cursor.units.map((unit): FlowItem => {
-    const number = numbers.get(unit.key) ?? numbers.size + 1;
-    const group = unit.kind !== 'single' && unit.members.length > 1;
-    const members = unit.members.map((member, index) => ({
-      rowId: member.rowId ?? member.entryId ?? unit.key,
-      number: group ? `${number}${String.fromCharCode(97 + index)}` : String(number),
-      title: (member.rowId ? day.rows[member.rowId]?.title : undefined) ?? doc.entries.find((entry) => entry.id === member.entryId)?.title ?? '',
-    }));
-    const state: FlowState = isSkipped(unit)
-      ? 'skipped'
-      : isFinished(unit)
-        ? 'done'
-        : unit === current
-          ? 'current'
-          : unit.members.some((member) => member.moved)
-            ? 'moved'
-            : 'pending';
-    return {
-      key: unit.key,
-      state,
-      kind: unit.kind,
-      kindLabel: unit.kind === 'single' ? null : BLOCK_KIND_LABELS[unit.kind],
-      members,
-      done: unit.members.reduce((sum, member) => sum + Math.min(member.done, member.planned), 0),
-      planned: unit.members.reduce((sum, member) => sum + member.planned, 0),
-      added: unit.members.some((member) => doc.entries.some((entry) => entry.id === member.entryId && entry.added)),
-    };
-  });
+/** Listenin satırının adı: tek harekette başlık, grupta "A + B" (`unitTitle` gibi). */
+export function itemName(item: { members: readonly { title: string }[] }): string {
+  return item.members
+    .map((member) => member.title)
+    .filter(Boolean)
+    .join(' + ');
+}
+
+/** Birimin satırı: numara planın sırasıyla (eklenen hareket planın arkasındaki numarayla), grupta "3a", "3b". */
+function itemOf(day: WorkoutDay, doc: Pick<SessionDoc, 'entries'>, unit: CursorUnit, numbers: ReadonlyMap<string, number>): FlowItem {
+  const number = numbers.get(unit.key) ?? numbers.size + 1;
+  const group = unit.kind !== 'single' && unit.members.length > 1;
+  const members = unit.members.map((member, index) => ({
+    rowId: member.rowId ?? member.entryId ?? unit.key,
+    number: group ? `${number}${String.fromCharCode(97 + index)}` : String(number),
+    title: (member.rowId ? day.rows[member.rowId]?.title : undefined) ?? doc.entries.find((entry) => entry.id === member.entryId)?.title ?? '',
+  }));
   return {
-    active: items.filter((item) => item.state !== 'skipped'),
-    skipped: items.filter((item) => item.state === 'skipped'),
-    doneSets: cursor.progress.doneSets,
-    plannedSets: cursor.progress.plannedSets,
+    key: unit.key,
+    kind: unit.kind,
+    kindLabel: unit.kind === 'single' ? null : BLOCK_KIND_LABELS[unit.kind],
+    members,
+    done: unit.members.reduce((sum, member) => sum + Math.min(member.done, member.planned), 0),
+    planned: unit.members.reduce((sum, member) => sum + member.planned, 0),
+    added: doc.entries.some((entry) => entry.id === unit.key && entry.added === true),
   };
 }
 
-/* --- geç, bugün yapma, geri al, şimdi yap --- */
+export type ListState = 'done' | 'current' | 'pending' | 'skipped';
+
+export type ListItem = FlowItem & {
+  state: ListState;
+  /** Satırdaki ağırlık: bugün kaydedilen son çalışma setinin kilosu, yoksa geçen antrenmanın son setininki. */
+  lastKg: number | null;
+  lastFrom: 'today' | 'last' | null;
+};
+
+export type ListView = {
+  /** Yapılış sırasında (atlanan birim `dropAt` ile sıranın sonuna iner). */
+  items: ListItem[];
+  /**
+   * Şu an: odak (açılabilen birim, `validFocus`); yoksa yarım bırakılan birim (son kaydedilen çalışma setininki);
+   * yoksa planı bitmemiş ilk birim. Üçünde de yalnız açılabilen birim: plan dışı kayıt "şu an" olmaz (açılamaz;
+   * "Devam et" ve açılış kuralı onu açmaya çalışmasın). Odaksız null: hepsi bittiyse (`allDone`) ya da kalan yalnız
+   * plan dışı kayıtsa. Bekleyen "+ Set ekle" seti birimi "şu an" tutmaz.
+   */
+  current: string | null;
+  doneSets: number;
+  plannedSets: number;
+  allDone: boolean;
+};
+
+/**
+ * Antrenmanın listesi (tasarım Faz 2): durum (✓ bitti, ▶ şu an, ○ sırada, ⤼ atlandı), ad, yapılan/planlanan set
+ * ve son ağırlık (grupta ağırlığı olan ilk üyenin). Danışan sırayı atlayıp başka bir hareketi yarım bıraktıysa
+ * "şu an" odur: listeye dönünce "Devam et" onu gösterir. Biten birim odakta da "bitti" görünür; açılamayan birime
+ * (günde yok, atlandı, plan dışı kayıt) odak yok sayılır. Plan dışı kayıt listede setleriyle durur.
+ */
+export function listView(day: WorkoutDay, doc: Pick<SessionDoc, 'entries' | 'order'>, focus?: string | null): ListView {
+  const cursor = cursorOf(day, doc);
+  const numbers = new Map(day.blocks.map((block, index) => [block.id, index + 1]));
+  let latest: { entryId: string; at: string } | null = null;
+  for (const entry of doc.entries) {
+    for (const set of entry.sets) {
+      // Eşit saat yalnız iki cihazda olur: kayıtların dizisinde sonra gelen kazanır (`order` varsa yapılış sırası,
+      // yoksa kimlik sırası); ikisi de tutarlı bir "şu an" verir.
+      if (set.type === 'working' && (!latest || set.at >= latest.at)) latest = { entryId: entry.id, at: set.at };
+    }
+  }
+  const inProgress = latest ? cursor.units.find((unit) => unit.members.some((member) => member.entryId === latest?.entryId)) : undefined;
+  const active = inProgress && openable(day, inProgress) && !isFinished(inProgress) ? inProgress.key : null;
+  const firstOpen = cursor.units.find((unit) => openable(day, unit) && !isFinished(unit));
+  const current = focusAmong(day, cursor.units, focus) ?? active ?? firstOpen?.key ?? null;
+  const items = cursor.units.map((unit): ListItem => {
+    const state: ListState = isSkipped(unit) ? 'skipped' : isFinished(unit) ? 'done' : unit.key === current ? 'current' : 'pending';
+    return { ...itemOf(day, doc, unit, numbers), state, ...lastWeightOf(day, doc, unit) };
+  });
+  return { items, current, doneSets: cursor.progress.doneSets, plannedSets: cursor.progress.plannedSets, allDone: cursor.allDone };
+}
+
+/**
+ * Birimin günün planında satırı var mı. Plan bloklarının birimlerinde her üyenin satırı vardır (gün her blok satırını
+ * `rows`'a yazar; muadil ve plan verisi gelen eklenen hareket de `effectiveDay`'de): biten, gruplu ya da şu anki üyesi
+ * bitmiş birim de. Yoksa plan dışı kayıttır (`workoutUnits`: başka cihazda plan verisi gelmeden eklenen hareket, PT'nin
+ * programdan kaldırdığı satırın kaydı): kartın gösterecek satırı yok.
+ */
+function hasPlanRow(day: WorkoutDay, unit: CursorUnit): boolean {
+  return unit.members.some((member) => member.rowId !== null && day.rows[member.rowId] !== undefined);
+}
+
+/** Odakta açılabilir mi: atlanmamış ve planda satırı var. */
+function openable(day: WorkoutDay, unit: CursorUnit): boolean {
+  return !isSkipped(unit) && hasPlanRow(day, unit);
+}
+
+/** Odak geçerli mi: birim günde ve açılabilir; değilse null (`listView`'ın ve ekranın tek kuralı). */
+function focusAmong(day: WorkoutDay, units: readonly CursorUnit[], focus: string | null | undefined): string | null {
+  const unit = focus == null ? undefined : units.find((item) => item.key === focus);
+  return unit && openable(day, unit) ? unit.key : null;
+}
+
+/**
+ * Adresteki odak gösterilir mi (`listView`'ın kuralı): birim günde, atlanmamış ve planda satırı var. Değilse null:
+ * antrenman ekranı listeyi çizer ve odağı adresten düşürür (başka cihazda silindi, adres elle değişti, birim atlandı,
+ * plan dışı kayıt).
+ */
+export function validFocus(day: WorkoutDay, doc: Pick<SessionDoc, 'entries' | 'order'>, focus: string | null | undefined): string | null {
+  return focus == null ? null : focusAmong(day, cursorOf(day, doc).units, focus);
+}
+
+/**
+ * Açılacak sıradaki birim (odakta kendiliğinden geçiş, odaktaki hareketi geçme; "Sıradaki" satırı): listede `except`'in
+ * ardından planı bitmemiş ilk açılabilen birim, sonda başa dönerek. Geri dönmez: önceki bitmemiş (yarım bırakılan da)
+ * ancak sıra başa dönünce gelir. Odak yokken (`except` null) listenin "şu an"ı (`listView`: yarım bırakılan, yoksa
+ * sırada ilk bitmemiş; "Devam et"). Atlamada belge atlamadan öncekidir: atlanan sona iner, sıradaki eski yerinin ardından.
+ * Bekleyen "+ Set ekle" seti birimi sıraya sokmaz; plan dışı kayıt da açılmaz. Yoksa null.
+ */
+export function nextUnitAfter(day: WorkoutDay, doc: Pick<SessionDoc, 'entries' | 'order'>, except: string | null): string | null {
+  if (except === null) return listView(day, doc).current;
+  const units = cursorOf(day, doc).units;
+  const index = units.findIndex((unit) => unit.key === except);
+  const ahead = index === -1 ? units : [...units.slice(index + 1), ...units.slice(0, index)];
+  return ahead.find((unit) => unit.key !== except && openable(day, unit) && !isFinished(unit))?.key ?? null;
+}
+
+/**
+ * Odakta "‹ Önceki": listede `key`'in hemen önündeki açılabilen birim (biten, şu an ya da sırada; yapılış sırası, `listView`
+ * gibi). Atlanan birim ve plan dışı kayıt açılamaz (`validFocus`), üstlerinden geçilir. `key` ilk açılabilen birimse ya da
+ * günde yoksa null. `nextUnitAfter`'ın aksine sıradaki iş değil, listedeki komşu: biten bir hareketi düzeltmeye dönmek için.
+ */
+export function previousUnitBefore(day: WorkoutDay, doc: Pick<SessionDoc, 'entries' | 'order'>, key: string): string | null {
+  const units = cursorOf(day, doc).units;
+  const index = units.findIndex((unit) => unit.key === key);
+  for (let at = index - 1; at >= 0; at -= 1) {
+    const unit = units[at];
+    if (unit && openable(day, unit)) return unit.key;
+  }
+  return null;
+}
+
+export type ListWindow<T> = {
+  shown: T[];
+  /** Pencerenin üstünde ve altında kalan hareketler (grupta her üye ayrı hareket): "Önceki n hareket", "+n hareket daha". */
+  before: number;
+  after: number;
+};
+
+/**
+ * Kısa liste penceresi (Bugün'ün "Devam et" kartı): en çok `limit` birim, "şu an" hep içinde. Şu an ilk `limit`
+ * birimdeyse baştan; değilse pencere kayar, şu anın üstünde bir birim bağlam kalır (`limit` 1 ise yalnız o) ve liste
+ * sonuna yaslanınca sondaki `limit` birim. Şu an yoksa (hepsi bitti) ya da listede değilse baştan.
+ */
+export function listWindow<T extends { key: string; members: readonly unknown[] }>(items: readonly T[], current: string | null, limit: number): ListWindow<T> {
+  const size = Math.max(1, Math.floor(limit));
+  const index = current === null ? -1 : items.findIndex((item) => item.key === current);
+  const start = index >= size ? Math.min(Math.max(index - 1, index - size + 1), items.length - size) : 0;
+  const count = (list: readonly T[]) => list.reduce((sum, item) => sum + item.members.length, 0);
+  return { shown: items.slice(start, start + size), before: count(items.slice(0, start)), after: count(items.slice(start + size)) };
+}
+
+/** Satırın ağırlığı: ağırlığı olan ilk üyenin bugünkü son çalışma seti, yoksa geçen antrenmanın son seti. */
+function lastWeightOf(day: WorkoutDay, doc: Pick<SessionDoc, 'entries'>, unit: CursorUnit): Pick<ListItem, 'lastKg' | 'lastFrom'> {
+  for (const member of unit.members) {
+    const entry = doc.entries.find((item) => item.id === member.entryId);
+    const today = entry?.sets.filter((set) => set.type === 'working' && set.kg !== undefined).at(-1)?.kg;
+    if (today !== undefined) return { lastKg: today, lastFrom: 'today' };
+    const last = (member.rowId ? day.rows[member.rowId]?.lastTime : undefined)?.filter((set) => set.kg !== undefined).at(-1)?.kg;
+    if (last !== undefined) return { lastKg: last, lastFrom: 'last' };
+  }
+  return { lastKg: null, lastFrom: null };
+}
+
+/* --- geri al, atlananlar --- */
 
 function overrides(day: WorkoutDay) {
   return cursorOverrides(day);
@@ -196,32 +325,10 @@ function prepared(day: WorkoutDay, doc: SessionDoc, key: string, stamp: Stamp, r
   return { ready, units, unit, entryId };
 }
 
-/** "Geri al" için geçmeden önceki hâl: sıra ve birimin kayıtlarının durumu. */
+/** "Geri al" için atlamadan önceki hâl: sıra ve birimin kayıtlarının durumu. */
 export type SkipUndo = { key: string; order: string[]; entries: { id: string; status: EntryStatus; skip?: SessionEntry['skip'] }[] };
 
-export type SkipResult = {
-  doc: SessionDoc;
-  /** `moved`: sona alındı; `dropped`: Geçilenler'e gitti (zaten sona alınmıştı ya da başka yapılacak kalmadı). */
-  outcome: 'moved' | 'dropped';
-  undo: SkipUndo;
-};
-
-/** "Hareketi geç ›" ya da akıştaki [Geç]: tek dokunuş, neden sorulmaz. Birim yoksa null. */
-export function skipAt(day: WorkoutDay, doc: SessionDoc, key: string, stamp: Stamp, random?: Random): SkipResult | null {
-  const { ready, units, unit, entryId } = prepared(day, doc, key, stamp, random);
-  if (!unit || !entryId) return null;
-  const ids = new Set(entryIdsOf(unit));
-  const undo: SkipUndo = {
-    key,
-    order: units.flatMap(entryIdsOf),
-    entries: ready.entries.filter((entry) => ids.has(entry.id)).map((entry) => ({ id: entry.id, status: entry.status, ...(entry.skip ? { skip: entry.skip } : {}) })),
-  };
-  const next = normalizeSession(skipUnit(dayBody(day), ready, entryId, stamp, overrides(day)));
-  const dropped = next.entries.some((entry) => ids.has(entry.id) && entry.status === 'skipped');
-  return { doc: next, outcome: dropped ? 'dropped' : 'moved', undo };
-}
-
-/** Toast'taki "Geri al": sıra ve birimin durumu geçmeden önceki hâline (arada yapılan setler kalır). */
+/** Toast'taki "Geri al" (`dropWithUndo`): sıra ve birimin durumu atlamadan önceki hâline (arada yapılan setler kalır). */
 export function undoSkip(day: WorkoutDay, doc: SessionDoc, undo: SkipUndo, stamp: Stamp): SessionDoc {
   const saved = new Map(undo.entries.map((entry) => [entry.id, entry]));
   const members = new Map(cursorOf(day, doc).units.flatMap((unit) => unit.members.flatMap((member) => (member.entryId ? [[member.entryId, member] as const] : []))));
@@ -240,13 +347,16 @@ export function undoSkip(day: WorkoutDay, doc: SessionDoc, undo: SkipUndo, stamp
   return normalizeSession({ ...doc, entries, order: { value: order, updatedAt: stamp.at, by: stamp.by } });
 }
 
-/** "Bugün yapma" (toast'ta): birim Geçilenler'e. */
+/** Birim atlananlara: `dropWithUndo`'nun yazımı, "Geri al" bilgisi olmadan (demo geçmişi, `demo-history.ts`). */
 export function dropAt(day: WorkoutDay, doc: SessionDoc, key: string, stamp: Stamp, random?: Random): SessionDoc {
   const { ready, entryId } = prepared(day, doc, key, stamp, random);
   return entryId ? normalizeSession(dropUnit(dayBody(day), ready, entryId, stamp, overrides(day))) : doc;
 }
 
-/** Geçilenler'de "Geri al": birim yeniden yapılacak, sonda kalır ("sona alındı"; yeniden geçilirse Geçilenler'e). */
+/**
+ * Atlananı geri almak (listede "Geri al", atlanan satıra dokunmak): birim yeniden yapılacak, sonda kalır. "Bilerek
+ * geçildi" işareti (`skip.moved`) kalır.
+ */
 export function restoreAt(day: WorkoutDay, doc: SessionDoc, key: string, stamp: Stamp, random?: Random): SessionDoc {
   const { ready, unit, entryId } = prepared(day, doc, key, stamp, random);
   if (!unit || !entryId) return doc;
@@ -255,26 +365,67 @@ export function restoreAt(day: WorkoutDay, doc: SessionDoc, key: string, stamp: 
   return normalizeSession({ ...restored, entries: restored.entries.map((entry) => (ids.has(entry.id) ? { ...entry, skip: { moved: true } } : entry)) });
 }
 
-/** "Şimdi yap" (akışta satıra dokunmak, bitişte "Geçileni yap"): birim kalanların başına; sıra oradan sürer. */
-export function doNowAt(day: WorkoutDay, doc: SessionDoc, key: string, stamp: Stamp, random?: Random): SessionDoc {
-  const { ready, entryId } = prepared(day, doc, key, stamp, random);
-  return entryId ? normalizeSession(doNow(dayBody(day), ready, entryId, stamp, overrides(day))) : doc;
-}
-
-/** Geçilenler'deki ilk birim ("Geçileni yap"); yoksa null. */
+/** Atlanan ilk birim (bitişte "Geçileni yap": geri alınıp açılır; plan dışı kayıt açılamaz, sayılmaz); yoksa null. */
 export function firstSkippedKey(day: WorkoutDay, doc: Pick<SessionDoc, 'entries' | 'order'>): string | null {
-  return cursorOf(day, doc).units.find(isSkipped)?.key ?? null;
+  return cursorOf(day, doc).units.find((unit) => isSkipped(unit) && hasPlanRow(day, unit))?.key ?? null;
 }
 
-/** Toast: "Calf Raise sona alındı", "2/3 set yapıldı; kalanı sona alındı", "Plank geçildi" (+ açıklama). */
-export function skipMessage(outcome: SkipResult['outcome'], title: string, done: number, planned: number): { title: string; description?: string } {
-  if (outcome === 'moved') return { title: done > 0 ? `${done}/${planned} set yapıldı; kalanı sona alındı` : `${title} sona alındı` };
-  return { title: `${title} geçildi`, description: done > 0 ? `${done}/${planned} set yapıldı` : 'Geçilenler listesinde' };
+/* --- sıra ve atlama (Faz 2: liste + odak) --- */
+
+/** Bitmemiş ve atlanmamış birimlerin yeni sırası; biten ve atlanan yerinde kalır. */
+function reorderMovable(day: WorkoutDay, doc: SessionDoc, key: string, place: (movable: CursorUnit[], from: number) => CursorUnit[] | null, stamp: Stamp, random?: Random): SessionDoc {
+  const { ready, units } = prepared(day, doc, key, stamp, random);
+  const movable = units.filter((unit) => !isSkipped(unit) && !isFinished(unit));
+  const from = movable.findIndex((unit) => unit.key === key);
+  const placed = from < 0 ? null : place(movable, from);
+  if (!placed) return doc;
+  let index = 0;
+  const ordered = units.map((unit) => (movable.includes(unit) ? (placed[index++] as CursorUnit) : unit));
+  return normalizeSession({ ...ready, order: { value: ordered.flatMap(entryIdsOf), updatedAt: stamp.at, by: stamp.by } });
+}
+
+/** Klavyeyle taşıma (liste, Alt + ↑/↓): birim bir yukarı ya da aşağı. Taşınamıyorsa belge aynen döner. */
+export function moveUnit(day: WorkoutDay, doc: SessionDoc, key: string, direction: -1 | 1, stamp: Stamp, random?: Random): SessionDoc {
+  return reorderMovable(day, doc, key, (movable, from) => {
+    const to = from + direction;
+    if (to < 0 || to >= movable.length) return null;
+    const next = [...movable];
+    [next[from], next[to]] = [next[to] as CursorUnit, next[from] as CursorUnit];
+    return next;
+  }, stamp, random);
+}
+
+/** Sürükleme (listede tutamaçtan): birim bırakıldığı bitmemiş birimin yerine. Hedef biten ya da atlanan ise belge aynen döner. */
+export function moveUnitTo(day: WorkoutDay, doc: SessionDoc, key: string, targetKey: string, stamp: Stamp, random?: Random): SessionDoc {
+  return reorderMovable(day, doc, key, (movable, from) => {
+    const to = movable.findIndex((unit) => unit.key === targetKey);
+    if (to < 0 || to === from) return null;
+    const next = [...movable];
+    const [moved] = next.splice(from, 1);
+    next.splice(to, 0, moved as CursorUnit);
+    return next;
+  }, stamp, random);
+}
+
+/** "Bu hareketi atla" (odakta ⋯): birim atlananlara; toast'taki "Geri al" (`undoSkip`) için önceki sıra ve durum. */
+export function dropWithUndo(day: WorkoutDay, doc: SessionDoc, key: string, stamp: Stamp, random?: Random): { doc: SessionDoc; undo: SkipUndo } | null {
+  const { ready, units, unit, entryId } = prepared(day, doc, key, stamp, random);
+  // Biten birim atlanmaz: "bitti" yerine "atlandı" görünür ve sonraki antrenmanın set artışı bastırılırdı.
+  if (!unit || !entryId || isSkipped(unit) || isFinished(unit)) return null;
+  const ids = new Set(entryIdsOf(unit));
+  const undo: SkipUndo = {
+    key,
+    order: units.flatMap(entryIdsOf),
+    entries: ready.entries
+      .filter((entry) => ids.has(entry.id))
+      .map((entry) => ({ id: entry.id, status: entry.status, ...(entry.skip ? { skip: entry.skip } : {}) })),
+  };
+  return { doc: normalizeSession(dropUnit(dayBody(day), ready, entryId, stamp, overrides(day))), undo };
 }
 
 /* --- değiştir (muadil) --- */
 
-/** "Değiştir" açık mı: programın satırı, çalışma seti kaydedilmemiş (kaydedildiyse "Geç" var). */
+/** "Değiştir" açık mı: programın satırı, çalışma seti kaydedilmemiş (kaydedildiyse "Bu hareketi atla" var). */
 export function canSwap(day: WorkoutDay, doc: Pick<SessionDoc, 'entries'>, rowId: string): boolean {
   if (!ROW_ID_PATTERN.test(rowId) || !day.rows[rowId]) return false;
   return !entryForRow(doc.entries, rowId)?.sets.some((set) => set.type === 'working');
@@ -336,7 +487,7 @@ export function optionText(extra: ExtraRow): string {
 
 /**
  * "Hareket ekle": yalnız bu antrenmana; kaydı hemen açılır (`added`, planlanan set sayısıyla) ve
- * yapılacakların sonuna (Geçilenler'in önüne) girer. `extra` bu kaydın kimliğiyle anahtarlanmış satır
+ * yapılacakların sonuna (atlananların önüne) girer. `extra` bu kaydın kimliğiyle anahtarlanmış satır
  * (`rekeyExtra`); `day` günün etkin planı.
  */
 export function addExercise(day: WorkoutDay, doc: SessionDoc, input: { entryId: string; extra: ExtraRow; stamp: Stamp; random?: Random }): SessionDoc {
@@ -359,6 +510,23 @@ export function addExercise(day: WorkoutDay, doc: SessionDoc, input: { entryId: 
   const units = cursorOf(day, ready).units;
   const order = [...units.filter((unit) => !isSkipped(unit)).flatMap(entryIdsOf), entry.id, ...units.filter(isSkipped).flatMap(entryIdsOf)];
   return normalizeSession({ ...ready, entries: [...ready.entries, entry], order: { value: order, updatedAt: stamp.at, by: stamp.by } });
+}
+
+/**
+ * Antrenmanda eklenen hareket silinebilir mi: kaydı `added` ve henüz seti yok. Plandaki hareket silinmez ("Atla" ile
+ * atlanır); seti yazılmış eklenen hareket de silinmez (önce setleri silinir ya da atlanır).
+ */
+export function canRemoveAdded(doc: Pick<SessionDoc, 'entries'>, key: string): boolean {
+  const entry = doc.entries.find((item) => item.id === key);
+  return entry?.added === true && entry.sets.length === 0;
+}
+
+/**
+ * Eklenen hareketi siler: kimlik kalıcı iz listesine girer (`withDeletions`; başka cihazdaki kopyası da düşer). "Geri al"
+ * hareketi yeni kimlikle yeniden ekler (`addExercise`). Silinemezse null.
+ */
+export function removeAdded(doc: SessionDoc, key: string): SessionDoc | null {
+  return canRemoveAdded(doc, key) ? withDeletions(doc, { entryIds: [key] }) : null;
 }
 
 /* --- bitişte neden --- */
@@ -400,39 +568,28 @@ export function withFinishReason(
   return { doc: normalizeSession({ ...ready, entries }), skippedRows };
 }
 
-/* --- bitişte rotasyon (§2.7) --- */
-
-export type FinishRotation = {
-  /** Hazır seçim: planın yarısı yapıldıysa sıradaki gün (`defaultRotation`, sunucuyla aynı kural). */
-  initial: RotationChoice;
-  /** "Gün B · sıradaki": bu günün arkasındaki gün. */
-  advance: string;
-  /** "Gün A yine sırada kalsın": rotasyon ilerlemezse sırada kalan gün (başka gün seçildiyse sıradaki gündü). */
-  keep: string;
-};
+const sameSkip = (a: SessionEntry['skip'], b: SessionEntry['skip']) => a?.reason === b?.reason && a?.moved === b?.moved;
 
 /**
- * Erken bitişin "Sıradaki antrenman: Gün B · Değiştir" satırı. Seçim yoksa null: gün şu anki evrede değil
- * (rotasyon zaten değişmez), evrede tek gün var ya da iki seçenek aynı güne çıkıyor. Eski anlık
- * görüntüde gün listesi yoksa da null (sunucu varsayılanı uygular).
+ * "Antrenmanı değiştir"in bitişi olmadı, antrenman sürüyor: değiştirmenin hazırlığı (`ensureEntries` ve yapılmayanlara
+ * "diğer" nedeni, `withFinishReason`) geri alınır; kalsaydı sonraki bitişte yapılmayanlar antrenöre "diğer" nedeniyle
+ * bildirilirdi. `before` değiştirmeden önceki belge, `prepared` hazırlanmış (bitişe gönderilen) belge, `latest` istek
+ * bittiğinde telefondaki belge.
+ *
+ * Belge istek sürerken değişmediyse (`latest === prepared`) önceki hâli döner. Değiştiyse (o arada set yazıldı) yalnız
+ * hazırlığın yazdığı neden önceki hâline döner (önceki `skip`, örneğin "bilerek geçildi" işareti, geri gelir; yoksa kalkar),
+ * sonradan yazılanlar kalır: o arada başka neden yazılmış kayda dokunulmaz. `ensureEntries`'in açtığı kayıtlar kalır
+ * (setsiz, nedensiz; o arada sete de dönmüş olabilirler).
  */
-export function finishRotation(day: Pick<WorkoutDay, 'dayId' | 'dayName' | 'plannedDayId' | 'rotationDays'>, progress: { doneSets: number; plannedSets: number }): FinishRotation | null {
-  const days = day.rotationDays ?? [];
-  const index = days.findIndex((item) => item.id === day.dayId);
-  if (index < 0 || days.length < 2) return null;
-  const advance = days[(index + 1) % days.length]?.name;
-  const keepId = day.plannedDayId ?? day.dayId;
-  const keep = days.find((item) => item.id === keepId)?.name ?? day.dayName;
-  if (!advance || advance === keep) return null;
-  return { initial: defaultRotation(progress.doneSets, progress.plannedSets), advance, keep };
-}
-
-/** Move whole execution units; supersets stay together, recorded sets retain their identities. */
-export function reorderAt(day:WorkoutDay,doc:SessionDoc,from:string,to:string,stamp:Stamp,random?:Random):SessionDoc{
- if(from===to)return doc;
- const {ready,units}=prepared(day,doc,from,stamp,random);
- const source=units.findIndex(unit=>unit.key===from),target=units.findIndex(unit=>unit.key===to);
- if(source<0 || target<0)return doc;
- const ordered=[...units];const [moved]=ordered.splice(source,1);ordered.splice(target,0,moved!);
- return normalizeSession({...ready,order:{value:ordered.flatMap(entryIdsOf),updatedAt:stamp.at,by:stamp.by}});
+export function undoSwitchPrep(latest: SessionDoc, before: SessionDoc, prepared: SessionDoc, stamp: Stamp): SessionDoc {
+  if (latest === prepared) return before;
+  const skipIn = (doc: SessionDoc, id: string) => doc.entries.find((entry) => entry.id === id)?.skip;
+  const entries = latest.entries.map((entry) => {
+    const written = skipIn(prepared, entry.id);
+    const was = skipIn(before, entry.id);
+    if (!written || sameSkip(written, was) || entry.skip?.reason !== written.reason) return entry;
+    const { skip: _skip, ...rest } = entry;
+    return { ...rest, ...(was ? { skip: was } : {}), updatedAt: stamp.at, by: stamp.by };
+  });
+  return normalizeSession({ ...latest, entries });
 }

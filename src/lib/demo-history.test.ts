@@ -22,7 +22,7 @@ import {
 import { todayIn } from './format.ts';
 import { gitBlobSha, jsonText } from './github/blob.ts';
 import { exerciseStrength } from './muscle-progress.ts';
-import { mondayOf, nextDayId } from './program-plan.ts';
+import { mondayOf } from './program-plan.ts';
 import { buildProgressView, digestSession } from './progress.ts';
 import type { HealthField } from './schemas/client.ts';
 import { healthCheckInSchema } from './schemas/health.ts';
@@ -102,7 +102,7 @@ describe('deneme geçmişi: kimlikler ve tohum', () => {
 });
 
 describe('deneme geçmişi: takvim', () => {
-  test('antrenman günleri: danışanınki ?? PT\'ninki, yoksa sıklığa göre, o da yoksa 3 gün', () => {
+  test('antrenman günleri: PT\'ninki (danışanın eski katmanı yok sayılır), yoksa sıklığa göre, o da yoksa 3 gün', () => {
     const cases: [ReturnType<typeof demoProgram>, number[]][] = [
       [demoProgram({ weekdays: [2, 4, 6] }), [2, 4, 6]],
       [demoProgram({ weekdays: null, daysPerWeek: 2 }), [2, 5]],
@@ -111,7 +111,7 @@ describe('deneme geçmişi: takvim', () => {
     ];
     for (const [program, expected] of cases) assert.deepEqual(demoWeekdays(program), expected);
     const own = { ...demoProgram({ weekdays: [1, 3, 5] }), clientSchedule: { weekdays: [2, 7], at: '2026-06-03T10:00:00.000Z' } };
-    assert.deepEqual(demoWeekdays(own), [2, 7]);
+    assert.deepEqual(demoWeekdays(own), [1, 3, 5]);
   });
 
   test('tarihler: bugünden önceki haftalarda seçili günler; 4+ haftada yolun ~%40\'ında bir hafta boş', () => {
@@ -240,17 +240,31 @@ describe('deneme geçmişi: üretim', () => {
     );
   });
 
-  test('rotasyon programla tutarlı: başka gün bildirimi yok, son antrenman sıradaki günden önceki gün', () => {
-    for (const rotation of [{}, { lastDayId: 'd_aaaaaa' }, { lastDayId: 'd_bbbbbb' }]) {
-      const program = demoProgram({ rotation });
-      const { sessions } = generate({ program, weeks: 3 });
-      const days = ['d_aaaaaa', 'd_bbbbbb', 'd_cccccc'];
-      const next = days.indexOf(nextDayId(program) ?? '');
-      assert.equal(sessions.at(-1)?.program?.dayId, days[(next + 2) % 3], JSON.stringify(rotation));
-      for (const [position, doc] of sessions.entries()) {
-        assert.equal(doc.notices.some((notice) => notice.kind === 'other_day'), false);
-        if (position > 0) assert.equal(days.indexOf(doc.program?.dayId ?? ''), (days.indexOf(sessions[position - 1]?.program?.dayId ?? '') + 1) % 3);
-      }
+  // Faz 3 (Karar 12): tarihler atanmış günlere düşer, her tarihin programı o günün ataması; dönüş yok.
+  test('atamalı programda her tarih kendi programı; başka program bildirimi yok', () => {
+    // demoProgram(): kayıttaki schedule [1, 3, 5] okunurken atanır → Gün A pazartesi, Gün B çarşamba, Gün C cuma.
+    assert.deepEqual(demoProgram().phases[0]?.days.map((day) => day.weekdays), [[1], [3], [5]]);
+    const byWeekday: Partial<Record<number, string>> = { 1: 'd_aaaaaa', 3: 'd_bbbbbb', 5: 'd_cccccc' };
+    for (const doc of full.sessions) {
+      assert.equal(doc.program?.dayId, byWeekday[isoWeekdayOf(doc.date)], doc.date);
+      assert.equal(doc.program?.plannedDayId, doc.program?.dayId, doc.date);
+      assert.equal(doc.notices.some((notice) => notice.kind === 'other_day'), false);
+    }
+    // Kayıttaki eski dönüş sırası okunmaz.
+    const days = (program?: ReturnType<typeof demoProgram>) => generate({ program, weeks: 3 }).sessions.map((doc) => doc.program?.dayId);
+    assert.deepEqual(days(demoProgram({ rotation: { lastDayId: 'd_aaaaaa' } })), days());
+  });
+
+  test('atamasız programda bugünkü takvim ve sırayla programlar', () => {
+    const { sessions, summary } = generate({ program: demoProgram({ weekdays: null, daysPerWeek: 2 }), weeks: 3 });
+    assert.deepEqual(summary.weekdays, [2, 5]);
+    assert.equal(sessions.length, 6);
+    const days = ['d_aaaaaa', 'd_bbbbbb', 'd_cccccc'];
+    for (const [position, doc] of sessions.entries()) {
+      assert.ok([2, 5].includes(isoWeekdayOf(doc.date)), doc.date);
+      assert.equal(doc.program?.dayId, days[position % days.length], doc.date);
+      assert.equal(doc.program?.plannedDayId, undefined);
+      assert.equal(doc.notices.some((notice) => notice.kind === 'other_day'), false);
     }
   });
 

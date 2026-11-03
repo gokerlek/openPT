@@ -90,9 +90,10 @@ describe('antrenman uçları: akış', () => {
     const same = await putRoute(deps, jsonHeaders(), ORIGIN, ID, two);
     assert.deepEqual([same.status, same.body.unchanged], [200, true]);
 
+    // Eski telefon dönüş seçimini gönderebilir: okunmaz, yanıtta yok (Faz 3).
     const finished = await finishRoute(deps, jsonHeaders(), ORIGIN, ID, { doc: two, rotation: 'keep' });
     assert.equal(finished.status, 200);
-    assert.deepEqual(finished.body.rotation, { choice: 'keep', applied: false });
+    assert.equal('rotation' in finished.body, false);
     assert.equal((finished.body.doc as SessionDoc).status, 'finished');
 
     const late = await putRoute(deps, jsonHeaders(), ORIGIN, ID, two);

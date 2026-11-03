@@ -1,8 +1,8 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { Plus } from '@phosphor-icons/react/dist/ssr';
 import { DeviceKindIcon } from '@/components/device-kind-icon';
 import { ImagePlaceholder } from '@/components/image-placeholder';
+import { Plus } from '@/components/line-icons';
 import { PageHeader } from '@/components/page-header';
 import { TrainingTabs } from '../training-tabs';
 import { Badge } from '@/components/ui/badge';
@@ -44,7 +44,7 @@ export default async function DevicesPage() {
         }
         actions={
           <Button nativeButton={false} render={<Link href="/dashboard/devices/new" />}>
-            <Plus data-icon="inline-start" weight="fill" />
+            <Plus data-icon="inline-start" />
             Yeni cihaz
           </Button>
         }

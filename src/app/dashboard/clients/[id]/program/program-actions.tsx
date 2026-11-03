@@ -1,27 +1,18 @@
 'use client';
 
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Trash } from '@phosphor-icons/react';
 import { discardDraft } from '@/components/block-editor/editor-draft';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from '@/components/ui/alert-dialog';
+import { ConfirmDeleteDialog } from '@/components/confirm-delete-dialog';
 import { Button } from '@/components/ui/button';
-import { Spinner } from '@/components/ui/spinner';
 import { fetchJson } from '@/lib/query/errors';
 import { useServiceMutation } from '@/lib/query/use-service';
 import { programDraftKey } from '@/lib/unsaved-changes';
 
 /** Düzenleme sayfasının yıkıcı eylemi (detayda değil, SPEC §6): danışanın programını siler. */
 export function ProgramActions({ clientId }: { clientId: string }) {
+  const [open, setOpen] = useState(false);
   const router = useRouter();
 
   const remove = useServiceMutation({
@@ -36,29 +27,20 @@ export function ProgramActions({ clientId }: { clientId: string }) {
   });
 
   return (
-    <AlertDialog>
+    <>
       {/* Başlıktaki tek renkli düğme yıkıcı olmasın: ikincil görünüm, yalnız metni kırmızı. */}
-      <AlertDialogTrigger
-        render={<Button variant="outline" className="text-destructive hover:bg-destructive/10 hover:text-destructive" />}>
+      <Button variant="outline" className="text-destructive hover:bg-destructive/10 hover:text-destructive" onClick={() => setOpen(true)}>
         <Trash data-icon="inline-start" />
         Programı sil
-      </AlertDialogTrigger>
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>Program silinsin mi?</AlertDialogTitle>
-          <AlertDialogDescription>
-            program.json danışanın repo&apos;sundan silinir; danışanın ekranında program görünmez. Geçmişi git&apos;te durur,
-            geçmiş antrenman kayıtları etkilenmez.
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel>Vazgeç</AlertDialogCancel>
-          <AlertDialogAction variant="destructive" disabled={remove.isPending} onClick={() => remove.mutate()}>
-            {remove.isPending ? <Spinner data-icon="inline-start" /> : null}
-            Sil
-          </AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
+      </Button>
+      <ConfirmDeleteDialog
+        open={open}
+        onOpenChange={setOpen}
+        title="Program silinsin mi?"
+        body="program.json danışanın repo'sundan silinir; danışanın ekranında program görünmez. Geçmişi git'te durur, geçmiş antrenman kayıtları etkilenmez."
+        busy={remove.isPending}
+        onConfirm={() => remove.mutate()}
+      />
+    </>
   );
 }

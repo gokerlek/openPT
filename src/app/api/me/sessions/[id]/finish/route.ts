@@ -4,8 +4,8 @@ import { finishRoute } from '@/lib/session-routes';
 import { origin } from '@/lib/urls';
 
 /**
- * Antrenmanı bitirir (tasarım §4.7): `{ doc, rotation?, health?, feedback? }` → TEK commit (Git Data API):
- * seans `finished` + index satırı + rotasyon ve "Programını güncelleyelim mi?"nin doğrudan maddeleri
+ * Antrenmanı bitirir (tasarım §4.7): `{ doc, health?, feedback? }` (eski telefonun `rotation`'ı okunmaz; Faz 3'te
+ * dönüş yok) → TEK commit (Git Data API): seans `finished` + index satırı + "Programını güncelleyelim mi?"nin doğrudan maddeleri
  * (`program.json`: danışan kaydı, `clientTargets`; revision artmaz) + öneriler (`proposals.json`) + onay varsa
  * sağlık ayrıntısı (`health.json`). Yanıtta `feedback`: doğrudan yazılan, öneriye giden, öneriye dönen madde
  * sayısı. Zaten bitmişse 200 no-op; silinmişse 410. Yalnız bu siteden ve JSON'la.

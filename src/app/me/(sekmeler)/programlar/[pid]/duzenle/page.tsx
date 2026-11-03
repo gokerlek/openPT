@@ -64,7 +64,7 @@ export default async function EditOwnProgramPage({
         clientId={client.id}
         programId={pid}
         creating={false}
-        initial={{ name: program.name, currentPhaseId: program.current.phaseId, phases: program.phases, weekdays: program.schedule?.weekdays ?? [] }}
+        initial={{ name: program.name, currentPhaseId: program.current.phaseId, phases: program.phases }}
         base={{ revision: program.revision, createdAt: program.createdAt }}
         exercises={library.exercises}
         devices={library.devices}

@@ -58,3 +58,9 @@ describe('setler danışanın dilinde (/me)', () => {
     }
   });
 });
+
+describe('kardiyo hedefleri', () => {
+  test('yürüyüş/koşu danışana dakika, mesafe ve eğimle', () => {
+    assert.equal(clientSetText([{ min: 1800, max: 1800, distanceM: 3000, inclinePct: 5 }], 'duration', undefined, 'walk'), '1 set: 30 dk · 3 km · %5');
+  });
+});

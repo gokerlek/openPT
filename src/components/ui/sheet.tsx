@@ -1,11 +1,15 @@
 "use client"
 
+// Yan paneller (sağ/sol/üst) için. Alttan açılan paneller `Drawer` (drawer.tsx): üstte tutamaç, aşağı
+// kaydırınca kapanır; `side="bottom"` yerine onu kullan. Ekrana göre yandan ya da alttan açılan panel
+// `ResponsiveSheet` (responsive-sheet.tsx).
+
 import * as React from "react"
 import { Dialog as SheetPrimitive } from "@base-ui/react/dialog"
 import { cn } from "cn"
 
+import { X } from "@/components/line-icons"
 import { Button } from "@/components/ui/button"
-import { X } from "@phosphor-icons/react"
 
 function Sheet({ ...props }: SheetPrimitive.Root.Props) {
   return <SheetPrimitive.Root data-slot="sheet" {...props} />

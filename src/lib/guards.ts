@@ -1,4 +1,5 @@
 import 'server-only';
+import { cache } from 'react';
 import { environmentStatus } from './installation/readiness';
 import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
@@ -39,9 +40,15 @@ export async function requireClient(): Promise<ClientSession> {
  */
 export { sessionClient };
 
-/** Danışan sayfalarının kapısı: geçerli kayıt yoksa girişe, nedeniyle birlikte. */
-export async function currentClient(): Promise<Client> {
+/**
+ * Danışan sayfalarının kapısı: geçerli kayıt yoksa girişe, nedeniyle birlikte.
+ *
+ * React `cache` ile istek başına bir kez çalışır: aynı istekte sekme kabuğunun dock'u (Sağlık öğesi,
+ * `(sekmeler)/layout.tsx`) ve sayfa çağırınca `client.json` bir kez okunur, ikisi aynı kaydı görür.
+ * Önbellek yalnız o isteğin çiziminde yaşar, istekler arasında paylaşılmaz.
+ */
+export const currentClient = cache(async (): Promise<Client> => {
   const client = await sessionClient(await requireClient());
   if (!client) redirect('/join?error=erisim');
   return client;
-}
+});

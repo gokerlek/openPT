@@ -1,7 +1,7 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { GithubError } from './github/errors.ts';
-import { deleteOwnProgram, readOwnState, saveOwnProgram, scheduleOwnProgram, selectOwnActive, shareOwnProgram, type OwnGuard } from './own-program-files.ts';
+import { deleteOwnProgram, readOwnState, saveOwnProgram, selectOwnActive, shareOwnProgram, type OwnGuard } from './own-program-files.ts';
 import type { OwnIndex } from './own-program-index.ts';
 import { OWN_INDEX_PATH, type OwnProgram } from './own-programs.ts';
 import type { DiffContext } from './program-diff.ts';
@@ -34,6 +34,11 @@ const save = (gh: ReturnType<typeof fakeSessionRepo>, body: OwnProgramSaveBody, 
 /** Kısıt denetimi: yasaklı hareketler ve danışanlara açık şablonların hareketleri. */
 function guardOf(blocked: string[], templates: Record<string, string[]> = {}): OwnGuard {
   return { blocked: new Set(blocked), templateExercises: async (id) => templates[id] ?? null };
+}
+
+/** Tek evrenin günlerine sırayla atama (boş dizi: düzenleyicide bütün günleri kaldırılmış). */
+function assign(phases: OwnProgramSaveBody['phases'], weekdays: number[][]): OwnProgramSaveBody['phases'] {
+  return phases.map((phase) => ({ ...phase, days: phase.days.map((day, index) => (weekdays[index] === undefined ? day : { ...day, weekdays: weekdays[index] })) }));
 }
 
 /** Günün sonuna tek hareketlik blok. */
@@ -96,6 +101,15 @@ describe('oluşturma', () => {
     assert.equal(result.status, 'invalid');
     assert.equal(gh.commitCount(), 0);
   });
+
+  test('alansız gövdenin günleri açılıştakiyle aynı olsa da (AI taslağı) programlara atanır', async () => {
+    const gh = fakeSessionRepo({ 'program.json': programFile() });
+    assert.equal((await save(gh, createBody({ weekdays: [4, 1], baseWeekdays: [1, 4] }))).status, 'created');
+    const program = gh.get(PATH) as OwnProgram;
+    assert.deepEqual(program.phases[0]?.days.map((day) => day.weekdays), [[1], [4]]);
+    assert.deepEqual(program.schedule, { weekdays: [1, 4], at: NOW.toISOString() });
+    assert.equal((await save(gh, createBody({ weekdays: [4, 1], baseWeekdays: [1, 4] }))).status, 'unchanged');
+  });
 });
 
 describe('kayıt', () => {
@@ -146,6 +160,27 @@ describe('kayıt', () => {
     });
     assert.equal((await save(gh, body, 'pt')).status, 'forbidden');
     assert.equal((gh.get(PATH) as OwnProgram).phases[0]?.days[1]?.name, 'Gün B');
+  });
+
+  test('eski sekme (gün başına alan yok; günler açılıştaki gibi ya da hiç yok): kayıttaki atamalar ve schedule kalır', async () => {
+    const gh = fakeSessionRepo({ 'program.json': programFile() });
+    await save(gh, createBody({ phases: assign(createBody().phases, [[2], [4]]) }));
+    const program = gh.get(PATH) as OwnProgram;
+    assert.deepEqual(program.schedule?.weekdays, [2, 4]);
+    const bare = (from: OwnProgram, name: string) =>
+      structuredClone(from.phases).map((phase) => ({ ...phase, days: phase.days.map(({ weekdays: _old, ...day }, index) => (index === 1 ? { ...day, name } : day)) }));
+    assert.equal((await save(gh, saveBody(program, { phases: bare(program, 'Karın'), weekdays: [2, 4], baseWeekdays: [2, 4] }))).status, 'saved');
+    const kept = gh.get(PATH) as OwnProgram;
+    assert.deepEqual(kept.phases[0]?.days.map((day) => day.weekdays), [[2], [4]]);
+    assert.deepEqual(kept.schedule, program.schedule, 'birleşim aynı: anı da aynı');
+    assert.equal((await save(gh, saveBody(kept, { phases: bare(kept, 'Sırt') }))).status, 'saved');
+    assert.deepEqual((gh.get(PATH) as OwnProgram).schedule?.weekdays, [2, 4]);
+    // Yeni düzenleyicide bütün günleri kaldırılan programlar boş dizi gönderir: atama gerçekten kalkar.
+    const latest = gh.get(PATH) as OwnProgram;
+    assert.equal((await save(gh, saveBody(latest, { phases: assign(latest.phases, [[], []]) }))).status, 'saved');
+    const cleared = gh.get(PATH) as OwnProgram;
+    assert.equal(cleared.phases[0]?.days.some((day) => 'weekdays' in day), false);
+    assert.equal(cleared.schedule, undefined);
   });
 });
 
@@ -239,16 +274,6 @@ describe('silme, paylaşım, seçim, günler', () => {
     assert.equal(gh.commitCount(), count);
     assert.deepEqual(await selectOwnActive(gh.repo, null, NOW), { status: 'saved' });
     assert.equal((gh.get(OWN_INDEX_PATH) as OwnIndex).active?.programId, null);
-  });
-
-  test('Günlerini değiştir: program ve index (günler, anı) tek commit', async () => {
-    const gh = fakeSessionRepo({ 'program.json': programFile() });
-    await save(gh, createBody());
-    const result = await scheduleOwnProgram(gh.repo, OWN_ID, [2, 4], NOW);
-    assert.equal(result.status, 'saved');
-    assert.deepEqual(gh.lastChanged(), [OWN_INDEX_PATH, PATH].sort());
-    const item = (gh.get(OWN_INDEX_PATH) as OwnIndex).items[0];
-    assert.deepEqual([item?.weekdays, item?.weekdaysAt], [[2, 4], NOW.toISOString()]);
   });
 
   test('okuma: index bozuksa dosyalardan kurulur; satırın sha\'sı tutmayan dosya yeniden okunur', async () => {

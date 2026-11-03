@@ -2,9 +2,11 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { getDeepError, setInput, useField, useFieldArray } from '@formisch/react';
-import { ArrowsSplit, Bandaids, Barbell, CaretDown, LinkBreak, NoteBlank, PersonSimpleTaiChi, Plus, TrendUp, Trash, UserCircle, WarningCircle } from '@phosphor-icons/react';
+import { ArrowsSplit, Bandaids, Barbell, CaretDown, NoteBlank, PersonSimpleTaiChi, TrendUp, Trash, UserCircle, WarningCircle } from '@phosphor-icons/react';
 import { ARMED, CardBadge, CardFace, CardGrabber, ExerciseCard, ExerciseCardSection, PLACEHOLDER } from '@/components/exercise-card';
 import { LabeledSelect } from '@/components/labeled-select';
+import { LinkBreak, Plus } from '@/components/line-icons';
+import { MoveButtons } from '@/components/list/move-buttons';
 import { SwipeRow, type SwipeAction } from '@/components/swipe/swipe-row';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -14,10 +16,11 @@ import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrig
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { clientTargetState } from '@/lib/client-targets';
 import { DEVICE_KIND_LABELS, DEVICE_KINDS, loadSpecFor } from '@/lib/device-loads';
+import { cardioKind } from '@/lib/cardio';
 import { deviceChangeMessage, dropTargetLabel, groupWorkText, rowWorkText } from '@/lib/edit-messages';
 import { familyOf } from '@/lib/muscles';
 import { describeRule, describeSetRules, PROGRESSION_LABELS, RIR_LABELS } from '@/lib/progression';
-import type { ReorderTarget } from '@/lib/reorder';
+import { moveTargetOf } from '@/lib/reorder';
 import { isStraight } from '@/lib/set-plan';
 import {
   changeKind,
@@ -60,8 +63,6 @@ const SELECT_TOUCH = {
 
 export const FULL_MESSAGE = 'Şablon dolu: en fazla 40 hareket, 30 blok';
 
-const KEY_TARGETS: Partial<Record<string, ReorderTarget>> = { ArrowUp: 'up', ArrowDown: 'down', Home: 'top', End: 'end' };
-
 const KEY_SHORTCUTS = 'Alt+ArrowUp Alt+ArrowDown Alt+Home Alt+End Alt+ArrowRight Alt+ArrowLeft Delete';
 
 /** Yüzdeki klavye: Alt+↑/↓/Home/End taşır, Alt+→ öncekiyle gruplar, Alt+← ayırır, Delete siler, Esc kapatır. */
@@ -76,7 +77,7 @@ function useFaceKeys(itemId: string, isOpen: boolean): React.KeyboardEventHandle
     }
     if (event.ctrlKey || event.metaKey || event.shiftKey) return;
     if (event.altKey) {
-      const target = KEY_TARGETS[event.key];
+      const target = moveTargetOf(event);
       if (target) {
         event.preventDefault();
         editor.actions.step(itemId, target);
@@ -117,13 +118,7 @@ function MoveStrip({ itemId, kind, title }: { itemId: string; kind: 'single' | '
   const editor = useEditor();
   const button = 'h-9 touch:h-11';
   return (
-    <div role="group" aria-label={`${title}: taşı`} className="sr-only flex flex-wrap gap-1.5 px-3 pb-3 focus-within:not-sr-only">
-      <Button type="button" variant="outline" size="sm" className={button} onClick={() => editor.actions.step(itemId, 'up')}>
-        Yukarı taşı
-      </Button>
-      <Button type="button" variant="outline" size="sm" className={button} onClick={() => editor.actions.step(itemId, 'down')}>
-        Aşağı taşı
-      </Button>
+    <MoveButtons name={title} onStep={(target) => editor.actions.step(itemId, target)}>
       {kind === 'single' ? (
         <Button type="button" variant="outline" size="sm" className={button} onClick={() => editor.actions.groupWithPrevious(itemId)}>
           Öncekiyle grupla
@@ -133,7 +128,7 @@ function MoveStrip({ itemId, kind, title }: { itemId: string; kind: 'single' | '
           Gruptan çıkar
         </Button>
       ) : null}
-    </div>
+    </MoveButtons>
   );
 }
 
@@ -228,7 +223,9 @@ function RowMeta({
 }) {
   const { devices, clientTargets, care } = useEditor();
   const device = exercise ? rowDevice(row, exercise, devices) : undefined;
-  const text = exercise ? rowWorkText(row.sets, exercise.trackingType, block.kind === 'single' ? block.restSeconds : undefined) : null;
+  const text = exercise
+    ? rowWorkText(row.sets, exercise.trackingType, block.kind === 'single' ? block.restSeconds : undefined, cardioKind(exercise))
+    : null;
   const target = clientTargets[row.id];
   // Danışanın kısıtı (tasarım `kisit-tarama.md` §3.3): yasak ya da dikkat; gerekçe ekran okuyucuda ve ipucunda.
   const flag = care?.map[row.exerciseId];
@@ -243,7 +240,7 @@ function RowMeta({
         </Mark>
       ) : null}
       {mark && (mark.pain.length > 0 || mark.info) ? (
-        <Mark label={mark.pain.length > 0 ? `Tarama: dikkat · ${mark.pain.join(' · ')}` : `${mark.info?.label ?? ''}. ${mark.info?.detail ?? ''}`.trim()}>
+        <Mark label={mark.pain.length > 0 ? `Hareket testi: dikkat · ${mark.pain.join(' · ')}` : `${mark.info?.label ?? ''}. ${mark.info?.detail ?? ''}`.trim()}>
           <PersonSimpleTaiChi aria-hidden weight={mark.pain.length > 0 ? 'fill' : 'regular'} className={mark.pain.length > 0 ? 'text-primary-text' : 'text-muted-foreground'} />
         </Mark>
       ) : null}

@@ -2,16 +2,16 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { getInput, setInput, useField, useFieldArray } from '@formisch/react';
-import { CheckSquare, LinkSimple, Plus, Trash } from '@phosphor-icons/react';
+import { CheckSquare, Trash } from '@phosphor-icons/react';
+import { LinkSimple, Plus } from '@/components/line-icons';
 import type { EditorCare } from '@/lib/constraint-filter';
 import { AnimatePresence, motion, type Variants } from 'motion/react';
-import { toast } from 'sonner';
 import { SwipeGroup } from '@/components/swipe/swipe-row';
 import { Button } from '@/components/ui/button';
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyTitle } from '@/components/ui/empty';
 import { FieldError } from '@/components/ui/field';
-import { showUndoToast } from '@/components/undo-toast';
+import { showGuardedUndo } from '@/components/undo-toast';
 import { useMediaQuery } from '@/hooks/use-media-query';
 import { isJoining } from '@/lib/drop-target';
 import {
@@ -27,7 +27,6 @@ import {
   selectionStatus,
   SHEET_FULL_MESSAGE,
 } from '@/lib/edit-messages';
-import { undoAt } from '@/lib/editor-undo';
 import { formatNumber } from '@/lib/format';
 import { DRAG, DURATION, EASE, tween } from '@/lib/motion';
 import type { TemplateInput } from '@/lib/schemas/template';
@@ -389,19 +388,12 @@ export function BlockEditor({
       if (next === before) return;
       write(next);
       // Geri al yalnız bu işlemden sonra başka değişiklik yoksa geçerli; yoksa sonraki düzenlemeler silinirdi.
-      // Yazımdan sonra formdan okunur (Formisch'in biçimi); `undoAt` boş notu yok sayarak karşılaştırır.
-      const after = current();
+      // `after` yazımdan sonra formdan okunur (Formisch'in biçimi); karşılaştırma boş notu yok sayar (`undoAt`).
       // Yer geri alma anında bulunur: programda gün o arada taşınmış olabilir (yol gün sırasıyla kurulur).
       const locate = undoPath ?? (() => path);
       if (options?.highlight) setHighlight(options.highlight);
       if (options?.focus !== undefined) focusFace(options.focus);
-      showUndoToast(message, () => {
-        if (!undoAt(locate, readAt, writeAt, before, after)) {
-          toast.error('Sonrasında başka değişiklik yapıldı; geri alınamadı.');
-          return;
-        }
-        announce('Geri alındı');
-      });
+      showGuardedUndo(message, { locate, read: readAt, write: writeAt, before }, { onUndone: () => announce('Geri alındı') });
     },
     [current, write, readAt, writeAt, path, undoPath, announce, focusFace],
   );

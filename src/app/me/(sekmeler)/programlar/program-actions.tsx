@@ -2,21 +2,13 @@
 
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { useRouter } from 'next/navigation';
-import { CaretDown, Check } from '@phosphor-icons/react';
 import { toast } from 'sonner';
 import { discardDraft } from '@/components/block-editor/editor-draft';
-import {
-  AlertDialog,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
+import { ConfirmDeleteDialog } from '@/components/confirm-delete-dialog';
+import { Check } from '@/components/line-icons';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { Drawer, DrawerContent, DrawerDescription, DrawerFooter, DrawerHeader, DrawerTitle } from '@/components/ui/drawer';
 import { Spinner } from '@/components/ui/spinner';
 import { Switch } from '@/components/ui/switch';
 import { fetchJson } from '@/lib/query/errors';
@@ -24,14 +16,13 @@ import { ownProgramDraftKey } from '@/lib/unsaved-changes';
 import { clearLocalWorkout, clearWorkoutCache } from '../../workout-storage';
 
 /**
- * Programlar sekmesinin eylemleri (`docs/design/kendi-program.md` §2.3, §2.7, §2.8) — istemcide: Bugün'ün programı
+ * Program sekmesinin eylemleri (`docs/design/kendi-program.md` §2.3, §2.7, §2.8) — istemcide: Bugün'ün programı
  * yap (kalıcı seçim), antrenörle paylaş (sheet'le onay; kapatma yerelde, "Geri al" süresi bitince gider), onaylı
  * silme (yarım antrenman bu programdansa satır içi [Yarım antrenmanı sil]) ve "Antrenörün düzenledi" rozetinin
  * görüldü bilgisi (telefonda).
  */
 
 const JSON_HEADERS = { 'Content-Type': 'application/json' };
-const BOTTOM = 'gap-0 rounded-t-2xl pb-[env(safe-area-inset-bottom)]';
 /** Kapatmanın "Geri al" süresi (§2.7). */
 const UNSHARE_DELAY_MS = 8000;
 const TOAST_BUTTONS = { actionButton: 'touch:min-h-11 touch:px-3! touch:text-sm!' };
@@ -174,20 +165,20 @@ export function ShareSwitch({ programId, name, shared: initial }: { programId: s
           aria-label="Antrenörünle paylaş"
         />
       </label>
-      <Sheet open={asking} onOpenChange={(open) => (busy ? undefined : setAsking(open))}>
-        <SheetContent side="bottom" showCloseButton={false} className={BOTTOM}>
-          <SheetHeader className="gap-1.5 pt-5">
-            <SheetTitle className="text-lg font-semibold">{name} antrenörünle paylaşılsın mı?</SheetTitle>
-            <SheetDescription render={<div />} className="flex flex-col gap-3">
+      <Drawer open={asking} onOpenChange={(open) => (busy ? undefined : setAsking(open))}>
+        <DrawerContent showCloseButton={false} className="gap-0" data-base-ui-swipe-ignore={busy || undefined}>
+          <DrawerHeader className="gap-1.5 pt-5">
+            <DrawerTitle className="text-lg font-semibold">{name} antrenörünle paylaşılsın mı?</DrawerTitle>
+            <DrawerDescription render={<div />} className="flex flex-col gap-3">
               <ul className="flex list-disc flex-col gap-1 pl-5">
                 <li>Antrenörün programı görür ve düzenleyebilir.</li>
                 <li>Her değişiklik programın geçmişine kimin yaptığıyla yazılır; öteki taraf haberdar olur.</li>
                 <li>Paylaşımı istediğin an kapatırsın.</li>
               </ul>
               <span>Paylaşmasan da yaptığın antrenmanları antrenörün görür. Programların antrenörünün veri deposunda durur.</span>
-            </SheetDescription>
-          </SheetHeader>
-          <SheetFooter className="pt-4">
+            </DrawerDescription>
+          </DrawerHeader>
+          <DrawerFooter className="pt-4">
             <Button size="lg" className="h-11 w-full" disabled={busy} onClick={() => void share()}>
               {busy ? <Spinner data-icon="inline-start" /> : null}
               Paylaş
@@ -195,9 +186,9 @@ export function ShareSwitch({ programId, name, shared: initial }: { programId: s
             <Button variant="outline" size="lg" className="h-11 w-full" autoFocus disabled={busy} onClick={() => setAsking(false)}>
               Vazgeç
             </Button>
-          </SheetFooter>
-        </SheetContent>
-      </Sheet>
+          </DrawerFooter>
+        </DrawerContent>
+      </Drawer>
     </>
   );
 }
@@ -207,7 +198,7 @@ type DeleteState = { kind: 'confirm' } | { kind: 'session'; sessionId: string } 
 /**
  * "Programı sil" (§2.8): onaylı; "uygulamadan kalkar, deponun geçmişinde kalır", "Ayrıntı" neyin silinmediğini
  * söyler. Bugün'ün programıysa ve paylaşılmışsa ek satırlar. Yarım antrenman bu programdansa sunucu 409 döner:
- * diyalog [Yarım antrenmanı sil]'i sunar (onaylı), sonra silme yeniden denenir. Başarıda Programlar'a dönülür.
+ * diyalog [Yarım antrenmanı sil]'i sunar (onaylı), sonra silme yeniden denenir. Başarıda Program'a dönülür.
  */
 export function DeleteOwnProgram({
   clientId,
@@ -225,10 +216,8 @@ export function DeleteOwnProgram({
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [expanded, setExpanded] = useState(false);
   const [state, setState] = useState<DeleteState>({ kind: 'confirm' });
   const [note, setNote] = useState<string | null>(null);
-  const cancel = useRef<HTMLButtonElement>(null);
 
   const remove = async () => {
     setBusy(true);
@@ -256,8 +245,8 @@ export function DeleteOwnProgram({
     setBusy(true);
     try {
       await fetchJson(`/api/me/sessions/${sessionId}`, { method: 'DELETE' });
-      // Telefondaki kopya ve saklanan plan da düşer (antrenman ekranı açılmasın).
-      clearLocalWorkout(clientId);
+      // Telefondaki kopya (bu antrenmansa) ve saklanan plan da düşer (antrenman ekranı açılmasın).
+      clearLocalWorkout(clientId, sessionId);
       clearWorkoutCache(clientId);
       setNote('Yarım antrenman silindi. Programı şimdi silebilirsin.');
       setState({ kind: 'confirm' });
@@ -268,80 +257,57 @@ export function DeleteOwnProgram({
     }
   };
 
+  const sessionStep = state.kind === 'sessionConfirm';
   return (
     <>
-      <Button variant="ghost" className="h-11 self-start px-2 text-destructive hover:text-destructive" onClick={() => setOpen(true)}>
-        Programı sil
-      </Button>
-      <AlertDialog
-        open={open}
-        onOpenChange={(next) => (next || busy ? undefined : setOpen(false))}
-        onOpenChangeComplete={(next) => {
-          if (next) return;
-          setExpanded(false);
+      <Button
+        variant="ghost"
+        className="h-11 self-start px-2 text-destructive hover:text-destructive"
+        onClick={() => {
           setState({ kind: 'confirm' });
           setNote(null);
+          setOpen(true);
         }}>
-        <AlertDialogContent initialFocus={cancel}>
-          {state.kind === 'sessionConfirm' ? (
-            <AlertDialogHeader>
-              <AlertDialogTitle>Yarım antrenman silinsin mi?</AlertDialogTitle>
-              <AlertDialogDescription>Kaydettiğin setler uygulamadan kalkar, geri getirilemez. Antrenörünün veri deposunun geçmişinde kalır.</AlertDialogDescription>
-            </AlertDialogHeader>
-          ) : (
-            <AlertDialogHeader>
-              <AlertDialogTitle>{name} silinsin mi?</AlertDialogTitle>
-              <AlertDialogDescription className="flex flex-col gap-2 text-left">
-                <span>Program uygulamadan kalkar, geri getirilemez. Antrenörünün veri deposunun geçmişinde kalır.</span>
-                {active ? <span>Bugün yeniden antrenörünün programıyla açılır.</span> : null}
-                {shared ? <span>Antrenörüne bildirilir.</span> : null}
-              </AlertDialogDescription>
-              <div className="w-full text-left">
-                <Button variant="ghost" className="-ml-2 h-11 px-2 text-muted-foreground" aria-expanded={expanded} onClick={() => setExpanded(!expanded)}>
-                  Ayrıntı
-                  <CaretDown data-icon="inline-end" className={expanded ? 'rotate-180' : undefined} />
-                </Button>
-                {expanded ? (
-                  <p className="text-sm text-muted-foreground">
-                    Yaptığın antrenmanlar silinmez; Geçmiş ve İlerleme&apos;de program adıyla kalır. Deponun eski sürümleri ve kayıt notları da
-                    silinmez.
-                  </p>
-                ) : null}
-              </div>
-              {state.kind === 'session' ? (
-                <p className="rounded-lg bg-muted p-3 text-left text-sm" role="status">
-                  Yarım antrenmanın bu programdan; önce bitir ya da sil.
-                </p>
-              ) : null}
-              {note ? (
-                <p className="text-left text-sm text-muted-foreground" role="status">
-                  {note}
-                </p>
-              ) : null}
-            </AlertDialogHeader>
-          )}
-          <AlertDialogFooter>
-            <AlertDialogCancel ref={cancel} className="h-11" disabled={busy}>
-              Vazgeç
-            </AlertDialogCancel>
-            {state.kind === 'session' ? (
-              <Button variant="destructive" className="h-11" disabled={busy} onClick={() => setState({ kind: 'sessionConfirm', sessionId: state.sessionId })}>
-                Yarım antrenmanı sil
-              </Button>
-            ) : state.kind === 'sessionConfirm' ? (
-              <Button variant="destructive" className="h-11" disabled={busy} onClick={() => void removeSession(state.sessionId)}>
-                {busy ? <Spinner data-icon="inline-start" /> : null}
-                Yarım antrenmanı sil
-              </Button>
-            ) : (
-              <Button variant="destructive" className="h-11" disabled={busy} onClick={() => void remove()}>
-                {busy ? <Spinner data-icon="inline-start" /> : null}
-                Programı sil
-              </Button>
-            )}
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        Programı sil
+      </Button>
+      <ConfirmDeleteDialog
+        open={open}
+        onOpenChange={setOpen}
+        title={sessionStep ? 'Yarım antrenman silinsin mi?' : `${name} silinsin mi?`}
+        body={
+          sessionStep
+            ? 'Kaydettiğin setler uygulamadan kalkar, geri getirilemez. Antrenörünün veri deposunun geçmişinde kalır.'
+            : [
+                'Program uygulamadan kalkar, geri getirilemez. Antrenörünün veri deposunun geçmişinde kalır.',
+                active ? 'Bugün yeniden antrenörünün programıyla açılır.' : null,
+                shared ? 'Antrenörüne bildirilir.' : null,
+              ]
+                .filter(Boolean)
+                .join(' ')
+        }
+        detail={
+          sessionStep
+            ? null
+            : "Yaptığın antrenmanlar silinmez; Geçmiş ve İlerleme'de program adıyla kalır. Deponun eski sürümleri ve kayıt notları da silinmez."
+        }
+        confirmLabel={state.kind === 'confirm' ? 'Programı sil' : 'Yarım antrenmanı sil'}
+        busy={busy}
+        onConfirm={() => {
+          if (state.kind === 'session') setState({ kind: 'sessionConfirm', sessionId: state.sessionId });
+          else if (state.kind === 'sessionConfirm') void removeSession(state.sessionId);
+          else void remove();
+        }}>
+        {state.kind === 'session' ? (
+          <p className="rounded-lg bg-muted p-3 text-left text-sm" role="status">
+            Yarım antrenmanın bu programdan; önce bitir ya da sil.
+          </p>
+        ) : null}
+        {note && !sessionStep ? (
+          <p className="text-left text-sm text-muted-foreground" role="status">
+            {note}
+          </p>
+        ) : null}
+      </ConfirmDeleteDialog>
     </>
   );
 }
@@ -396,7 +362,7 @@ export function MarkPtEditSeen({ clientId, programId, editedAt }: { clientId: st
   return null;
 }
 
-/** Programlar'daki "Antrenörün düzenledi" rozeti: görülmediyse. */
+/** Program'daki "Antrenörün düzenledi" rozeti: görülmediyse. */
 export function PtEditBadge({ clientId, programId, editedAt }: { clientId: string; programId: string; editedAt: string | undefined }) {
   const unseen = useUnseenPtEdit(clientId, programId, editedAt);
   return unseen ? <Badge>Antrenörün düzenledi</Badge> : null;

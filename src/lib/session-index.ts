@@ -75,11 +75,33 @@ function exerciseRow(entry: SessionEntry): SessionIndexExercise | null {
   };
 }
 
-/** Süre: danışanın onayladığı (`effort.durationMin`), yoksa başlangıçtan bitişe. */
-export function durationOf(doc: Pick<SessionDoc, 'startedAt' | 'finishedAt' | 'effort'>): number | undefined {
-  if (doc.effort?.durationMin !== undefined) return doc.effort.durationMin;
+/** Yarım antrenmanda son setten sonra sayılan pay (dk): kapatılmadan açık kalan antrenman saatler sürmüş görünmesin. */
+const UNFINISHED_TAIL_MIN = 10;
+
+/**
+ * Gösterilen bitiş (ISO): `finishedAt`; yarım bırakılan antrenmanda son setten en çok `UNFINISHED_TAIL_MIN`
+ * sonrası. Bitmemişse (`finishedAt` yok) undefined. Saat aralığı ve süre bununla hesaplanır.
+ */
+export function sessionEnd(doc: Pick<SessionDoc, 'finishedAt'> & Partial<Pick<SessionDoc, 'entries' | 'notices'>>): string | undefined {
   if (!doc.finishedAt) return undefined;
-  const minutes = Math.round((time(doc.finishedAt) - time(doc.startedAt)) / 60_000);
+  if (!doc.notices?.some((notice) => notice.kind === 'unfinished')) return doc.finishedAt;
+  const lastSet = Math.max(0, ...(doc.entries ?? []).flatMap((entry) => entry.sets.map((set) => time(set.at))));
+  if (lastSet === 0) return doc.finishedAt;
+  const capped = lastSet + UNFINISHED_TAIL_MIN * 60_000;
+  return capped < time(doc.finishedAt) ? new Date(capped).toISOString() : doc.finishedAt;
+}
+
+/**
+ * Süre: danışanın onayladığı (`effort.durationMin`), yoksa başlangıçtan bitişe (`sessionEnd`: yarım bırakılan
+ * antrenmanda bitiş son setten en çok `UNFINISHED_TAIL_MIN` sonradır).
+ */
+export function durationOf(
+  doc: Pick<SessionDoc, 'startedAt' | 'finishedAt' | 'effort'> & Partial<Pick<SessionDoc, 'entries' | 'notices'>>,
+): number | undefined {
+  if (doc.effort?.durationMin !== undefined) return doc.effort.durationMin;
+  const end = sessionEnd(doc);
+  if (!end) return undefined;
+  const minutes = Math.round((time(end) - time(doc.startedAt)) / 60_000);
   return Math.min(24 * 60, Math.max(0, minutes));
 }
 
@@ -101,7 +123,7 @@ export function indexRowOf(doc: SessionDoc, sha: string): SessionIndexRow {
   const notices = [...new Set(doc.notices.map((notice) => notice.kind))].sort() as NoticeKind[];
   const duration = durationOf(doc);
   const program = doc.program;
-  // Kendi programda başka gün yok: plan danışanın (`docs/design/kendi-program.md` §3.4).
+  // Kendi programda "başka program" yok: plan danışanın (`docs/design/kendi-program.md` §3.4).
   const otherDay = !program?.programId && Boolean(program?.plannedDayId && program.plannedDayId !== program.dayId);
   const unfinished = doc.notices.find((notice) => notice.kind === 'unfinished');
   const overloads = notices.includes('overload') ? overloadsOf(doc) : [];

@@ -11,11 +11,11 @@ import { withPainReviewed } from '@/lib/screening';
 export async function POST(request: Request, { params }: { params: Promise<{ id: string; date: string }> }) {
   if (!(await isPt())) return forbidden();
   const { id, date } = await params;
-  if (!v.is(clientIdSchema, id) || !isCalendarDate(date)) return notFound('Tarama bulunamadı.');
+  if (!v.is(clientIdSchema, id) || !isCalendarDate(date)) return notFound('Hareket testi bulunamadı.');
   const parsed = v.safeParse(screeningReviewSchema, await readBody(request));
   if (!parsed.success) return invalid(parsed.issues);
   try {
-    await updateHealth(id, 'screening', (record) => withPainReviewed(record, date, parsed.output.key, new Date().toISOString()), 'Tarama güncellendi');
+    await updateHealth(id, 'screening', (record) => withPainReviewed(record, date, parsed.output.key, new Date().toISOString()), 'Hareket testi güncellendi');
     return NextResponse.json({ ok: true });
   } catch (error) {
     return failed(error, 'Kaydedilemedi.');

@@ -7,8 +7,10 @@ import { parsedProgram } from './workout-fixtures.ts';
 
 /**
  * Deneme geçmişi testlerinin kalıpları — YALNIZ testler için. Hazır kütüphanenin gerçek hareketleri ve
- * cihazlarıyla üç günlük evresiz program (Pzt/Çar/Cum): halterle squat, bench, row; süperset; süreli
- * plank; makine, kablo ve dambıl; vücut ağırlığı. Bugün 27 Eylül 2026 Pazar, İstanbul.
+ * cihazlarıyla üç programlı evresiz program: halterle squat, bench, row; süperset; süreli plank; makine, kablo ve
+ * dambıl; vücut ağırlığı. Varsayılan günler Pzt/Çar/Cum eski biçimde (`schedule`); okunurken atanır (Faz 3): Gün A
+ * pazartesi, Gün B çarşamba, Gün C cuma. `weekdays: null` atamasız program. Bugün (`DEMO_TODAY`, üretimin `now`'ından
+ * aynı gün) 27 Eylül 2026 Pazar, İstanbul.
  */
 
 export const DEMO_NOW = new Date('2026-09-27T09:00:00.000Z');

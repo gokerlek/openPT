@@ -19,7 +19,7 @@ export const metadata: Metadata = { title: 'Danışanın programını düzenle' 
 
 /**
  * PT danışanın paylaştığı programı düzenler (`docs/design/kendi-program.md` §4, §3.5): `OwnProgramForm` `own-pt`
- * kipinde (ad salt okuma, tam düzenleyici, "+ Gün"de bütün şablonlar). Kayıt `PUT /api/clients/[id]/programs/[pid]`;
+ * kipinde (ad salt okuma, tam düzenleyici, "+ Program"da bütün şablonlar). Kayıt `PUT /api/clients/[id]/programs/[pid]`;
  * paylaşım o arada kapandıysa 403, program silindiyse 404, başkası kaydettiyse 412 (form söyler). Paylaşılmamış
  * dosya açılmaz: görünüm sayfası nedenini söyler. Danışanın kısıtları PT'nin program düzenleyicisindeki gibi
  * (`kisit-tarama.md` §3.2): sheet'te işaret, "Bu danışana önerilmeyenler", "Yine de ekle", kartta rozet.
@@ -53,7 +53,7 @@ export default async function EditOwnProgramPtPage({ params }: { params: Promise
         clientId={id}
         programId={pid}
         creating={false}
-        initial={{ name: program.name, currentPhaseId: program.current.phaseId, phases: program.phases, weekdays: program.schedule?.weekdays ?? [] }}
+        initial={{ name: program.name, currentPhaseId: program.current.phaseId, phases: program.phases }}
         base={{ revision: program.revision, createdAt: program.createdAt }}
         exercises={pickerExercises(exercises)}
         devices={pickerDevices(devices)}

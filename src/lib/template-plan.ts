@@ -1,6 +1,8 @@
 import { progressionOf, type ProgressionRule, type ProgressionScheme, type TrackingType } from './progression.ts';
+import { cardioKind } from './cardio.ts';
 import { SET_LIMITS, referenceSet, uniformSets, type SetSpec } from './set-plan.ts';
 import type { Category } from '@/lib/schemas/exercise';
+import type { MovementPattern } from './alternatives.ts';
 
 /**
  * Antrenman şablonu — okuma tarafı (SPEC §7.4).
@@ -124,6 +126,9 @@ export type PlanExercise = {
   primaryMuscles: readonly string[];
   secondaryMuscles: readonly string[];
   stabilizerMuscles?: readonly string[];
+  /** Kardiyo türü için (`cardioKind`): hareket kalıbı ve yürüyüş/koşu işareti. */
+  pattern?: MovementPattern;
+  locomotion?: boolean;
 };
 
 /** Antrenman ekranının set sırası: hangi satır, kaçıncı tur, ardından ne kadar dinlenme. */
@@ -369,14 +374,6 @@ export function scaleLoad(load: Readonly<Record<string, number>>, factor: number
   return Object.fromEntries(Object.entries(load).map(([muscle, value]) => [muscle, clean(value * factor)]));
 }
 
-/** Haritanın tonu: şablonun en çok çalışan kası 1; sıfırlar ve kardiyo dışarıda. */
-export function loadIntensity(load: Readonly<Record<string, number>>): Record<string, number> {
-  const body = Object.entries(load).filter(([muscle, value]) => muscle !== 'cardio' && value > 0);
-  const max = Math.max(0, ...body.map(([, value]) => value));
-  if (max <= 0) return {};
-  return Object.fromEntries(body.map(([muscle, value]) => [muscle, clean(value / max)]));
-}
-
 /**
  * Bir setin tahmini süresi (sn): hedefin ortası (AMRAP'ta üst sınır); tekrarda tekrar
  * başına 3 sn, süreli harekette saniye.
@@ -440,6 +437,22 @@ export function rowLabels(template: TemplateBody): Map<string, string> {
     block.rows.forEach((row, rowIndex) => labels.set(row.id, `${number}${LETTERS[rowIndex] ?? rowIndex + 1}`));
   });
   return labels;
+}
+
+/**
+ * Bugün önizlemesi: en az `limit` hareketi dolduran ilk bloklar (grup bölünmez) ve kalanlar; `restRows` kalan
+ * satır sayısı. Kütüphanede olmayan satırları çağıran önceden ayıklar (yoksa "ilk 3" üçten az görünür).
+ */
+export function previewBlocks<T extends { rows: readonly unknown[] }>(blocks: readonly T[], limit: number): { head: T[]; rest: T[]; restRows: number } {
+  const head: T[] = [];
+  let rows = 0;
+  for (const block of blocks) {
+    if (rows >= limit) break;
+    head.push(block);
+    rows += block.rows.length;
+  }
+  const rest = blocks.slice(head.length);
+  return { head, rest, restRows: rest.reduce((sum, block) => sum + block.rows.length, 0) };
 }
 
 export type TemplateSummary = {
@@ -566,11 +579,15 @@ export function normalizeTemplate(
         }
         // Egzersiz yoksa (hata zaten bildirildi) yüzde olduğu gibi kalır.
         const keepPct = set.loadPct !== undefined && set.loadPct < 100 && (!exercise || exercise.trackingType === 'weight_reps');
+        // Mesafe kardiyoda, eğim yürüyüş/koşuda; egzersiz yoksa olduğu gibi kalır.
+        const kind = exercise ? cardioKind(exercise) : 'walk';
         return {
           min: set.min,
           max: set.max,
           ...(keepPct ? { loadPct: set.loadPct } : {}),
           ...(set.amrap === true ? { amrap: true } : {}),
+          ...(kind && set.distanceM !== undefined ? { distanceM: set.distanceM } : {}),
+          ...(kind === 'walk' && set.inclinePct !== undefined ? { inclinePct: set.inclinePct } : {}),
         };
       });
       const stored = options.storedRows?.get(row.id);

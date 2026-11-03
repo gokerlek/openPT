@@ -12,18 +12,23 @@ import { listClientIds } from '@/lib/github/repos';
 import { requirePt } from '@/lib/guards';
 import { readLiveOverview } from '@/lib/live-store';
 import { AttentionCard } from './attention-card';
+import { clientOverviews } from './client-overviews';
 import { LiveNow } from './live-now';
 import { NoticesCard } from './notices-card';
 
 export const metadata: Metadata = { title: 'Genel bakış' };
 
 /**
- * Genel bakış: sayılar (her sayı kartı kendi listesine götürür), şu an antrenmanda olanlar (canlı, tasarım
- * §4.6), "Dikkat gerektirenler" (kaçan gün, ilerlemeyen hareket, evre, öneri, ölçüm, davet; §2.11, §8 satır 12)
- * ve danışanların bildirimleri (başka gün, yarım antrenman, aşırı yük, program değişikliği; §4.6).
+ * Genel bakış: önce "Dikkat gerektirenler" (danışana göre gruplu; kaçan gün, ilerlemeyen hareket, evre, öneri,
+ * ölçüm, davet; §2.11, §8 satır 12) ve danışanların bildirimleri (başka program, yarım antrenman, aşırı yük, program
+ * değişikliği; §4.6), sonra küçük sayılar (her sayı kartı kendi listesine götürür) ve şu an antrenmanda olanlar
+ * (canlı, tasarım §4.6).
  */
 export default async function DashboardPage() {
   await requirePt();
+  // Dikkat ve bildirimlerin danışan özetleri hemen başlar ama beklenmez (kartlar kendi akışında; React `cache` aynı
+  // okumayı paylaştırır). Reddedilmez: okunamayan danışan sayılır (`client-overviews.ts`).
+  void clientOverviews();
   const [exercises, clientIds, config] = await Promise.all([
     listExercises(),
     listClientIds().catch(() => [] as string[]),
@@ -33,22 +38,7 @@ export default async function DashboardPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <PageHeader title="Genel bakış" description="Danışanların, şablonların ve egzersiz kütüphanen." />
-
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <CountCard href="/dashboard/clients" label="Danışan" count={clientIds.length} hint="Danışan listesini aç" />
-        <CountCard
-          href="/dashboard/exercises"
-          label="Egzersiz"
-          count={exercises.length}
-          hint={`${formatNumber(custom)} tanesi senin · kütüphaneyi aç`}
-        />
-
-        {/* Danışan başına bir koşullu okuma; sayfanın geri kalanı beklemesin. */}
-        <Suspense fallback={<LiveSkeleton />}>
-          <LiveNowCard />
-        </Suspense>
-      </div>
+      <PageHeader title="Genel bakış" description="Önce bakılacaklar: dikkat isteyen danışanlar ve bildirimler." />
 
       {/* Danışan başına özet önbellekten (iki kart ortak); önbellek boşken sayfanın geri kalanı beklemesin. */}
       <div className="grid gap-6 lg:grid-cols-2 lg:items-start">
@@ -58,6 +48,24 @@ export default async function DashboardPage() {
         <Suspense fallback={<ListSkeleton title="Bildirimler" />}>
           <NoticesCard timeZone={config.timeZone} />
         </Suspense>
+      </div>
+
+      {/* Sayılar ikincil: telefonda iki küçük kart yan yana, canlı kart altta tam genişlikte. */}
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+        <CountCard href="/dashboard/clients" label="Danışan" count={clientIds.length} hint="Danışan listesini aç" />
+        <CountCard
+          href="/dashboard/exercises"
+          label="Egzersiz"
+          count={exercises.length}
+          hint={`${formatNumber(custom)} tanesi senin · kütüphaneyi aç`}
+        />
+
+        {/* Danışan başına bir koşullu okuma; sayfanın geri kalanı beklemesin. */}
+        <div className="col-span-2 grid lg:col-span-1">
+          <Suspense fallback={<LiveSkeleton />}>
+            <LiveNowCard />
+          </Suspense>
+        </div>
       </div>
     </div>
   );
@@ -74,10 +82,10 @@ async function LiveNowCard() {
 
 function LiveSkeleton() {
   return (
-    <Card aria-busy="true">
+    <Card size="sm" aria-busy="true">
       <CardHeader>
         <CardDescription>Şu an antrenmanda</CardDescription>
-        <Skeleton className="h-10 w-12" />
+        <Skeleton className="h-8 w-10" />
       </CardHeader>
       <CardContent>
         <Skeleton className="h-4 w-full" />
@@ -106,10 +114,10 @@ function ListSkeleton({ title }: { title: string }) {
 function CountCard({ href, label, count, hint }: { href: string; label: string; count: number; hint: string }) {
   return (
     <Link href={href} className="group/count rounded-xl outline-none focus-visible:ring-3 focus-visible:ring-ring/50">
-      <Card className="h-full transition-colors group-hover/count:bg-muted/50">
+      <Card size="sm" className="h-full transition-colors group-hover/count:bg-muted/50">
         <CardHeader>
           <CardDescription>{label}</CardDescription>
-          <CardTitle className="tabular-nums text-4xl">{formatNumber(count)}</CardTitle>
+          <CardTitle className="tabular-nums group-data-[size=sm]/card:text-2xl">{formatNumber(count)}</CardTitle>
           <CardAction>
             <CaretRight
               weight="fill"

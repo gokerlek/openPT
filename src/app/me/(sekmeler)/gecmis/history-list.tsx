@@ -10,7 +10,7 @@ import { firstHistoryRows, HISTORY_PAGE, type HistoryMonth, type HistoryRow } fr
 
 /**
  * Geçmiş listesi (tasarım §2.10): aylara bölünmüş kartlar; ilk 20 antrenman, altında "Daha fazla göster (n)".
- * Satır 64 px'ten yüksek, bütünü bağlantı (detay). Rekor, "başka gün" ve "yarım" rozetleri metinle.
+ * Satır 64 px'ten yüksek, bütünü bağlantı (detay). Rekor, "başka program" ve "yarım" rozetleri metinle.
  */
 export function HistoryList({ months }: { months: HistoryMonth[] }) {
   const [count, setCount] = useState(HISTORY_PAGE);
@@ -62,7 +62,7 @@ function HistoryItem({ row }: { row: HistoryRow }) {
               {formatNumber(row.prs)} rekor
             </Badge>
           ) : null}
-          {row.otherDay ? <Badge variant="secondary">başka gün</Badge> : null}
+          {row.otherDay ? <Badge variant="secondary">başka program</Badge> : null}
           {row.unfinished ? <Badge variant="outline">yarım</Badge> : null}
         </span>
         <span className="text-[0.8125rem] text-muted-foreground tabular-nums">{row.meta}</span>

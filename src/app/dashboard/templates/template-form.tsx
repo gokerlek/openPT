@@ -10,7 +10,8 @@ import type { BlocksFormStore } from '@/components/block-editor/block-items';
 import { DraftAutosave, DraftNotice, useEditorDraft } from '@/components/block-editor/editor-draft';
 import { keepLineEnter } from '@/components/block-editor/enter-key';
 import { EditorSaveProvider, FloatingSaveButton } from '@/components/block-editor/editor-save';
-import { TemplateMuscleMap } from '@/components/muscle-map/template-muscle-map';
+import { MuscleMap } from '@/components/muscle-map/muscle-map';
+import { LOAD_DESCRIPTION, loadMapProps } from '@/lib/muscle-tiers';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -29,9 +30,6 @@ import { templateMuscleLoad } from '@/lib/template-plan';
 import { TEMPLATE_DRAFT_BASE, templateDraftKey } from '@/lib/unsaved-changes';
 
 const BLANK: TemplateInput = { name: '', description: '', blocks: [], sharedWithClients: false };
-
-const LOAD_DESCRIPTION =
-  'Kas başına çalışma seti: hedef 1, yardımcı 0,5, dengeleyici 0,25 sayılır; ısınma ve soğuma hareketleri sayılmaz.';
 
 /**
  * Şablon düzenleyici — kendi sayfasında (modal değil, SPEC §6).
@@ -267,7 +265,7 @@ export function TemplateForm({
           </CardHeader>
           <CardContent>
             {blocks.length > 0 ? (
-              <TemplateMuscleMap variant="full" bodyClassName="h-56 lg:h-64" load={load} />
+              <MuscleMap layout="split" bodyClassName="h-56 lg:h-64" {...loadMapProps(load, 'session', 'Şablonun kas yükü')} />
             ) : (
               <p className="text-sm text-muted-foreground">Hareket ekleyince kas yükü burada görünür.</p>
             )}

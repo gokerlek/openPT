@@ -7,7 +7,7 @@
 
 ## Özet kararlar
 
-1. Danışan sayfasında **"Ölçümler" sekmesi "Sağlık" olur**; içinde alt şerit: **Kısıtlar · Ölçümler · Tarama**. Ölçüm adresleri aynen kalır, yönlendirme gerekmez (§1).
+1. Danışan sayfasında **"Ölçümler" sekmesi "Sağlık" olur**; içinde alt şerit: **Kısıtlar · Ölçümler · Hareket** (Hareket: kamera ölçümü ve PT'nin hareket testi). Ölçüm adresleri aynen kalır, yönlendirme gerekmez (§1).
 2. **Kısıt** bir kayıttır: bölge, taraf, tür, şiddet, başlangıç, durum (etkin/kapandı), kaçınılacak hareketler (kütüphanenin medikal etiketlerine eşlenir), isteğe bağlı **sağlık profesyonelinin koyduğu tanı** (kaynağıyla: hekim ya da fizyoterapist / danışanın beyanı), isteğe bağlı ve yalnız PT'nin gördüğü **gözlem** (bulgu), notlar. `health.json`'da, değişiklik kaydıyla (§2).
 3. Danışan kendisi **bildirebilir**; bildirim PT'ye gider ve PT karar verene kadar "danışan bildirdi" rozetini taşır. **Güvenli yön hemen:** bildirilen "zorlayanlar" o andan itibaren **yalnız dikkat** olarak işler (asla yasak değil; bölgeden tahmin yok); kötüleşme hemen yazılır; gevşeten değişiklik PT onayıyla **[sentez]** (§2.4).
 4. Süzgeç kısıtlardan beslenir: düzenleyicinin kütüphane sheet'i uygun olmayanı **gerekçesiyle işaretler, yasakları katlanmış grupta saklar**, PT **"Yine de ekle"** ile bu danışana özel izin verir (§3.2). **Etiketi eksik hareket hiçbir kaçınmada "uygun" sayılmaz:** kaçınmanın kalıp ailesindeyse "Etiket eksik" dikkatini alır (§2.2). Kütüphanenin squat, tek bacak, menteşe, dikey ve yatay itiş/çekiş hareketlerinin etiketlenmesi faz 3'ün ön koşuludur.
@@ -23,7 +23,7 @@
 
 ## 1. Yer: danışan sayfasında "Sağlık" sekmesi
 
-**Karar:** sekme şeridi **Genel · Program · Sağlık · İlerleme · Antrenmanlar · Davet** olur. "Sağlık"ın içinde küçük ikinci şerit (`TabsNav`, gezinme): **Kısıtlar · Ölçümler · Tarama**.
+**Karar:** sekme şeridi **Genel · Program · Sağlık · İlerleme · Antrenmanlar · Davet** olur. "Sağlık"ın içinde küçük ikinci şerit (`TabsNav`, gezinme): **Kısıtlar · Ölçümler · Hareket**, onay parçası başına bir sekme. Ölçümler yalnız elle girilen ölçümlerdir; Hareket kamera ölçümünü ve PT'nin hareket testini birlikte taşır (ikisi de `screening` onayı).
 
 | Seçenek | Neden değil / neden |
 |---|---|
@@ -31,7 +31,7 @@
 | Ölçümler sayfasına bölüm eklemek | Kısıt ölçüm değildir: programı süzer, danışan bildirir, onay akışı vardır. Üç ayrı giriş akışı ve üç ayrı kilit tek sayfada karışır; ad yanıltır. |
 | **Sağlık + alt şerit** (seçilen) | Sekme sayısı aynı kalır. Onay ve kilit tek çatıda, parça başına. Ölçüm ve tarama çoğu zaman aynı değerlendirme gününde yapılır: yan yana durmaları doğal. |
 
-**Adresler (kararlı):** `…/measurements/**` hiç değişmez (Genel'deki ölçüm kartı ve "Ölçümde gerileme" maddesinin bağlantıları çalışmaya devam eder). Yeni kardeşler: `…/constraints`, `…/constraints/new`, `…/constraints/[kid]/edit`, `…/screening`, `…/screening/new`, `…/screening/[tarih]/edit` (danışan sayfalarının İngilizce adlarıyla aynı). "Sağlık" sekmesi üç önekten birindeyken etkindir. Sekmenin bağlantısı layout'ta (danışan kaydı zaten okunuyor) hesaplanır: modülde seçili ilk parça, sıra **Kısıtlar → Ölçümler → Tarama**; modül kapalıysa Kısıtlar (kilit uyarısı neden ve ne yapılacağını söyler). Yönlendirme sayfası yok, ek istek yok.
+**Adresler (kararlı):** `…/measurements/**` hiç değişmez (Genel'deki ölçüm kartı ve "Ölçümde gerileme" maddesinin bağlantıları çalışmaya devam eder). Yeni kardeşler: `…/constraints`, `…/constraints/new`, `…/constraints/[kid]/edit`, `…/screening`, `…/screening/new`, `…/screening/[tarih]/edit` (danışan sayfalarının İngilizce adlarıyla aynı). "Sağlık" sekmesi üç önekten birindeyken etkindir; kamera sihirbazı (`…/measurements/camera`) sekme değil, Hareket'in eylemidir ve şeritte Hareket'i yakar (en uzun önek kazanır). Sekmenin bağlantısı layout'ta (danışan kaydı zaten okunuyor) hesaplanır: modülde seçili ilk parça, sıra **Kısıtlar → Ölçümler → Hareket**; modül kapalıysa Kısıtlar (kilit uyarısı neden ve ne yapılacağını söyler). Yönlendirme sayfası yok, ek istek yok.
 
 **Alt şerit:** yalnız modülde seçili parçalar etkin; seçili olmayan parça pasif ve "seçili değil" notlu (`TabsNavLink disabled note`). Bekleyen danışan bildirimi ya da gözden geçirilmemiş tarama ağrısı varsa parçanın adının yanında nokta (ekran okuyucuya "bekleyen var").
 
@@ -228,7 +228,7 @@ Yer: danışanın **Sağlık** sayfası (§5.2), "Yeni bir şey bildir". Tek, ka
 ```
 
 - **İki kademe**, yoklamanın "Bugün yük yok" ekranıyla aynı ayrım: **acil** (sheet'in başında, vurgulu): "İdrar ya da dışkılamada yeni değişiklik, kasıkta uyuşma ya da yeni güç kaybı varsa beklemeden acil servise başvur." — ciddi omurga patolojisi işaretleri (Finucane 2020, aynı gün sevk). **Öteki** (Gönder'in üstünde): "Geceleri uyandıran ağrı, düşme ya da darbeden sonra üstüne basamama, hızla şişen ya da kilitlenen eklem varsa antrenmandan önce bir sağlık profesyoneline görün." — "üstüne basamama" Ottawa ayak bileği ve diz kurallarından (Stiell 1992; Stiell 1995), gece ağrısı Finucane 2020'den; hızlı şişme ve kilitlenme ile seçimin kendisi **[sentez]**. Cevap istenmez, kaydedilmez (veri en aza).
-- **Gönderince (şiddete göre):** hafif/orta → "Antrenörüne iletildi. Antrenörün bakana kadar zorlayan hareketlerde dikkatli ol; ağrı yaparsa 'Hareketi geç' ya da 'Değiştir'i kullan." · şiddetli ya da "Yeni bir sakatlık · Bu hafta" → "Antrenörüne iletildi. Antrenörün bakana kadar bu bölgeyi zorlayan hareketleri yapma; ağrı günlük hayatını etkiliyorsa bir sağlık profesyoneline görün."
+- **Gönderince (şiddete göre):** hafif/orta → "Antrenörüne iletildi. Antrenörün bakana kadar zorlayan hareketlerde dikkatli ol; ağrı yaparsa antrenmanda ⋯ menüsünden hareketi atla ya da muadil seç." · şiddetli ya da "Yeni bir sakatlık · Bu hafta" → "Antrenörüne iletildi. Antrenörün bakana kadar bu bölgeyi zorlayan hareketleri yapma; ağrı günlük hayatını etkiliyorsa bir sağlık profesyoneline görün."
 - **Bekleyen bildirimin zorlayanları hemen işler, yalnız dikkat olarak** (asla yasak değil): eşlendikleri kaçınmalarla (§2.2, bölge kapısıyla) değerlendirilir; hareket kartında not "Bildirdiğin sol diz için zorlayabilir; ağrı yaparsa geç", "Değiştir" bu hareketleri sona alır. Bölgeden tahmin yoktur: zorlayan seçilmemişse hiçbir hareket değişmez.
 - Danışan onay bekleyen bildirimini düzeltebilir ya da **geri çekebilir** (kayıttan çıkar; kayıtta "geri çekildi" satırı kalır). Onaylı kısıtta yalnız iki düğme: **Kötüleşti** (şiddet seçimi) ve **Düzeldi**.
 - **Güvenli yön kuralı [sentez]:** bildirilen yeni kısıt PT onaylayana kadar hiçbir hareketi yasaklamaz, yalnız zorlayanları dikkat olur (düzenleyicide ve Kısıtlar'da bekleyen bildirim olarak durur); **kötüleşme** hemen yazılır (şiddet görünür, Dikkat maddesi doğar); **düzelme** kısıtı PT onaylayana kadar kapatmaz (`clientChange.resolved`). Yük artıran yönü yalnız PT açar.
@@ -463,7 +463,7 @@ Kurulum metni ekranda testin kartında durur; aşağıdakiler PT'ye dönük kont
  5  Ters kürek (Temiz): ilerlet — Tek Kol Dambıl Row, Barfiks.
  Sıra: ağrı → en düşük sonuç → asimetri. Sonrası senin hedefine göre.
 
- Tarama günleri
+ Test günleri
  12 Eyl 2026 · 8 test · 1 ağrı ›        1 Ağu 2026 · 7 test ›
 ```
 
@@ -520,7 +520,7 @@ squat ve denge "Yapılmadı (kısıt)" olarak hazır; istersen değiştir.
 |---|---|---|---|
 | `conditions` (Kısıtlar) | Kısıtlar sayfası kilit uyarısı; düzenleyici sheet'inde tek satır "kısıtlar kullanılamıyor"; süzgeç danışan kısıtı olmadan; kısıt Dikkat ve Bildirimleri yok | Sağlık sayfasında kısıt bölümü ve "bildir" yok; kartta not yok; "Değiştir" sırası normal | §2, §3 |
 | `screening` (Tarama) | Tarama sayfası kilit uyarısı; tarama Dikkat maddeleri yok | tarama bölümü yok | §4 |
-| ikisi de yok | — | avatar menüsünde "Sağlık" yok | |
+| ikisi de yok | — | dock'ta "Sağlık" sekmesi yok | |
 
 - **Sürüm parça başınadır** **[sentez]**: `HEALTH_FIELD_VERSIONS` — `conditions` ve `screening` `2026-10` (amaçları genişledi: danışanın bildirimi, antrenmandaki not, tarama ipuçları), `readiness`, `check_in`, `measurements` `2026-09`. Onay kaydı `versions` taşır (parça → onaylandığı sürüm); `versions`'ı olmayan eski onay her parça için kendi `version`'ını (bugün `2026-09`) taşımış sayılır. `canRecordHealth(client, field)` yalnız o parçanın sürümüne bakar. Böylece sürüm artışı ağrı takibini, kırmızı bayrak sorusunu ve ölçüm girişini **kapatmaz**; yalnız değişen parçalar yeniden sorulur. Modülün yeniden açılması ya da kapsamının genişlemesi (`enabledAt`) bugünkü gibi bütün onayı yeniler (PT'nin bilinçli eylemi, SPEC §9.4).
 - **Onay kartı** (`outdated`): "Kısıtlar ve hareket taraması için yeni onay gerekiyor; ağrı takibi ve ölçümler sürüyor." Onay yeniden verilince bütün parçalar güncel sürümle yazılır.
@@ -531,7 +531,7 @@ squat ve denge "Yapılmadı (kısıt)" olarak hazır; istersen değiştir.
 
 ### 5.2 Danışanın Sağlık sayfası (`/me/saglik`, 375 px)
 
-Avatar menüsünde Programım · **Sağlık** · Ayarlar · Çıkış (yalnız `conditions` ya da `screening` onaylıysa). Ayarlar'daki onay kartının altında "Sağlık sayfan ›". Dock'ta etkin sekme yok (Ayarlar gibi).
+Dock'ta Bugün · Program · İlerleme · **Sağlık** (yalnız `conditions` ya da `screening` onaylıysa); avatar menüsünde yalnız Ayarlar · Çıkış. Ayarlar'daki onay kartının altında "Sağlık sayfan ›". Bu sayfada ve kamera ölçümünde (`/me/olcum`) dock'ta Sağlık etkin.
 
 ```
 ┌─────────────────────────────────────────┐

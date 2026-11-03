@@ -3,7 +3,8 @@
 import { useState, useSyncExternalStore } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Check, Lightbulb, X } from '@phosphor-icons/react';
+import { Lightbulb } from '@phosphor-icons/react';
+import { Check, X } from '@/components/line-icons';
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -142,7 +143,7 @@ export function ProposalsCard({ clientId, items }: { clientId: string; items: Pr
                   {busy === item.id && approve.isPending ? <Spinner data-icon="inline-start" /> : <Check data-icon="inline-start" />}
                   Uygula
                 </Button>
-                <Button size="sm" variant="outline" className="touch:h-11" disabled={busy !== null} onClick={() => setDeclining(item)}>
+                <Button size="sm" variant="ghost" className="min-h-11" disabled={busy !== null} onClick={() => setDeclining(item)}>
                   <X data-icon="inline-start" />
                   Reddet
                 </Button>

@@ -1,5 +1,5 @@
 'use client';
-import { useId, useState } from 'react';
+import { useEffect, useEffectEvent, useId, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
@@ -23,19 +23,20 @@ import { fetchJson } from '@/lib/query/errors';
 import { EQUIPMENT, EQUIPMENT_LABELS } from '@/lib/schemas/exercise';
 import { GOALS, GOAL_LABELS, type AssistantSelection, type AssistantView, type AssistantDraft } from '@/lib/ai/assistant-contract';
 import type { COACH_PAGES } from '@/lib/ai/coach-contract';
-import { answerCoach } from '@/lib/ai/coach-engine';
+import { PROGRAM_COPY, sensitiveNotice } from '@/lib/ai/coach-copy';
 import { BODY_MUSCLES, isBodyMuscle } from '@/lib/muscles';
-import { EMPTY_CARE } from '@/lib/constraint-filter';
+import { displayDays } from '@/lib/program-plan';
 
-export function CoachPanel({ clientId, role, page: _page = 'overview', general = false, transport = fetchJson }: { clientId: string; role: 'pt' | 'client'; page?: typeof COACH_PAGES[number]; general?: boolean; transport?: typeof fetchJson }) {
+export function CoachPanel({ clientId, role, page: _page = 'overview', general = false, initialTab, autoReview = false, onAutoReview, transport = fetchJson }: { clientId: string; role: 'pt' | 'client'; page?: typeof COACH_PAGES[number]; general?: boolean; initialTab?: 'review' | 'program'; autoReview?: boolean; onAutoReview?: () => void; transport?: typeof fetchJson }) {
   const endpoint = general ? '/api/coach' : role === 'pt' ? `/api/clients/${clientId}/coach` : '/api/me/coach';
   const cache = useQueryClient(), instance = useId();
   const queryKey = ['coach', clientId, role, 'assistant'];
   const query = useQuery({ queryKey, queryFn: () => transport<AssistantView>(endpoint) });
-  const [tab, setTab] = useState('review');
+  const [tab, setTab] = useState(initialTab === 'program' && !general ? 'program' : 'review');
   const [text, setText] = useState(''), [notice, setNotice] = useState(''), [error, setError] = useState(''), [busy, setBusy] = useState(false), [formOpen, setFormOpen] = useState(false);
   const [goal, setGoal] = useState<AssistantSelection['goal'] | ''>(''), [fullBody, setFullBody] = useState(true), [muscles, setMuscles] = useState<AssistantSelection['muscles']>([]);
   const [weekdays, setWeekdays] = useState<number[]>([]), [equipment, setEquipment] = useState<AssistantSelection['conditions']['equipment']>([]), [minutes, setMinutes] = useState(45);
+  const copy = PROGRAM_COPY[role];
   const ready = !!goal && weekdays.length > 0 && equipment.length > 0 && Number.isInteger(minutes) && minutes >= 15 && minutes <= 120 && (fullBody || muscles.length > 0);
   async function action(run: () => Promise<unknown>) {
     if (busy) return;
@@ -52,7 +53,7 @@ export function CoachPanel({ clientId, role, page: _page = 'overview', general =
       if (data.interpreted) {
         const result = data.interpreted;
         if (result.intent !== 'fitness') {
-          setNotice(result.intent === 'unclear' ? 'Hedef netleşmedi. Aşağıdan hedef ve kaslarını seçebilirsin.' : answerCoach({ intent: result.intent, exerciseIds: [] }, { facts: [], exercises: [], care: EMPTY_CARE, existingExerciseIds: [], healthUnavailable: false, today: '' }).answer);
+          setNotice(result.intent === 'unclear' ? copy.unclear : sensitiveNotice(result.intent, role));
           if (result.intent !== 'unclear') { setFormOpen(false); return; }
         } else {
           setNotice('Yazdıkların seçimlere dönüştü. Belirtmediğin alanlar doldurulmadı; kontrol edip eksikleri tamamla.');
@@ -66,11 +67,24 @@ export function CoachPanel({ clientId, role, page: _page = 'overview', general =
     });
   }
   const data = query.data;
+  // Bağlamlı açılış (`autoReview`): kayıtlar gelince bir kez değerlendirilir; AI kapalıysa istek gitmez. Karar anında
+  // `onAutoReview` açılış isteğini tüketir: panel yeniden kurulsa da (sayfa değişip dönünce) ikinci ücretli istek gitmez.
+  // `reviewed` bu örnekte etkinin ikinci çalışmasına (Strict Mode, tüketim henüz çizilmeden) karşı.
+  const reviewed = useRef(false), reviewOnOpen = useEffectEvent((ready: boolean) => {
+    onAutoReview?.();
+    if (ready) void request({ action: 'review' });
+  });
+  useEffect(() => {
+    if (!autoReview || reviewed.current || !data) return;
+    reviewed.current = true;
+    // İstek sunucuya gider; `busy` onun süresini gösterir (Değerlendir düğmesiyle aynı yol).
+    reviewOnOpen(data.access === 'ready');
+  }, [autoReview, data]);
   if (query.isPending) return <div role="status" aria-label="AI önerileri açılıyor" className="flex flex-col gap-4"><Skeleton className="h-12 w-full" /><Skeleton className="h-48 w-full" /></div>;
   if (query.error || !data) return <Alert variant="destructive"><AlertTitle>Öneriler açılamadı</AlertTitle><AlertDescription><Button variant="outline" onClick={() => void query.refetch()}>Yeniden dene</Button></AlertDescription></Alert>;
   const review = data.reviews.at(-1);
   return <div className="flex flex-col gap-6">
-    {data.access !== 'ready' ? <Alert><AlertTitle>AI desteği kapalı</AlertTitle><AlertDescription>{role === 'pt' ? <Button variant="outline" nativeButton={false} render={<Link href={`/dashboard/clients/${clientId}/edit`} />}>Danışan ayarlarını aç</Button> : 'PT, danışan bilgilerinden açabilir.'}</AlertDescription></Alert> :
+    {data.access !== 'ready' ? <Alert><AlertTitle>AI desteği kapalı</AlertTitle><AlertDescription>{role === 'pt' ? <Button variant="outline" nativeButton={false} render={<Link href={`/dashboard/clients/${clientId}/edit`} />}>Danışan ayarlarını aç</Button> : 'Antrenörün AI desteğini açabilir.'}</AlertDescription></Alert> :
     <Tabs value={tab} onValueChange={value => setTab(String(value))}>
       <TabsList><TabsTrigger value="review">Gelişim</TabsTrigger>{!general ? <TabsTrigger value="program">Program hazırla</TabsTrigger> : null}</TabsList>
       <TabsContent value="review" className="flex flex-col gap-4">
@@ -80,16 +94,16 @@ export function CoachPanel({ clientId, role, page: _page = 'overview', general =
         </Card>
       </TabsContent>
       {!general ? <TabsContent value="program" className="flex flex-col gap-4">
-        <Card><CardHeader><CardTitle>Programını hazırlayalım</CardTitle><CardDescription>Hedefi ve koşulları belirle; taslağı oluşturucuda düzenle.</CardDescription></CardHeader><CardContent>
-          <FieldGroup><Field><FieldLabel htmlFor={`${instance}-goal`}>Ne yapmak istiyorsun?</FieldLabel><Textarea id={`${instance}-goal`} placeholder="Bütün beden, haftada 2 gün, 45 dakika, dambıl." value={text} onChange={e => setText(e.target.value)} rows={3} maxLength={1500} disabled={busy} /></Field>
-            <div className="flex flex-wrap gap-2"><Button disabled={busy || !text.trim() || !data.connection} onClick={() => void request({ action: 'interpret', text: text.trim() })}>Hedefi yorumla</Button><Button variant="outline" disabled={busy} onClick={() => { setFormOpen(true); setNotice(''); }}>Kendim seçeyim</Button></div>
+        <Card><CardHeader><CardTitle>{copy.title}</CardTitle><CardDescription>Hedefi ve koşulları belirle; taslağı oluşturucuda düzenle.</CardDescription></CardHeader><CardContent>
+          <FieldGroup><Field><FieldLabel htmlFor={`${instance}-goal`}>{copy.goal}</FieldLabel><Textarea id={`${instance}-goal`} placeholder="Bütün beden, haftada 2 gün, 45 dakika, dambıl." value={text} onChange={e => setText(e.target.value)} rows={3} maxLength={1500} disabled={busy} /></Field>
+            <div className="flex flex-wrap gap-2"><Button disabled={busy || !text.trim() || !data.connection} onClick={() => void request({ action: 'interpret', text: text.trim() })}>Hedefi yorumla</Button><Button variant="outline" disabled={busy} onClick={() => { setFormOpen(true); setNotice(''); }}>{copy.manual}</Button></div>
           </FieldGroup>
         </CardContent></Card>
         {notice ? <Alert role="status"><AlertDescription>{notice}</AlertDescription></Alert> : null}
         {formOpen ? <Card><CardHeader><CardTitle>Antrenman koşulları</CardTitle></CardHeader><CardContent><FieldGroup>
           <Field><FieldLabel htmlFor={`${instance}-selection`}>Hedef</FieldLabel><Select value={goal || null} onValueChange={value => setGoal(value as AssistantSelection['goal'])} disabled={busy} items={GOALS.map(g => ({ value: g, label: GOAL_LABELS[g] }))}><SelectTrigger id={`${instance}-selection`} className="w-full"><SelectValue placeholder="Hedef seç" /></SelectTrigger><SelectContent><SelectGroup>{GOALS.map(g => <SelectItem key={g} value={g}>{GOAL_LABELS[g]}</SelectItem>)}</SelectGroup></SelectContent></Select></Field>
           <Field orientation="horizontal"><Checkbox id={`${instance}-full`} checked={fullBody} disabled={busy} onCheckedChange={setFullBody} /><FieldLabel htmlFor={`${instance}-full`}>Bütün beden</FieldLabel></Field>
-          {!fullBody ? <MuscleMap label="Çalıştırmak istediğin kasları seç" selected={muscles.filter(isBodyMuscle)} disabled={busy ? BODY_MUSCLES : []} onToggle={m => setMuscles(muscles.includes(m) ? muscles.filter(x => x !== m) : [...muscles, m])} /> : null}
+          {!fullBody ? <MuscleMap label={copy.muscles} selected={muscles.filter(isBodyMuscle)} disabled={busy ? BODY_MUSCLES : []} onToggle={m => setMuscles(muscles.includes(m) ? muscles.filter(x => x !== m) : [...muscles, m])} /> : null}
           <Field><FieldLabel id={`${instance}-weekdays`}>Antrenman günleri</FieldLabel><WeekdayToggle id={`${instance}-weekdays`} value={weekdays} onChange={setWeekdays} disabled={busy} /></Field>
           <Field><FieldLabel htmlFor={`${instance}-minutes`}>Seans süresi (dakika)</FieldLabel><Input id={`${instance}-minutes`} type="number" min={15} max={120} step={1} value={minutes || ''} placeholder="15–120" disabled={busy} onChange={e => setMinutes(Number(e.target.value))} /></Field>
           <FieldSet disabled={busy}><FieldLegend>Ekipman</FieldLegend><div className="grid grid-cols-2 gap-3">{EQUIPMENT.filter(value => data.exercises.some(e => e.equipment === value)).map(value => <Field key={value} orientation="horizontal"><Checkbox id={`${instance}-equipment-${value}`} checked={equipment.includes(value)} onCheckedChange={checked => setEquipment(checked ? [...equipment, value] : equipment.filter(x => x !== value))} /><FieldLabel htmlFor={`${instance}-equipment-${value}`}>{EQUIPMENT_LABELS[value]}</FieldLabel></Field>)}</div></FieldSet>
@@ -103,7 +117,7 @@ export function CoachPanel({ clientId, role, page: _page = 'overview', general =
 }
 function DraftCard({ draft, data, role, clientId, busy, apply }: { draft: AssistantDraft; data: AssistantView; role: 'pt' | 'client'; clientId: string; busy: boolean; apply: () => void }) {
   const exercises = new Map(data.exercises.map(e => [e.id, { title: e.title, trackingType: e.trackingType as TrackingType }]));
-  const days = draft.body.phases.flatMap(p => p.days);
+  const days = draft.body.phases.flatMap(p => displayDays(p.days));
   return <Card><CardHeader><CardTitle>{draft.name}</CardTitle><CardDescription>{GOAL_LABELS[draft.selection.goal]} · {days.length} gün</CardDescription><CardAction><Badge variant="secondary">{draft.status === 'saved' ? 'Atandı / kaydedildi' : 'Taslak'}</Badge></CardAction></CardHeader>
     <CardContent className="flex flex-col gap-4"><Tabs defaultValue={days[0]?.id}><div className="overflow-x-auto"><TabsList>{days.map(day => <TabsTrigger key={day.id} value={day.id}>{day.name}</TabsTrigger>)}</TabsList></div>{days.map(day => <TabsContent key={day.id} value={day.id}><DayPlan blocks={day.blocks} exercises={exercises} missing="show" audience={role} /></TabsContent>)}</Tabs>
       {draft.attention.length ? <Alert><AlertTitle>Gözden geçirilecekler</AlertTitle><AlertDescription><ul className="flex list-disc flex-col gap-1 pl-4">{draft.attention.map(t => <li key={t}>{t}</li>)}</ul></AlertDescription></Alert> : null}

@@ -16,7 +16,9 @@ export const EASE = {
 
 /** Sürükle-bırak (düzenleyicinin üst çizgi tutamağı, dnd-kit). */
 export const DRAG = {
-  activationDistance: 4, // px: çizgiye basıp bu kadar kayınca sürükleme başlar (basılı tutma yok)
+  activationDistance: 4, // px: çizgiye basıp bu kadar kayınca sürükleme başlar (düzenleyicide ve farede basılı tutma yok)
+  touchHoldMs: 200, // ms: düz listelerde parmakla sürükleme bu kadar basılı tutunca başlar (kaydırırken kazara taşıma yok)
+  touchTolerance: 5, // px: basılı tutarken bu kadar kayma tutmayı bozmaz; fazlası iptal (sürükleme yok)
   combineHoldMs: 250, // ms: kartın orta bandında bu kadar bekleyince "üstüne bırak" devreye girer
   liftScale: 1.02, // sürüklenen overlay; reduced-motion'da 1
   autoScrollEdge: 80, // px: ekranın üst ve alt kenarında otomatik kaydırma bölgesi
@@ -41,7 +43,7 @@ export const SWIPE = {
 } as const;
 
 /**
- * Danışanın sekmeleri (dock: Bugün · Geçmiş · İlerleme; `(sekmeler)/template.tsx`). Yeni sekmenin
+ * Danışanın sekmeleri (dock: Bugün · Program · İlerleme · Sağlık, `lib/client-tabs.ts`; `(sekmeler)/template.tsx`). Yeni sekmenin
  * içeriği dock'taki yönden kayarak gelir (`DURATION.base`, `EASE.enter`); sekme dışı sayfada
  * (Ayarlar) yalnız saydamlık. Hareket azaltma tercihinde kayma yok (`MotionConfig`).
  */
@@ -58,7 +60,7 @@ export const WORKOUT = {
   groupSlidePx: 12, // px: grup üyeleri arası
   countUpMs: 700, // ms: özet sayılarının sayarak gelmesi
   waterUndoMs: 3000, // ms: "+1 · Geri al" hapı
-  skipToastMs: 5000, // ms: "sona alındı · Bugün yapma · Geri al"
+  addedToastMs: 5000, // ms: "<hareket> eklendi · Şimdi yap" toast'ı (geri almalar ortak 8 sn, `showUndoToast`)
   tapGuardMs: 400, // ms: durum değişiminden sonra alt panelin dokunuş kilidi (çift dokunuş ikinci set yazmasın)
   restWarnSeconds: 10, // sn: son 10 saniyede renk + tek bip
   alarmRepeatMs: 15_000, // ms: dinlenme bitişinin 3 bipi, dokunulana kadar bu aralıkla…

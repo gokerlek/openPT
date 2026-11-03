@@ -9,7 +9,7 @@ import type { ChangeLine, ChangeState } from './workout-summary.ts';
  * PT'nin danışan sayfasındaki antrenman detayı (SPEC §6, tasarım §8 satır 12) — saf, yalnız okuma. Danışanın
  * geçmiş detayıyla aynı hesap (`sessionDetail`: hareketler yapılış sırasıyla, setler zorluklarıyla, ısınma
  * ayrı, geçme nedeni, ayar notu); üstüne PT'nin görmesi gerekenler:
- * - antrenmanın işaretleri: başka gün seçildi (hangi günün yerine), yarım bırakıldı (yapılan/planlanan set),
+ * - antrenmanın işaretleri: başka program seçildi (o gün planlanan hangi programın yerine), yarım bırakıldı (yapılan/planlanan set),
  *   hafifletilmiş gün (nötr: nedeni yalnız onay sürdükçe `health.json`'da), seans zorluğu;
  * - hareketin notları: muadille değiştirildi (programdaki hangi hareketin yerine), plan dışı eklendi, o günkü
  *   plan (üst ağırlık, aşama), bir defalık ve hafif; ağrı nedeniyle geçildi yalnız onay sürdükçe (çağıran
@@ -52,9 +52,11 @@ export function ptSessionDetail(
     rowTitle?: (rowId: string) => string | null;
     /** Ağrı nedeniyle geçilen satırlar (yalnız onay sürdükçe). */
     painRows?: ReadonlySet<string>;
+    /** Seansın günündeki kilo (yalnız ölçüm onayı sürdükçe): yürüyüş/koşu setinde kalori. */
+    bodyMassKg?: number | undefined;
   },
 ): PtSessionDetail {
-  const base = sessionDetail(doc, input.timeZone);
+  const base = sessionDetail(doc, input.timeZone, input.bodyMassKg);
   const entries = new Map(doc.entries.map((entry) => [entry.id, entry]));
   const overloads = new Set(doc.entries.flatMap((entry) => entry.sets.filter((set) => set.overload).map((set) => set.id)));
 
@@ -79,7 +81,7 @@ export function ptSessionDetail(
   const flags: string[] = [];
   // Danışanın kendi programından (kendi-program.md §4); adı başlıkta ("Evde · Gün A", anlık görüntü).
   if (doc.program?.programId) flags.push('kendi programı');
-  if (base.otherDay) flags.push(doc.program?.plannedDayName ? `${doc.program.plannedDayName} yerine seçildi` : 'başka gün seçildi');
+  if (base.otherDay) flags.push(doc.program?.plannedDayName ? `${doc.program.plannedDayName} yerine seçildi` : 'başka program seçildi');
   const unfinished = doc.notices.find((notice) => notice.kind === 'unfinished');
   if (unfinished) {
     flags.push(

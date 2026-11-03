@@ -6,7 +6,9 @@ import { AI_CONSENT_VERSION, type Client } from '../schemas/client.ts';
 import { fakeSessionRepo } from '../testing/fake-session-repo.ts';
 import { EXERCISES } from '../testing/workout-fixtures.ts';
 import { askCoach, decideCoach, getCoach, type CoachDeps } from './coach-routes.ts';
-import { createProgramRecord } from '../program-plan.ts';
+import * as v from 'valibot';
+import { bodyWithAssignments, createProgramRecord } from '../program-plan.ts';
+import { programSchema } from '../schemas/program.ts';
 import { answerCoach, coachProgramMatches, draftCoachProgram, eligibleExercises, type CoachContext } from './coach-engine.ts';
 import { coachAccess, coachView, COACH_PATH, emptyCoach, type CoachData, type CoachStore } from './coach-contract.ts';
 import { classifyCoachQuestion } from './coach-gemini.ts';
@@ -121,6 +123,16 @@ test('unavailable health or unavailable equipment stops the draft; numbers stay 
   assert.equal(result.body.phases[0]?.days.length, 2);
   assert.ok(result.body.phases[0]?.days.every(d => d.blocks.every(b => b.rows.every(row => row.sets.length === 2))));
 });
+test('taslak programları "Program A…" adlandırır ve her birini kendi gününe atar', () => {
+  const f = setup();
+  const result = draftCoachProgram(f.context, { ...conditions, weekdays: [5, 1, 3] }, [], f.deps.id);
+  assert.ok('body' in result);
+  const [phase] = result.body.phases;
+  assert.deepEqual(phase?.days.map((day) => [day.name, day.weekdays]), [['Program A', [1]], ['Program B', [3]], ['Program C', [5]]]);
+  assert.deepEqual(result.body.weekdays, [1, 3, 5]);
+  // Atamalı evrede sıklık yazılmaz (sıklık atanmış gün sayısı).
+  assert.equal(phase?.daysPerWeek, undefined);
+});
 test('facts are rendered from records; empty measurements are not invented', () => {
   const f = setup();
   assert.match(answerCoach({ intent: 'overview', exerciseIds: [] }, f.context).answer, /3 antrenman/);
@@ -164,9 +176,15 @@ test('published-program recovery compares the real stored shape with the form dr
   const f = setup();
   const draft = draftCoachProgram(f.context, conditions, [], f.deps.id);
   assert.ok('body' in draft);
-  const stored = createProgramRecord(draft.body, new Date(NOW));
+  // Yayın gövdeyi atar (`saveProgram`); kayıt `readProgramFile` gibi şemadan geçmiş hâliyle okunur.
+  const stored = v.parse(programSchema, createProgramRecord(bodyWithAssignments(draft.body), new Date(NOW)));
+  assert.deepEqual(stored.phases[0]?.days.map((day) => day.weekdays), [[1], [4]]);
   assert.equal(coachProgramMatches(stored, draft.body), true);
-  assert.equal(coachProgramMatches({ ...stored, schedule: { weekdays: [2] } }, draft.body), false);
+  // Yayında atamalı evrenin sıklığı düşer (`normalizeProgram`): eşleşmeyi bozmaz.
+  const { daysPerWeek: _dropped, ...phase } = stored.phases[0]!;
+  assert.equal(coachProgramMatches({ ...stored, phases: [phase] }, draft.body), true);
+  const moved = stored.phases.map((item) => ({ ...item, days: item.days.map((day, index) => (index === 1 ? { ...day, weekdays: [5] } : day)) }));
+  assert.equal(coachProgramMatches({ ...stored, phases: moved, schedule: { weekdays: [1, 5] } }, draft.body), false);
 });
 test('health-field revocation during classification discards a previously read response', async () => {
   const f = setup();

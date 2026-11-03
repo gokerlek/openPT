@@ -1,12 +1,14 @@
 'use client';
 
 import { useMemo, useRef, useState } from 'react';
-import { CaretRight, Equals, Ruler, TrendDown, TrendUp } from '@phosphor-icons/react';
-import { MuscleMap, MuscleStatusSwatch, type MuscleStatusTone } from '@/components/muscle-map/muscle-map';
+import { CaretRight, Ruler, TrendDown, TrendUp } from '@phosphor-icons/react';
+import { Equals } from '@/components/line-icons';
+import { MuscleMap } from '@/components/muscle-map/muscle-map';
+import { statusLegend, statusMarks, type MuscleStatusTone } from '@/lib/muscle-tiers';
 import { ProgressChart } from '@/components/progress-chart';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Sheet, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { summarizeMuscles, type BodyMuscle } from '@/lib/muscles';
 import {
@@ -40,20 +42,12 @@ import {
 import { MUSCLE_LABELS } from '@/lib/schemas/exercise';
 import { cn } from '@/lib/utils';
 import { ProgressCard, SubHeading } from './progress-card';
-import { ProgressSheetContent } from './progress-sheet';
+import { ProgressSheet, ProgressSheetContent } from './progress-sheet';
 
 /** Listelerde önce bu kadar satır; gerisi "Tümünü göster". */
 const LIST_LIMIT = 5;
 
 const STATUS_ICONS = { improved: TrendUp, stable: Equals, declined: TrendDown, insufficient: Equals } as const;
-
-const LEGEND: { tone: MuscleStatusTone | null; label: string }[] = [
-  { tone: 'strong', label: 'Belirgin gelişme (%5 ve üstü)' },
-  { tone: 'improved', label: 'Gelişme' },
-  { tone: 'stable', label: 'Sabit' },
-  { tone: 'declined', label: 'Gerileme' },
-  { tone: null, label: 'Veri az ya da çalışılmadı' },
-];
 
 const groupId = (group: Pick<MuscleGroup, 'muscles'>) => group.muscles.join(',');
 const groupLabel = (group: Pick<MuscleGroup, 'muscles'>) => summarizeMuscles(group.muscles).join(', ');
@@ -213,8 +207,8 @@ export function StrengthProgress({
           <div className="flex flex-col items-center gap-3 @3xl:col-start-1 @3xl:row-span-2 @3xl:row-start-1">
             <MuscleMap
               layout="split"
-              tone="status"
-              statuses={statuses}
+              marks={statusMarks(statuses)}
+              legend={statusLegend(statuses)}
               counts={counts}
               selected={open?.muscles.filter((muscle): muscle is BodyMuscle => muscle !== 'cardio') ?? []}
               onToggle={(muscle) => {
@@ -233,18 +227,6 @@ export function StrengthProgress({
               bodyClassName="h-56 @3xl:h-72"
               label={`${periodIn} güç gelişimi: ${up.length > 0 ? `gelişen ${summarizeMuscles(up.flatMap((group) => group.muscles)).join(', ')}` : 'gelişen kas yok'}`}
             />
-            <ul className="grid w-full grid-cols-2 gap-x-3 gap-y-1.5 text-xs text-muted-foreground" aria-label="Harita açıklaması">
-              {LEGEND.map((item) => (
-                <li key={item.label} className="flex items-center gap-1.5">
-                  {item.tone ? (
-                    <MuscleStatusSwatch status={item.tone} />
-                  ) : (
-                    <span className="size-3.5 shrink-0 rounded-[3px] bg-[var(--muscle-empty)]" aria-hidden />
-                  )}
-                  {item.label}
-                </li>
-              ))}
-            </ul>
           </div>
 
           <div className="flex flex-col gap-5 @3xl:col-start-2 @3xl:row-start-2">
@@ -392,8 +374,8 @@ function MuscleSheet({
   const changes = Array.isArray(circumference) ? circumference.filter((change) => related.includes(change.id)) : [];
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <ProgressSheetContent viewer={viewer} initialFocus={title} finalFocus={finalFocus}>
+    <ProgressSheet viewer={viewer} open={open} onOpenChange={onOpenChange}>
+      <ProgressSheetContent initialFocus={title} finalFocus={finalFocus}>
         {shown ? (
           <>
             <SheetHeader className="gap-1 pt-5 pb-3 pr-14">
@@ -480,6 +462,6 @@ function MuscleSheet({
           </>
         ) : null}
       </ProgressSheetContent>
-    </Sheet>
+    </ProgressSheet>
   );
 }

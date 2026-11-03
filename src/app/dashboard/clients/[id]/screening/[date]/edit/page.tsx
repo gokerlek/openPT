@@ -26,7 +26,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   await requirePt();
   const { id, date } = await params;
   await loadDay(id, date);
-  return { title: `${formatDay(date)} taraması` };
+  return { title: `${formatDay(date)} hareket testi` };
 }
 
 /** Bir günün taramasını düzenleme; başlıkta "Sil" o günü kaldırır. */
@@ -42,7 +42,7 @@ export default async function EditScreeningPage({ params }: { params: Promise<{ 
         clientId={id}
         mode={{ kind: 'edit', date }}
         initial={initialScreeningState({ date, tests: screening.tests, ...(screening.note ? { note: screening.note } : {}) })}
-        title={`${dateLabel} taraması`}
+        title={`${dateLabel} hareket testi`}
         description="Değiştir; boşalttığın test o günden çıkar."
         actions={<ScreeningDelete clientId={id} date={date} dateLabel={dateLabel} />}
       />
@@ -51,7 +51,7 @@ export default async function EditScreeningPage({ params }: { params: Promise<{ 
 
   return (
     <div className="flex flex-col gap-6">
-      <SectionHeader back={{ href: `/dashboard/clients/${id}/screening`, label: 'PT değerlendirmesi' }} title={`${dateLabel} taraması`} />
+      <SectionHeader back={{ href: `/dashboard/clients/${id}/screening`, label: 'Hareket' }} title={`${dateLabel} hareket testi`} />
       {!loaded.ok ? <MeasurementProblemAlert title="Danışan kaydı okunamadı" problem={loaded.problem} /> : null}
       {view?.state === 'locked' ? <HealthLockAlert field="screening" lock={view.lock} clientId={id} /> : null}
       {view?.state === 'broken' ? <MeasurementProblemAlert title="Sağlık kaydı okunamadı" problem={view.problem} /> : null}

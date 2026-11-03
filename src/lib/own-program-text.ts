@@ -18,24 +18,18 @@ export function sessionDayText(program: { dayName?: string | undefined; programN
   return program?.programName ? `${program.programName} · ${day}` : day;
 }
 
-/** "Sal, Per", yoksa "haftada 2", o da yoksa "gün seçilmedi". */
-export function scheduleText(input: { weekdays: readonly number[]; daysPerWeek?: number | undefined }): string {
-  const days = weekdaysText(input.weekdays);
-  if (days) return days;
-  return input.daysPerWeek !== undefined ? `haftada ${formatNumber(input.daysPerWeek)}` : 'gün seçilmedi';
-}
-
 /**
- * Programın satırı: "2 gün · haftada 2 · Sal, Per · son: 22 Eyl"; gün seçilmemişse sıklık ("haftada 3"), o da
- * yoksa "gün seçilmedi". Haftalık sayı seçili gün sayısıdır, yoksa sıklık (`weekTarget` gibi).
+ * Programın satırı: "2 antrenman · haftada 2 · Sal, Per · son: 22 Eyl" (Faz 3: sayım "antrenman", "gün" yalnız hafta
+ * günleri); gün atanmamışsa sıklık ("haftada 3"), o da yoksa "gün atanmadı". Haftalık sayı atanmış gün sayısıdır,
+ * yoksa sıklık (`weekTarget` gibi).
  */
 export function programLine(input: { days: number; weekdays: readonly number[]; daysPerWeek?: number | undefined }, lastDate?: string | undefined): string {
   const weekdays = weekdaysText(input.weekdays);
   const perWeek = weekdays ? normalizeWeekdays(input.weekdays).length : input.daysPerWeek;
   return [
-    `${formatNumber(input.days)} gün`,
+    `${formatNumber(input.days)} antrenman`,
     ...(perWeek !== undefined ? [`haftada ${formatNumber(perWeek)}`] : []),
-    ...(weekdays ? [weekdays] : perWeek === undefined ? ['gün seçilmedi'] : []),
+    ...(weekdays ? [weekdays] : perWeek === undefined ? ['gün atanmadı'] : []),
     ...(lastDate ? [`son: ${formatDayShort(lastDate)}`] : []),
   ].join(' · ');
 }
@@ -65,7 +59,7 @@ export function lastDateByDay(index: Pick<SessionIndex, 'items'>): Map<string, s
 
 /**
  * PT'nin programı kalıcı seçimden sonra oluşturuldu ya da kaydedildi mi (Bugün'deki "Antrenörün yeni bir program
- * hazırladı" satırı, Programlar'daki "Güncellendi" rozeti, §2.6): yalnız kalıcı seçim kendi programken.
+ * hazırladı" satırı, Program'daki "Güncellendi" rozeti, §2.6): yalnız kalıcı seçim kendi programken.
  */
 export function ptUpdatedSince(program: { createdAt: string; updatedAt: string } | null | undefined, active: { programId: string | null; at: string } | null | undefined): boolean {
   if (!program || !active?.programId) return false;

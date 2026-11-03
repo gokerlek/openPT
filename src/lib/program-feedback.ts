@@ -36,7 +36,7 @@ import { extraKey, type ExtraRows, type RowPrevious, type WorkoutDay, type Worko
  *   motorun işi). Genişlik korunur: yukarıda en düşük sete göre (8–12, en düşük set 14 → 10–14), aşağıda
  *   en iyi sete göre. Düz setlerde doğrudan (`clientTargets`), piramit/back-off/AMRAP'ta PT'ye öneri.
  * - **Set sayısı** (yapılan çalışma seti plandan fazla ya da bilerek geçilip az, aynı yönde üst üste 2 antrenman),
- *   **hareket geçildi** (aynı satır aynı nedenle üst üste 2 antrenman; "Hareketi geç" ile, erken bitişte yalnız
+ *   **hareket geçildi** (aynı satır aynı nedenle üst üste 2 antrenman; "Bu hareketi atla" ile, erken bitişte yalnız
  *   yapılmadan kalan sayılmaz) → PT'ye öneri, seçili. **"Değiştir"** ile
  *   yapılan muadil ve **eklenen hareket** → PT'ye öneri, seçili değil. Öneri katmanının set artışı
  *   (`algo_sets`, §5.6) dışarıdan gelir, seçili.
@@ -251,7 +251,7 @@ function setsItem(context: RowContext, previous: RowPrevious | undefined): Feedb
   const sets = working(entry);
   const done = sets.length;
   const planned = plannedCount(sets, row);
-  // Az: bilerek geçilen setler ("Hareketi geç"); erken bitişte yapılmadan kalanlar sayılmaz.
+  // Az: bilerek geçilen setler ("Bu hareketi atla"); erken bitişte yapılmadan kalanlar sayılmaz.
   const now = done > planned ? 'up' : done < planned && skippedOn(entry) ? 'down' : null;
   const before = previous.done > previous.planned ? 'up' : previous.done < previous.planned && previous.done > 0 && previous.skipped ? 'down' : null;
   if (!now || now !== before || (now === 'down' && doc.adjust === 'lighter')) return null;
@@ -272,7 +272,10 @@ function setsItem(context: RowContext, previous: RowPrevious | undefined): Feedb
   };
 }
 
-/** Bilerek geçildi: Geçilenler'de ya da sona alındı. Erken bitişte yalnız yapılmadan kalan hareket geçilmiş sayılmaz. */
+/**
+ * Bilerek geçildi: atlandı (`skip.moved`; listede geri alınsa da kalır, toast'taki "Geri al" atlamayı hiç olmamış
+ * sayar; eski seanslarda "sona alındı"). Erken bitişte yalnız yapılmadan kalan hareket geçilmiş sayılmaz.
+ */
 function skippedOn(entry: Pick<SessionEntry, 'status' | 'skip'>): boolean {
   return entry.status === 'skipped' || entry.skip?.moved === true;
 }

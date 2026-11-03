@@ -1,13 +1,14 @@
 'use client';
 
 import { useDeferredValue, useMemo, useRef, useState } from 'react';
-import { CaretDown, Check, MagnifyingGlass } from '@phosphor-icons/react';
+import { CaretDown, MagnifyingGlass } from '@phosphor-icons/react';
+import { Check } from '@/components/line-icons';
 import { ProgressChart } from '@/components/progress-chart';
 import { Badge } from '@/components/ui/badge';
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '@/components/ui/empty';
 import { InputGroup, InputGroupAddon, InputGroupInput } from '@/components/ui/input-group';
 import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from '@/components/ui/item';
-import { Sheet, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { fold } from '@/lib/exercise-search';
 import { formatDay, formatDayShort, formatWithUnit } from '@/lib/format';
@@ -31,7 +32,7 @@ import {
 import { forecastAsOf, rangeStart, type RangePreset } from '@/lib/trend';
 import { cn } from '@/lib/utils';
 import { ProgressCard, SubHeading } from './progress-card';
-import { ProgressSheetContent } from './progress-sheet';
+import { ProgressSheet, ProgressSheetContent } from './progress-sheet';
 
 /** Grafiğin tarih aralıkları; 375 px'te tek satıra sığan kısa adlar. */
 const RANGES = [
@@ -335,8 +336,8 @@ function ExercisePicker({
   }, [exercises, deferred]);
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange} onOpenChangeComplete={(next) => (next ? undefined : setSearch(''))}>
-      <ProgressSheetContent viewer={viewer} showCloseButton={false} initialFocus={title}>
+    <ProgressSheet viewer={viewer} open={open} onOpenChange={onOpenChange} onOpenChangeComplete={(next) => (next ? undefined : setSearch(''))}>
+      <ProgressSheetContent showCloseButton={false} initialFocus={title}>
         <SheetHeader className="gap-1 pt-5 pb-3">
           <SheetTitle ref={title} tabIndex={-1} className="text-lg font-semibold outline-none">
             Hareket seç
@@ -399,6 +400,6 @@ function ExercisePicker({
           )}
         </div>
       </ProgressSheetContent>
-    </Sheet>
+    </ProgressSheet>
   );
 }

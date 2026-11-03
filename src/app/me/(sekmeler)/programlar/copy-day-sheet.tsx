@@ -2,18 +2,17 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { CopySimple, Plus } from '@phosphor-icons/react';
+import { CopySimple } from '@phosphor-icons/react';
+import { Plus } from '@/components/line-icons';
 import { Button } from '@/components/ui/button';
 import { Item, ItemContent, ItemDescription, ItemMedia, ItemTitle } from '@/components/ui/item';
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { Drawer, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle } from '@/components/ui/drawer';
 import { OWN_PROGRAM_LIMITS } from '@/lib/own-programs';
 
-const BOTTOM = 'gap-0 rounded-t-2xl pb-[env(safe-area-inset-bottom)] max-h-[calc(100dvh-max(1rem,env(safe-area-inset-top)))]';
-
 /**
- * Antrenörünün programında günün altındaki "Kendi programına kopyala" (`docs/design/kendi-program.md` §2.2): sheet
- * "Yeni programa" ya da var olan programlar (7 günü dolu olan pasif). Kopya anlık görüntüdür; var olan programa
- * kopyalamak o programın düzenleyicisini günü eklenmiş olarak açar (kaydetmek danışanın işi).
+ * Antrenörünün programında her programın (günün) altındaki "Kendi programına kopyala" (`docs/design/kendi-program.md`
+ * §2.2): sheet "Yeni programa" ya da var olan programlar (7 antrenmanı dolu olan pasif). Kopya anlık görüntüdür; var
+ * olan programa kopyalamak o programın düzenleyicisini program eklenmiş olarak açar (kaydetmek danışanın işi).
  */
 export function CopyDaySheet({
   dayId,
@@ -34,12 +33,12 @@ export function CopyDaySheet({
         <CopySimple data-icon="inline-start" />
         Kendi programına kopyala
       </Button>
-      <Sheet open={open} onOpenChange={setOpen}>
-        <SheetContent side="bottom" className={BOTTOM}>
-          <SheetHeader className="gap-1.5 pt-5">
-            <SheetTitle className="text-lg font-semibold">{dayName} nereye kopyalansın?</SheetTitle>
-            <SheetDescription>Kopya o anki hâliyle alınır; antrenörün günü sonra değiştirse de kopyan değişmez.</SheetDescription>
-          </SheetHeader>
+      <Drawer open={open} onOpenChange={setOpen}>
+        <DrawerContent className="gap-0">
+          <DrawerHeader className="gap-1.5 pt-5">
+            <DrawerTitle className="text-lg font-semibold">{dayName} nereye kopyalansın?</DrawerTitle>
+            <DrawerDescription>Kopya o anki hâliyle alınır; antrenörün bu programı sonra değiştirse de kopyan değişmez.</DrawerDescription>
+          </DrawerHeader>
           <div className="flex flex-col gap-2 overflow-y-auto px-4 pb-4">
             {canCreate ? (
               <Item variant="outline" className="touch:min-h-11" render={<Link href={`/me/programlar/yeni?${query}`} onClick={() => setOpen(false)} />}>
@@ -59,7 +58,7 @@ export function CopyDaySheet({
                 <Item key={program.id} variant="outline" className="opacity-60" aria-disabled>
                   <ItemContent>
                     <ItemTitle className="break-words">{program.name}</ItemTitle>
-                    <ItemDescription>{OWN_PROGRAM_LIMITS.days} gün dolu</ItemDescription>
+                    <ItemDescription>{OWN_PROGRAM_LIMITS.days} antrenman dolu</ItemDescription>
                   </ItemContent>
                 </Item>
               ) : (
@@ -70,14 +69,14 @@ export function CopyDaySheet({
                   render={<Link href={`/me/programlar/${program.id}/duzenle?${query}`} onClick={() => setOpen(false)} />}>
                   <ItemContent>
                     <ItemTitle className="break-words">{program.name}</ItemTitle>
-                    <ItemDescription className="tabular-nums">{program.days} gün</ItemDescription>
+                    <ItemDescription className="tabular-nums">{program.days} antrenman</ItemDescription>
                   </ItemContent>
                 </Item>
               );
             })}
           </div>
-        </SheetContent>
-      </Sheet>
+        </DrawerContent>
+      </Drawer>
     </>
   );
 }

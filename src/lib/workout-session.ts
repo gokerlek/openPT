@@ -1,3 +1,4 @@
+import { cardioParts, cardioText, minutesOf, walkKcal, type CardioKind } from './cardio.ts';
 import { formatKg, formatNumber } from './format.ts';
 import { isFullLoad, isOverload, nextSetInPlan, type Effort, type SetTarget, type TrackingType } from './progression.ts';
 import { SESSION_ID_LENGTHS, SESSION_LIMITS, type SessionDoc, type SessionEntry, type SessionSet } from './schemas/session.ts';
@@ -11,8 +12,10 @@ import {
   entryStatusOf,
   prefillSet,
   remaining,
+  rowKeyOf,
   slotDone,
   workoutCursor,
+  type CursorUnit,
   type PlanOverrides,
   type PreviousSet,
   type Stamp,
@@ -22,7 +25,7 @@ import { dayBody, entryPlanOf, type WorkoutDay, type WorkoutRow } from './workou
 
 /**
  * Antrenman ekranının telefondaki işleri (tasarım §2.4, §2.5, §4.2) — saf: yeni belge, sıradaki set ve
- * önceden dolu değerleri, "Set bitti", setin düzeltilmesi ve silinmesi, su, bitiş özeti, ekran metinleri.
+ * önceden dolu değerleri, "Set bitti", setin düzenlenmesi, silinmesi ve "Geri al"la geri gelmesi, su, bitiş özeti, ekran metinleri.
  * Belge değişiklikleri `session-merge.ts`'in kanonik biçimine döner; imleç `workout-cursor.ts`'ten.
  *
  * - Hareket kaydı (entry) ilk setle oluşur; set o günkü hedefi (`target`), planın üst ağırlığını ve set
@@ -119,8 +122,9 @@ export function cursorOverrides(day: Pick<WorkoutDay, 'rows' | 'extraRounds'>): 
   };
 }
 
-export function cursorOf(day: WorkoutDay, doc: Pick<SessionDoc, 'entries' | 'order'>): WorkoutCursor {
-  return workoutCursor(dayBody(day), doc, cursorOverrides(day));
+/** Günün imleci; `focus` (birim anahtarı) verilince sıradaki set yalnız o birimde aranır (`workoutCursor`). */
+export function cursorOf(day: WorkoutDay, doc: Pick<SessionDoc, 'entries' | 'order'>, focus?: string | null): WorkoutCursor {
+  return workoutCursor(dayBody(day), doc, cursorOverrides(day), focus);
 }
 
 export function templateRowOf(day: WorkoutDay, rowId: string): TemplateRow | undefined {
@@ -217,8 +221,36 @@ export function setViews(day: WorkoutDay, doc: Pick<SessionDoc, 'entries'>, rowI
   return [...planned, ...extras];
 }
 
+/** Setin girilen değerleri: ağırlık, tekrar ya da süre (`value`), kardiyoda mesafe ve eğim (`cardio.ts`). */
+export type SetValues = {
+  kg?: number | undefined;
+  value?: number | undefined;
+  distanceM?: number | undefined;
+  inclinePct?: number | undefined;
+};
+
 /** Kaydedilmemiş taslak: danışanın stepper'la değiştirdiği değerler (yalnız o set için). */
-export type SetDraft = { rowId: string; setIndex: number; kg?: number | undefined; value?: number | undefined };
+export type SetDraft = { rowId: string; setIndex: number } & SetValues;
+
+/**
+ * Seçili setin dışındaki setlere yazılanlar: danışan bir satıra yazıp ✓'lamadan başka sete geçince değerler o satırda
+ * kalır (set ✓'lanmadıkça yapılmış sayılmaz). Aynı setin eskisinin yerine yazılır.
+ */
+export function keepTyped(typed: readonly SetDraft[], draft: SetDraft): SetDraft[] {
+  return [...withoutTyped(typed, draft.rowId, draft.setIndex), draft];
+}
+
+/** Setin yazılanı listeden düşer; listede yoksa aynı liste. */
+export function withoutTyped(typed: readonly SetDraft[], rowId: string, setIndex: number): readonly SetDraft[] {
+  const rest = typed.filter((item) => item.rowId !== rowId || item.setIndex !== setIndex);
+  return rest.length === typed.length ? typed : rest;
+}
+
+/** Yalnız hâlâ bekleyen setlerin yazılanları (yapılan, artık günde olmayan set düşer); değişmediyse aynı liste. */
+export function pendingTyped(day: WorkoutDay, doc: Pick<SessionDoc, 'entries'>, typed: readonly SetDraft[]): readonly SetDraft[] {
+  const rest = typed.filter((item) => setViews(day, doc, item.rowId).some((view) => view.setIndex === item.setIndex && !view.logged));
+  return rest.length === typed.length ? typed : rest;
+}
 
 export type NextSet = {
   /** İmlecin birimi (blok): hareket kartının kimliği. */
@@ -235,51 +267,144 @@ export type NextSet = {
   /** Önceden dolu ağırlık (ağırlıksız harekette yok) ve tekrar/süre. */
   kg: number | undefined;
   value: number;
+  /** Kardiyoda önceden dolu mesafe, yürüyüş/koşuda eğim (`cardioPrefill`); yoksa boş. */
+  distanceM?: number;
+  inclinePct?: number;
   /** Birimin turu (0'dan; fazladan turda planın turlarının arkasından): grubun "Tur 2/3"ü. */
   round: number;
   /** "+ Set ekle" ile istenen fazladan set. */
   extra?: true;
+  /** Danışan tablodan seçti (imlecin sırası dışında): dinlenme bu setin ardındaki, grupta üye geçişi sayılmaz (`afterLog`). */
+  chosen?: true;
 };
 
-/** Sıradaki set ve önceden dolu değerleri; hepsi yapıldıysa null. */
-export function nextSet(day: WorkoutDay, doc: Pick<SessionDoc, 'entries' | 'order'>, draft?: SetDraft | null): NextSet | null {
-  const cursor = cursorOf(day, doc);
+/**
+ * Sıradaki set ve önceden dolu değerleri; hepsi yapıldıysa null. `focus`: yalnız o birimin sıradaki seti
+ * (birimde set kalmadıysa null). Odakta taslak aynı zamanda seçimdir: danışan tablodan bekleyen başka bir seti seçtiyse
+ * (kutusuna dokundu, yazdı) sıradaki set odur; setler istenen sırayla yapılabilir (`chosenSet`).
+ */
+export function nextSet(
+  day: WorkoutDay,
+  doc: Pick<SessionDoc, 'entries' | 'order'>,
+  draft?: SetDraft | null,
+  focus?: string | null,
+  typed?: readonly SetDraft[] | null,
+): NextSet | null {
+  const cursor = cursorOf(day, doc, focus);
+  const chosen = draft && focus != null ? chosenSet(day, doc, cursor, draft, focus, typed) : null;
+  if (chosen) return chosen;
   const position = cursor.next;
   if (!position?.rowId) return null;
-  const row = day.rows[position.rowId];
-  const template = templateRowOf(day, position.rowId);
   const unit = cursor.units[position.unit];
   const all = setViews(day, doc, position.rowId);
-  const views = all.filter((item) => !item.extra);
-  const view = position.extra === undefined ? views.find((item) => !item.logged) : all.find((item) => item.extra && !item.logged);
-  if (!row || !template || !unit || !view) return null;
+  const view = all.find((item) => (position.extra === undefined ? !item.extra : item.extra) && !item.logged);
+  if (!unit || !view) return null;
+  return setAt(day, doc, { unit, rowId: position.rowId, all, view, round: position.round, restAfterSeconds: position.restAfterSeconds }, draft, typed);
+}
 
-  const entry = entryForRow(doc.entries, position.rowId);
-  const own = draft && draft.rowId === position.rowId && draft.setIndex === view.setIndex ? draft : null;
-  const common = { unitKey: unit.key, rowId: position.rowId, position: view.position, total: all.length, setIndex: view.setIndex, target: view.target, plannedKg: view.plannedKg, restAfterSeconds: position.restAfterSeconds, round: position.round };
+/**
+ * Taslağın seti odaktaki birimde henüz yapılmadıysa sıradaki set odur. İmlecin kendi seti seçiliyse ya da seçim geçersizse
+ * (set yapıldı, üye geçildi, başka birimin seti) null: imleç karar verir. Bekleyen fazladan setler birbirinin aynısı: hangisi
+ * seçilirse seçilsin ilki yapılır. Dinlenme o setin ardındaki; antrenmanda başka set kalmadıysa yok.
+ */
+function chosenSet(
+  day: WorkoutDay,
+  doc: Pick<SessionDoc, 'entries' | 'order'>,
+  cursor: WorkoutCursor,
+  draft: SetDraft,
+  focus: string,
+  typed: readonly SetDraft[] | null | undefined,
+): NextSet | null {
+  const unitIndex = cursor.units.findIndex((item) => item.key === focus);
+  const unit = cursor.units[unitIndex];
+  const member = unit ? unit.members.findIndex((item) => item.rowId === draft.rowId) : -1;
+  if (!unit || member < 0) return null;
+  const all = setViews(day, doc, draft.rowId);
+  const picked = all.find((item) => item.setIndex === draft.setIndex && !item.logged);
+  const view = picked?.extra ? all.find((item) => item.extra && !item.logged) : picked;
+  if (!view) return null;
+  const extra = view.extra === true;
+  const slot = unit.slots.find((item) => item.member === member && (item.extra !== undefined) === extra && !slotDone(unit, item));
+  if (!slot) return null;
+  const first = all.find((item) => Boolean(item.extra) === extra && !item.logged);
+  const next = cursor.next;
+  if (next && next.unit === unitIndex && next.member === member && (next.extra !== undefined) === extra && first === view) return null;
+  const left = cursor.units.reduce((sum, item) => sum + item.slots.filter((candidate) => !slotDone(item, candidate)).length, 0);
+  const set = setAt(day, doc, { unit, rowId: draft.rowId, all, view, round: slot.round, restAfterSeconds: left > 1 ? slot.restAfterSeconds : 0 }, draft, typed);
+  return set && { ...set, chosen: true };
+}
+
+/**
+ * Kardiyo setinin önceden dolu mesafesi ve eğimi (kuvvet setlerindeki gibi): taslak → o sete yazılan → hedef → geçen
+ * seferin aynı seti; hiçbiri yoksa boş. Eğim yalnız yürüyüş/koşuda; kardiyo olmayan satırda ikisi de yok.
+ */
+function cardioPrefill(row: WorkoutRow, target: SetTarget, setIndex: number, own: readonly (SetDraft | undefined)[]): Pick<NextSet, 'distanceM' | 'inclinePct'> {
+  if (!row.cardio) return {};
+  const last = row.lastTime.find((item) => item.setIndex === setIndex);
+  const pick = (key: 'distanceM' | 'inclinePct') => own.map((item) => item?.[key]).find((value) => value !== undefined) ?? target[key] ?? last?.[key];
+  const distanceM = pick('distanceM');
+  const inclinePct = row.cardio === 'walk' ? pick('inclinePct') : undefined;
+  return { ...(distanceM !== undefined ? { distanceM } : {}), ...(inclinePct !== undefined ? { inclinePct } : {}) };
+}
+
+/** Satırın bekleyen bir seti (`view`) ve önceden dolu değerleri: taslağınki, yoksa o sete yazılan (`typed`), yoksa öneri. */
+function setAt(
+  day: WorkoutDay,
+  doc: Pick<SessionDoc, 'entries'>,
+  at: { unit: CursorUnit; rowId: string; all: SetView[]; view: SetView; round: number; restAfterSeconds: number },
+  draft: SetDraft | null | undefined,
+  typed: readonly SetDraft[] | null | undefined,
+): NextSet | null {
+  const { view, all } = at;
+  const row = day.rows[at.rowId];
+  const template = templateRowOf(day, at.rowId);
+  if (!row || !template) return null;
+
+  const entry = entryForRow(doc.entries, at.rowId);
+  const mine = (item: SetDraft | null | undefined): item is SetDraft => item != null && item.rowId === at.rowId && item.setIndex === view.setIndex;
+  const drafted = mine(draft) ? draft : undefined;
+  const saved = typed?.find(mine);
+  const own = { kg: drafted?.kg ?? saved?.kg, value: drafted?.value ?? saved?.value };
+  // Yürüyüş/koşuda önceden dolu süre tam dakika: kutu dakika gösterir (599 sn "10" görünüp 9:59 kaydedilmesin).
+  const whole = (seconds: number) => (row.cardio === 'walk' && seconds > 0 ? Math.max(60, Math.round(seconds / 60) * 60) : seconds);
+  const common = {
+    unitKey: at.unit.key,
+    rowId: at.rowId,
+    position: view.position,
+    total: all.length,
+    setIndex: view.setIndex,
+    target: view.target,
+    plannedKg: view.plannedKg,
+    restAfterSeconds: at.restAfterSeconds,
+    round: at.round,
+    ...cardioPrefill(row, view.target, view.setIndex, [drafted, saved]),
+  };
   if (view.extra) {
     // Fazladan set: ağırlık bu hareketin son setinden (danışanın bugünkü ağırlığı), tekrar aralığın altı.
     const lastKg = entry?.sets.filter((set) => set.type === 'working' && set.kg !== undefined).at(-1)?.kg;
-    const kg = row.trackingType === 'weight_reps' ? (own?.kg ?? lastKg ?? view.plannedKg) : undefined;
+    const kg = row.trackingType === 'weight_reps' ? (own.kg ?? lastKg ?? view.plannedKg) : undefined;
     const cap = row.adjusted ? extraPlanOf(row, template).cap : undefined;
-    const value = own?.value ?? prefillSet({ target: view.target, setIndex: view.setIndex, plannedKg: kg, lastTime: row.lastTime, cap }).value;
+    const value = own.value ?? whole(prefillSet({ target: view.target, setIndex: view.setIndex, plannedKg: kg, lastTime: row.lastTime, cap }).value);
     return { ...common, kg, value, extra: true };
   }
 
+  const views = all.filter((item) => !item.extra);
   const before = views.slice(0, view.position).flatMap((item) => (item.logged ? [item.logged] : []));
   // Bugünün setleri hafifletilen günde de sayılır: planın gerekçesi (`lighten`) yalnız sonraki antrenmanın
   // süzgecidir (`toSetResults`); burada kalsa önceki setin ağırlığı ve inişi sıradaki sete geçmezdi.
   const done = entry ? toSetResults({ ...entry, plan: undefined, sets: before }) : [];
-  const suggestion = nextSetInPlan({ spec: row.spec, rule: row.rule, sets: template.sets, plan: row.plan, done, raise: !row.adjusted });
+  // Önündeki bir set yapılmadıysa (sırası dışında seçildi) motorun önerisi bu setin değil: planın ağırlığı.
+  const suggestion =
+    before.length === view.position ? nextSetInPlan({ spec: row.spec, rule: row.rule, sets: template.sets, plan: row.plan, done, raise: !row.adjusted }) : { weightKg: view.plannedKg };
   // Basamak değişirken (piramit, back-off) motor planın üst ağırlığından hesaplar; danışan önceki seti
   // plandan farklı yaptıysa onun ağırlığı kalır (aynı yüzdede motor zaten önceki setin ağırlığını verir).
   const previous = views[view.position - 1];
   const changed =
     previous?.logged?.kg !== undefined && Math.abs(previous.logged.kg - previous.plannedKg) > 0.001 && (previous.target.loadPct ?? 100) !== (view.target.loadPct ?? 100);
-  const kg = row.trackingType === 'weight_reps' ? (own?.kg ?? (changed ? previous?.logged?.kg : undefined) ?? suggestion.weightKg) : undefined;
+  const kg = row.trackingType === 'weight_reps' ? (own.kg ?? (changed ? previous?.logged?.kg : undefined) ?? suggestion.weightKg) : undefined;
   // Yoklamanın indirdiği gün: önceden dolu tekrar/süre planın bu setteki hedefini aşmaz (`prefillSet`).
   const cap = row.adjusted ? row.plan.sets.find((item) => item.setIndex === view.setIndex)?.target : undefined;
-  const value = own?.value ?? prefillSet({ target: view.target, setIndex: view.setIndex, plannedKg: kg, lastTime: row.lastTime, cap }).value;
+  const value = own.value ?? whole(prefillSet({ target: view.target, setIndex: view.setIndex, plannedKg: kg, lastTime: row.lastTime, cap }).value);
   return { ...common, kg, value };
 }
 
@@ -326,7 +451,7 @@ function entryFor(day: WorkoutDay, doc: SessionDoc, rowId: string, stamp: Stamp,
 
 /**
  * Günün her satırının kaydı (henüz yoksa boş, `pending`; geçen seferki ayar notu taşınır). Yapılış sırası
- * (`order`) hareket kimlikleriyle yazıldığı için "geç", "şimdi yap" ve "hareket ekle" önce bunu ister:
+ * (`order`) hareket kimlikleriyle yazıldığı için "atla", "sırayı değiştir" ve "hareket ekle" önce bunu ister:
  * kaydı olmayan hareket sırada yer tutamaz. Hepsi varsa aynı belge.
  */
 export function ensureEntries(day: WorkoutDay, doc: SessionDoc, stamp: Stamp, random?: Random): SessionDoc {
@@ -355,12 +480,24 @@ function putEntry(doc: SessionDoc, entry: SessionEntry, extra: Partial<Pick<Sess
  * "Set bitti": hareketin kaydı yoksa oluşur; set o günkü hedefi ve planı taşır. Ağırlık yalnız
  * ağırlıklı harekette; süreli harekette değer saniyedir. `overload`: aşırı yük onaylandı (ya da bu
  * harekette zaten onaylanmıştı); hareketin ilk aşırı yük setinde PT'ye bildirim (`notices`). `extra`:
- * "+ Set ekle" ile istenen fazladan set (`setIndex` planın arkasından; hedefi ve planı planın son setinin).
+ * "+ Set ekle" ile istenen fazladan set (`setIndex` planın arkasından; hedefi ve planı planın son setinin). Kardiyoda
+ * mesafe, yürüyüş/koşuda eğim de yazılır.
  */
 export function logSet(
   day: WorkoutDay,
   doc: SessionDoc,
-  input: { rowId: string; setIndex: number; kg?: number | undefined; value: number; overload?: boolean; extra?: boolean; stamp: Stamp; random?: Random },
+  input: {
+    rowId: string;
+    setIndex: number;
+    kg?: number | undefined;
+    value: number;
+    distanceM?: number | undefined;
+    inclinePct?: number | undefined;
+    overload?: boolean;
+    extra?: boolean;
+    stamp: Stamp;
+    random?: Random;
+  },
 ): { doc: SessionDoc; setId: string } {
   const row = day.rows[input.rowId];
   const template = templateRowOf(day, input.rowId);
@@ -380,6 +517,9 @@ export function logSet(
     setIndex: input.setIndex,
     ...(weighted && input.kg !== undefined ? { kg: input.kg } : {}),
     ...(row.trackingType === 'duration' ? { seconds: input.value } : { reps: input.value }),
+    // Kardiyoda mesafe; yürüyüş/koşuda eğim hep (girilmediyse 0): kalori yalnız eğimi olan sette (`cardio.ts`).
+    ...(row.cardio && input.distanceM !== undefined ? { distanceM: input.distanceM } : {}),
+    ...(row.cardio === 'walk' ? { inclinePct: input.inclinePct ?? 0 } : {}),
     ...(target ? { target } : {}),
     ...(weighted ? { topWeightKg: row.plan.topWeightKg } : {}),
     plannedSetCount: row.plan.sets.length,
@@ -417,8 +557,13 @@ export function findSet(doc: Pick<SessionDoc, 'entries'>, setId: string): { entr
   return null;
 }
 
-/** "Seti düzelt": değerler değişir, yapıldığı an (`at`) değişmez; birleştirme `editedAt`'le. */
-export function editSet(doc: SessionDoc, setId: string, values: { kg?: number | undefined; value: number }, stamp: Stamp): SessionDoc {
+/** Setin düzenlenmesi (alttaki panelin "Kaydet"i): değerler değişir, yapıldığı an (`at`) değişmez; birleştirme `editedAt`'le. */
+export function editSet(
+  doc: SessionDoc,
+  setId: string,
+  values: { kg?: number | undefined; value: number; distanceM?: number | undefined; inclinePct?: number | undefined },
+  stamp: Stamp,
+): SessionDoc {
   const found = findSet(doc, setId);
   if (!found) return doc;
   const { set } = found;
@@ -426,6 +571,9 @@ export function editSet(doc: SessionDoc, setId: string, values: { kg?: number | 
     ...set,
     ...(set.kg !== undefined || values.kg !== undefined ? { kg: values.kg ?? set.kg } : {}),
     ...(set.seconds !== undefined ? { seconds: values.value } : { reps: values.value }),
+    // Kardiyo: verilen alan değişir, verilmeyen kalır.
+    ...(values.distanceM !== undefined ? { distanceM: values.distanceM } : {}),
+    ...(values.inclinePct !== undefined ? { inclinePct: values.inclinePct } : {}),
     editedAt: stamp.at,
     by: stamp.by,
   };
@@ -433,7 +581,7 @@ export function editSet(doc: SessionDoc, setId: string, values: { kg?: number | 
   return normalizeSession({ ...doc, entries });
 }
 
-/** Setin zorluğu ("Seti düzelt", "Kolaydı" kısayolu); `undefined` zorluğu kaldırır (motor `good` sayar). */
+/** Setin zorluğu (setin düzenlenmesi, "Kolaydı" kısayolu); `undefined` zorluğu kaldırır (motor `good` sayar). */
 export function setSetEffort(doc: SessionDoc, setId: string, effort: Effort | undefined, stamp: Stamp): SessionDoc {
   const found = findSet(doc, setId);
   if (!found || found.set.type !== 'working' || found.set.effort === effort) return doc;
@@ -443,16 +591,66 @@ export function setSetEffort(doc: SessionDoc, setId: string, effort: Effort | un
   return normalizeSession({ ...doc, entries });
 }
 
-/** "Seti sil" (etkin antrenmanda): kimlik kalıcı iz listesine girer, hareketin durumu yeniden hesaplanır. */
+/** Kaydın durumunu hesaplayan planlı set sayısı (silme ve geri getirme aynı kuralla). */
+function plannedOf(day: WorkoutDay, entry: SessionEntry): number {
+  return entry.rowId ? (day.rows[entry.rowId]?.plan.sets.length ?? 0) : (entry.plannedSets ?? 0);
+}
+
+/**
+ * Seti siler (etkin antrenmanda: ✓'u kaldırmak, sola kaydırıp "Sil", panelin "Seti sil"i): kimlik kalıcı iz listesine girer,
+ * hareketin durumu yeniden hesaplanır.
+ */
 export function deleteSet(day: WorkoutDay, doc: SessionDoc, setId: string, stamp: Stamp): SessionDoc {
   const found = findSet(doc, setId);
   if (!found) return doc;
   const removed = withDeletions(doc, { setIds: [setId] });
-  const planned = found.entry.rowId ? (day.rows[found.entry.rowId]?.plan.sets.length ?? 0) : (found.entry.plannedSets ?? 0);
+  const planned = plannedOf(day, found.entry);
   return normalizeSession({
     ...removed,
     entries: removed.entries.map((entry) => (entry.id === found.entry.id ? withStatus(entry, planned, stamp) : entry)),
   });
+}
+
+/**
+ * Silinen setin toast'taki "Geri al"ı: set aynı kayda **yeni kimlikle** döner (eski kimlik kalıcı iz listesinde, `deleteSet`;
+ * birleşim onu her kopyadan siler). Değerleri, zorluğu, yeri (`setIndex`) ve yapıldığı an (`at`) aynı: "şu an" ve sıralama
+ * bozulmaz; hareketin durumu yeniden hesaplanır. Olmazsa null: kayıt yok ya da hareketi değişti (o arada muadil seçildi), ya
+ * da o yerde yine bir set var (o arada yeniden yapıldı; iki set aynı yeri tutmaz), ya da fazladan set geri gelemez
+ * (`extraRestorable`). `removedAt`: silmenin anı (yoksa yalnız sayı denetlenir). `day`: geri getirmeden sonraki istenen
+ * turlarla (silmenin bıraktığı tur da geri gelecekse onunla).
+ */
+export function restoreSet(
+  day: WorkoutDay,
+  doc: SessionDoc,
+  removed: { entry: Pick<SessionEntry, 'id' | 'exerciseId'>; set: SessionSet; removedAt?: string | undefined },
+  stamp: Stamp,
+  random?: Random,
+): { doc: SessionDoc; setId: string } | null {
+  const entry = doc.entries.find((item) => item.id === removed.entry.id);
+  const { set } = removed;
+  if (!entry || entry.exerciseId !== removed.entry.exerciseId) return null;
+  if (entry.sets.some((item) => item.type === set.type && item.setIndex === set.setIndex && Boolean(item.extra) === Boolean(set.extra))) return null;
+  if (set.extra && !extraRestorable(day, entry, removed.removedAt)) return null;
+  const setId = randomId('st', SESSION_ID_LENGTHS.st, takenIds(doc), random);
+  const back: SessionSet = { ...set, id: setId, by: stamp.by };
+  return { doc: putEntry(doc, withStatus({ ...entry, sets: [...entry.sets, back] }, plannedOf(day, entry), stamp)), setId };
+}
+
+/**
+ * Silinen fazladan set geri gelebilir mi. Fazladan setlerin yeri sabit değil (bekleyen set yapılanların arkasından
+ * sayılır): ✓'u kaldırılan setin bıraktığı bekleyen set başka bir yerde yeniden yapılabilir, aynı yer denetimi bunu
+ * görmez ve geri gelen set istenmeyen bir tur olurdu. Bu yüzden hayır: silmeden sonra aynı kayda fazladan set yapıldıysa
+ * ya da yapılan fazladan setler birimin istenen turunu (`day.extraRounds`) zaten dolduruyorsa. Bu telefonda istek yoksa
+ * (fazladan setler başka cihazda yapıldı, istek yalnız telefonda tutulur) sayı denetlenmez: geri almak bozulmasın.
+ */
+function extraRestorable(day: WorkoutDay, entry: SessionEntry, removedAt: string | undefined): boolean {
+  const extras = extrasOf(entry);
+  const since = removedAt ? Date.parse(removedAt) : Number.NaN;
+  if (!Number.isNaN(since) && extras.some((item) => Date.parse(item.at) > since)) return false;
+  const rowKey = rowKeyOf(entry);
+  const unitKey = rowKey ? unitKeyOfRow(day, rowKey) : undefined;
+  const requested = unitKey ? (day.extraRounds?.[unitKey] ?? 0) : 0;
+  return requested === 0 || extras.length < requested;
 }
 
 /** "Su içtim" (+1) ya da "Geri al" (−1 dokunuşu, kalıcı). */
@@ -463,29 +661,57 @@ export function addWaterTap(doc: SessionDoc, d: 1 | -1, stamp: Stamp, random?: R
 
 /* --- "Set bitti"den sonra ne olur --- */
 
+/**
+ * Grupta üyenin o turdaki setinin ardından aynı turda gelen (yapılmamış) başka üye: "Set bitti → B" ve dinlenmesiz geçiş.
+ * Tur bitiyorsa ya da grup değilse null.
+ */
+export function memberAfter(unit: CursorUnit, member: number, round: number): number | null {
+  if (unit.kind === 'single') return null;
+  const at = unit.slots.findIndex((slot) => slot.member === member && slot.round === round);
+  if (at < 0) return null;
+  const following = unit.slots.slice(at + 1).find((slot) => !slotDone(unit, slot));
+  return following && following.round === round && following.member !== member ? following.member : null;
+}
+
 export type AfterLog =
   /** Aynı harekette sıradaki set: dinlenme (0 ise doğrudan giriş paneli). */
   | { kind: 'same'; restSeconds: number }
   /** Grupta aynı turun sıradaki üyesi: dinlenme yok; devrede istasyon geçişi sayar. */
   | { kind: 'member'; transitionSeconds: number }
-  /** Hareket bitti: sıradaki hareket gelir, dinlenme onun üstünde açılır. */
+  /** Hareket bitti: sıradaki birim gelir (ekran `nextUnitAfter` ile seçer), dinlenme onun üstünde açılır. */
   | { kind: 'next'; restSeconds: number }
-  /** Son hareketin son seti: dinlenme yok, bitirme sorusu. */
+  /** Hiçbir yerde yapılacak set kalmadı (istenen fazladan setler dahil): dinlenme yok, bitirme sorusu. */
   | { kind: 'done' };
 
 /**
  * `before`: set kaydedilmeden önceki belge; dinlenme o setin ardındaki (`restAfterSeconds`). Grupta
  * tur sürerken (aynı birim, aynı tur, başka üye) dinlenme yok: süperset ve komplekste 0, devrede
- * istasyon geçişi; tur sonunda blok dinlenmesi.
+ * istasyon geçişi; tur sonunda blok dinlenmesi. `focus`: setin seçildiği odak (`nextSet(…, focus)` ile
+ * aynı); set o birimde sayılır (liste + odak). Birim bitince başka bir yerde set kaldıysa `next`, kalmadıysa `done`.
+ * `logged`: kaydedilen set; tablodan sırası dışında seçildiyse (`chosen`) dinlenme onun ardındaki, üye geçişi yok.
  */
-export function afterLog(day: WorkoutDay, before: Pick<SessionDoc, 'entries' | 'order'>, after: Pick<SessionDoc, 'entries' | 'order'>): AfterLog {
-  const was = cursorOf(day, before);
-  const now = cursorOf(day, after);
-  if (!now.next) return { kind: 'done' };
-  const restSeconds = was.next?.restAfterSeconds ?? 0;
+export function afterLog(
+  day: WorkoutDay,
+  before: Pick<SessionDoc, 'entries' | 'order'>,
+  after: Pick<SessionDoc, 'entries' | 'order'>,
+  focus?: string | null,
+  logged?: Pick<NextSet, 'rowId' | 'round' | 'restAfterSeconds' | 'chosen'> | null,
+): AfterLog {
+  const was = cursorOf(day, before, focus);
+  const now = cursorOf(day, after, focus);
+  const overall = focus == null ? now : cursorOf(day, after);
+  if (!overall.next) return { kind: 'done' };
+  const chosen = logged?.chosen === true;
+  const restSeconds = chosen ? logged.restAfterSeconds : (was.next?.restAfterSeconds ?? 0);
   const oldUnit = was.next ? was.units[was.next.unit]?.key : undefined;
-  const newUnit = now.units[now.next.unit]?.key;
-  if (oldUnit !== newUnit) return { kind: 'next', restSeconds };
+  const newUnit = now.next ? now.units[now.next.unit]?.key : undefined;
+  if (!now.next || oldUnit !== newUnit) return { kind: 'next', restSeconds };
+  if (chosen) {
+    // Seçilen setin ardından aynı turda başka üye geliyorsa (grupta tur sürüyor) dinlenme yok, devrede istasyon geçişi.
+    const unit = was.units.find((item) => item.members.some((member) => member.rowId === logged.rowId));
+    const member = unit ? unit.members.findIndex((item) => item.rowId === logged.rowId) : -1;
+    return unit && memberAfter(unit, member, logged.round) !== null ? { kind: 'member', transitionSeconds: restSeconds } : { kind: 'same', restSeconds };
+  }
   if (was.next && now.next.round === was.next.round && now.next.member !== was.next.member) return { kind: 'member', transitionSeconds: restSeconds };
   return { kind: 'same', restSeconds };
 }
@@ -587,7 +813,7 @@ export function effortQuestions(day: WorkoutDay, doc: Pick<SessionDoc, 'entries'
   });
 }
 
-/** Cevap hareketin AMRAP olmayan bütün çalışma setlerine yazılır (set başına ayrım "Seti düzelt"te). */
+/** Cevap hareketin AMRAP olmayan bütün çalışma setlerine yazılır (set başına ayrım setin düzenlenmesinde). */
 export function setEntryEffort(doc: SessionDoc, entryId: string, effort: Effort, stamp: Stamp): SessionDoc {
   const entry = doc.entries.find((item) => item.id === entryId);
   if (!entry) return doc;
@@ -601,15 +827,16 @@ export function setEntryEffort(doc: SessionDoc, entryId: string, effort: Effort,
  * "Kolaydı · sonraki set X kg" (§2.5): az önce kaydedilen set aralığın tepesindeyse ve sıradaki set
  * aynı hareketin aynı yükteki setiyse, o sete `easy` yazmak sonraki seti bir adım artırır
  * (`nextSetInPlan`). Artmıyorsa (cihazın en ağır ayarı, başka yüzde, AMRAP) null. `taken`: dokunuldu.
+ * `focus`: sıradaki set odaktaki birimden (`nextSet`).
  */
-export function easyShortcut(day: WorkoutDay, doc: SessionDoc, setId: string): { kg: number; taken: boolean } | null {
+export function easyShortcut(day: WorkoutDay, doc: SessionDoc, setId: string, focus?: string | null): { kg: number; taken: boolean } | null {
   const found = findSet(doc, setId);
   const set = found?.set;
   if (!found || !set || set.type !== 'working' || set.extra || !set.target || set.target.amrap || (set.reps ?? 0) < set.target.max) return null;
-  const next = nextSet(day, doc);
+  const next = nextSet(day, doc, null, focus);
   if (!next || next.kg === undefined || next.rowId !== found.entry.rowId) return null;
   if (set.effort === 'easy') return next.kg > (set.kg ?? 0) ? { kg: next.kg, taken: true } : null;
-  const raised = nextSet(day, setSetEffort(doc, setId, 'easy', { at: set.editedAt ?? set.at, by: set.by ?? doc.writer }));
+  const raised = nextSet(day, setSetEffort(doc, setId, 'easy', { at: set.editedAt ?? set.at, by: set.by ?? doc.writer }), null, focus);
   return raised?.kg !== undefined && raised.kg > next.kg ? { kg: raised.kg, taken: false } : null;
 }
 
@@ -630,7 +857,7 @@ export type WorkoutSummary = {
   plannedSets: number;
   /** Geçilmemiş her hareketin planlı setleri yapıldı ("Antrenman tamamlandı, bitirelim mi?"). */
   allDone: boolean;
-  /** Yapılmayanlar: planlanan seti tamamlanmamış hareketler; geçilenler (Geçilenler'deki) işaretli. */
+  /** Yapılmayanlar: planlanan seti tamamlanmamış hareketler; atlananlar işaretli. */
   remaining: { rowId: string; title: string; done: number; planned: number; skipped: boolean }[];
 };
 
@@ -693,45 +920,68 @@ export function pendingExtra(day: WorkoutDay, doc: Pick<SessionDoc, 'entries' | 
 
 /* --- ekran metinleri --- */
 
-const unitOf = (trackingType: TrackingType) => (trackingType === 'duration' ? 'sn' : 'tekrar');
+const unitOf = (trackingType: TrackingType, cardio: CardioKind | null = null) =>
+  cardio === 'walk' ? 'dk' : trackingType === 'duration' ? 'sn' : 'tekrar';
 
 function range(target: Pick<SetTarget, 'min' | 'max'>): string {
   return target.min === target.max ? formatNumber(target.min) : `${formatNumber(target.min)}–${formatNumber(target.max)}`;
 }
 
-/** Tablodaki "Hedef" sütunu: "12", "10–12", AMRAP'ta "8+", süreli harekette "30 sn". */
-export function targetCell(target: SetTarget, trackingType: TrackingType): string {
-  const text = target.amrap ? `${formatNumber(target.min)}+` : range(target);
-  return trackingType === 'duration' ? `${text} sn` : text;
+/** Yürüyüş/koşuda hedef dakikayla anlatılır. */
+function timed(target: SetTarget, cardio: CardioKind | null): SetTarget {
+  return cardio === 'walk' ? { ...target, min: minutesOf(target.min), max: minutesOf(target.max) } : target;
 }
 
-/** Paneldeki hedef: "Hedef 8–10", AMRAP'ta "En az 8, yapabildiğin kadar", süreli "Hedef 30–45 sn". */
-export function targetText(target: SetTarget, trackingType: TrackingType): string {
-  if (target.amrap) return `En az ${formatNumber(target.min)}${trackingType === 'duration' ? ' sn' : ''}, yapabildiğin kadar`;
-  return `Hedef ${range(target)}${trackingType === 'duration' ? ' sn' : ''}`;
+/** Tablodaki "Hedef" sütunu: "12", "10–12", AMRAP'ta "8+", süreli harekette "30 sn", yürüyüş/koşuda "30 dk". */
+export function targetCell(target: SetTarget, trackingType: TrackingType, cardio: CardioKind | null = null): string {
+  const shown = timed(target, cardio);
+  const text = shown.amrap ? `${formatNumber(shown.min)}+` : range(shown);
+  return trackingType === 'duration' ? `${text} ${unitOf(trackingType, cardio)}` : text;
 }
 
-/** Kaydın metni: "62,5 kg × 10", "10 tekrar", "45 sn". */
-export function setValueText(set: Pick<SessionSet, 'kg' | 'reps' | 'seconds'>): string {
+/** Paneldeki hedef: "Hedef 8–10", AMRAP'ta "En az 8, yapabildiğin kadar", süreli "Hedef 30–45 sn"; kardiyoda mesafe ve eğim de. */
+export function targetText(target: SetTarget, trackingType: TrackingType, cardio: CardioKind | null = null): string {
+  const shown = timed(target, cardio);
+  const unit = trackingType === 'duration' ? ` ${unitOf(trackingType, cardio)}` : '';
+  const extra = cardio ? cardioParts(target).map((part) => ` · ${part}`).join('') : '';
+  if (shown.amrap) return `En az ${formatNumber(shown.min)}${unit}, yapabildiğin kadar${extra}`;
+  return `Hedef ${range(shown)}${unit}${extra}`;
+}
+
+/**
+ * Kaydın metni: "62,5 kg × 10", "10 tekrar", "45 sn"; kardiyoda "30:00 · 3 km · %5", yürüyüş/koşuda kilo verilirse
+ * "· ≈ 253 kcal" de (`cardio.ts`).
+ */
+export function setValueText(set: Pick<SessionSet, 'kg' | 'reps' | 'seconds' | 'distanceM' | 'inclinePct'>, bodyMassKg?: number): string {
+  if (set.seconds !== undefined && (set.distanceM !== undefined || set.inclinePct !== undefined)) {
+    return cardioText(set, walkKcal(set, bodyMassKg));
+  }
   const load = set.kg !== undefined && set.kg > 0 ? formatKg(set.kg) : null;
   if (set.seconds !== undefined) return load ? `${load} × ${set.seconds} sn` : `${set.seconds} sn`;
   return load ? `${load} × ${set.reps ?? 0}` : `${set.reps ?? 0} tekrar`;
 }
 
-/** "Önceki" sütunu: "60 × 10", ağırlıksızda "10", süreli "45 sn"; yoksa "—". */
-export function previousText(previous: PreviousSet | undefined, trackingType: TrackingType): string {
+/** "Önceki" sütunu: "60 × 10", ağırlıksızda "10", süreli "45 sn", yürüyüş/koşuda "30:00 · 3 km · %5"; yoksa "—". */
+export function previousText(previous: PreviousSet | undefined, trackingType: TrackingType, cardio: CardioKind | null = null): string {
   if (!previous) return '—';
-  if (trackingType === 'duration') return `${formatNumber(previous.value)} sn`;
+  if (cardio === 'walk') return cardioText({ seconds: previous.value, distanceM: previous.distanceM, inclinePct: previous.inclinePct });
+  if (trackingType === 'duration') return [`${formatNumber(previous.value)} sn`, ...(cardio ? cardioParts(previous) : [])].join(' · ');
   return previous.kg !== undefined && previous.kg > 0 && trackingType === 'weight_reps'
     ? `${formatNumber(previous.kg)} × ${formatNumber(previous.value)}`
     : formatNumber(previous.value);
 }
 
 /** Dinlenmedeki "Sıradaki": "Set 3 · 62,5 kg × 8–10"; başka harekette adıyla. */
-export function nextText(next: Pick<NextSet, 'position' | 'target' | 'kg'>, row: Pick<WorkoutRow, 'title' | 'trackingType'>, withName: boolean): string {
-  const target = next.target.amrap ? `${formatNumber(next.target.min)}+` : range(next.target);
+export function nextText(
+  next: Pick<NextSet, 'position' | 'target' | 'kg'>,
+  row: Pick<WorkoutRow, 'title' | 'trackingType' | 'cardio'>,
+  withName: boolean,
+): string {
+  const cardio = row.cardio ?? null;
+  const shown = timed(next.target, cardio);
+  const target = shown.amrap ? `${formatNumber(shown.min)}+` : range(shown);
   const body =
-    next.kg !== undefined ? `${formatKg(next.kg)} × ${target}` : `${target} ${unitOf(row.trackingType)}`;
+    next.kg !== undefined ? `${formatKg(next.kg)} × ${target}` : `${target} ${unitOf(row.trackingType, cardio)}`;
   return `${withName ? `${row.title} · ` : ''}Set ${next.position + 1} · ${body}`;
 }
 

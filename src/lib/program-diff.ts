@@ -3,7 +3,7 @@ import {
   capChanges,
   currentPhaseChange,
   keepHiddenPhase,
-  reconcileRotation,
+  settleSchedule,
   type LogKind,
   type ProgramBody,
   type ProgramChange,
@@ -11,9 +11,10 @@ import {
   type ProgramPhase,
   type ProgramState,
 } from './program-plan.ts';
+import { cardioKind } from './cardio.ts';
 import { ptTargetsEdit } from './client-targets.ts';
 import { PROGRESSION_LABELS, RIR_LABELS, type TrackingType } from './progression.ts';
-import { ptScheduleEdit } from './training-days.ts';
+import { sameWeekdays, weekdaysText } from './day-assignments.ts';
 import { amrapIndexes, resizeSets, setShape, setsText, type SetSpec } from './set-plan.ts';
 import {
   BLOCK_KIND_LABELS,
@@ -40,7 +41,7 @@ import {
  */
 
 export type DiffContext = {
-  exercises: ReadonlyMap<string, { title: string; trackingType: TrackingType }>;
+  exercises: ReadonlyMap<string, { title: string; trackingType: TrackingType; pattern?: string | undefined; locomotion?: boolean | undefined }>;
   devices: ReadonlyMap<string, { name: string }>;
 };
 
@@ -99,13 +100,20 @@ function uniformCount(block: TemplateBlock): boolean {
   return block.rows.every((row) => row.sets.length === first);
 }
 
-/** Yalnız AMRAP işaretleri mi değişti (sayı, aralık, yüzde aynı). */
+/** Yalnız AMRAP işaretleri mi değişti (sayı, aralık, yüzde, mesafe, eğim aynı). */
 function amrapOnly(a: readonly SetSpec[], b: readonly SetSpec[]): boolean {
   return (
     a.length === b.length &&
     a.every((set, index) => {
       const other = b[index];
-      return other !== undefined && set.min === other.min && set.max === other.max && set.loadPct === other.loadPct;
+      return (
+        other !== undefined &&
+        set.min === other.min &&
+        set.max === other.max &&
+        set.loadPct === other.loadPct &&
+        set.distanceM === other.distanceM &&
+        set.inclinePct === other.inclinePct
+      );
     })
   );
 }
@@ -127,6 +135,11 @@ function amrapChange(a: readonly SetSpec[], b: readonly SetSpec[]): string {
 export function diffDay(before: Pick<ProgramDay, 'blocks'>, after: Pick<ProgramDay, 'blocks'>, ctx: DiffContext): string[] {
   const title = (row: TemplateRow) => ctx.exercises.get(row.exerciseId)?.title ?? row.exerciseId;
   const tt = (row: TemplateRow): TrackingType => ctx.exercises.get(row.exerciseId)?.trackingType ?? 'weight_reps';
+  // Yürüyüş/koşuda süre dakikayla yazılır (`cardio.ts`).
+  const cardioOf = (row: TemplateRow) => {
+    const exercise = ctx.exercises.get(row.exerciseId);
+    return exercise ? cardioKind(exercise) : null;
+  };
   const names = (block: TemplateBlock) => block.rows.map(title).join(' + ');
 
   const beforeRows = flatten(before.blocks);
@@ -197,13 +210,13 @@ export function diffDay(before: Pick<ProgramDay, 'blocks'>, after: Pick<ProgramD
       rowLines.push(`${name} gruptan çıkarıldı (dinlenme ${restText(next.block.restSeconds)})`);
     }
 
-    const textA = setsText(a.sets, tt(a));
-    const textB = setsText(b.sets, tt(b));
+    const textA = setsText(a.sets, tt(a), cardioOf(a));
+    const textB = setsText(b.sets, tt(b), cardioOf(b));
     if (textA !== textB) {
       const roundsOnly =
         roundsReported.has(next.block.id) &&
         previous.block.id === next.block.id &&
-        setsText(resizeSets(a.sets, b.sets.length), tt(a)) === textB;
+        setsText(resizeSets(a.sets, b.sets.length), tt(a), cardioOf(a)) === textB;
       if (tt(a) === tt(b) && amrapOnly(a.sets, b.sets)) rowLines.push(`${name}: ${amrapChange(a.sets, b.sets)}`);
       else if (!roundsOnly) rowLines.push(`${name} ${textA} → ${textB}`);
     }
@@ -304,13 +317,17 @@ export function diffProgram(before: ProgramBody, after: ProgramBody, ctx: DiffCo
     }
   }
 
-  // 2. Günler: ad (programın her yerinde); her iki sürümde de olan evrelerde ekleme, silme,
-  // sıra (yeni evrenin günleri evreyle birlikte yazılır); evresi değişen gün.
+  // 2. Günler: ad ve atandığı günler (programın her yerinde); her iki sürümde de olan evrelerde ekleme,
+  // silme, sıra (yeni evrenin günleri evreyle birlikte yazılır); evresi değişen gün. Yeni eklenen günün
+  // atandığı günler yazılmaz ("… eklendi" yeter; birleşim değiştiyse antrenman günleri cümlesi söyler).
   for (const phase of after.phases) {
     const scope = phaseScope(phase);
     for (const day of phase.days) {
       const previous = beforeDays.get(day.id)?.day;
       if (previous && previous.name !== day.name) push(`Gün adı: '${previous.name}' → '${day.name}'`, scope);
+      if (previous && !sameWeekdays(previous.weekdays, day.weekdays)) {
+        push(`Günleri: ${weekdaysText(previous.weekdays ?? []) || 'yok'} → ${weekdaysText(day.weekdays ?? []) || 'yok'}`, dayScope(phase, day));
+      }
     }
     const old = beforePhases.get(phase.id);
     if (!old) continue;
@@ -432,11 +449,13 @@ export function commitMessage(kind: LogKind, changes: readonly ProgramChange[]):
 /**
  * PT'nin kaydı: farkı çıkarır, değişiklik yoksa `null` (hiçbir şey yazılmaz). Varsa
  * revision +1, geçmişe kayıt (en fazla 60 değişiklik), şu anki evre değiştiyse yeni evre
- * şimdi başlar ve rotasyon onun ilk gününden; değişmediyse silinen ya da başka evreye
- * taşınan son gün uzlaştırılır. Evrelere bölme/kaldırma "Düzenlendi" kaydıdır. Evresiz program
- * evresiz kalırsa gizli evre kayıttakidir (`keepHiddenPhase`): fark gün düzeyinde, rotasyon sürer.
- * Antrenman günleri değiştiyse PT'nin günleri yazılır ve danışanın katmanı silinir (`ptScheduleEdit`);
- * göndermeyen eski sekme kayıttakine dokunmaz. Danışanın satır hedefleri (`clientTargets`) rotasyon gibi
+ * şimdi başlar. Eski dosyanın rotasyonu (Faz 3'te okunmaz) olduğu gibi taşınır; evre geçişinde son
+ * gün düşer. Evrelere bölme/kaldırma "Düzenlendi" kaydıdır. Evresiz program evresiz kalırsa gizli
+ * evre kayıttakidir (`keepHiddenPhase`): fark gün düzeyinde.
+ * Antrenman günleri (Faz 3) gövdenin şu anki evresinin atamalarından yeniden yazılır, kayıttaki danışan
+ * katmanı düşer (`settleSchedule`; eski programın ilk kaydı başka değişiklik olmasa da katmanı siler);
+ * gövdenin program düzeyindeki `weekdays`'i okunmaz (eski gövde daha önce atanmıştır: `upgradeProgramBody`,
+ * `bodyWithAssignments`, `keepStoredAssignments`). Danışanın satır hedefleri (`clientTargets`) rotasyon gibi
  * korunur; PT satırın setlerini ya da hareketini değiştirdiyse o satırın hedefi düşer ve kayda yazılır
  * (`ptTargetsEdit`: PT kazanır). `note`: kaydın sonuna eklenen cümleler (onaylanan danışan önerisi); fark
  * yoksa kayıt yine yazılmaz. Dönen `changes` kırpılmamıştır (commit mesajı için).
@@ -460,16 +479,15 @@ export function applyProgramEdit(
   }));
 
   const at = now.toISOString();
-  // Antrenman günleri: göndermeyen eski sekme kayıttakini değiştirmez; değişince danışanın katmanı silinir.
-  const schedule = ptScheduleEdit(stored, input.weekdays, at);
-  const diff = [
-    ...diffProgram(
-      { phased: stored.phased, currentPhaseId: stored.current.phaseId, phases: stored.phases },
-      { phased: body.phased, currentPhaseId: body.currentPhaseId, phases },
-      ctx,
-    ),
-    ...schedule.changes.map((text): ProgramChange => ({ text })),
-  ];
+  // Antrenman günleri: gövdenin şu anki evresinin atamalarının birleşimi; danışanın eski katmanı düşer.
+  const current = phases.find((phase) => phase.id === body.currentPhaseId) ?? phases[0];
+  const schedule = settleSchedule(stored, current?.days ?? [], at);
+  const structural = diffProgram(
+    { phased: stored.phased, currentPhaseId: stored.current.phaseId, phases: stored.phases },
+    { phased: body.phased, currentPhaseId: body.currentPhaseId, phases },
+    ctx,
+  );
+  const diff = [...structural, ...schedule.changes.map((text): ProgramChange => ({ text }))];
   if (diff.length === 0) return null;
   // Danışanın satır hedefleri: değişmeyen satırda kalır, PT'nin değiştirdiği satırda düşer (kayda yazılır).
   const targets = ptTargetsEdit(stored.phases, phases, stored.clientTargets, {
@@ -482,7 +500,11 @@ export function applyProgramEdit(
   const revision = stored.revision + 1;
   const currentChanged = body.currentPhaseId !== stored.current.phaseId;
   const toggled = stored.phased !== body.phased;
-  const kind: LogKind = currentChanged && diff.length === 1 && !toggled ? 'phase' : 'edit';
+  // Türü programın kendi farkı belirler: evre geçişi atamalı evreler arasında günlerin satırlarını da (birleşim,
+  // danışanın katmanı) getirir; onlar "Evre geçişi"ni "Düzenlendi" yapmasın (`startPhase` de aynı kaydı yazar).
+  const kind: LogKind = currentChanged && structural.length === 1 && !toggled ? 'phase' : 'edit';
+  // Dönüş (rotasyon) Faz 3'te okunmaz (Karar 5); eski dosyanın alanı olduğu gibi taşınır, evre geçişinde son gün
+  // `startPhase`'teki gibi düşer.
   const { lastDayId: _dropped, ...withoutDay } = stored.rotation;
   const { schedule: _schedule, clientSchedule: _clientSchedule, clientTargets: _clientTargets, ...rest } = stored;
 
@@ -490,14 +512,13 @@ export function applyProgramEdit(
     program: {
       ...rest,
       ...(schedule.schedule ? { schedule: schedule.schedule } : {}),
-      ...(schedule.clientSchedule ? { clientSchedule: schedule.clientSchedule } : {}),
       ...(targets.clientTargets ? { clientTargets: targets.clientTargets } : {}),
       phased: body.phased,
       revision,
       updatedAt: at,
       phases,
       current: currentChanged ? { phaseId: body.currentPhaseId, startedAt: at } : stored.current,
-      rotation: currentChanged ? withoutDay : reconcileRotation(stored.phases, phases, stored.rotation),
+      rotation: currentChanged ? withoutDay : stored.rotation,
       log: appendLog(stored.log, { at, revision, kind, changes: capChanges(changes) }),
     },
     changes,

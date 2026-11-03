@@ -16,8 +16,10 @@ import { GlobalLoading } from './global-loading';
  * - QueryClient bir kez kurulur (her render'da kurulursa önbellek sıfırlanır).
  * - Bildirimler tek bir Toaster'dan çıkar.
  * - Hareket azaltma tercihinde `motion` dönüş/konum animasyonlarını atlar (yalnız saydamlık kalır).
- * - İkonlar Phosphor'un dolu (fill) sürümü; tek yerden. Sunucuda çizilen ikonlar (`dist/ssr`)
- *   bu bağlamı görmez, onlara `weight="fill"` ayrıca verilir.
+ * - İkonlar varsayılan olarak Phosphor'un dolu (fill) sürümü; tek yerden. Sunucuda çizilen ikonlar
+ *   (`dist/ssr`) bu bağlamı görmez, onlara `weight="fill"` ayrıca verilir. Çizgi glifleri (X, artı,
+ *   tik, nokta tutamaçları…) Phosphor'dan değil `@/components/line-icons`'tan gelir: dolu sürümleri,
+ *   glifin oyulduğu dolu bir kutu. Orada çizgi kalınlığındadırlar ve bu bağlamı okumazlar.
  */
 const ICONS = { weight: 'fill' } as const;
 

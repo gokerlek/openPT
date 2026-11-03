@@ -14,7 +14,7 @@ import { WORKOUT } from './motion.ts';
 export const LATE_MS = 2000;
 
 export type RestTimer = {
-  /** Dinlenmenin ardından geldiği set ("Set 2 kaydedildi · Düzelt"). */
+  /** Dinlenmenin ardından geldiği set ("Set 2 kaydedildi · Düzenle"). */
   setId: string;
   startedAt: number;
   endsAt: number;

@@ -109,8 +109,19 @@ function normalizeSet(set: SessionSet): SessionSet {
     kg: set.kg,
     reps: set.reps,
     seconds: set.seconds,
+    distanceM: set.distanceM,
+    inclinePct: set.inclinePct,
     effort: set.effort,
-    target: set.target && compact({ min: set.target.min, max: set.target.max, loadPct: set.target.loadPct, amrap: set.target.amrap }),
+    target:
+      set.target &&
+      compact({
+        min: set.target.min,
+        max: set.target.max,
+        loadPct: set.target.loadPct,
+        amrap: set.target.amrap,
+        distanceM: set.target.distanceM,
+        inclinePct: set.target.inclinePct,
+      }),
     topWeightKg: set.topWeightKg,
     plannedSetCount: set.plannedSetCount,
     plannedKg: set.plannedKg,

@@ -7,6 +7,7 @@ import {
   effectiveSets,
   liveClientTargets,
   ptTargetsEdit,
+  sameSets,
   setClientTarget,
   withClientTargets,
 } from './client-targets.ts';
@@ -144,5 +145,14 @@ describe('bitişte hedef yazımı', () => {
     const amrap = [...sets(2, 8, 12), { min: 8, max: 12, amrap: true }];
     assert.equal(setClientTarget(phases(amrap), undefined, { ...input, from: amrap }).status, 'conflict');
     assert.equal(setClientTarget(phases(), undefined, { ...input, to: sets(4, 10, 14) }).status, 'conflict');
+  });
+});
+
+describe('kardiyo hedefleri', () => {
+  test('yalnız mesafesi ya da eğimi farklı setler aynı değil', () => {
+    const walk = { min: 1800, max: 1800, distanceM: 3000, inclinePct: 5 };
+    assert.equal(sameSets([walk], [{ ...walk }]), true);
+    assert.equal(sameSets([walk], [{ ...walk, distanceM: 3200 }]), false);
+    assert.equal(sameSets([walk], [{ ...walk, inclinePct: 4 }]), false);
   });
 });

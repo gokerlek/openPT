@@ -20,7 +20,10 @@
  */
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { Trash } from '@phosphor-icons/react';
 import { animate, motion, useDragControls, useMotionValue, useReducedMotion, useTransform, type MotionValue, type PanInfo } from 'motion/react';
+import { vibrate } from '@/lib/haptics';
+import { tracksSwipe } from '@/lib/swipe-intent';
 import { INSTANT, SWIPE, tween } from '@/lib/motion';
 import { cn } from '@/lib/utils';
 
@@ -40,6 +43,22 @@ export type SwipeAction = {
   disabled?: boolean;
 };
 
+/**
+ * Listelerin tek silme eylemi (sola kaydırma, sonuna kadar kaydırmak doğrudan siler): adı her yerde "Sil". Yerel silmede
+ * satır kapanır (`removes`, ardından 8 sn "Geri al"); kayıt silmesinde (`removes: false`) onay penceresi açılır.
+ */
+export function deleteAction(onPress: () => void, options: { removes?: boolean; disabled?: boolean } = {}): SwipeAction {
+  return {
+    key: 'sil',
+    label: 'Sil',
+    icon: <Trash weight="bold" />,
+    tone: 'destructive',
+    removes: options.removes ?? true,
+    ...(options.disabled ? { disabled: true } : {}),
+    onPress,
+  };
+}
+
 /** `start`: sağa kaydırınca soldan açılan panel; `end`: sola kaydırınca sağdan açılan. */
 type Side = 'start' | 'end';
 
@@ -52,10 +71,6 @@ const TONES: Record<SwipeTone, string> = {
 /** Tam kaydırmalı tarafta sürükleme sınırı yok sayılacak kadar uzak (px). */
 const FREE = 4000;
 
-function vibrate() {
-  if (typeof navigator !== 'undefined' && 'vibrate' in navigator) navigator.vibrate(8);
-}
-
 // ─── Grup: aynı anda tek panel açık ────────────────────────────────────────────────────
 
 type Group = {
@@ -66,15 +81,15 @@ type Group = {
 
 const SwipeGroupContext = createContext<Group | null>(null);
 
-/** Başka bir karta yapılan dokunuş (yüz, tutamak, açık gövde): panel açıkken yalnız paneli kapatır. */
-const CARD = '[data-slot=exercise-card], [data-slot=exercise-group]';
+/** Başka bir karta ya da kaydırma satırına (set tablosu, liste) yapılan dokunuş: panel açıkken yalnız paneli kapatır. */
+const CARD = '[data-slot=exercise-card], [data-slot=exercise-group], [data-slot=swipe-row]';
 
 /**
  * Bu basışın `click`'ini yutar (iOS gibi: panel açıkken ilk dokunuş yalnız kapatır, dokunulan kartı
  * açmaz). Basış kaydırmaya dönerse (pointercancel) ya da tıklama gelmezse bırakılır: sonraki
  * dokunuşlar etkilenmez.
  */
-function swallowClick(down: PointerEvent) {
+export function swallowClick(down: PointerEvent) {
   const onClick = (event: MouseEvent) => {
     event.preventDefault();
     event.stopPropagation();
@@ -150,11 +165,16 @@ export function useCardGesture({ enabled, onSwipe }: { enabled: boolean; onSwipe
   const handlers = {
     onPointerDown: (event: React.PointerEvent) => {
       swiped.current = false;
-      const onGrabber = event.target instanceof Element && event.target.closest('[data-slot=card-grabber]') !== null;
-      track.current =
-        enabled && !onGrabber && event.isPrimary && (event.pointerType !== 'mouse' || event.button === 0)
-          ? { id: event.pointerId, x: event.clientX, y: event.clientY, down: event.nativeEvent }
-          : null;
+      const target = event.target instanceof Element ? event.target : null;
+      const tracked = tracksSwipe({
+        enabled,
+        onGrabber: target?.closest('[data-slot=card-grabber]') != null,
+        isPrimary: event.isPrimary,
+        pointerType: event.pointerType,
+        button: event.button,
+        inTextField: target?.closest('input, textarea, select, [contenteditable="true"]') != null,
+      });
+      track.current = tracked ? { id: event.pointerId, x: event.clientX, y: event.clientY, down: event.nativeEvent } : null;
     },
     onPointerMove: (event: React.PointerEvent) => {
       const start = track.current;

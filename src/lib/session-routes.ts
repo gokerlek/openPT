@@ -164,7 +164,10 @@ export function putRoute(deps: SessionRouteDeps, headers: Headers, origin: strin
   });
 }
 
-/** Bitiş: tek commit (seans + index + rotasyon ve danışanın program güncellemesi + öneriler + onaylı sağlık ayrıntısı). */
+/**
+ * Bitiş: tek commit (seans + index + danışanın program güncellemesi + öneriler + onaylı sağlık ayrıntısı). Faz 3'te
+ * dönüş yok: gövdedeki `rotation` (eski telefon) okunmaz, yanıtta `rotation` yok (telefon okumuyordu).
+ */
 export function finishRoute(deps: SessionRouteDeps, headers: Headers, origin: string, id: string, input: unknown): Promise<SessionRouteResult> {
   const blocked = postGuard(headers, origin);
   if (blocked) return Promise.resolve(blocked);
@@ -179,7 +182,7 @@ export function finishRoute(deps: SessionRouteDeps, headers: Headers, origin: st
     deps.log(`[seans] ${client.id} ${id} finish`);
     return {
       status: 200,
-      body: { doc: result.doc, rotation: result.plan.rotation, health: result.plan.health, feedback: result.plan.feedback, ...slow(result.remaining) },
+      body: { doc: result.doc, health: result.plan.health, feedback: result.plan.feedback, ...slow(result.remaining) },
     };
   });
 }

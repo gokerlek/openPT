@@ -2,6 +2,7 @@ import type { JoiningOutcome } from './drop-target.ts';
 import type { AddToGroupOutcome, CombineOutcome, GroupCheck } from './template-edit.ts';
 import { setsText, type SetSpec } from './set-plan.ts';
 import { BLOCK_KIND_LABELS, type TemplateBlock } from './template-plan.ts';
+import type { CardioKind } from './cardio.ts';
 import type { TrackingType } from './progression.ts';
 
 /**
@@ -219,8 +220,13 @@ function restText(seconds: number): string {
  * görünümü): `setsText` + dinlenme. "3×8–12 · 90 sn", "12/10/8+ (piramit %80/%90/%100) · 90 sn",
  * "3×30 sn · dinlenme yok"; grup üyesinde dinlenme grupta, yalnız setler (`restSeconds` verilmez).
  */
-export function rowWorkText(sets: readonly SetSpec[], trackingType: TrackingType, restSeconds?: number): string {
-  const line = setsText(sets, trackingType);
+export function rowWorkText(
+  sets: readonly SetSpec[],
+  trackingType: TrackingType,
+  restSeconds?: number,
+  cardio: CardioKind | null = null,
+): string {
+  const line = setsText(sets, trackingType, cardio);
   return restSeconds === undefined ? line : `${line} · ${restText(restSeconds)}`;
 }
 

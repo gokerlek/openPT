@@ -45,7 +45,7 @@ const index = (...items: SessionIndexRow[]): SessionIndex => ({ version: 1, item
 const texts = (notices: readonly PtNotice[]) => notices.map((notice) => `${notice.kind}: ${notice.text}`);
 
 describe('PT bildirimleri: antrenmanlardan', () => {
-  test('başka gün, yarım (12/17 set), aşırı yük (hareket başına), hafifletildi', () => {
+  test('başka program, yarım (12/17 set), aşırı yük (hareket başına), hafifletildi', () => {
     const notices = sessionNotices(
       index(
         row('s_aaaaaaaa', 1, { otherDay: true, plannedDayName: 'Gün B', notices: ['other_day'] }),
@@ -81,7 +81,7 @@ describe('PT bildirimleri: antrenmanlardan', () => {
       NOW.getTime() - 14 * DAY,
     );
     assert.deepEqual(texts(notices), [
-      'other_day: Başka gün seçildi: Gün C',
+      'other_day: Başka program seçildi: Gün C',
       'unfinished: Gün C yarım bırakıldı',
       'overload: Gün C: hedefin çok üzerinde set onaylandı',
     ]);
@@ -172,7 +172,7 @@ describe('PT bildirimleri: okundu ve Genel bakış listesi', () => {
       { id: 'c_bbbbbbbb', name: 'Mehmet', notices: [notice('b1', 2), notice('b2', 4)] },
       { id: 'c_cccccccc', name: 'Zeynep', seenAt: ago(0), notices: [notice('c1', 0.5)] },
     ];
-    const feed = noticeFeed(digests, 3);
+    const feed = noticeFeed(digests, { now: NOW, limit: 3 });
     assert.deepEqual(
       feed.items.map((item) => [item.key, item.clientName, item.unread]),
       [
@@ -183,6 +183,28 @@ describe('PT bildirimleri: okundu ve Genel bakış listesi', () => {
     );
     assert.equal(feed.unread, 3, 'a1, b1 ve listeye girmeyen b2');
     assert.deepEqual(feed.unreadClients, ['c_aaaaaaaa', 'c_bbbbbbbb']);
+  });
+
+  test('pencere sayfa açılırken uygulanır: önbellekte kalan eski bildirim düşer, bekleyen öneri kalır', () => {
+    const digests: ClientDigest[] = [
+      {
+        id: 'c_aaaaaaaa',
+        name: 'Ayşe',
+        notices: [
+          { key: 'yeni', kind: 'unfinished', at: ago(1), text: 'yeni', target: 'client' },
+          { key: 'eski', kind: 'unfinished', at: ago(20), text: 'eski', target: 'client' },
+          { key: 'oneri', kind: 'proposal', at: ago(30), text: 'Öneri: Leg Press 3 → 4 set', target: 'program' },
+        ],
+      },
+      { id: 'c_bbbbbbbb', name: 'Mehmet', notices: [{ key: 'bayat', kind: 'unfinished', at: ago(20), text: 'bayat', target: 'client' }] },
+    ];
+    const feed = noticeFeed(digests, { now: NOW });
+    assert.deepEqual(
+      feed.items.map((item) => item.key),
+      ['yeni', 'oneri'],
+    );
+    assert.equal(feed.unread, 2, 'pencere dışındaki eski bildirim okunmamış sayılmaz');
+    assert.deepEqual(feed.unreadClients, ['c_aaaaaaaa'], 'yalnız eski bildirimi olan danışan "Tümünü okundu say"a girmez');
   });
 });
 

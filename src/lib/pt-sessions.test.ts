@@ -33,10 +33,13 @@ describe('PT: antrenman detayı', () => {
     ],
   });
 
-  test('antrenmanın işaretleri: başka gün, yarım, hafifletilmiş, zorluk', () => {
+  test('antrenmanın işaretleri: başka program, yarım, hafifletilmiş, zorluk', () => {
     const detail = ptSessionDetail(doc, { timeZone: TZ });
     assert.deepEqual(detail.flags, ['Gün B yerine seçildi', 'yarım bırakıldı (4/6 set)', 'hafifletilmiş gün', 'Zorluk 7/10']);
     assert.equal(detail.title, 'Gün A · 26 Eylül 2026');
+    // Planlanan programın adı yoksa (eski kayıt) genel işaret.
+    const { plannedDayName: _name, ...program } = doc.program!;
+    assert.equal(ptSessionDetail({ ...doc, program }, { timeZone: TZ }).flags[0], 'başka program seçildi');
   });
 
   test('hareketler: plan, muadil (programdaki hareketin adıyla), eklenen, ağrı yalnız verilince; aşırı yük seti', () => {

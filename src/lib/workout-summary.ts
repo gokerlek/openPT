@@ -1,9 +1,10 @@
+import { totalKcal } from './cardio.ts';
 import { formatKg, formatNumber } from './format.ts';
 import { sessionDayText } from './own-program-text.ts';
 import { mondayOf, type ProgramLogEntry } from './program-plan.ts';
 import type { Category } from './schemas/exercise.ts';
 import type { SessionDoc, SessionEntry, SessionIndex } from './schemas/session.ts';
-import { indexRowOf, upsertIndexRow, volumeOf, waterOf, workingSetCount } from './session-index.ts';
+import { durationOf, indexRowOf, sessionEnd, upsertIndexRow, volumeOf, waterOf, workingSetCount } from './session-index.ts';
 import { compareWithLast, recordKey, sessionRecords, type RecordHit, type RepPoint, type TopSet, type Trend } from './session-records.ts';
 import { countsForLoad } from './template-plan.ts';
 import { addDays } from './training-days.ts';
@@ -310,6 +311,8 @@ export type SessionSummary = {
   topMuscle: string | null;
   /** "17 set · 142 tekrar". */
   totals: string;
+  /** Yürüyüş/koşu setlerinin tahmini kalorisi (`cardio.ts`); kilo ya da yürüyüş yoksa 0. */
+  kcal: number;
   exercises: ExerciseLine[];
   changes: ChangeLine[];
 };
@@ -328,11 +331,14 @@ export function sessionSummary<E extends MuscleSource>(input: {
   week: SummaryWeek | null;
   changes: readonly ChangeLine[];
   next: NextLine[] | null;
+  /** Seansın günündeki kilo (yalnız ölçüm onayıyla): yürüyüş/koşu kalorisi. */
+  bodyMassKg?: number | undefined;
 }): SessionSummary {
   const { doc } = input;
   const index = input.index.items.some((row) => row.id === doc.id) ? input.index : upsertIndexRow(input.index, indexRowOf(doc, '0'.repeat(40)));
-  const end = doc.finishedAt ?? doc.startedAt;
-  const minutes = Math.max(1, Math.round((Date.parse(end) - Date.parse(doc.startedAt)) / 60_000));
+  // Süre ve saat aralığı Geçmiş'teki gibi (`durationOf`, `sessionEnd`): yarım antrenman son setten en çok 10 dk sonra biter.
+  const end = sessionEnd(doc) ?? doc.startedAt;
+  const minutes = Math.max(1, durationOf(doc) ?? 0);
   const volumeKg = volumeOf(doc);
   const sets = workingSetCount(doc);
 
@@ -388,5 +394,6 @@ export function sessionSummary<E extends MuscleSource>(input: {
     totals: [`${formatNumber(sets)} set`, ...(reps > 0 ? [`${formatNumber(reps)} tekrar`] : []), ...(seconds > 0 ? [`${formatNumber(seconds)} sn`] : [])].join(' · '),
     exercises,
     changes: [...input.changes],
+    kcal: totalKcal(doc.entries.flatMap(working), input.bodyMassKg),
   };
 }

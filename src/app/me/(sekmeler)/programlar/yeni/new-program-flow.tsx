@@ -9,14 +9,15 @@ import { Input } from '@/components/ui/input';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { newOwnProgramId, OWN_PROGRAM_LIMITS, ownNameProblem, ownStartBody, type OwnStart } from '@/lib/own-programs';
 import { formatNumber } from '@/lib/format';
-import { programIdSource, type ClientTargets, type ProgramPhase, type TemplateOption } from '@/lib/program-plan';
+import { displayDays, programIdSource, type ClientTargets, type ProgramPhase, type TemplateOption } from '@/lib/program-plan';
 import type { TemplateBlock } from '@/lib/template-plan';
 
 type StartKind = OwnStart['kind'];
 
 /**
  * Yeni program (`docs/design/kendi-program.md` §2.4): aynı adres iki adım. Önce ad ve başlangıç (boş, antrenörünün
- * programından seçili günler, danışanlara açık bir şablon); "Devam" hiçbir şey yazmaz, düzenleyiciyi oluşturma
+ * programından seçili programlar — atamasız kopyalanır, günlerini danışan düzenleyicide seçer (Faz 3, Karar 10) —,
+ * danışanlara açık bir şablon); "Devam" hiçbir şey yazmaz, düzenleyiciyi oluşturma
  * kipinde açar ("Programı oluştur"). Program kimliği telefonda üretilir (oluşturma idempotent). Kısıtının yasakladığı
  * hareket kopyadan düşmez: seçenekte sayısı yazar, düzenleyicide satır "Sana önerilmiyor" der (`kisit-tarama.md` §3.7).
  */
@@ -90,7 +91,7 @@ export function NewProgramFlow({
           ? { kind: 'template', template }
           : { kind: 'blank' };
     const body = ownStartBody(start, programIdSource(ptPhases), new Date());
-    setStep({ programId: newOwnProgramId(new Set(takenIds)), initial: { name: name.trim(), currentPhaseId: body.currentPhaseId, phases: body.phases, weekdays: [] } });
+    setStep({ programId: newOwnProgramId(new Set(takenIds)), initial: { name: name.trim(), currentPhaseId: body.currentPhaseId, phases: body.phases } });
   };
 
   const others = ptPhases.filter((phase) => phase.id !== current?.id);
@@ -152,7 +153,10 @@ export function NewProgramFlow({
                 <RadioGroupItem value="pt" id="start-pt" />
                 <FieldContent>
                   <FieldTitle>Antrenörünün programından</FieldTitle>
-                  <FieldDescription>Günler senin hedeflerinle kopyalanır; antrenörün sonra değiştirse de kopyan değişmez.</FieldDescription>
+                  <FieldDescription>
+                    Programlar senin hedeflerinle ve atanmamış olarak kopyalanır; günlerini sen seçersin. Antrenörün sonra
+                    değiştirse de kopyan değişmez.
+                  </FieldDescription>
                 </FieldContent>
               </Field>
             </FieldLabel>
@@ -171,19 +175,19 @@ export function NewProgramFlow({
 
         {kind === 'pt' && current ? (
           <div className="flex flex-col gap-1 pl-7">
-            {current.days.map(dayRow)}
+            {displayDays(current.days).map(dayRow)}
             {others.length > 0 ? (
               <details className="flex flex-col gap-1">
                 <summary className="flex min-h-11 cursor-pointer items-center text-sm text-muted-foreground">Öteki evreler</summary>
                 {others.map((phase) => (
                   <div key={phase.id} className="flex flex-col gap-1">
                     <p className="text-sm font-medium text-muted-foreground">{phase.name}</p>
-                    {phase.days.map(dayRow)}
+                    {displayDays(phase.days).map(dayRow)}
                   </div>
                 ))}
               </details>
             ) : null}
-            {dayIds.length === 0 ? <p className="text-sm text-muted-foreground">Gün seçmezsen boş bir günle başlar.</p> : null}
+            {dayIds.length === 0 ? <p className="text-sm text-muted-foreground">Hiçbirini seçmezsen boş bir programla başlar.</p> : null}
           </div>
         ) : null}
 

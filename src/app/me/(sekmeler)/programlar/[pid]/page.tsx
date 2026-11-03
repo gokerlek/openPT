@@ -16,7 +16,7 @@ import { activeProgramId } from '@/lib/own-program-index';
 import { lastDateByDay, programLine } from '@/lib/own-program-text';
 import { isOwnProgramId, ownSummaryOf } from '@/lib/own-programs';
 import { readOwnOverview, readOwnProgramOf } from '@/lib/own-programs-store';
-import { nextDayId } from '@/lib/program-plan';
+import { todayAssigned } from '@/lib/training-days';
 import { ClientHeader } from '../../../client-header';
 import { DeleteOwnProgram, MakeActiveButton, MarkPtEditSeen, ShareSwitch } from '../program-actions';
 import { ProgramDays } from '../program-days';
@@ -27,8 +27,8 @@ export const metadata: Metadata = { title: 'Kendi programın' };
 const LOG_INITIAL = 5;
 
 /**
- * Kendi programın (`docs/design/kendi-program.md` §2.3): günler salt okuma ("sıradaki", "son: 19 Eyl"), Düzenle,
- * Bugün'ün programı (rozet ya da tek dokunuşla seçim), antrenörle paylaşım, değişiklikler (etiketler görene göre,
+ * Kendi programın (`docs/design/kendi-program.md` §2.3): programlar salt okuma (atandığı günler, "bugün", "son: 19
+ * Eyl"), Düzenle, Bugün'ün programı (rozet ya da tek dokunuşla seçim), antrenörle paylaşım, değişiklikler (etiketler görene göre,
  * §7.3) ve silme. Adresteki kimlik kalıba uymuyorsa ya da program yoksa 404. Açılınca PT'nin düzenlemesi görüldü
  * sayılır (rozet düşer). Kısıtlar onaylıyken kısıtının yasakladığı satırlar en üstte (`kisit-tarama.md` §3.7): gerekçe
  * yok, gün ve hareket.
@@ -37,7 +37,7 @@ export default async function OwnProgramPage({ params }: { params: Promise<{ pid
   const [client, config, { pid }] = await Promise.all([currentClient(), readAppConfig(), params]);
   if (!isOwnProgramId(pid)) notFound();
   const [read, overview, exercises] = await Promise.all([readOwnProgramOf(client.id, pid), readOwnOverview(client.id).catch(() => null), listExercises()]);
-  const back = { href: '/me/programlar', label: 'Programlar' };
+  const back = { href: '/me/programlar', label: 'Program' };
   if (read.status === 'missing') notFound();
 
   const active = activeProgramId(overview?.state.index) === pid;
@@ -61,8 +61,9 @@ export default async function OwnProgramPage({ params }: { params: Promise<{ pid
   const item = overview?.state.index.items.find((row) => row.id === pid);
   const byId = new Map(exercises.map((exercise) => [exercise.id, exercise]));
   const lastByDay = overview ? lastDateByDay(overview.sessions) : new Map<string, string>();
-  const careInput = await loadCareInput(client, todayIn(config.timeZone));
-  const conflicts = careInput ? programConflicts(program, byId, careInput) : [];
+  const today = todayIn(config.timeZone);
+  const careInput = await loadCareInput(client, today);
+  const conflicts = careInput ? programConflicts(program, byId, careInput, today) : [];
 
   return (
     <main className="flex flex-col gap-6">
@@ -91,7 +92,7 @@ export default async function OwnProgramPage({ params }: { params: Promise<{ pid
         </Alert>
       ) : null}
 
-      {phase ? <ProgramDays days={phase.days} exercises={byId} nextId={nextDayId(program)} lastByDay={lastByDay} /> : null}
+      {phase ? <ProgramDays days={phase.days} exercises={byId} todayId={todayAssigned(phase.days, today)?.id ?? null} lastByDay={lastByDay} /> : null}
 
       <Button variant="outline" size="lg" className="h-11 w-full" nativeButton={false} render={<Link href={`/me/programlar/${pid}/duzenle`} />}>
         <PencilSimple data-icon="inline-start" />

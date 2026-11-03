@@ -21,7 +21,6 @@ import {
   OWN_PROGRAM_LIMITS,
   OWN_PROGRAMS_DIR,
   applyOwnEdit,
-  applyOwnSchedule,
   createOwnProgram,
   isOwnProgramId,
   ownNameProblem,
@@ -34,7 +33,14 @@ import {
   type OwnProgramPhase,
 } from './own-programs.ts';
 import { commitMessage, type DiffContext } from './program-diff.ts';
-import { normalizeProgram, sameProgramBase, type ProgramChange, type ProgramPhase } from './program-plan.ts';
+import {
+  bodyWithAssignments,
+  keepStoredAssignments,
+  normalizeProgram,
+  sameProgramBase,
+  type ProgramChange,
+  type ProgramPhase,
+} from './program-plan.ts';
 import type { OwnProgramSaveBody } from './schemas/own-program.ts';
 import { programSchema, type Program } from './schemas/program.ts';
 import { readIndex, readOrNull, withRetry, type OwnReader, type RepoHead, type SessionRepo } from './session-files-core.ts';
@@ -50,8 +56,12 @@ import type { PlanExercise } from './template-plan.ts';
  *   denetimler yeniden: PT'nin kaydında `shared` da); ikincisi de olmazsa 409.
  * - **Oluşturma** idempotent: aynı kimlik ve aynı gövde `unchanged`, farklı gövde `exists`; sınır (5) aynı
  *   commit'te denetlenir. PT'nin programı yokken ilk kendi program kendiliğinden seçilir.
- * - **PT'nin kaydı** yalnız dosyada `shared` varken (403 değilse); ad, paylaşım, kimlik, geçmiş, rotasyon ve (PT
- *   günleri değiştirmediyse) günler kayıttan (`applyOwnEdit`).
+ * - **PT'nin kaydı** yalnız dosyada `shared` varken (403 değilse); ad, paylaşım, kimlik, geçmiş ve rotasyon kayıttan
+ *   (`applyOwnEdit`).
+ * - **Atamalar** (Faz 3) programların içinde. Gün başına alanı olmayan eski gövde normalleştirmeden önce çözülür
+ *   (boş dizi orada düşer, "bütün günler kaldırıldı" ile "alan yok" ayırt edilemezdi): oluştururken program
+ *   düzeyindeki günlerden türetilir (`bodyWithAssignments`), kayıtta günleri göndermeyen ya da açılıştaki gibi
+ *   gönderen eski sekme kayıttaki atamaları korur (`keepStoredAssignments`).
  * - **Kısıt** (yalnız danışanın kaydında, `guard`): kütüphaneden eklenen izinsiz yasaklı hareket reddedilir; önceki
  *   kayıtta duran ya da antrenörünün programından, danışanlara açık şablondan kopyayla gelen kalır (`kisit-tarama.md`
  *   §3.7). PT'nin kaydı denetlenmez: yasağı PT "Yine de ekle" iznini vererek açar.
@@ -236,21 +246,23 @@ export async function saveOwnProgram(
 
     if (body.baseRevision === null) {
       if (by === 'pt') return { status: 'forbidden' };
+      // Korunacak kayıt yok: alansız gövde açılıştaki günleri gönderse de (AI taslağı) onlardan atanır.
+      const assigned = bodyWithAssignments(body);
       if (stored.status === 'ok') {
-        return sameOwnBody(stored.program, body) ? { status: 'unchanged', program: stored.program, droppedDevices: 0 } : { status: 'exists' };
+        return sameOwnBody(stored.program, assigned) ? { status: 'unchanged', program: stored.program, droppedDevices: 0 } : { status: 'exists' };
       }
       if (stored.status === 'invalid') return { status: 'exists' };
       if (state.index.items.length + state.unreadable.length >= OWN_PROGRAM_LIMITS.programs) return { status: 'limit' };
       const name = body.name ?? '';
       const problem = ownNameProblem(name, others);
       if (problem) return { status: 'invalid', errors: { name: problem } };
-      const normalized = normalizeOwn(body.phases, input.library, null);
+      const normalized = normalizeOwn(assigned.phases, input.library, null);
       if (Object.keys(normalized.errors).length > 0) return { status: 'invalid', errors: normalized.errors };
       const refused = guard ? await guardErrors(guard, body.phases, null, pt.program) : null;
       if (refused) return { status: 'blocked', errors: refused };
       const taken = await otherIds(repo, state, id, pt.program);
       const settled = reIdCollisions({ currentPhaseId: body.currentPhaseId, phases: normalized.phases }, taken, new Set(), input.random);
-      const program = { ...createOwnProgram({ id, name, currentPhaseId: settled.currentPhaseId, phases: settled.phases, weekdays: body.weekdays, now }), ...(input.shareOnCreate ? { shared: { at } } : {}) };
+      const program = { ...createOwnProgram({ id, name, currentPhaseId: settled.currentPhaseId, phases: settled.phases, now }), ...(input.shareOnCreate ? { shared: { at } } : {}) };
       let index = upsertOwnItem(state.index, ownIndexItemOf(program, shaOf(program)));
       // PT'nin programı yokken ilk kendi program Bugün'ün programı olur (§3.2): Bugün boş kalmasın.
       const activated = !pt.exists && state.index.items.length === 0;
@@ -270,19 +282,14 @@ export async function saveOwnProgram(
       const problem = ownNameProblem(body.name, others);
       if (problem) return { status: 'invalid', errors: { name: problem } };
     }
-    const normalized = normalizeOwn(body.phases, input.library, current);
+    const kept = keepStoredAssignments(body, current);
+    const normalized = normalizeOwn(kept.phases, input.library, current);
     if (Object.keys(normalized.errors).length > 0) return { status: 'invalid', errors: normalized.errors };
     const refused = guard ? await guardErrors(guard, body.phases, current, pt.program) : null;
     if (refused) return { status: 'blocked', errors: refused };
     const taken = await otherIds(repo, state, id, pt.program);
     const settled = reIdCollisions({ currentPhaseId: body.currentPhaseId, phases: normalized.phases }, taken, programIds(current.phases), input.random);
-    const result = applyOwnEdit(
-      current,
-      { name: body.name, currentPhaseId: settled.currentPhaseId, phases: settled.phases, weekdays: body.weekdays, baseWeekdays: body.baseWeekdays },
-      input.ctx,
-      now,
-      by,
-    );
+    const result = applyOwnEdit(current, { name: body.name, currentPhaseId: settled.currentPhaseId, phases: settled.phases }, input.ctx, now, by);
     if (!result) return { status: 'unchanged', program: current, droppedDevices: normalized.droppedDevices };
     const previous = state.index.items.find((item) => item.id === id);
     let item: OwnIndexItem = ownIndexItemOf(result.program, shaOf(result.program), previous);
@@ -317,7 +324,7 @@ export async function deleteOwnProgram(repo: SessionRepo, id: string, now: Date)
   });
 }
 
-/* --- paylaşım, seçim, günler --- */
+/* --- paylaşım ve seçim --- */
 
 export type OwnChangeResult = { status: 'saved' | 'unchanged'; program: OwnProgram } | { status: 'missing' } | { status: 'invalid' };
 
@@ -357,22 +364,5 @@ export async function selectOwnActive(repo: SessionRepo, programId: string | nul
       message: name ? `Bugün'ün programı: ${name}` : "Bugün'ün programı: antrenörün programı",
     });
     return { status: 'saved' };
-  });
-}
-
-/** Kendi programda "Günlerini değiştir" (§3.2): program ve index tek commit; revision artmaz. */
-export async function scheduleOwnProgram(repo: SessionRepo, id: string, weekdays: readonly number[], now: Date): Promise<OwnChangeResult> {
-  if (!isOwnProgramId(id)) return { status: 'missing' };
-  return withRetry(async (): Promise<OwnChangeResult> => {
-    const head = await repo.head();
-    const [state, stored] = await Promise.all([readOwnState(repo, head), readOwnProgram(repo, id, head.commit)]);
-    if (stored.status === 'missing') return { status: 'missing' };
-    if (stored.status === 'invalid') return { status: 'invalid' };
-    const applied = applyOwnSchedule(stored.program, weekdays, now);
-    if (!applied) return { status: 'unchanged', program: stored.program };
-    const previous = state.index.items.find((item) => item.id === id);
-    const index = upsertOwnItem(state.index, ownIndexItemOf(applied.program, shaOf(applied.program), previous));
-    await commitProgram(repo, head, applied.program, index, `Kendi programı (${applied.program.name}): ${applied.text}`);
-    return { status: 'saved', program: applied.program };
   });
 }

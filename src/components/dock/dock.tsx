@@ -15,6 +15,8 @@
  * - Telefonda (`touch:`) ikonun altında kısa etiket durur (üstüne gelme yok); ipucu ve nokta orada gizli.
  * - Dokunulan öğe, sayfa gelene kadar bekleme halkası taşır (`useLinkStatus`); üstteki ilerleme
  *   çubuğuyla birlikte dokunuşa anında tepki.
+ * - `labels`: telefon düzeni her genişlikte (ikonun altında kısa etiket, 64 px öğe; büyüme, ipucu ve
+ *   nokta yok). PT dock'u bunu kullanır (`dashboard/nav.tsx`); danışanınki varsayılanda kalır.
  */
 
 import Link, { useLinkStatus } from 'next/link';
@@ -33,9 +35,12 @@ import { cn } from '@/lib/utils';
 
 export type DockEntry = {
   href: string;
-  /** Erişilebilir ad ve masaüstündeki ipucu. */
+  /** Erişilebilir ad ve masaüstündeki ipucu (`labels` yoksa). */
   label: string;
-  /** Telefonda ikonun altındaki görünür etiket (erişilebilir adın içinde geçmeli); yoksa `label`. */
+  /**
+   * Telefonda (`labels` ile her genişlikte) ikonun altındaki görünür etiket (erişilebilir adın içinde
+   * geçmeli); yoksa `label`.
+   */
   shortLabel?: string;
   icon: React.ReactNode;
   active?: boolean;
@@ -52,6 +57,8 @@ type DockProps = {
   magnification?: number;
   distance?: number;
   spring?: SpringOptions;
+  /** Her genişlikte telefon düzeni: ikonun altında etiket, büyüme ve ipucu yok. Varsayılan `false`. */
+  labels?: boolean;
 };
 
 const LinkMotion = motion.create(Link);
@@ -78,6 +85,7 @@ function DockItem({
   distance,
   spring,
   reduced,
+  labels,
 }: {
   item: DockEntry;
   mouseX: MotionValue<number>;
@@ -86,6 +94,7 @@ function DockItem({
   distance: number;
   spring: SpringOptions;
   reduced: boolean;
+  labels: boolean;
 }) {
   const ref = useRef<HTMLSpanElement>(null);
   const [showLabel, setShowLabel] = useState(false);
@@ -96,22 +105,26 @@ function DockItem({
   });
   const target = useTransform(offset, [-distance, 0, distance], [baseItemSize, magnification, baseItemSize]);
   const animated = useSpring(target, spring);
-  const size = reduced ? baseItemSize : animated;
+  // Etiketli düzende öğe büyümez (telefondaki gibi): sabit taban boyut.
+  const size = reduced || labels ? baseItemSize : animated;
 
   const label = item.disabled ? `${item.label} · yakında` : item.label;
+  // Etiketli düzende ipucu çizilmez; üzerine gelmek/odak boşuna yeniden çizdirmesin.
+  const tooltip = !labels;
 
   const content = (
     <>
-      {/* Büyüyen kare: masaüstünde öğenin kendisi, telefonda etiketin üstündeki ikon kutusu. */}
+      {/* Büyüyen kare: masaüstünde öğenin kendisi, telefonda (ya da `labels` ile) etiketin üstündeki ikon kutusu. */}
       <motion.span
         ref={ref}
         style={{ width: size, height: size }}
         className={cn(
           'relative flex shrink-0 items-center justify-center rounded-lg border bg-muted text-muted-foreground transition-colors duration-160',
           'group-hover/dock-item:text-foreground',
-          // Aktif sayfa: ana renk tonu + altta nokta (macOS dock'taki gibi). Telefonda nokta yerine etiket.
+          // Aktif sayfa: ana renk tonu + altta nokta (macOS dock'taki gibi). Telefonda (ya da `labels` ile) nokta yerine etiket.
           'group-aria-[current=page]/dock-item:border-primary-text group-aria-[current=page]/dock-item:bg-primary/15 group-aria-[current=page]/dock-item:text-primary-text',
-          'group-aria-[current=page]/dock-item:after:absolute group-aria-[current=page]/dock-item:after:-bottom-[7px] group-aria-[current=page]/dock-item:after:left-1/2 group-aria-[current=page]/dock-item:after:size-1 group-aria-[current=page]/dock-item:after:-translate-x-1/2 group-aria-[current=page]/dock-item:after:rounded-full group-aria-[current=page]/dock-item:after:bg-primary-text touch:after:hidden',
+          'group-aria-[current=page]/dock-item:after:absolute group-aria-[current=page]/dock-item:after:-bottom-[7px] group-aria-[current=page]/dock-item:after:left-1/2 group-aria-[current=page]/dock-item:after:size-1 group-aria-[current=page]/dock-item:after:-translate-x-1/2 group-aria-[current=page]/dock-item:after:rounded-full group-aria-[current=page]/dock-item:after:bg-primary-text',
+          labels ? 'after:hidden' : 'touch:after:hidden',
         )}>
         <span className="flex size-[46%] items-center justify-center [&_svg]:size-full" aria-hidden>
           {item.icon}
@@ -120,7 +133,10 @@ function DockItem({
       </motion.span>
       <span
         aria-hidden
-        className="hidden text-[0.6875rem] leading-none font-medium whitespace-nowrap text-muted-foreground transition-colors duration-160 touch:block group-aria-[current=page]/dock-item:font-semibold group-aria-[current=page]/dock-item:text-foreground">
+        className={cn(
+          labels ? 'block group-hover/dock-item:text-foreground' : 'hidden touch:block',
+          'text-[0.6875rem] leading-none font-medium whitespace-nowrap text-muted-foreground transition-colors duration-160 group-aria-[current=page]/dock-item:font-semibold group-aria-[current=page]/dock-item:text-foreground',
+        )}>
         {item.shortLabel ?? item.label}
       </span>
       <AnimatePresence>
@@ -143,14 +159,14 @@ function DockItem({
     className: cn(
       'group/dock-item relative inline-flex shrink-0 flex-col items-center justify-end gap-1 rounded-lg outline-none',
       'focus-visible:ring-3 focus-visible:ring-ring/50',
-      // Telefonda sütun: ikon kutusu + etiket; dokunma alanı 64 px genişlik.
-      'touch:w-16',
+      // Telefonda (ya da `labels` ile) sütun: ikon kutusu + etiket; dokunma alanı 64 px genişlik.
+      labels ? 'w-16' : 'touch:w-16',
       'aria-disabled:cursor-default aria-disabled:opacity-40',
     ),
-    onHoverStart: () => setShowLabel(true),
-    onHoverEnd: () => setShowLabel(false),
-    onFocus: () => setShowLabel(true),
-    onBlur: () => setShowLabel(false),
+    onHoverStart: tooltip ? () => setShowLabel(true) : undefined,
+    onHoverEnd: tooltip ? () => setShowLabel(false) : undefined,
+    onFocus: tooltip ? () => setShowLabel(true) : undefined,
+    onBlur: tooltip ? () => setShowLabel(false) : undefined,
     'aria-label': label,
   };
 
@@ -179,6 +195,7 @@ export function Dock({
   magnification = 64,
   distance = 140,
   spring = { mass: 0.1, stiffness: 170, damping: 14 },
+  labels = false,
 }: DockProps) {
   const mouseX = useMotionValue(Infinity);
   const reduced = useReducedMotion() ?? false;
@@ -191,8 +208,8 @@ export function Dock({
         className="pointer-events-auto flex items-end gap-2 rounded-2xl border bg-background/95 p-2 shadow-xl backdrop-blur-xl supports-backdrop-filter:bg-background/85"
         aria-label={ariaLabel}
         // Büyüme yalnız farede: dokunuşun ardından gelen uyumluluk olayları öğeyi büyük bırakmasın.
-        onPointerMove={({ pageX, pointerType }) => mouseX.set(pointerType === 'mouse' ? pageX : Infinity)}
-        onPointerLeave={() => mouseX.set(Infinity)}>
+        onPointerMove={labels ? undefined : ({ pageX, pointerType }) => mouseX.set(pointerType === 'mouse' ? pageX : Infinity)}
+        onPointerLeave={labels ? undefined : () => mouseX.set(Infinity)}>
         {items.map((item) => (
           <Fragment key={item.href}>
             {item.separatorBefore ? <span className="mx-0.5 my-1 w-px self-stretch bg-border" aria-hidden /> : null}
@@ -204,6 +221,7 @@ export function Dock({
               distance={distance}
               spring={spring}
               reduced={reduced}
+              labels={labels}
             />
           </Fragment>
         ))}

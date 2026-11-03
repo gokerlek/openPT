@@ -4,6 +4,7 @@ import * as v from 'valibot';
 import {
   addMeasurements,
   checkValues,
+  healthLockInfo,
   isCalendarDate,
   MEASUREMENT_SLOTS,
   measurementDays,
@@ -206,5 +207,13 @@ describe('kayıt izni', () => {
       measurementLock(client(true, ['measurements'], { granted: true, fields: ['measurements'], version: '2020-01' })),
       'outdated',
     );
+  });
+
+  test('Hareket kilidi kamera ölçümünü de söyler: kamera kayıtları da aynı onaydan geçer', () => {
+    assert.match(healthLockInfo('screening', 'pending').description, /kamera ölçümü ve hareket testi kaydedilmez/);
+    assert.match(healthLockInfo('screening', 'declined').description, /kamera ölçümü ve hareket testi kaydedilmez/);
+    assert.match(healthLockInfo('screening', 'outdated').description, /kamera ölçümü ve hareket testi kaydedilmez/);
+    assert.match(healthLockInfo('screening', 'off').description, /onaylayınca kamera ölçümü alıp hareket testi girebilirsin\.$/);
+    assert.match(healthLockInfo('screening', 'not_selected').description, /onaylayınca kamera ölçümü alıp hareket testi girebilirsin\.$/);
   });
 });

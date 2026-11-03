@@ -6,7 +6,8 @@ import type { SessionIndex } from './schemas/session.ts';
 /**
  * PT'nin bildirimleri (tasarım §4.6) — saf. Bildirimler ayrı dosyada tutulmaz, danışanın repo'sundaki
  * kayıtlardan türetilir:
- * - antrenmanların index satırları (`sessions-index.json`): başka gün seçildi, yarım bırakıldı, aşırı
+ * - antrenmanların index satırları (`sessions-index.json`): başka program seçildi (o gün atanmış program varken
+ *   başkası yapıldı; Faz 3), yarım bırakıldı, aşırı
  *   yük onaylandı, hafifletildi (nötr: `lighter` ağrı ya da hazır oluşluk demez);
  * - program geçmişindeki danışan kayıtları (`client`): antrenman günleri, bitişte kilo ve tekrar hedefi;
  * - `proposals.json`'daki bekleyen öneriler (PT onaylar; burada hoşgörüyle okunur);
@@ -31,13 +32,13 @@ export const PT_NOTICE_KINDS = ['other_day', 'unfinished', 'overload', 'lighter'
 export type PtNoticeKind = (typeof PT_NOTICE_KINDS)[number];
 
 export const PT_NOTICE_LABELS: Record<PtNoticeKind, string> = {
-  other_day: 'Başka gün',
+  other_day: 'Başka program',
   unfinished: 'Yarım',
   overload: 'Aşırı yük',
   lighter: 'Hafifletildi',
   pain: 'Ağrı',
   program: 'Program',
-  proposal: 'Öneri',
+  proposal: 'Bekleyen öneri',
   own_program: 'Kendi programı',
   constraint: 'Kısıt',
 };
@@ -85,7 +86,8 @@ export function sessionNotices(index: SessionIndex, since: number, health: reado
     const day = row.dayName ?? 'Antrenman';
     const push = (kind: PtNoticeKind, text: string, suffix = '') => notices.push({ key: `${kind}:${row.id}${suffix}`, kind, at, text, target: 'client' });
     if (row.otherDay || row.notices.includes('other_day')) {
-      push('other_day', row.plannedDayName ? `${row.plannedDayName} yerine ${day} yapıldı` : `Başka gün seçildi: ${day}`);
+      // "Alt vücut yerine Üst vücut yapıldı"; planlanan programın adı yoksa (eski satır) genel metin.
+      push('other_day', row.plannedDayName ? `${row.plannedDayName} yerine ${day} yapıldı` : `Başka program seçildi: ${day}`);
     }
     if (row.unfinished || row.notices.includes('unfinished')) {
       push('unfinished', `${day} yarım bırakıldı${row.progress ? ` (${formatNumber(row.progress.done)}/${formatNumber(row.progress.planned)} set)` : ''}`);
@@ -226,14 +228,21 @@ export type FeedItem = PtNotice & { clientId: string; clientName: string; unread
 
 /**
  * Genel bakış'ın "Bildirimler" listesi: bütün danışanların bildirimleri tek listede, en yeniden eskiye,
- * en çok `limit`. `unread`: okunmamışların toplamı (listede görünmeyenler dahil); `unreadClients`:
- * "Tümünü okundu say"ın yazacağı danışanlar.
+ * en çok `limit`. Pencere burada, sayfa açılırken uygulanır: danışan özeti önbellekte eski kalabilir
+ * (`notices-store.ts`); bekleyen öneri pencere dışında da kalır (PT'nin kararını bekliyor). `unread`:
+ * okunmamışların toplamı (listede görünmeyenler dahil); `unreadClients`: "Tümünü okundu say"ın yazacağı danışanlar.
  */
-export function noticeFeed(digests: readonly ClientDigest[], limit = NOTICE_FEED_LIMIT): { items: FeedItem[]; unread: number; unreadClients: string[] } {
+export function noticeFeed(
+  digests: readonly ClientDigest[],
+  options: { now: Date; limit?: number },
+): { items: FeedItem[]; unread: number; unreadClients: string[] } {
+  const since = options.now.getTime() - NOTICE_WINDOW_DAYS * DAY_MS;
   const all = digests.flatMap((digest) =>
-    digest.notices.map((notice) => ({ ...notice, clientId: digest.id, clientName: digest.name, unread: isUnread(notice, digest.seenAt) })),
+    digest.notices
+      .filter((notice) => notice.kind === 'proposal' || time(notice.at) >= since)
+      .map((notice) => ({ ...notice, clientId: digest.id, clientName: digest.name, unread: isUnread(notice, digest.seenAt) })),
   );
   all.sort((a, b) => time(b.at) - time(a.at) || (a.clientId < b.clientId ? -1 : a.clientId > b.clientId ? 1 : 0) || (a.key < b.key ? -1 : 1));
   const unreadClients = [...new Set(all.filter((item) => item.unread).map((item) => item.clientId))].sort();
-  return { items: all.slice(0, limit), unread: all.filter((item) => item.unread).length, unreadClients };
+  return { items: all.slice(0, options.limit ?? NOTICE_FEED_LIMIT), unread: all.filter((item) => item.unread).length, unreadClients };
 }

@@ -5,16 +5,15 @@ import { useRouter } from 'next/navigation';
 import { Field as FormField, Form, getInput, setInput, useForm } from '@formisch/react';
 import {
   BatteryHigh,
-  Check,
   FirstAidKit,
   Heartbeat,
   Info,
   PersonSimpleWalk,
-  Plus,
   Ruler,
   type Icon as PhosphorIcon,
 } from '@phosphor-icons/react';
 import { LabeledSelect } from '@/components/labeled-select';
+import { Check, Plus } from '@/components/line-icons';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';

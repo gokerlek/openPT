@@ -4,7 +4,7 @@ import * as v from 'valibot';
 import {
   ATTENTION_URGENCY,
   attentionFactsOf,
-  attentionFeed,
+  attentionGroups,
   attentionItems,
   constraintFactsOf,
   exerciseStalls,
@@ -20,7 +20,6 @@ import type { SessionIndexExercise, SessionIndexRow } from './schemas/session.ts
 import { ownIndexItemOf, type OwnIndex } from './own-program-index.ts';
 import { OWN_ID, ownProgram } from './testing/own-fixtures.ts';
 import { programFile, singleBlock } from './testing/session-fixtures.ts';
-import { applyClientSchedule, resetClientSchedule } from './training-days.ts';
 
 // Cumartesi 26 Eylül 2026, İstanbul'da 19:00.
 const NOW = new Date('2026-09-26T16:00:00.000Z');
@@ -117,15 +116,18 @@ describe('dikkat: kaçan gün penceresi (günler ya da durum değişince baştan
     );
   });
 
-  test('"PT\'nin günlerine dön" ve danışanın PT\'nin günlerine dönmesi pencereyi baştan başlatır', () => {
+  test('kayıtta danışanın eski katmanı varken kaçan gün yok (pencere bugünden); katman düşünce o andan', () => {
+    // Faz 3 (Karar 3): katmanlı kayıtta da günler PT'nin. Ama danışan yayına kadar kendi günlerini (Pzt/Çar/Cum)
+    // izliyordu: PT'nin Sal/Per/Cmt'si o güne kadar kaçmış sayılmaz; katman kayıtta durdukça pencere bugünden.
     const own = scheduled({ schedule: { weekdays: [2, 4, 6] }, clientSchedule: { weekdays: [1, 3, 5], at: '2026-08-01T10:00:00.000Z' } });
     assert.deepEqual(missedOf({ program: own }), []);
-    const reset = resetClientSchedule(own, new Date(YESTERDAY));
-    assert.ok(reset);
-    assert.deepEqual(missedOf({ program: reset.program }), []);
-    const back = applyClientSchedule(own, [2, 4, 6], new Date(YESTERDAY));
-    assert.ok(back);
-    assert.deepEqual(missedOf({ program: back.program }), []);
+    // PT'nin ilk kaydı katmanı düşürür ve `schedule.at`'i o ana alır (`settleSchedule`): pencere oradan sürer.
+    const { clientSchedule: _layer, ...saved } = own;
+    assert.deepEqual(missedOf({ program: { ...saved, schedule: { weekdays: [2, 4, 6], at: YESTERDAY } } }), []);
+    // Katman yokken aynı günler kaçar (karşılaştırma).
+    assert.deepEqual(missedOf({ program: scheduled({ schedule: { weekdays: [2, 4, 6] } }) }).map((item) => item.text), [
+      'Son 7 günde 3 antrenman günü kaçtı: 19 Eyl Cmt, 22 Eyl Sal, 24 Eyl Per',
+    ]);
   });
 
   test('duraklatmadan dönüş: aradaki günler kaçan sayılmaz', () => {
@@ -298,26 +300,39 @@ describe('dikkat: özet', () => {
 });
 
 describe('dikkat: Genel bakış listesi', () => {
-  test('aciliyet, sonra ad; toplam ve danışan sayısı', () => {
-    const feed = attentionFeed(
+  test('danışana göre gruplar: en acil maddesi olan önce, sonra ad; grup ve madde sınırı', () => {
+    const result = attentionGroups(
       [
-        { id: 'c_bbbbbbbb', name: 'Zeynep', facts: facts({ proposals: { count: 1, at: '2026-09-25T10:00:00.000Z', text: 'Squat 3 → 4 set' } }) },
+        { id: 'c_bbbbbbbb', name: 'Ayşe', facts: facts({ access: 'none' }) },
+        { id: 'c_cccccccc', name: 'Can', facts: facts({ access: 'none', proposals: { count: 1, at: '2026-09-25T10:00:00.000Z', text: 'Squat 3 → 4 set' } }) },
         { id: 'c_aaaaaaaa', name: 'Ahmet', facts: facts({ proposals: { count: 2, at: '2026-09-25T10:00:00.000Z' }, access: 'joined' }) },
-        { id: 'c_cccccccc', name: 'Can', facts: facts({ access: 'none' }) },
         { id: 'c_dddddddd', name: 'Okunamadı', facts: null },
       ],
       ctx,
-      2,
+      { groups: 2, perGroup: 1 },
     );
     assert.deepEqual(
-      feed.items.map((item) => [item.clientName, item.text]),
+      result.groups.map((group) => [group.clientName, group.items.map((item) => item.text), group.more]),
       [
-        ['Ahmet', '2 öneri onay bekliyor'],
-        ['Zeynep', 'Öneri onay bekliyor: Squat 3 → 4 set'],
+        ['Ahmet', ['2 öneri onay bekliyor'], 0],
+        ['Can', ['Öneri onay bekliyor: Squat 3 → 4 set'], 1],
       ],
     );
-    assert.equal(feed.total, 3);
-    assert.equal(feed.clients, 3);
+    assert.equal(result.total, 3);
+    assert.equal(result.hidden, 1);
+    // Sağlık güvenliği maddesi grubu kırmızı yapar.
+    const red = attentionGroups(
+      [
+        {
+          id: 'c_eeeeeeee',
+          name: 'Elif',
+          facts: facts({ constraints: { urgent: [], refer: [{ id: 'k_aaaaaaaa', title: 'Sol diz' }], waiting: [], reports: [], changes: [], conflicts: [] } }),
+        },
+      ],
+      ctx,
+    );
+    assert.equal(red.groups[0]?.items[0]?.tone, 'danger');
+    assert.equal(red.groups[0]?.urgent, true);
   });
 });
 
@@ -384,7 +399,7 @@ describe('dikkat: kısıtlar ve tarama (kisit-tarama.md §3.6)', () => {
   );
   health = reportConstraint(health, { region: 'shoulder', side: 'right', type: 'injury', severity: 'moderate', triggers: [] }, { id: 'k_cccccc', now: at, today: '2026-09-20' });
 
-  test('yönlendirme en üstte (95); kauda ekinada acil metin; bildirim 80; sıradaki gündeki çelişki 85', () => {
+  test('yönlendirme en üstte (95); kauda ekinada acil metin; bildirim 80; sıradaki programdaki çelişki 85', () => {
     const constraints = constraintFactsOf(health, [
       { phaseId: 'p_a', dayId: 'd_a', dayName: 'Gün A', rowId: 'r_a', exerciseId: 'jump-squat', title: 'Jump Squat', message: 'x', next: true },
     ]);
@@ -412,7 +427,7 @@ describe('dikkat: kısıtlar ve tarama (kisit-tarama.md §3.6)', () => {
     assert.deepEqual(attentionItems(facts({ constraints: constraintFactsOf(cleared, []) }), ctx), []);
   });
 
-  test('şiddetli kötüleşme 92; sıradaki günde olmayan çelişki 66', () => {
+  test('şiddetli kötüleşme 92; sıradaki programda olmayan çelişki 66', () => {
     let record: HealthRecord = { version: 2, checkIns: [], measurements: [] };
     record = addConstraint(record, { region: 'knee', side: 'left', type: 'injury', severity: 'moderate', avoid: ['ballistic'] }, { id: 'k_dddddd', now: at });
     record = reportWorse(record, 'k_dddddd', 'severe', { now: at });
@@ -445,8 +460,8 @@ describe('dikkat: kısıtlar ve tarama (kisit-tarama.md §3.6)', () => {
     assert.deepEqual(
       items.map((item) => [item.urgency, item.text, item.target]),
       [
-        [ATTENTION_URGENCY.screeningPain, 'Taramada ağrı: Kol kaldırma (sağ)', 'screening'],
-        [ATTENTION_URGENCY.asymmetry, 'Taramada büyük asimetri: Split squat', 'screening'],
+        [ATTENTION_URGENCY.screeningPain, 'Hareket testinde ağrı: Kol kaldırma (sağ)', 'screening'],
+        [ATTENTION_URGENCY.asymmetry, 'Hareket testinde büyük asimetri: Split squat', 'screening'],
       ],
     );
     assert.equal(attentionItems(facts({ screening: screeningFactsOf(record) }), { ...ctx, now: new Date('2026-10-20T10:00:00.000Z') }).length, 1);

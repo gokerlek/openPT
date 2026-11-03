@@ -2,7 +2,10 @@ import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   correctiveTargets,
+  DEEP_MUSCLE_MAX,
+  DEEP_MUSCLE_REGION_LABELS,
   DEEP_MUSCLES,
+  deepMusclesByRegion,
   DEEP_MUSCLE_LABELS,
   DEEP_MUSCLE_REGIONS,
   isDeepMuscle,
@@ -24,6 +27,20 @@ describe('derin kas sözlüğü', () => {
     assert.equal(isDeepMuscle('glutes'), false, 'glutes yüzey haritasında');
     assert.equal(isDeepMuscle('uydurma_kas'), false);
   });
+});
+
+describe('derin kas bölümü', () => {
+  test('derin kaslar bölge bölge, boş bölge yok', () => {
+    const all = deepMusclesByRegion(DEEP_MUSCLES);
+    assert.deepEqual(
+      all.map((group) => group.label),
+      Object.values(DEEP_MUSCLE_REGION_LABELS),
+    );
+    const one = deepMusclesByRegion(['multifidus']);
+    assert.deepEqual(one, [{ region: 'trunk', label: 'Gövde', muscles: ['multifidus'] }]);
+  });
+
+  test('en çok 8 derin kas', () => assert.equal(DEEP_MUSCLE_MAX, 8));
 });
 
 describe('postür paternleri', () => {

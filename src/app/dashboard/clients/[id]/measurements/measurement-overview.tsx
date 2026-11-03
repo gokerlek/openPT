@@ -1,5 +1,6 @@
 import Link from 'next/link';
-import { ArrowDown, ArrowUp, CheckCircle, Equals, Ruler, WarningCircle } from '@phosphor-icons/react/dist/ssr';
+import { ArrowDown, ArrowUp, CheckCircle, Ruler, WarningCircle } from '@phosphor-icons/react/dist/ssr';
+import { Equals } from '@/components/line-icons';
 import { ProgressChart, type ProgressSeries } from '@/components/progress-chart';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -64,10 +65,8 @@ export function MeasurementOverview({
           <EmptyMedia variant="icon">
             <Ruler weight="fill" />
           </EmptyMedia>
-          <EmptyTitle>Henüz manuel ölçüm yok</EmptyTitle>
-          <EmptyDescription>
-            Bu bölüm, elle girilen hareketlilik, performans ve vücut ölçümlerini gösterir. Kamera ölçümleri yukarıdaki Kamera ölçüm geçmişi bölümündedir.
-          </EmptyDescription>
+          <EmptyTitle>Henüz ölçüm yok</EmptyTitle>
+          <EmptyDescription>Elle girilen vücut ölçüleri, performans ve hareketlilik testleri, anket skorları burada görünür; ilk ölçüm başlangıç değeri olur.</EmptyDescription>
         </EmptyHeader>
       </Empty>
     );
@@ -81,7 +80,7 @@ export function MeasurementOverview({
           <EmptyMedia variant="icon">
             <Ruler weight="fill" />
           </EmptyMedia>
-          <EmptyTitle>Bu aralıkta manuel ölçüm yok</EmptyTitle>
+          <EmptyTitle>Bu aralıkta ölçüm yok</EmptyTitle>
           <EmptyDescription>Tarih aralığını genişlet ya da “Tümü”nü seç.</EmptyDescription>
         </EmptyHeader>
       </Empty>
@@ -279,7 +278,7 @@ function VerdictBadge({ text, tone, title }: { text: string; tone: VerdictTone; 
     ) : tone === 'down' ? (
       <ArrowDown weight="fill" data-icon="inline-start" />
     ) : (
-      <Equals weight="fill" data-icon="inline-start" />
+      <Equals data-icon="inline-start" />
     );
   const variant = tone === 'good' ? 'default' : tone === 'bad' ? 'destructive' : tone === 'flat' ? 'outline' : 'secondary';
   return (

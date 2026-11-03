@@ -1147,7 +1147,7 @@ export function afterReportText(input: Pick<ReportInput, 'severity' | 'type' | '
   const serious = input.severity === 'severe' || (input.type === 'injury' && input.since === 'week');
   return serious
     ? "Antrenörüne iletildi. Antrenörün bakana kadar bu bölgeyi zorlayan hareketleri yapma; ağrı günlük hayatını etkiliyorsa bir sağlık profesyoneline görün."
-    : "Antrenörüne iletildi. Antrenörün bakana kadar zorlayan hareketlerde dikkatli ol; ağrı yaparsa 'Hareketi geç' ya da 'Değiştir'i kullan.";
+    : 'Antrenörüne iletildi. Antrenörün bakana kadar zorlayan hareketlerde dikkatli ol; ağrı yaparsa antrenmanda ⋯ menüsünden hareketi atla ya da muadil seç.';
 }
 
 /** Bildirim sheet'inin iki kademeli güvenlik metni (§2.4; Finucane 2020, Stiell 1992, Stiell 1995; seçim [sentez]). */

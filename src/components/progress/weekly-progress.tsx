@@ -1,33 +1,32 @@
 'use client';
 
 import { useState } from 'react';
-import { CaretLeft, CaretRight, WarningCircle } from '@phosphor-icons/react';
+import { CaretLeft, CaretRight } from '@phosphor-icons/react';
 import { MuscleMap } from '@/components/muscle-map/muscle-map';
 import { Button } from '@/components/ui/button';
 import { formatKg, formatNumber } from '@/lib/format';
-import { BODY_MUSCLES, summarizeMuscles, type BodyMuscle, type MuscleIntensity } from '@/lib/muscles';
+import { BODY_MUSCLES, type BodyMuscle } from '@/lib/muscles';
+import { loadMapProps } from '@/lib/muscle-tiers';
 import type { WeekView } from '@/lib/progress';
 import { progressCopy, weekLabel, type ProgressViewer } from '@/lib/progress-text';
 import { MUSCLE_LABELS } from '@/lib/schemas/exercise';
 import { weeklySetBand, type WeeklySetBand } from '@/lib/template-plan';
 import { ProgressCard } from './progress-card';
 
-/** Listede en çok bu kadar kas; gerisi "+n kas daha". */
-const LIST_LIMIT = 12;
-
 const BAND_LABELS: Record<Exclude<WeeklySetBand, 'none'>, string> = { low: 'az', enough: 'yeterli', high: 'fazla' };
 
 /**
- * Haritanın tonu kademeli (SPEC §7.4): az açık, yeterli ve fazla tam ton. "Fazla" haritada ayrı renk
- * almaz (temada uyarı rengi yok); listede ikon ve sözcükle yazılır, renk tek başına bilgi taşımaz.
+ * Haftanın kas yükü haftalık kademeyle (10 set ve üstü dolu, 5–9,75 çizgili, 5 altı noktalı). Açıklamada her kasın yanında
+ * SPEC §7.4 sözcüğü (az / yeterli / fazla); "fazla" haritada ayrı renk almaz, açıklamada ikon ve sözcükle yazılır.
  */
-const BAND_INTENSITY: Record<WeeklySetBand, number> = { none: 0, low: 0.35, enough: 1, high: 1 };
-
 function WeekMuscles({ load, label, hint }: { load: Record<string, number>; label: string; hint: string }) {
-  const worked = BODY_MUSCLES.filter((muscle) => (load[muscle] ?? 0) > 0).sort((a, b) => (load[b] ?? 0) - (load[a] ?? 0));
-  const intensity: MuscleIntensity = Object.fromEntries(worked.map((muscle) => [muscle, BAND_INTENSITY[weeklySetBand(load[muscle] ?? 0)]]));
-  const shown = worked.slice(0, LIST_LIMIT);
-  const cardio = load.cardio ?? 0;
+  const rows = BODY_MUSCLES.map((muscle) => {
+    const sets = load[muscle] ?? 0;
+    const band = weeklySetBand(sets);
+    return band === 'none'
+      ? { key: muscle, label: MUSCLE_LABELS[muscle], sets }
+      : { key: muscle, label: MUSCLE_LABELS[muscle], sets, note: BAND_LABELS[band], warn: band === 'high' };
+  });
   const describe = (muscle: BodyMuscle) => {
     const sets = load[muscle] ?? 0;
     const band = weeklySetBand(sets);
@@ -35,47 +34,7 @@ function WeekMuscles({ load, label, hint }: { load: Record<string, number>; labe
   };
 
   return (
-    <div className="flex flex-col items-center gap-4">
-      <MuscleMap
-        layout="split"
-        tone="load"
-        intensity={intensity}
-        describe={describe}
-        hint={hint}
-        bodyClassName="h-56"
-        label={worked.length > 0 ? `${label}: ${summarizeMuscles(worked.slice(0, 6)).join(', ')}` : `${label}: kas yükü yok`}
-      />
-      {shown.length > 0 || cardio > 0 ? (
-        <div className="flex w-full flex-col gap-2 text-sm">
-          <dl className="grid w-full grid-cols-1 gap-y-1">
-            {shown.map((muscle) => {
-              const sets = load[muscle] ?? 0;
-              const band = weeklySetBand(sets);
-              return (
-                <div key={muscle} className="flex min-h-7 items-baseline justify-between gap-3">
-                  <dt className="min-w-0 text-muted-foreground [overflow-wrap:anywhere]">{MUSCLE_LABELS[muscle]}</dt>
-                  <dd className="flex shrink-0 items-center gap-1.5 tabular-nums">
-                    {formatNumber(sets)} set
-                    {band === 'none' ? null : (
-                      <span className={band === 'high' ? 'flex items-center gap-1 font-medium' : 'text-muted-foreground'}>
-                        {band === 'high' ? <WarningCircle weight="fill" className="size-3.5" aria-hidden /> : null}· {BAND_LABELS[band]}
-                      </span>
-                    )}
-                  </dd>
-                </div>
-              );
-            })}
-            {cardio > 0 ? (
-              <div className="flex min-h-7 items-baseline justify-between gap-3">
-                <dt className="text-muted-foreground">Kardiyo</dt>
-                <dd className="tabular-nums">{formatNumber(cardio)} set</dd>
-              </div>
-            ) : null}
-          </dl>
-          {worked.length > shown.length ? <p className="text-muted-foreground">+{worked.length - shown.length} kas daha</p> : null}
-        </div>
-      ) : null}
-    </div>
+    <MuscleMap layout="split" bodyClassName="h-56" {...loadMapProps(load, 'weekly', label, { rows })} describe={describe} hint={hint} />
   );
 }
 

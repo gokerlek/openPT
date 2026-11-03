@@ -10,6 +10,7 @@ import { listDevices } from '@/lib/devices';
 import { listTemplates, pickerExercises, pickerDevices } from '@/lib/templates';
 import { readAppConfig } from '@/lib/config';
 import { todayIn } from '@/lib/format';
+import { bodyWithAssignments } from '@/lib/program-plan';
 import { loadEditorCare } from '@/lib/client-care';
 import { EditorBackLink } from '@/components/block-editor/editor-back-link';
 import { SectionHeader } from '@/components/section-header';
@@ -28,9 +29,10 @@ export default async function DraftEditor({ params }: { params: Promise<{ id: st
   if (!stored) notFound();
   const care = await loadEditorCare(stored.client, exercises, todayIn(config.timeZone));
   return <div className="flex flex-col gap-6">
-    <EditorBackLink href={`/dashboard/clients/${id}/coach`} label="AI koç" />
-    <SectionHeader title="AI programını düzenle" description="Günleri, hareketleri ve bileşik blokları düzenle; hazır olduğunda danışana ata." />
+    <EditorBackLink href={`/dashboard/clients/${id}/program`} label="Program" />
+    <SectionHeader title="AI programını düzenle" description="Programları, hareketleri ve bileşik blokları düzenle; hazır olduğunda danışana ata." />
     <Alert><AlertDescription>Onayladığında mevcut PT programının yerine atanır. Bu ekranda yaptığın değişiklikler onaylayana kadar danışanı etkilemez.</AlertDescription></Alert>
-    <ProgramForm clientId={id} aiDraftId={draft.id} mode="create" initial={draft.body} base={draft.baseRevision === null ? null : { revision: draft.baseRevision, createdAt: draft.baseCreatedAt }} stored={null} exercises={pickerExercises(exercises)} devices={pickerDevices(devices)} templates={templates.flatMap(t => t.template ? [{ id: t.template.id, name: t.template.name, blocks: t.template.blocks }] : [])} now={new Date().toISOString()} timeZone={config.timeZone} care={care} />
+    {/* Gün başına atamadan önceki taslak (program düzeyinde `weekdays`) okunan eski dosya gibi atanır: form o alanı okumaz. */}
+    <ProgramForm clientId={id} aiDraftId={draft.id} mode="create" initial={bodyWithAssignments(draft.body)} base={draft.baseRevision === null ? null : { revision: draft.baseRevision, createdAt: draft.baseCreatedAt }} stored={null} exercises={pickerExercises(exercises)} devices={pickerDevices(devices)} templates={templates.flatMap(t => t.template ? [{ id: t.template.id, name: t.template.name, blocks: t.template.blocks }] : [])} now={new Date().toISOString()} timeZone={config.timeZone} care={care} />
   </div>;
 }

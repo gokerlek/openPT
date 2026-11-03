@@ -183,3 +183,37 @@ describe('anlatım', () => {
     assert.equal(setsText([{ min: 30, max: 60 }, { min: 45, max: 45, amrap: true }], 'duration'), '30–60/45+ sn');
   });
 });
+
+describe('kardiyo hedefleri', () => {
+  const walk: SetSpec[] = [{ min: 1800, max: 1800, distanceM: 3000, inclinePct: 5 }];
+
+  test('yürüyüş/koşuda süre dakika; mesafe ve eğim arkasında', () => {
+    assert.equal(formatSets(walk, 'duration', 'pt', 'walk'), '1 × 30 dk · 3 km · %5');
+    assert.equal(formatSets([{ min: 300, max: 600 }], 'duration', 'pt', 'walk'), '1 × 5–10 dk');
+    assert.equal(setsText(walk, 'duration', 'walk'), '1×30 dk · 3 km · %5');
+  });
+
+  test('öteki kardiyoda süre saniye, mesafe arkasında', () => {
+    assert.equal(formatSets([{ min: 600, max: 600, distanceM: 4000 }], 'duration', 'pt', 'machine'), '1 × 600 sn · 4 km');
+    assert.equal(setsText([{ min: 600, max: 600, distanceM: 4000 }], 'duration'), '1×600 sn · 4 km');
+  });
+
+  test('"Setleri eşitle" mesafe ve eğimi korur', () => {
+    const sets: SetSpec[] = [
+      { min: 1800, max: 1800, distanceM: 3000, inclinePct: 5 },
+      { min: 600, max: 600, distanceM: 1000, inclinePct: 5 },
+    ];
+    assert.deepEqual(straightPreset(sets), [
+      { min: 1800, max: 1800, distanceM: 3000, inclinePct: 5 },
+      { min: 1800, max: 1800, distanceM: 3000, inclinePct: 5 },
+    ]);
+  });
+
+  test('setlerde farklı mesafe tek tek; eğim 0 yazılmaz', () => {
+    const sets: SetSpec[] = [
+      { min: 600, max: 600, distanceM: 2000, inclinePct: 0 },
+      { min: 600, max: 600, distanceM: 2500, inclinePct: 0 },
+    ];
+    assert.equal(setsText(sets, 'duration', 'walk'), '2×10 dk · 2 km / 2,5 km');
+  });
+});

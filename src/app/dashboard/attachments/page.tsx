@@ -1,7 +1,8 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { ImageSquare, Plus } from '@phosphor-icons/react/dist/ssr';
+import { ImageSquare } from '@phosphor-icons/react/dist/ssr';
 import { ImagePlaceholder } from '@/components/image-placeholder';
+import { Plus } from '@/components/line-icons';
 import { PageHeader } from '@/components/page-header';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -47,7 +48,7 @@ export default async function AttachmentsPage() {
         }
         actions={
           <Button nativeButton={false} render={<Link href="/dashboard/attachments/new" />}>
-            <Plus data-icon="inline-start" weight="fill" />
+            <Plus data-icon="inline-start" />
             Yeni aparat
           </Button>
         }

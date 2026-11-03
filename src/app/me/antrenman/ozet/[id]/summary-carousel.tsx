@@ -3,8 +3,11 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { animate, motion, useMotionValue, useReducedMotion, useTransform } from 'motion/react';
-import { ArrowDown, ArrowUp, CaretLeft, CaretRight, Equals, Sparkle, Trophy } from '@phosphor-icons/react';
-import { TemplateMuscleMap } from '@/components/muscle-map/template-muscle-map';
+import { ArrowDown, ArrowUp, CaretLeft, CaretRight, Sparkle, Trophy } from '@phosphor-icons/react';
+import { CoachButton } from '@/components/coach/coach-button';
+import { Equals } from '@/components/line-icons';
+import { MuscleMap } from '@/components/muscle-map/muscle-map';
+import { loadMapProps } from '@/lib/muscle-tiers';
 import { Button } from '@/components/ui/button';
 import { Carousel, CarouselContent, CarouselItem, type CarouselApi } from '@/components/ui/carousel';
 import { formatNumber } from '@/lib/format';
@@ -13,7 +16,7 @@ import type { PainReportOffer } from '@/lib/pain-report';
 import type { Trend } from '@/lib/session-records';
 import { cn } from '@/lib/utils';
 import { CHANGE_LABELS, type SessionSummary } from '@/lib/workout-summary';
-import { vibrate } from '../../workout-feedback';
+import { vibrate } from '@/lib/haptics';
 import { PainReportCallout } from './pain-report-callout';
 
 const CARDS = ['Antrenman tamamlandı', 'Rekorlar ve gelişim', 'Çalışan kaslar', 'Hareketler'] as const;
@@ -40,9 +43,9 @@ function CountUp({ value }: { value: number }) {
   );
 }
 
-function Tile({ value, unit, label }: { value: number; unit?: string; label: string }) {
+function Tile({ value, unit, label, wide = false }: { value: number; unit?: string; label: string; wide?: boolean }) {
   return (
-    <div className="flex min-w-0 flex-col gap-0.5 rounded-xl bg-card p-3.5 ring-1 ring-foreground/10">
+    <div className={cn('flex min-w-0 flex-col gap-0.5 rounded-xl bg-card p-3.5 ring-1 ring-foreground/10', wide && 'col-span-2')}>
       <span className="font-heading text-[1.875rem] leading-tight font-semibold whitespace-nowrap tabular-nums">
         <CountUp value={value} />
         {unit ? <span className="ml-1 text-[0.9375rem] font-medium text-muted-foreground">{unit}</span> : null}
@@ -87,18 +90,21 @@ function Line({ lead, name, value, muted }: { lead?: React.ReactNode; name: stri
  * Erişilebilirlik: `role="region"` + `aria-roledescription="carousel"`, kartlar "2 / 4, Rekorlar ve gelişim";
  * ←/→ tuşları; görünmeyen kartlar ekran okuyucudan gizli. Hareket azaltmada geçiş anında, sayılar son değerle.
  * Bitişte, ağrıyla yine geçilen hareket varsa ilk kartın altında "Antrenörüne kısıt olarak bildir" (`painOffers`,
- * `kisit-tarama.md` §3.7).
+ * `kisit-tarama.md` §3.7). Son kartta ikincil yuva (1–3. kartta "Bugün'e dön") AI koç açıksa "AI koça sor" (`coach`:
+ * panel açılır, hemen değerlendirir); değilse görünmez kalır, birincil düğme yerinden oynamaz.
  */
 export function SummaryCarousel({
   summary,
   firstName,
   from,
   painOffers = [],
+  coach = false,
 }: {
   summary: SessionSummary;
   firstName: string;
   from: 'finish' | 'history';
   painOffers?: readonly PainReportOffer[];
+  coach?: boolean;
 }) {
   const reduced = useReducedMotion() ?? false;
   const [api, setApi] = useState<CarouselApi>();
@@ -207,9 +213,13 @@ export function SummaryCarousel({
             <CaretRight data-icon="inline-end" weight="bold" />
           </Button>
         )}
-        <Button variant="ghost" className={cn('h-11 self-center text-muted-foreground', last && 'invisible')} nativeButton={false} render={<Link href={home.href} tabIndex={last ? -1 : undefined} />}>
-          {home.label}
-        </Button>
+        {last && coach ? (
+          <CoachButton variant="ghost" label="AI koça sor" detail={{ autoReview: true }} className="h-11 self-center text-muted-foreground" />
+        ) : (
+          <Button variant="ghost" className={cn('h-11 self-center text-muted-foreground', last && 'invisible')} nativeButton={false} render={<Link href={home.href} tabIndex={last ? -1 : undefined} />}>
+            {home.label}
+          </Button>
+        )}
       </div>
     </div>
   );
@@ -238,6 +248,7 @@ function FirstCard({
         <Tile value={summary.volumeKg} unit="kg" label="toplam ağırlık" />
         <Tile value={summary.sets} label="set" />
         <Tile value={summary.muscles} label="kas çalıştı" />
+        {summary.kcal > 0 ? <Tile value={summary.kcal} unit="kcal" label="yürüyüş/koşu, tahmini" wide /> : null}
       </div>
       {summary.prs > 0 || summary.versusLast ? (
         <div className="flex flex-wrap items-center gap-2 text-sm">
@@ -326,12 +337,12 @@ function MusclesCard({ summary }: { summary: SessionSummary }) {
       <h2 className="-mt-2 font-heading text-2xl font-semibold tabular-nums">{formatNumber(summary.muscles)} kas çalıştı</h2>
       {summary.topMuscle ? <p className="-mt-1 text-sm text-muted-foreground">En çok: {summary.topMuscle.toLocaleLowerCase('tr-TR')}</p> : null}
       {summary.worked.length > 0 ? (
-        <TemplateMuscleMap
-          load={summary.load}
-          legend={summary.worked.map((item) => ({ label: item.label, value: item.sets }))}
-          legendLimit={5}
-          label="Bu antrenmanın kas yükü"
+        <MuscleMap
+          layout="split"
           bodyClassName="h-60"
+          {...loadMapProps(summary.load, 'session', 'Bu antrenmanın kas yükü', {
+            rows: summary.worked.map((item) => ({ key: item.label, label: item.label, sets: item.sets })),
+          })}
         />
       ) : (
         <p className="text-sm text-muted-foreground">Bu antrenmanda sayılan kas yükü yok.</p>

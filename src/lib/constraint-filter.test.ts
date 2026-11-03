@@ -5,6 +5,7 @@ import {
   careCounts,
   careGroup,
   careInputOf,
+  careLine,
   careMap,
   careRank,
   careStampOf,
@@ -18,6 +19,7 @@ import {
   rowCareOf,
   rowCareText,
   type CareInput,
+  type RowCare,
 } from './constraint-filter.ts';
 import { ackClientChange, reportWorse, addConstraint, addOverride, clearConstraint, constraintsOf, reportConstraint, type ConstraintInput } from './constraints.ts';
 import type { HealthRecord } from './schemas/health.ts';
@@ -191,6 +193,15 @@ describe('sıra ve danışanın notu', () => {
     const care = input(record([{ region: 'lower_back', avoid: ['forward_bend'] }]));
     assert.equal(optionCareText(evaluateCare(ex('romanian-deadlift'), care)), 'Bel için dikkatli');
   });
+
+  test('Bugün önizlemesinin kısıt satırı', () => {
+    const rowCare: RowCare = { kind: 'note', label: 'Sol diz', region: 'knee', side: 'left' };
+    assert.equal(careLine(rowCare, 'Back Squat'), 'Sol diz için dikkat: Back Squat');
+    assert.equal(careLine({ ...rowCare, kind: 'avoid' }, 'Back Squat'), 'Sol diz için değiştir: Back Squat');
+    // Kendi programda hareketi danışan seçti.
+    assert.equal(careLine({ ...rowCare, kind: 'avoid', own: true }, 'Back Squat'), 'Sol diz için önerilmiyor: Back Squat');
+    assert.equal(careLine({ ...rowCare, kind: 'report' }, 'Back Squat'), 'Sol diz için dikkat: Back Squat');
+  });
 });
 
 describe('PT: sheet ve çelişkiler', () => {
@@ -224,27 +235,35 @@ describe('PT: sheet ve çelişkiler', () => {
     assert.notEqual(careStampOf(edited), stamp);
   });
 
-  test('programdaki çelişkiler: şu anki evre, sıradaki gün işaretli', () => {
+  // Faz 3 (Karar 5): "sıradaki" bugüne ya da haftada sıradaki güne atanmış program (`upcomingAssigned`); dönüş yok.
+  test('programdaki çelişkiler: şu anki evre; next işareti bugünkü ya da sıradaki atanmış programda', () => {
     const program = {
       phases: [
         {
           id: 'p_aaaaaa',
           name: 'Uyum',
           days: [
-            { id: 'd_aaaaaa', name: 'Gün A', blocks: [{ id: 'b_aaaaaa', kind: 'single', rows: [{ id: 'r_aaaaaa', exerciseId: 'hack-squat', sets: [] }] }] },
-            { id: 'd_bbbbbb', name: 'Gün B', blocks: [{ id: 'b_bbbbbb', kind: 'single', rows: [{ id: 'r_bbbbbb', exerciseId: 'halter-biceps-curl', sets: [] }] }] },
+            { id: 'd_aaaaaa', name: 'Gün A', weekdays: [2], blocks: [{ id: 'b_aaaaaa', kind: 'single', rows: [{ id: 'r_aaaaaa', exerciseId: 'hack-squat', sets: [] }] }] },
+            { id: 'd_bbbbbb', name: 'Gün B', weekdays: [4], blocks: [{ id: 'b_bbbbbb', kind: 'single', rows: [{ id: 'r_bbbbbb', exerciseId: 'hack-squat', sets: [] }] }] },
           ],
         },
       ],
       current: { phaseId: 'p_aaaaaa', startedAt: NOW },
-      rotation: { lastDayId: 'd_bbbbbb' },
+      // Eski kayıttaki dönüş sırası okunmaz.
+      rotation: { lastDayId: 'd_aaaaaa' },
     } as unknown as Program;
     const exercises = new Map(EXERCISE_LIBRARY.map((exercise) => [exercise.id, exercise]));
-    const conflicts = programConflicts(program, exercises, input(record([{ region: 'knee', side: 'left', avoid: ['deep_knee_flexion'] }])));
-    assert.deepEqual(
-      conflicts.map((item) => [item.dayName, item.title, item.message, item.next]),
-      [['Gün A', 'Hack Squat', 'Sol diz: derin diz bükme (90° üstü)', true]],
-    );
+    const knee = input(record([{ region: 'knee', side: 'left', avoid: ['deep_knee_flexion'] }]));
+    const marks = (today: string) => programConflicts(program, exercises, knee, today).map((item) => [item.dayName, item.title, item.message, item.next]);
+    // 27 Ekim 2026 salı: bugün Gün A; 28 Ekim çarşamba: sıradaki perşembe, Gün B.
+    assert.deepEqual(marks('2026-10-27'), [
+      ['Gün A', 'Hack Squat', 'Sol diz: derin diz bükme (90° üstü)', true],
+      ['Gün B', 'Hack Squat', 'Sol diz: derin diz bükme (90° üstü)', false],
+    ]);
+    assert.deepEqual(marks('2026-10-28').map((item) => item[3]), [false, true]);
+    // Atama yoksa sıradaki yok: hiçbiri işaretli değil.
+    const bare = { ...program, phases: program.phases.map((phase) => ({ ...phase, days: phase.days.map(({ weekdays: _weekdays, ...day }) => day) })) } as Program;
+    assert.deepEqual(programConflicts(bare, exercises, knee, '2026-10-27').map((item) => item.next), [false, false]);
   });
 });
 

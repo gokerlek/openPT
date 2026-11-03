@@ -3,7 +3,8 @@ import type { CoachInsight } from './coach-review.ts';
 import { defaultSets, DEFAULT_REST_SECONDS } from '../template-plan.ts';
 import type { PlanExercise } from '../template-plan.ts';
 import { programFormSchema } from '../schemas/program.ts';
-import type { ProgramBody, ProgramState } from '../program-plan.ts';
+import { cleanWeekdays, hasAssignments } from '../day-assignments.ts';
+import { bodyWithAssignments, nextDayName, type ProgramBody, type ProgramDay, type ProgramState } from '../program-plan.ts';
 import { evaluateCare, hasCare, type CareInput } from '../constraint-filter.ts';
 import type { CoachConditions, CoachIntent } from './coach-contract.ts';
 
@@ -59,15 +60,17 @@ export function draftCoachProgram(context: CoachContext, conditions: CoachCondit
   }
   if (selected.length < 2) return { error: 'Bu koşullarda yeterli, değerlendirilebilir hareket bulunamadı. Ekipman seçimini kontrol edelim veya PT kütüphaneye uygun bir alternatif eklesin.' };
   const phaseId = id('p');
-  const body: ProgramBody = {
-    phased: false, currentPhaseId: phaseId, weekdays: conditions.weekdays,
-    phases: [{ id: phaseId, name: 'AI taslağı', daysPerWeek: conditions.weekdays.length,
-      days: conditions.weekdays.map((_, index) => ({ id: id('d'), name: `Gün ${index + 1}`, blocks: selected.map(e => ({
-        id: id('b'), kind: 'single' as const, restSeconds: DEFAULT_REST_SECONDS[e.category],
-        rows: [{ id: id('r'), exerciseId: e.id, sets: defaultSets(e, 2) }],
-      })) })),
-    }],
-  };
+  // Faz 3: gün başına bir program, o güne atanmış ("Program A" ilk güne…); atamalı evrede sıklık yazılmaz (sıklık
+  // atanmış gün sayısı). Program düzeyindeki `weekdays` eski gövdeyi bekleyen okuyucularla uyum için kalır.
+  const weekdays = cleanWeekdays(conditions.weekdays);
+  const days: ProgramDay[] = [];
+  for (const weekday of weekdays) {
+    days.push({ id: id('d'), name: nextDayName(days), weekdays: [weekday], blocks: selected.map(e => ({
+      id: id('b'), kind: 'single' as const, restSeconds: DEFAULT_REST_SECONDS[e.category],
+      rows: [{ id: id('r'), exerciseId: e.id, sets: defaultSets(e, 2) }],
+    })) });
+  }
+  const body: ProgramBody = { phased: false, currentPhaseId: phaseId, weekdays, phases: [{ id: phaseId, name: 'AI taslağı', days }] };
   const parsed = v.safeParse(programFormSchema, body);
   if (!parsed.success) return { error: 'Taslak program kurallarını karşılamadı; program değiştirilmedi.' };
   return { body: parsed.output, rationale: [
@@ -78,10 +81,29 @@ export function draftCoachProgram(context: CoachContext, conditions: CoachCondit
   ] };
 }
 
-/** Stored programs have `current.phaseId`; form payloads have `currentPhaseId`. */
+/**
+ * Yayın kurtarma: kayıttaki program bu taslak mı? Kayıt `current.phaseId`, gövde `currentPhaseId` taşır. İki taraf
+ * aynı biçime getirilir (Faz 3): taslak yayında olduğu gibi atanır (`bodyWithAssignments`); atamalar günlerde
+ * karşılaştırılır (sıralı, boşu yok sayılarak), program düzeyindeki `weekdays` karşılaştırılmaz; atamalı evrede
+ * `daysPerWeek` iki tarafta da yok sayılır (`normalizeProgram` yayında düşürür).
+ */
 export function coachProgramMatches(current: ProgramState, body: ProgramBody): boolean {
-  const parsed = v.safeParse(programFormSchema, { ...current, currentPhaseId: current.current.phaseId, ...(current.schedule ? { weekdays: current.schedule.weekdays } : {}) });
-  return parsed.success && JSON.stringify({ ...parsed.output, weekdays: parsed.output.weekdays ? [...parsed.output.weekdays].sort() : undefined }) === JSON.stringify({ ...v.parse(programFormSchema, body), weekdays: body.weekdays ? [...body.weekdays].sort() : undefined });
+  const shape = (input: unknown): string | null => {
+    const parsed = v.safeParse(programFormSchema, input);
+    if (!parsed.success) return null;
+    const { weekdays: _program, ...rest } = parsed.output;
+    const phases = rest.phases.map(({ daysPerWeek, days, ...phase }) => ({
+      ...phase,
+      ...(daysPerWeek !== undefined && !hasAssignments(days) ? { daysPerWeek } : {}),
+      days: days.map(({ weekdays: list, ...day }) => {
+        const weekdays = cleanWeekdays(list);
+        return { ...day, ...(weekdays.length > 0 ? { weekdays } : {}) };
+      }),
+    }));
+    return JSON.stringify({ ...rest, phases });
+  };
+  const stored = shape({ phased: current.phased, currentPhaseId: current.current.phaseId, phases: current.phases });
+  return stored !== null && stored === shape(bodyWithAssignments(body));
 }
 
 /** Known high-risk wording has a local gate as well as the provider classifier. */

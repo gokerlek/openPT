@@ -1,6 +1,6 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { lastDateByDay, lastDateByProgram, ownLogLabel, programLine, ptUpdatedSince, scheduleText, sessionDayText } from './own-program-text.ts';
+import { lastDateByDay, lastDateByProgram, ownLogLabel, programLine, ptUpdatedSince, sessionDayText } from './own-program-text.ts';
 import type { SessionIndexRow } from './schemas/session.ts';
 
 function row(id: string, date: string, extra: Partial<SessionIndexRow> = {}): SessionIndexRow {
@@ -29,12 +29,10 @@ describe('kendi program metinleri', () => {
     assert.equal(sessionDayText(undefined), 'Antrenman');
   });
 
-  test('satır: gün sayısı, haftalık sayı, günler, son antrenman', () => {
-    assert.equal(programLine({ days: 2, weekdays: [4, 2] }, '2026-09-22'), '2 gün · haftada 2 · Sal, Per · son: 22 Eyl');
-    assert.equal(programLine({ days: 3, weekdays: [], daysPerWeek: 3 }), '3 gün · haftada 3');
-    assert.equal(programLine({ days: 1, weekdays: [] }), '1 gün · gün seçilmedi');
-    assert.equal(scheduleText({ weekdays: [], daysPerWeek: 2 }), 'haftada 2');
-    assert.equal(scheduleText({ weekdays: [] }), 'gün seçilmedi');
+  test('satır: antrenman sayısı, haftalık sayı, günler, son antrenman', () => {
+    assert.equal(programLine({ days: 2, weekdays: [4, 2] }, '2026-09-22'), '2 antrenman · haftada 2 · Sal, Per · son: 22 Eyl');
+    assert.equal(programLine({ days: 3, weekdays: [], daysPerWeek: 3 }), '3 antrenman · haftada 3');
+    assert.equal(programLine({ days: 1, weekdays: [] }), '1 antrenman · gün atanmadı');
   });
 
   test('son antrenman programa ve güne göre; bitmemiş sayılmaz', () => {

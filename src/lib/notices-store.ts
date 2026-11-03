@@ -32,12 +32,12 @@ import { readIndex, type OwnReader, type RepoHead } from './session-files-core';
  * Genel bakış her açılışta danışan başına dosya okumasın diye danışanın özeti (ad, `inbox.seenAt`,
  * bildirimler, dikkat özeti) Next'in veri önbelleğindedir (sunucu örnekleri arasında ortak): danışanın
  * bildirim ya da dikkat doğuran her yazımında düşer (bitiş, geçmişte düzeltme ve silme: `session-files.ts`;
- * antrenman günleri: `/api/me/schedule`; PT'nin programı: `programs.ts`; öneri kararları: `proposals-store.ts`;
+ * PT'nin programı (antrenman günleri dahil; Faz 3'te danışan günleri değiştirmez): `programs.ts`; öneri kararları: `proposals-store.ts`;
  * ölçümler: `health.ts`; PT'nin okundu yazımı, danışan kaydı ve davet: `clients.ts`). Elle yapılan
  * değişiklikler için 5 dk üst sınır. Önbellek boşken danışan başına `client.json`, onarılmış index (dalın ucu,
  * `sessions/` ağacı, index'le uyuşmayan dosyalar: bitirilmemiş antrenman da gün sayılsın; set yazımları index'i
  * yazmaz), `program.json`, `proposals.json`, (onay varsa) `health.json` ve (henüz girmemişse) `invite.json` okunur.
- * Zamana bağlı kararlar (kaçan gün, evrenin bitişi) önbellekte değil, sayfa açılınca verilir.
+ * Zamana bağlı kararlar (kaçan gün, evrenin bitişi, bildirim penceresi: `noticeFeed`) önbellekte değil, sayfa açılınca verilir.
  */
 
 export const noticesTag = (id: string) => `notices-${id}`;
@@ -105,7 +105,8 @@ function joined(client: Pick<Client, 'access'>): boolean {
   return Boolean(lastJoinAt && !(revokedAt && revokedAt > lastJoinAt));
 }
 
-export type ClientOverview = ClientDigest & { attention: AttentionFacts };
+/** `coach`: AI koç bu danışan için açık (`coachAccess`); Genel bakış'ın "AI'ya sor" düğmesi buna bakar. */
+export type ClientOverview = ClientDigest & { attention: AttentionFacts; coach: boolean };
 
 async function buildDigest(id: string): Promise<ClientOverview | null> {
   const stored = await readClient(id);
@@ -121,6 +122,7 @@ async function buildDigest(id: string): Promise<ClientOverview | null> {
     screening: canRecordHealth(client, 'screening'),
   };
   const anyHealth = Object.values(consent).some(Boolean);
+  const coach = coachAccess(client) === 'ready';
   const reader = sessionReader(repo);
   const head = await reader.head();
   const now = new Date();
@@ -131,7 +133,7 @@ async function buildDigest(id: string): Promise<ClientOverview | null> {
     readTolerant(repo, 'proposals.json'),
     anyHealth ? readTolerant(repo, 'health.json') : Promise.resolve(null),
     joined(client) ? Promise.resolve(null) : readTolerant(repo, 'invite.json'),
-    coachAccess(client) === 'ready' ? readTolerant(repo, ASSISTANT_PATH) : Promise.resolve(null),
+    coach ? readTolerant(repo, ASSISTANT_PATH) : Promise.resolve(null),
   ]);
   const program = programRaw === null ? null : v.safeParse(programSchema, programRaw);
   const index = repaired.index;
@@ -155,10 +157,12 @@ async function buildDigest(id: string): Promise<ClientOverview | null> {
   let constraints: ConstraintFacts | null = null;
   if (consent.conditions && record) {
     // Çelişkiler için kütüphanenin etiketleri: yalnız etkin kısıt ve program varken okunur.
-    const input = careInputOf(record, { today: todayIn((await readAppConfig()).timeZone, now), painConsent: consent.pain });
+    const today = todayIn((await readAppConfig()).timeZone, now);
+    const input = careInputOf(record, { today, painConsent: consent.pain });
+    // "Sıradaki" bugünkü ya da sıradaki atanmış program (Faz 3).
     const conflicts =
       programOk && input.active.length > 0
-        ? programConflicts(programOk, new Map((await listExercises()).map((exercise) => [exercise.id, exercise])), input)
+        ? programConflicts(programOk, new Map((await listExercises()).map((exercise) => [exercise.id, exercise])), input, today)
         : [];
     constraints = constraintFactsOf(record, conflicts);
   }
@@ -176,10 +180,13 @@ async function buildDigest(id: string): Promise<ClientOverview | null> {
     // Kalıcı seçim kendi programsa günler ve pencere ondan (kendi-program.md §4).
     own: own.index,
   });
-  return { id, name: client.name, ...(client.inbox?.seenAt ? { seenAt: client.inbox.seenAt } : {}), notices, attention };
+  return { id, name: client.name, ...(client.inbox?.seenAt ? { seenAt: client.inbox.seenAt } : {}), notices, attention, coach };
 }
 
-/** Danışanın Genel bakış özeti (önbellekli): bildirimler ve dikkat özeti; kaydı yoksa null. */
+/**
+ * Danışanın Genel bakış özeti (önbellekli): bildirimler, dikkat özeti ve AI koçun açık olup olmadığı; kaydı yoksa null.
+ * Anahtardaki sürüm özetin biçimi değişince eski önbelleği bırakır (`v2`: `coach` alanı).
+ */
 export function readClientDigest(id: string): Promise<ClientOverview | null> {
-  return unstable_cache(() => buildDigest(id), ['client-overview', id], { tags: [noticesTag(id)], revalidate: 300 })();
+  return unstable_cache(() => buildDigest(id), ['client-overview', 'v2', id], { tags: [noticesTag(id)], revalidate: 300 })();
 }

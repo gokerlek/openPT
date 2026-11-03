@@ -1,8 +1,8 @@
 'use client';
 
 import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useState } from 'react';
-import { Check } from '@phosphor-icons/react';
 import { AnimatePresence, motion } from 'motion/react';
+import { Check } from '@/components/line-icons';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
 import { DURATION, EASE, tween } from '@/lib/motion';
@@ -105,7 +105,7 @@ export function SaveButton() {
   );
 }
 
-/** Dock'un kapladığı alt pay (dock 64 px + altındaki 12 px, biraz da nefes): orada kalan düğme görünmez sayılır. */
+/** Dock'un kapladığı alt pay (dock en çok 82 px + altındaki 12 px, biraz da nefes): orada kalan düğme görünmez sayılır. */
 const DOCK_MARGIN = '0px 0px -96px 0px';
 
 /** Öğe (tamamen) ekranın görünen yerinde değil mi; öğe yoksa `false`. */

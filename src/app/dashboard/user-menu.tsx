@@ -1,8 +1,9 @@
 'use client';
 
 import Link from 'next/link';
-import { ArrowsClockwise, GearSix, SignOut, Sparkle, User } from '@phosphor-icons/react';
+import { GearSix, SignOut, Sparkle, User } from '@phosphor-icons/react';
 import { discardAllDrafts } from '@/components/block-editor/editor-draft';
+import { openCoach } from '@/components/coach/coach-launcher';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
   DropdownMenu,
@@ -16,7 +17,8 @@ import {
 import { confirmLeave } from '@/components/unsaved-changes-guard';
 
 /**
- * Sağ üstteki kullanıcı menüsü: ayarlar ve çıkış burada (üst çubuk yok, SPEC §6).
+ * Sağ üstteki kullanıcı menüsü: AI koç paneli, Ayarlar ve çıkış burada (üst çubuk yok, SPEC §6).
+ * Ayarlar tek öğe: bölümün girişine (Görünüm) açılır, Yapay zekâ ve Sürüm oradaki sekmelerde.
  * Avatar GitHub profil resmi; yüklenmezse kişi ikonu. Düğme 44 px (avatar 40 px), telefonda
  * menü öğeleri de 44 px.
  */
@@ -56,17 +58,13 @@ export function UserMenu({ login, appName }: { login: string; appName: string })
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
+          <DropdownMenuItem className="touch:min-h-11" onClick={() => openCoach()}>
+            <Sparkle weight="fill" />
+            AI koç
+          </DropdownMenuItem>
           <DropdownMenuItem className="touch:min-h-11" render={<Link href="/dashboard/settings" />}>
             <GearSix />
-            Görünüm ayarları
-          </DropdownMenuItem>
-          <DropdownMenuItem className="touch:min-h-11" render={<Link href="/dashboard/settings/ai" />}>
-            <Sparkle />
-            Yapay zekâ ayarları
-          </DropdownMenuItem>
-          <DropdownMenuItem className="touch:min-h-11" render={<Link href="/dashboard/settings/updates" />}>
-            <ArrowsClockwise />
-            Sürüm ve güncellemeler
+            Ayarlar
           </DropdownMenuItem>
         </DropdownMenuGroup>
         <DropdownMenuSeparator />

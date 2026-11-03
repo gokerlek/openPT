@@ -1,6 +1,7 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { SessionDoc } from './schemas/session.ts';
+import { withLighter } from './session-check.ts';
 import { sameSessionData } from './session-merge.ts';
 import { at, sessionDoc, sessionEntry, W1, W2, workingSet } from './testing/session-fixtures.ts';
 import { DEVICES, PUSH_UP, workoutDay } from './testing/workout-fixtures.ts';
@@ -11,6 +12,7 @@ import {
   BACKOFF,
   createLocalWorkout,
   hasUnsent,
+  localWorkoutId,
   parseLocalWorkout,
   SEND_WINDOW_MS,
   sendDelay,
@@ -18,6 +20,7 @@ import {
   setsMissingOn,
   SLOW_WINDOW_MS,
   unsentSets,
+  untouchedWorkout,
   withChange,
 } from './workout-outbox.ts';
 import { startRest } from './workout-rest.ts';
@@ -94,12 +97,13 @@ describe('kuyruk: sunucunun yanıtı', () => {
 });
 
 describe('kuyruk: telefondaki kayıt', () => {
-  test('yazılıp okunur; dinlenme, taslak ve süreli setin sayacı korunur', () => {
+  test('yazılıp okunur; dinlenme, taslak, başka setlere yazılanlar ve süreli setin sayacı korunur', () => {
     const local = {
       ...withChange(createLocalWorkout(docWith([]), workoutDay()), docWith([set('st_aaaaaaaa', 1)]), { send: true }),
       rest: startRest('st_aaaaaaaa', 90, 1_000),
       restCount: 1,
       draft: { rowId: 'r_aaaaaa', setIndex: 1, kg: 25 },
+      drafts: [{ rowId: 'r_aaaaaa', setIndex: 2, kg: 30, value: 7 }, { rowId: 'r_bbbbbb', setIndex: 0, value: 1800, distanceM: 3000, inclinePct: 2.5 }],
       timer: startSetTimer({ rowId: 'r_bbbbbb', setIndex: 0, target: { min: 30, max: 45 } }, 2_000),
       lastSentAt: 500,
     };
@@ -137,6 +141,37 @@ describe('kuyruk: telefondaki kayıt', () => {
     assert.deepEqual(broken?.extraRounds, { b_aaaaaa: 1 });
     const { extraRounds: _rounds, ...old } = local;
     assert.deepEqual(parseLocalWorkout(JSON.stringify(old))?.extraRounds, {});
+  });
+
+  test('kaydın kimliği şemasız okunur (karşılaştırıp silmek için); yoksa ya da bozuksa null', () => {
+    const local = createLocalWorkout(docWith([]), workoutDay());
+    assert.equal(localWorkoutId(JSON.stringify(local)), local.doc.id);
+    assert.equal(localWorkoutId(null), null);
+    assert.equal(localWorkoutId('{'), null);
+    assert.equal(localWorkoutId(JSON.stringify({ doc: { id: 7 } })), null);
+    assert.equal(localWorkoutId('[]'), null);
+  });
+});
+
+describe('kuyruk: dokunulmamış antrenman (plan değişince yeniden kurulabilir)', () => {
+  // Yeni antrenmanın belgesinde kayıt yok (`newSessionDoc`); hareketin kaydı ilk sette açılır.
+  const fresh = () => createLocalWorkout(sessionDoc(), workoutDay());
+
+  test('yeni antrenman dokunulmamış', () => {
+    assert.equal(untouchedWorkout(fresh()), true);
+  });
+
+  test('gönderim, kayıt ya da su dokunur', () => {
+    assert.equal(untouchedWorkout({ ...fresh(), lastSentAt: 1 }), false);
+    assert.equal(untouchedWorkout({ ...fresh(), acked: sessionDoc() }), false);
+    assert.equal(untouchedWorkout({ ...fresh(), doc: docWith([set('st_aaaaaaaa', 1)]) }), false);
+    assert.equal(untouchedWorkout({ ...fresh(), doc: sessionDoc({ waterTaps: [{ id: 'wt_aaaaaaaa', d: 1, at: at(1) }] }) }), false);
+  });
+
+  test('yoklamanın hafifletmesi dokunur: yeniden kurulsaydı hafifletme kaybolurdu', () => {
+    const local = fresh();
+    assert.equal(untouchedWorkout({ ...local, doc: withLighter(local.doc, at(1)) }), false);
+    assert.equal(untouchedWorkout({ ...local, doc: { ...local.doc, notices: [{ kind: 'overload', at: at(1) }] } }), false);
   });
 });
 

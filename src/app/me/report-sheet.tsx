@@ -6,7 +6,7 @@ import { ChoiceChips, MultiChips } from '@/components/choice-chips';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/field';
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { Drawer, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle } from '@/components/ui/drawer';
 import { Spinner } from '@/components/ui/spinner';
 import { Textarea } from '@/components/ui/textarea';
 import {
@@ -51,8 +51,6 @@ const SIDE_CHOICES: { value: ConstraintSide; label: string }[] = [
   { value: 'both', label: 'İkisi' },
 ];
 
-const TALL = 'max-h-[calc(100dvh-max(1rem,env(safe-area-inset-top)))] gap-0 rounded-t-2xl pb-[env(safe-area-inset-bottom)]';
-
 /**
  * "Antrenörüne bildir" (tasarım `kisit-tarama.md` §2.4): tek, kaydırılan sheet. Başta acil metin (yoklamanın
  * "Bugün yük yok" ekranıyla aynı ayrım; Finucane 2020), Gönder'in üstünde öteki işaretler (Ottawa kuralları, Stiell
@@ -75,11 +73,11 @@ export function ReportSheet({
 }) {
   const title = useRef<HTMLHeadingElement>(null);
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="bottom" className={TALL} initialFocus={title}>
+    <Drawer open={open} onOpenChange={onOpenChange}>
+      <DrawerContent className="gap-0" initialFocus={title}>
         {open ? <ReportBody key={editing ?? 'new'} titleRef={title} editing={editing} initial={initial} onSent={onSent} /> : null}
-      </SheetContent>
-    </Sheet>
+      </DrawerContent>
+    </Drawer>
   );
 }
 
@@ -133,12 +131,12 @@ function ReportBody({
 
   return (
     <>
-      <SheetHeader className="gap-1 pt-5 pb-2">
-        <SheetTitle ref={titleRef} tabIndex={-1} className="text-lg font-semibold outline-none">
+      <DrawerHeader className="gap-1 pt-5 pb-2">
+        <DrawerTitle ref={titleRef} tabIndex={-1} className="text-lg font-semibold outline-none">
           {editing ? 'Bildirimini düzelt' : 'Antrenörüne bildir'}
-        </SheetTitle>
-        <SheetDescription>Antrenörün programını buna göre ayarlar.</SheetDescription>
-      </SheetHeader>
+        </DrawerTitle>
+        <DrawerDescription>Antrenörün programını buna göre ayarlar.</DrawerDescription>
+      </DrawerHeader>
       <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto overscroll-contain px-4 pb-4">
         <Alert variant="destructive">
           <WarningCircle weight="fill" />
