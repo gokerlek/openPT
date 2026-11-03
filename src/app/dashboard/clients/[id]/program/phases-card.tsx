@@ -351,6 +351,7 @@ export function PhasesCard({
           label="Evreler"
           onStep={(id, target) => movePhaseTo(id, target)}
           onDrop={(id, over) => movePhaseTo(id, { over })}
+          onTapItem={(id) => document.getElementById(`phase-name-${id}`)?.focus()}
           renderItem={(phase, slot) => <PhaseRow phase={phase} index={phases.indexOf(phase)} shared={shared} slot={slot} />}
         />
         <FieldError>{phasesArray.errors?.[0]}</FieldError>

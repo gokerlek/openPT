@@ -1,6 +1,6 @@
 'use client';
 
-import { AutoScrollActivator, PointerSensor, useSensor, useSensors, type Announcements } from '@dnd-kit/core';
+import { AutoScrollActivator, MouseSensor, PointerSensor, TouchSensor, useSensor, useSensors, type Announcements } from '@dnd-kit/core';
 import { DRAG } from '@/lib/motion';
 
 /**
@@ -23,9 +23,17 @@ export const LIST_ACCESSIBILITY = {
   screenReaderInstructions: { draggable: '' },
 };
 
-/** Tek işaretçi sensörü: `DRAG.activationDistance` px kıpırdayınca başlar (dokunup bırakmak kartı açar). */
-export function useListSensors() {
-  return useSensors(useSensor(PointerSensor, { activationConstraint: { distance: DRAG.activationDistance } }));
+/**
+ * Sensörler: işaretçi `DRAG.activationDistance` px kıpırdayınca başlar (dokunup bırakmak kartı açar; düzenleyici). Düz
+ * listelerde (`touchHold`) parmakla sürükleme `DRAG.touchHoldMs` basılı tutunca başlar: antrenman listesini kaydırırken
+ * tutamaçtan geçen parmak hareketi yerinden oynatmaz (tasarım: "kazara yer değiştirme olmaz"). Fare ve kalem aynı kalır.
+ */
+export function useListSensors({ touchHold = false }: { touchHold?: boolean } = {}) {
+  const distance = { activationConstraint: { distance: DRAG.activationDistance } };
+  const pointer = useSensor(PointerSensor, distance);
+  const mouse = useSensor(MouseSensor, distance);
+  const touch = useSensor(TouchSensor, { activationConstraint: { delay: DRAG.touchHoldMs, tolerance: DRAG.touchTolerance } });
+  return useSensors(...(touchHold ? [mouse, touch] : [pointer]));
 }
 
 /** Otomatik kaydırma şeridi: ekranın üst ve altında `DRAG.autoScrollEdge` px, ekran yüksekliğine oran olarak. */

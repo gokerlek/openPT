@@ -29,6 +29,8 @@ type SortableListProps<T> = {
   onStep: (key: string, target: 'up' | 'down') => void;
   /** Sürükle-bırak: öğe, üzerine bırakıldığı öğenin sırasına (`moveTo`). */
   onDrop: (key: string, overKey: string) => void;
+  /** Tutamacın üstüne kıpırdamadan dokunmak: öğenin kendisine dokunmakla aynı iş (tutamacın alanında ölü bölge yok). */
+  onTapItem?: (key: string) => void;
   renderItem: (item: T, slot: SortableSlot) => React.ReactNode;
   /** Listenin ekran okuyucu adı. */
   label: string;
@@ -41,9 +43,9 @@ type SortableListProps<T> = {
  * aynı). Klavyede odaktaki öğede Alt + ↑/↓, ekran okuyucuda gizli şerit. Kaydırarak silme için öğeler `SwipeGroup`
  * içindedir (aynı anda tek panel açık). Ayarlar düzenleyiciyle ortak (`dnd-base.ts`).
  */
-export function SortableList<T>({ items, keyOf, nameOf, canMove = () => true, onStep, onDrop, renderItem, label, className }: SortableListProps<T>) {
+export function SortableList<T>({ items, keyOf, nameOf, canMove = () => true, onStep, onDrop, onTapItem, renderItem, label, className }: SortableListProps<T>) {
   const id = useId();
-  const sensors = useListSensors();
+  const sensors = useListSensors({ touchHold: true });
   const [activeKey, setActiveKey] = useState<string | null>(null);
   const [edge, setEdge] = useState(0.1);
   const movable = items.filter(canMove).map(keyOf);
@@ -85,6 +87,7 @@ export function SortableList<T>({ items, keyOf, nameOf, canMove = () => true, on
                 canUp={position > 0}
                 canDown={position !== -1 && position < movable.length - 1}
                 onStep={(target) => onStep(key, target)}
+                onTapItem={onTapItem}
                 render={(slot) => renderItem(item, slot)}
               />
             );
@@ -107,6 +110,7 @@ function SortableItem({
   canUp,
   canDown,
   onStep,
+  onTapItem,
   render,
 }: {
   itemKey: string;
@@ -115,6 +119,7 @@ function SortableItem({
   canUp: boolean;
   canDown: boolean;
   onStep: (target: 'up' | 'down') => void;
+  onTapItem: ((key: string) => void) | undefined;
   render: (slot: SortableSlot) => React.ReactNode;
 }) {
   const { setNodeRef: setDragRef, setActivatorNodeRef, listeners, isDragging } = useDraggable({ id: itemKey, disabled: !movable });
@@ -126,7 +131,14 @@ function SortableItem({
     },
     [setDragRef, setDropRef],
   );
-  const grabber = movable ? <CardGrabber ref={setActivatorNodeRef} dragging={isDragging} {...listeners} /> : null;
+  const grabber = movable ? (
+    <CardGrabber
+      ref={setActivatorNodeRef}
+      dragging={isDragging}
+      onTap={onTapItem ? () => onTapItem(itemKey) : undefined}
+      {...listeners}
+    />
+  ) : null;
   // Taşınan öğenin düğümü DOM'da yer değiştirir ve odak düşebilir: odaktaki öğe taşımadan sonra yeniden odaklanır.
   const step = (target: 'up' | 'down') => {
     const focused = document.activeElement instanceof HTMLElement ? document.activeElement : null;

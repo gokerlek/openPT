@@ -311,6 +311,7 @@ export function ExerciseForm({
                       const to = target === "up" ? from - 1 : from + 1;
                       if (to >= 0 && to < array.items.length) move(form, { path: ["cues"], from, to });
                     }}
+                    onTapItem={(item) => document.getElementById(`cue-${item}`)?.focus()}
                     onDrop={(item, over) =>
                       move(form, { path: ["cues"], from: array.items.indexOf(item), to: array.items.indexOf(over) })
                     }
@@ -333,6 +334,7 @@ export function ExerciseForm({
                               {(field) => (
                                 <Input
                                   {...field.props}
+                                  id={`cue-${item}`}
                                   value={field.input ?? ""}
                                   placeholder="Kürek kemiklerini sıkıştır"
                                   aria-label={`${index + 1}. ipucu`}

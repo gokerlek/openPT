@@ -242,7 +242,7 @@ export function WorkoutSetRow({
         style={{ gridTemplateColumns: columns }}
         onClick={logged ? () => onEdit(logged.id) : input && !input.disabled ? input.onSelect : undefined}
         className={cn(
-          'grid h-12 scroll-mb-3 border-b bg-card transition-colors',
+          'grid min-h-12 scroll-mb-3 border-b bg-card transition-colors',
           highlight && 'bg-[color-mix(in_oklab,var(--primary)_10%,var(--card))]',
           (logged || input) && 'cursor-pointer',
         )}>

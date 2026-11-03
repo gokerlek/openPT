@@ -113,6 +113,7 @@ export function WorkoutList({
         label="Hareketler"
         onStep={(key, target) => onMove(key, target === 'up' ? -1 : 1)}
         onDrop={onMoveTo}
+        onTapItem={onOpen}
         renderItem={(item, slot) => {
           const card = (
             <div
