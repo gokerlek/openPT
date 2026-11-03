@@ -91,25 +91,84 @@ describe('antrenman belgesi: başlangıç ve sıradaki set', () => {
     );
   });
 
-  test('tekrar: geçen seferki aynı sıradaki set, aynı ağırlıkta; tepe önceden dolmaz; ağırlık arttıysa alt sınır', () => {
-    const history = (reps: number) => [
+  /** Geçen seferki bench: `[kg, tekrar]` setleri (hedef 8–10), `extra` fazladan setler planın arkasından; satır verilmezse bu günün satırı. */
+  function lastBench(sets: readonly (readonly [number, number])[], options: { rowId?: string; extra?: readonly (readonly [number, number])[] } = {}) {
+    const working = sets.map(([kg, reps], index) => workingSet(`st_0000000${index}`, -999 + index, { setIndex: index, kg, reps, effort: 'good', target: { min: 8, max: 10 } }));
+    const extra = (options.extra ?? []).map(([kg, reps], index) =>
+      workingSet(`st_0000001${index}`, -990 + index, { setIndex: sets.length + index, kg, reps, extra: true, target: { min: 8, max: 10 } }),
+    );
+    return [
       sessionDoc({
         id: 's_aaaaaaaa',
         status: 'finished',
         startedAt: at(-1000),
         finishedAt: at(-960),
-        entries: [
-          sessionEntry('e_aaaaaa', {
-            rowId: 'r_aaaaaa',
-            sets: [0, 1, 2].map((index) => workingSet(`st_0000000${index}`, -999 + index, { setIndex: index, kg: 60, reps, effort: 'good', target: { min: 8, max: 10 } })),
-          }),
-        ],
+        entries: [sessionEntry('e_aaaaaa', { rowId: options.rowId ?? 'r_aaaaaa', sets: [...working, ...extra] })],
       }),
     ];
-    const hold = workoutDay({ history: history(9) });
-    assert.deepEqual(nextSet(hold, start(hold)) && { kg: nextSet(hold, start(hold))?.kg, value: nextSet(hold, start(hold))?.value }, { kg: 60, value: 9 });
-    const up = workoutDay({ history: history(10) });
-    assert.deepEqual({ kg: nextSet(up, start(up))?.kg, value: nextSet(up, start(up))?.value }, { kg: 62.5, value: 8 });
+  }
+
+  /** Bench satırının bekleyen üç setine önceden dolan `[kg, tekrar]`. */
+  function prefilled(day: ReturnType<typeof workoutDay>) {
+    const doc = start(day);
+    return [0, 1, 2].map((setIndex) => {
+      const next = nextSet(day, doc, { rowId: 'r_aaaaaa', setIndex }, 'b_aaaaaa');
+      return next && [next.kg, next.value];
+    });
+  }
+
+  test('geçen seferki aynı sıradaki set aynen dolar: kg ve tekrar, tepe dahil; motorun artışı yalnız gerekçede', () => {
+    const hold = workoutDay({ history: lastBench([[60, 9], [60, 9], [60, 9]]) });
+    assert.deepEqual(prefilled(hold), [[60, 9], [60, 9], [60, 9]]);
+    const up = workoutDay({ history: lastBench([[60, 10], [60, 10], [60, 10]]) });
+    assert.deepEqual(prefilled(up), [[60, 10], [60, 10], [60, 10]]);
+    assert.deepEqual({ reason: up.rows.r_aaaaaa?.plan.reason, top: up.rows.r_aaaaaa?.plan.topWeightKg }, { reason: 'increase', top: 62.5 });
+  });
+
+  test('her set kendi geçen seferkiyle (piramit tek ağırlığa inmez); hareket en son başka antrenmanda yapıldıysa oradan', () => {
+    assert.deepEqual(prefilled(workoutDay({ history: lastBench([[60, 10], [70, 8], [80, 6]]) })), [[60, 10], [70, 8], [80, 6]]);
+    assert.deepEqual(prefilled(workoutDay({ history: lastBench([[50, 9], [55, 9], [55, 8]], { rowId: 'r_baskaaa' }) })), [[50, 9], [55, 9], [55, 8]]);
+  });
+
+  test('geçen sefer daha az set: geçmişi olmayan set öneriden; taslak ve yazılan geçen seferkini ezer', () => {
+    const day = workoutDay({ history: lastBench([[60, 9], [65, 8]]) });
+    const planned = day.rows.r_aaaaaa?.plan.sets[2]?.weightKg;
+    assert.deepEqual(prefilled(day), [[60, 9], [65, 8], [planned, 8]]);
+    const doc = start(day);
+    assert.equal(nextSet(day, doc, { rowId: 'r_aaaaaa', setIndex: 1, kg: 70 }, 'b_aaaaaa')?.kg, 70);
+    assert.equal(nextSet(day, doc, null, 'b_aaaaaa', [{ rowId: 'r_aaaaaa', setIndex: 0, value: 11 }])?.value, 11);
+  });
+
+  test('yoklama ya da ağrıyla ayarlanan günde planın (indirilmiş) değerleri dolar, geçen seferki değil', () => {
+    const base = workoutDay({ history: lastBench([[60, 10], [60, 10], [60, 10]]) });
+    const row = base.rows.r_aaaaaa;
+    if (!row) throw new Error('Satır yok.');
+    const day = { ...base, rows: { ...base.rows, r_aaaaaa: { ...row, adjusted: 'readiness' as const } } };
+    assert.deepEqual(prefilled(day)[0], [62.5, 8]);
+  });
+
+  test('"+ Set ekle": fazladan set geçen seferki aynı sıradaki fazladan setle dolar', () => {
+    const base = workoutDay({ history: lastBench([[60, 9], [60, 9], [60, 9]], { extra: [[55, 12]] }) });
+    let doc = start(base);
+    for (const minute of [1, 2, 3]) doc = logNext(base, doc, minute);
+    const day = withExtraRounds(base, addExtraRound(base, doc, 'b_aaaaaa'));
+    const extra = nextSet(day, doc);
+    assert.deepEqual(extra && { extra: extra.extra, setIndex: extra.setIndex, kg: extra.kg, value: extra.value }, { extra: true, setIndex: 3, kg: 55, value: 12 });
+  });
+
+  test('aşırı yük geçen seferki aynı setin ağırlığından da ölçülür: önceden dolan değer kırmızı çıkmaz', () => {
+    // Motor bugün 40 kg planlıyor (ör. hafif antrenman önerisi); geçen sefer 60 kg yapıldı.
+    const base = workoutDay({ history: lastBench([[60, 6], [60, 6], [60, 6]]) });
+    const row = base.rows.r_aaaaaa;
+    if (!row) throw new Error('Satır yok.');
+    const plan = { ...row.plan, topWeightKg: 40, sets: row.plan.sets.map((set) => ({ ...set, weightKg: 40 })) };
+    const day = { ...base, rows: { ...base.rows, r_aaaaaa: { ...row, plan } } };
+    const doc = start(day);
+    const heaviest = nextSet(day, doc, { rowId: 'r_aaaaaa', setIndex: 2 }, 'b_aaaaaa');
+    if (!heaviest) throw new Error('Set yok.');
+    assert.deepEqual([heaviest.kg, heaviest.plannedKg], [60, 40]);
+    assert.equal(overloadState(day, doc, heaviest, heaviest.kg), 'none');
+    assert.equal(overloadState(day, doc, heaviest, 75), 'ask');
   });
 
   test('taslak yalnız kendi setinde geçerli', () => {
@@ -483,7 +542,7 @@ describe('antrenman belgesi: aşırı yük, ısınma, ayar notu', () => {
     assert.deepEqual(doc.entries[0]?.sets.map((set) => set.overload ?? false), [false, true, true]);
     assert.deepEqual(doc.notices, [{ kind: 'overload', at: at(2) }]);
     // Başka hareket kendi onayını ister.
-    assert.equal(overloadState(day, doc, { rowId: 'r_bbbbbb', plannedKg: 62.5 }, 80), 'ask');
+    assert.equal(overloadState(day, doc, { rowId: 'r_bbbbbb', plannedKg: 62.5, setIndex: 0 }, 80), 'ask');
     assert.equal(v.safeParse(sessionDocSchema, doc).success, true);
   });
 
@@ -862,7 +921,8 @@ describe('antrenman belgesi: yoklamanın indirdiği gün', () => {
     doc = logNext(lowered, doc, 1);
     doc = logNext(lowered, doc, 2);
     assert.deepEqual([nextSet(lowered, doc)?.rowId, nextSet(lowered, doc)?.value], ['r_bbbbbb', 8]);
-    assert.equal(nextSet(plain, logNext(plain, logNext(plain, start(plain), 1), 2))?.value, 11);
+    // Olağan günde geçen seferki aynen, aralığın tepesi dahil (şınav 12, 11).
+    assert.equal(nextSet(plain, logNext(plain, logNext(plain, start(plain), 1), 2))?.value, 12);
   });
 
   test('planın satırdan az set verdiği gün planlanan set kayda yazılır: sunucunun bitiş sayısı telefonunkiyle aynı', () => {
@@ -1004,13 +1064,13 @@ describe('kardiyo: önceden dolu mesafe ve eğim, kayıt ve düzeltme', () => {
     assert.equal(day.rows.r_card03?.cardio, undefined);
   });
 
-  test('mesafe ve eğim hedeften; hedefte yoksa geçen seferden; o da yoksa boş', () => {
-    const fromTarget = cardioDay([{ min: 1800, max: 1800, distanceM: 3000, inclinePct: 5 }], [lastWalk]);
-    const next = nextSet(fromTarget, start(fromTarget));
-    assert.deepEqual({ distanceM: next?.distanceM, inclinePct: next?.inclinePct }, { distanceM: 3000, inclinePct: 5 });
-    const fromLast = cardioDay([{ min: 1800, max: 1800 }], [lastWalk]);
+  test('mesafe ve eğim geçen seferden; geçmiş yoksa hedeften; o da yoksa boş', () => {
+    const fromLast = cardioDay([{ min: 1800, max: 1800, distanceM: 3000, inclinePct: 5 }], [lastWalk]);
     const again = nextSet(fromLast, start(fromLast));
     assert.deepEqual({ distanceM: again?.distanceM, inclinePct: again?.inclinePct }, { distanceM: 2800, inclinePct: 4 });
+    const fromTarget = cardioDay([{ min: 1800, max: 1800, distanceM: 3000, inclinePct: 5 }]);
+    const next = nextSet(fromTarget, start(fromTarget));
+    assert.deepEqual({ distanceM: next?.distanceM, inclinePct: next?.inclinePct }, { distanceM: 3000, inclinePct: 5 });
     const empty = cardioDay([{ min: 1800, max: 1800 }]);
     const none = nextSet(empty, start(empty));
     assert.equal(none && 'distanceM' in none, false);

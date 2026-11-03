@@ -3,7 +3,7 @@ import type { SessionDoc } from './schemas/session.ts';
 import { BLOCK_KIND_LABELS, type BlockKind } from './template-plan.ts';
 import type { CursorUnit } from './workout-cursor.ts';
 import type { WorkoutDay } from './workout-plan.ts';
-import { cursorOf, memberAfter, setViews, type NextSet } from './workout-session.ts';
+import { cursorOf, lastSetOf, memberAfter, setViews, type NextSet } from './workout-session.ts';
 
 /**
  * Gruplar (süperset, devre, kompleks; tasarım §2.4 "Gruplar") — saf. Set sırası imlecin `setSlots`
@@ -102,7 +102,7 @@ export function groupView(
       const weighted = row.trackingType === 'weight_reps';
       const value = logged ? (logged.reps ?? logged.seconds ?? 0) : undefined;
       const target = view.target.amrap ? `${formatNumber(view.target.min)}+` : range(view.target.min, view.target.max);
-      const kg = logged ? logged.kg : current ? focus.kg : view.plannedKg;
+      const kg = logged ? logged.kg : current ? focus.kg : (lastSetOf(row, view.setIndex)?.kg ?? view.plannedKg);
       if (weighted) text = `${kg !== undefined ? formatNumber(kg) : '—'} × ${value !== undefined ? formatNumber(value) : target}`;
       else if (row.trackingType === 'duration') text = `${value !== undefined ? formatNumber(value) : target} sn`;
       else text = `${value !== undefined ? formatNumber(value) : target} tekrar`;

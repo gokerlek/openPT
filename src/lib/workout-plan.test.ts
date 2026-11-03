@@ -145,14 +145,14 @@ describe('günün planı', () => {
     assert.equal(workoutDay({ history: [active] }).rows.r_aaaaaa?.plan.reason, 'first_time');
   });
 
-  test('"Önceki": satırın kaydı yoksa aynı egzersiz ve cihazın en yeni kaydı; fazladan set yok', () => {
+  test('"Önceki": satırın kaydı yoksa aynı egzersiz ve cihazın en yeni kaydı; fazladan set planın arkasındaki yeriyle', () => {
     const doc = finished('s_aaaaaaaa', -1000, three(60, 10));
     const withExtra = {
       ...doc,
-      entries: doc.entries.map((entry) => ({ ...entry, rowId: 'r_eskisii', sets: [...entry.sets, workingSet(setId(), -900, { setIndex: 3, extra: true })] })),
+      entries: doc.entries.map((entry) => ({ ...entry, rowId: 'r_eskisii', sets: [...entry.sets, workingSet(setId(), -900, { setIndex: 3, kg: 55, reps: 12, extra: true })] })),
     };
     const previous = lastTimeOf([withExtra], { rowId: 'r_aaaaaa', exerciseId: 'bench-press' });
-    assert.equal(previous.length, 3);
+    assert.deepEqual(previous.map((set) => [set.setIndex, set.kg, set.value]), [[0, 60, 10], [1, 60, 10], [2, 60, 10], [3, 55, 12]]);
     assert.deepEqual(lastTimeOf([withExtra], { rowId: 'r_aaaaaa', exerciseId: 'bench-press', deviceId: 'smith-makinesi' }), []);
   });
 });

@@ -1,7 +1,7 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { SessionDoc } from './schemas/session.ts';
-import { at, W1 } from './testing/session-fixtures.ts';
+import { at, sessionDoc, sessionEntry, W1, workingSet } from './testing/session-fixtures.ts';
 import { dayWithBlocks } from './testing/workout-fixtures.ts';
 import { groupView, memberLetter, nextMemberLetter } from './workout-groups.ts';
 import { afterLog, logSet, newSessionDoc, nextSet } from './workout-session.ts';
@@ -137,6 +137,30 @@ describe('gruplar: kart', () => {
     assert.equal(view?.round, 2);
     assert.deepEqual(view?.members.map((member) => member.status), ['current', 'finished']);
     assert.equal(nextMemberLetter(day, doc), null);
+  });
+
+  test('bekleyen üyenin ağırlığı geçen seferki aynı setinki (önceden dolanla aynı)', () => {
+    const last = sessionDoc({
+      id: 's_aaaaaaaa',
+      status: 'finished',
+      startedAt: at(-1000),
+      finishedAt: at(-960),
+      entries: [
+        sessionEntry('e_aaaaaa', {
+          rowId: 'r_baskaaa',
+          sets: [
+            workingSet('st_00000000', -999, { setIndex: 0, kg: 70, reps: 8 }),
+            workingSet('st_00000001', -998, { setIndex: 1, kg: 40, reps: 10 }),
+          ],
+        }),
+      ],
+    });
+    const day = dayWithBlocks(
+      [{ id: 'b_tttttt', kind: 'circuit', restSeconds: 120, transitionSeconds: 20, rows: [bench('r_aaaaaa', 2), goblet('r_bbbbbb', 2), plank('r_pppppp', 2)] }],
+      [last],
+    );
+    // Odak yoksa son tur: Bench'in 2. seti geçen sefer 40 kg (motor ikisine de 70 kg önerir).
+    assert.equal(groupView(day, start(day), 'b_tttttt', null)?.members[0]?.text, '40 × 8–10');
   });
 
   test('ağırlıksız üyeler: tekrar ve saniye', () => {

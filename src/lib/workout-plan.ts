@@ -48,9 +48,9 @@ import type { PreviousSet } from './workout-cursor.ts';
  *   motorun planının üstüne aşama kurallarıyla kurulur. Önceden dolu ağırlık ve kart çipi bu plandan
  *   gelir: satır aşamayı (`stage`, hareket kaydına yazılır) ve danışan dilinde gerekçeyi (`why`) taşır.
  *   Verilmezse (eski testler) yalnız motor.
- * - "Önceki" sütunu ve önceden dolu tekrar için geçen seferki setler (`lastTime`): aynı satırın en
- *   yeni kaydı; satırın kaydı yoksa aynı egzersiz ve cihazınki. Danışanın ayar notu (sehpa, koltuk)
- *   da aynı kayıttan gelir (`setupNote`); hareketin kaydı açılınca ona taşınır.
+ * - "Önceki" sütunu ve önceden dolan değerler için geçen seferki setler (`lastTime`): program ve günden bağımsız,
+ *   aynı egzersiz ve cihazın en yeni kaydı (fazladan setler dahil). Danışanın ayar notu (sehpa, koltuk)
+ *   önce satırın kendi kaydından gelir (`setupNote`); hareketin kaydı açılınca ona taşınır.
  * - Isınma setleri saklanmaz, burada hesaplanır (`warmupSets`, v1 §7.8): halterle bileşik hareket, kas
  *   grubunun gündeki ilk hareketi, en hafif çalışma seti 40 kg ve üstü (piramitte ilk basamak).
  * - Bugün'ün sayıları index'ten: "bu hafta x/3" (`weekOf`), yarım antrenman, bitmiş
@@ -238,10 +238,13 @@ function findDay(program: PlanProgram, dayId: string): { phase: Program['phases'
   return null;
 }
 
-/** Hareketin çalışma setleri (fazladan setler hariç) → "Önceki" satırları. */
+/**
+ * Hareketin çalışma setleri → "Önceki" satırları ve önceden dolan değerler. Fazladan setler planın arkasındaki yerleriyle
+ * (`setIndex`) gelir: bugünkü "+ Set ekle" ya da artık daha uzun plan aynı sıradaki seti bulur.
+ */
 function previousSets(entry: SessionEntry): PreviousSet[] {
   return entry.sets
-    .filter((set) => set.type === 'working' && !set.extra)
+    .filter((set) => set.type === 'working')
     .map((set, position) => ({
       setIndex: set.setIndex ?? position,
       ...(set.kg !== undefined ? { kg: set.kg } : {}),

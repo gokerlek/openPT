@@ -32,11 +32,13 @@ import { dayBody, entryPlanOf, type WorkoutDay, type WorkoutRow } from './workou
  *   sayısını taşır: motor kaydı o günkü plana göre değerlendirir.
  * - Setin satırdaki yeri (`setIndex`) planın setlerinden gelir; ortadaki bir set silinse de sıradaki
  *   set, planda henüz yapılmamış ilk settir (aynı `setIndex` iki kez yazılmaz).
- * - Önceden dolu ağırlık: kaydedilmemiş taslak → bu seansın önceki setlerinden öneri
- *   (`nextSetInPlan`: aynı yüzdede önceki setin ağırlığı, basamakta son tam yük setinden; danışan
- *   önceki basamağı plandan farklı yaptıysa onun ağırlığı) → plan.
- *   Tekrar/süre: taslak → geçen seferki aynı sıradaki setin aynı ağırlıktaki değeri → aralığın altı
- *   (`prefillSet`; tepe hiçbir zaman önceden dolmaz).
+ * - Önceden dolu değer: kaydedilmemiş taslak → geçen seferki aynı sıradaki set aynen (kg ve tekrar/süre, tepe dahil;
+ *   hareketin en son yapıldığı antrenmandan, `lastSetOf`) → bu seansın önceki setlerinden öneri (`nextSetInPlan`: aynı
+ *   yüzdede önceki setin ağırlığı, basamakta son tam yük setinden; danışan önceki basamağı plandan farklı yaptıysa onun
+ *   ağırlığı) → plan. Motorun artışı yalnız gerekçede (kartın çipi). Geçen seferki yok sayılır: yoklama ya da ağrıyla
+ *   ayarlanan gün (planın indirilmiş değerleri) ve bugün önceki bir sete "Kolaydı" denmişse (artış danışanın seçimi).
+ *   Geçmişi olmayan sette tekrar/süre: geçen seferki aynı sıradaki setin aynı ağırlıktaki değeri → aralığın altı
+ *   (`prefillSet`).
  * - Set türleri (§2.4): ısınma setleri satırdaki ✓ ile yazılır (`type: warmup`, `setIndex` ısınmanın
  *   sırası), imleci ve hacmi etkilemez; aşırı yük (`isOverload`) hareket başına bir kez onaylanır, sonra
  *   setler `overload` işaretiyle yazılır ve PT'ye bildirim gider.
@@ -335,13 +337,29 @@ function chosenSet(
 }
 
 /**
- * Kardiyo setinin önceden dolu mesafesi ve eğimi (kuvvet setlerindeki gibi): taslak → o sete yazılan → hedef → geçen
- * seferin aynı seti; hiçbiri yoksa boş. Eğim yalnız yürüyüş/koşuda; kardiyo olmayan satırda ikisi de yok.
+ * Geçen seferki aynı set: hareketin en son yapıldığı antrenmandan (program ve günden bağımsız, `lastTimeOf`). Yoklama ya da
+ * ağrıyla ayarlanan günde yok: o gün planın indirilmiş değerleri dolar.
+ */
+export function lastSetOf(row: Pick<WorkoutRow, 'adjusted' | 'lastTime' | 'plan'>, setIndex: number): PreviousSet | undefined {
+  return carriesLastTime(row) ? row.lastTime.find((item) => item.setIndex === setIndex) : undefined;
+}
+
+/** Satırın kutuları geçen seferkiyle dolar: geçmişi var ve gün yoklama ya da ağrıyla ayarlanmadı. */
+export function carriesLastTime(row: Pick<WorkoutRow, 'adjusted' | 'lastTime' | 'plan'>): boolean {
+  return !row.adjusted && row.plan.reason !== 'lighten' && row.lastTime.length > 0;
+}
+
+/**
+ * Kardiyo setinin önceden dolu mesafesi ve eğimi (kuvvet setlerindeki gibi): taslak → o sete yazılan → geçen seferin aynı
+ * seti → hedef; hiçbiri yoksa boş. Ayarlanan günde hedef geçen seferkinden önce. Eğim yalnız yürüyüş/koşuda; kardiyo
+ * olmayan satırda ikisi de yok.
  */
 function cardioPrefill(row: WorkoutRow, target: SetTarget, setIndex: number, own: readonly (SetDraft | undefined)[]): Pick<NextSet, 'distanceM' | 'inclinePct'> {
   if (!row.cardio) return {};
-  const last = row.lastTime.find((item) => item.setIndex === setIndex);
-  const pick = (key: 'distanceM' | 'inclinePct') => own.map((item) => item?.[key]).find((value) => value !== undefined) ?? target[key] ?? last?.[key];
+  const last = lastSetOf(row, setIndex);
+  const earlier = row.lastTime.find((item) => item.setIndex === setIndex);
+  const pick = (key: 'distanceM' | 'inclinePct') =>
+    own.map((item) => item?.[key]).find((value) => value !== undefined) ?? last?.[key] ?? target[key] ?? earlier?.[key];
   const distanceM = pick('distanceM');
   const inclinePct = row.cardio === 'walk' ? pick('inclinePct') : undefined;
   return { ...(distanceM !== undefined ? { distanceM } : {}), ...(inclinePct !== undefined ? { inclinePct } : {}) };
@@ -380,15 +398,22 @@ function setAt(
     ...cardioPrefill(row, view.target, view.setIndex, [drafted, saved]),
   };
   if (view.extra) {
-    // Fazladan set: ağırlık bu hareketin son setinden (danışanın bugünkü ağırlığı), tekrar aralığın altı.
+    // Fazladan set: geçen seferki aynı sıradaki fazladan set; yoksa ağırlık bu hareketin son setinden (danışanın bugünkü
+    // ağırlığı), tekrar aralığın altı.
+    const last = lastSetOf(row, view.setIndex);
     const lastKg = entry?.sets.filter((set) => set.type === 'working' && set.kg !== undefined).at(-1)?.kg;
-    const kg = row.trackingType === 'weight_reps' ? (own.kg ?? lastKg ?? view.plannedKg) : undefined;
+    const kg = row.trackingType === 'weight_reps' ? (own.kg ?? last?.kg ?? lastKg ?? view.plannedKg) : undefined;
     const cap = row.adjusted ? extraPlanOf(row, template).cap : undefined;
-    const value = own.value ?? whole(prefillSet({ target: view.target, setIndex: view.setIndex, plannedKg: kg, lastTime: row.lastTime, cap }).value);
+    const value =
+      own.value ?? whole(last && last.value > 0 ? last.value : prefillSet({ target: view.target, setIndex: view.setIndex, plannedKg: kg, lastTime: row.lastTime, cap }).value);
     return { ...common, kg, value, extra: true };
   }
 
   const views = all.filter((item) => !item.extra);
+  // Geçen seferki aynı set aynen dolar (kg ve tekrar/süre; motorun artışı yalnız gerekçede). Bugün önceki bir set
+  // "Kolaydı" dendiyse sıradakiler motorun artırdığından gelir.
+  const easy = views.slice(0, view.position).some((item) => item.logged?.effort === 'easy');
+  const last = easy ? undefined : lastSetOf(row, view.setIndex);
   const before = views.slice(0, view.position).flatMap((item) => (item.logged ? [item.logged] : []));
   // Bugünün setleri hafifletilen günde de sayılır: planın gerekçesi (`lighten`) yalnız sonraki antrenmanın
   // süzgecidir (`toSetResults`); burada kalsa önceki setin ağırlığı ve inişi sıradaki sete geçmezdi.
@@ -401,10 +426,11 @@ function setAt(
   const previous = views[view.position - 1];
   const changed =
     previous?.logged?.kg !== undefined && Math.abs(previous.logged.kg - previous.plannedKg) > 0.001 && (previous.target.loadPct ?? 100) !== (view.target.loadPct ?? 100);
-  const kg = row.trackingType === 'weight_reps' ? (own.kg ?? (changed ? previous?.logged?.kg : undefined) ?? suggestion.weightKg) : undefined;
+  const kg = row.trackingType === 'weight_reps' ? (own.kg ?? last?.kg ?? (changed ? previous?.logged?.kg : undefined) ?? suggestion.weightKg) : undefined;
   // Yoklamanın indirdiği gün: önceden dolu tekrar/süre planın bu setteki hedefini aşmaz (`prefillSet`).
   const cap = row.adjusted ? row.plan.sets.find((item) => item.setIndex === view.setIndex)?.target : undefined;
-  const value = own.value ?? whole(prefillSet({ target: view.target, setIndex: view.setIndex, plannedKg: kg, lastTime: row.lastTime, cap }).value);
+  const value =
+    own.value ?? whole(last && last.value > 0 ? last.value : prefillSet({ target: view.target, setIndex: view.setIndex, plannedKg: kg, lastTime: row.lastTime, cap }).value);
   return { ...common, kg, value };
 }
 
@@ -542,9 +568,17 @@ export function logSet(
  */
 export type OverloadState = 'none' | 'ask' | 'confirmed';
 
-export function overloadState(day: WorkoutDay, doc: Pick<SessionDoc, 'entries'>, next: Pick<NextSet, 'rowId' | 'plannedKg'>, kg: number | undefined): OverloadState {
+export function overloadState(
+  day: WorkoutDay,
+  doc: Pick<SessionDoc, 'entries'>,
+  next: Pick<NextSet, 'rowId' | 'plannedKg' | 'setIndex'>,
+  kg: number | undefined,
+): OverloadState {
   const row = day.rows[next.rowId];
-  if (!row || row.trackingType !== 'weight_reps' || kg === undefined || !isOverload(next.plannedKg, kg)) return 'none';
+  if (!row || row.trackingType !== 'weight_reps' || kg === undefined) return 'none';
+  // Ölçü planın ağırlığı ya da geçen seferki aynı setinki (hangisi ağırsa): önceden dolan değer kırmızı çıkmaz.
+  const reference = Math.max(next.plannedKg, lastSetOf(row, next.setIndex)?.kg ?? 0);
+  if (!isOverload(reference, kg)) return 'none';
   const entry = entryForRow(doc.entries, next.rowId);
   return entry?.sets.some((set) => set.type === 'working' && set.overload) ? 'confirmed' : 'ask';
 }

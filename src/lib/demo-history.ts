@@ -487,7 +487,9 @@ export function generateDemoHistory(input: DemoInput): DemoHistory {
     const check = startCheckInBody({ parts, answers, sessionId: doc.id, adjustReason: adjusted?.adjustReason });
     if (check) health = withCheckIn(health, { date, entry: check });
 
-    // Setler: telefonun imleciyle, sıradaki set boşalana kadar.
+    // Setler: telefonun imleciyle, sıradaki set boşalana kadar. Deneme danışanı koçun planını izler (motorun artışı,
+    // hafifletmesi): telefonun geçen seferkiyle doldurması (`lastSetOf`) senaryoyu durdururdu.
+    const coached = { ...day, rows: Object.fromEntries(Object.entries(day.rows).map(([id, row]) => [id, { ...row, lastTime: [] }])) };
     const units = cursorOf(day, doc).units;
     const skipKey = skipSessions.has(n) && units.length >= 3 ? (units.at(-1)?.key ?? null) : null;
     let t = startedAt.getTime() + random.int(3, 6) * MINUTE;
@@ -500,7 +502,7 @@ export function generateDemoHistory(input: DemoInput): DemoHistory {
     let deloadToday = false;
     let skippedToday = false;
     for (let guard = 0; guard < 500; guard++) {
-      const next = nextSet(day, doc);
+      const next = nextSet(coached, doc);
       if (!next) break;
       if (next.unitKey === skipKey && !skippedToday) {
         doc = dropAt(day, doc, next.unitKey, stamp(t), bytes);

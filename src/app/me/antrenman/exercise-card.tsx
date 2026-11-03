@@ -19,7 +19,7 @@ import { isStraight } from '@/lib/set-plan';
 import { cn } from '@/lib/utils';
 import type { GroupMemberStatus, GroupView } from '@/lib/workout-groups';
 import type { WorkoutRow } from '@/lib/workout-plan';
-import type { SetView, WarmupView } from '@/lib/workout-session';
+import { carriesLastTime, type SetView, type WarmupView } from '@/lib/workout-session';
 import { WorkoutSetRow, type FixSet, type RowEntry } from './set-row';
 
 const UP = new Set<string>(['increase', 'range_increase']);
@@ -292,7 +292,8 @@ export function WorkoutExerciseCard({
   const reason = row.plan.reason as SuggestionReason;
   // Öneri katmanının gerekçesi (§5.7): kısa çip ve tamamı; eski anlık görüntüde gerekçenin genel metni.
   const reasonChip = row.why?.chip ?? REASON_LABELS[reason] ?? '';
-  const reasonDetail = row.why?.detail ?? REASON_LABELS[reason] ?? '';
+  // Kutular geçen seferkiyle dolu: öneri (artış, iniş) yalnız burada, danışan isterse kendisi uygular.
+  const reasonDetail = `${row.why?.detail ?? REASON_LABELS[reason] ?? ''}${carriesLastTime(row) ? ' Kutularda geçen seferki değerler var; öneriyi istersen kendin uygula.' : ''}`;
   const reasonUp = row.why ? row.why.tone === 'up' : UP.has(reason);
   const warmDone = warmups.length > 0 && warmups.every((warmup) => warmup.logged);
   const toggle = (chip: 'reason' | 'note' | 'setup' | 'care') => setOpen(open === chip ? null : chip);
