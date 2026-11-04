@@ -40,7 +40,8 @@ function ActionItem({ action, icon, label }: { action: MenuAction; icon: React.R
  * Antrenman ekranının üst çubuğu (Faz 2, tasarım `antrenman-ekrani.md` §2.4). İlk satır: solda odakta "‹ Liste" (geri
  * tuşuyla aynı yer), listede boş (başlık ortada kalır); ortada `[program ·] gün · mm:ss` (program adı daralır, gün ve
  * süre kalır); sağda **Bitir** ve ⋯ menüsü (odakta önce hareketin öğeleri **Muadil seç**, **Bu hareketi atla**; her
- * zaman **Antrenmanı değiştir**, **Ara ver**). İkinci satır: set ilerleme çubuğu, "Hareket 2/5 · 7/17 set" ve su.
+ * zaman **Antrenmanı değiştir**, **Ara ver**). İkinci satır: set ilerleme çubuğu, "Hareket 2/5 · 7/17 set", su ve nabız
+ * rozeti (çubuk daralır, metin ve rozet 375 px'te de sığar).
  * Gönderim sorunu varsa üçüncü satır. Dinlenme paneli çubuğu örtmez: her an dokunulur.
  */
 export function WorkoutHeader({
@@ -53,6 +54,7 @@ export function WorkoutHeader({
   status,
   busy,
   focusActions,
+  heart,
   onList,
   onFinish,
   onSwitch,
@@ -73,6 +75,8 @@ export function WorkoutHeader({
   busy: boolean;
   /** Odakta hareketin öğeleri; listede null. */
   focusActions: FocusActions | null;
+  /** Nabız rozeti (Paket C): bağlıyken bpm, değilken "Nabız" düğmesi. */
+  heart?: React.ReactNode;
   /** Odakta "‹ Liste"; listede null. */
   onList: (() => void) | null;
   onFinish: () => void;
@@ -136,7 +140,7 @@ export function WorkoutHeader({
         </div>
       </div>
       <div className="flex h-11 items-center gap-3 px-4">
-        <Progress value={sets.planned > 0 ? (sets.done / sets.planned) * 100 : 0} aria-label="Antrenmanın ilerlemesi" className="min-w-16 flex-1" />
+        <Progress value={sets.planned > 0 ? (sets.done / sets.planned) * 100 : 0} aria-label="Antrenmanın ilerlemesi" className="min-w-8 flex-1" />
         <span className="text-[0.8125rem] whitespace-nowrap text-muted-foreground tabular-nums">
           Hareket {unit.index}/{unit.total} · {sets.done}/{sets.planned} set
         </span>
@@ -147,6 +151,7 @@ export function WorkoutHeader({
             <span className="sr-only">Su: {water} bardak</span>
           </span>
         ) : null}
+        {heart}
       </div>
       {status ? (
         <div role="status" className={cn('flex min-h-9 items-center gap-2 border-t px-4 text-[0.8125rem]', status.tone === 'warn' ? 'text-destructive' : 'text-muted-foreground')}>

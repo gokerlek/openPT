@@ -2,12 +2,13 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
-import { ArrowUp, CaretDown, CaretRight, LockSimple } from '@phosphor-icons/react';
+import { ArrowUp, CaretDown, CaretRight, Heart, LockSimple } from '@phosphor-icons/react';
 import { Check } from '@/components/line-icons';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Stepper } from '@/components/ui/stepper';
 import { formatKg } from '@/lib/format';
+import { calmText } from '@/lib/heart-rate';
 import { DURATION, EASE, tween, WORKOUT } from '@/lib/motion';
 import { EFFORT_LABELS } from '@/lib/progression';
 import { SESSION_LIMITS } from '@/lib/schemas/session';
@@ -17,21 +18,28 @@ import { clockText, EFFORT_CHOICES, type EffortChoice, type EffortQuestion } fro
 
 /** Sayacın ekrandaki hâli (saniyede bir değişir). */
 export type RestView = {
-  state: 'running' | 'warn' | 'ended';
-  /** Kalan (tam saniye, yukarı yuvarlanmış) ya da bitişten beri geçen. */
+  /** `hold`: temel süre bitti, nabız bekleniyor (dinlenme uzuyor). */
+  state: 'running' | 'warn' | 'hold' | 'ended';
+  /** Kalan (tam saniye, yukarı yuvarlanmış), nabız beklenirken uzama ya da bitişten beri geçen. */
   seconds: number;
   /** Alarm hâlâ yineleyecek: "dokununca alarm susar". */
   alarmPending: boolean;
+  /** Dinlenme en çok uzadı, nabız inmeden bitti: "Nabız hâlâ yüksek". */
+  heartHigh: boolean;
 };
+
+/** Dinlenmenin nabız bilgisi: son ölçüm (yoksa null) ve toparlanma sınırı. */
+export type RestHeartView = { bpm: number | null; recovery: number };
 
 const RADIUS = 96;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 
 /**
  * 208 px'lik halka (tasarım §2.5): `endsAt`'ten kare kare, doğrusal. Rakam 56 px, son 10 sn'de ana renk;
- * bitince "Hazırsın" ve bir kez nabız. Hareket azaltmada halka yok, saniyede bir sayı.
+ * bitince "Hazırsın" ve bir kez nabız. Hareket azaltmada halka yok, saniyede bir sayı. Nabız beklenirken (halka boş)
+ * ortada canlı nabız ve uzama süresi.
  */
-function RestRing({ endsAt, total, view }: { endsAt: number; total: number; view: RestView }) {
+function RestRing({ endsAt, total, view, bpm }: { endsAt: number; total: number; view: RestView; bpm: number | null }) {
   const arc = useRef<SVGCircleElement>(null);
   const reduced = useReducedMotion();
   useEffect(() => {
@@ -48,10 +56,11 @@ function RestRing({ endsAt, total, view }: { endsAt: number; total: number; view
   }, [endsAt, total, reduced]);
 
   const ended = view.state === 'ended';
+  const hold = view.state === 'hold';
   return (
     <motion.div
       role="timer"
-      aria-label="Kalan dinlenme"
+      aria-label={hold ? 'Dinlenme nabız için uzuyor' : 'Kalan dinlenme'}
       animate={{ scale: ended ? [1, 1.06, 1] : 1 }}
       transition={tween(DURATION.slow)}
       className="relative shrink-0"
@@ -75,14 +84,23 @@ function RestRing({ endsAt, total, view }: { endsAt: number; total: number; view
       <div className="absolute inset-0 flex flex-col items-center justify-center gap-0.5 text-center">
         <span
           className={cn(
-            'font-heading leading-none font-semibold tabular-nums transition-colors duration-160',
+            'inline-flex items-center gap-1 font-heading leading-none font-semibold tabular-nums transition-colors duration-160',
             ended ? 'text-[2.125rem] text-primary' : 'text-[3.5rem]',
             view.state === 'warn' && 'text-primary',
           )}>
-          {ended ? 'Hazırsın' : clockText(view.seconds)}
+          {hold ? <Heart weight="fill" className="size-7 text-destructive" aria-hidden /> : null}
+          {ended ? 'Hazırsın' : hold ? (bpm ?? '—') : clockText(view.seconds)}
         </span>
         <span className="max-w-[9.5rem] text-[0.8125rem] text-muted-foreground">
-          {ended ? (view.alarmPending ? 'dokununca alarm susar' : '') : view.state === 'warn' ? 'az kaldı' : 'kalan'}
+          {ended
+            ? view.alarmPending
+              ? 'dokununca alarm susar'
+              : ''
+            : hold
+              ? `nabız · +${clockText(view.seconds)}`
+              : view.state === 'warn'
+                ? 'az kaldı'
+                : 'kalan'}
         </span>
       </div>
     </motion.div>
@@ -193,6 +211,7 @@ export function RestPanel({
   endsAt,
   total,
   view,
+  heart,
   summary,
   saved,
   lockWarning,
@@ -216,6 +235,8 @@ export function RestPanel({
   endsAt: number;
   total: number;
   view: RestView;
+  /** Nabız bandı bağlıysa (dinlenme uzarken canlı nabız ve "Nabzın 121'in altına inince devam"). */
+  heart: RestHeartView | null;
   /** Kartın tek satırı: "Goblet Squat · 2/3 set" (grupta "A + B · 4/6 set"; bittiyse ✓); setin hareketi bilinmiyorsa yok. */
   summary: { title: string; done: number; planned: number; finished: boolean } | null;
   saved: { text: string; setId: string } | null;
@@ -313,14 +334,24 @@ export function RestPanel({
             −15
             <span className="text-[0.6875rem] font-medium text-muted-foreground">sn</span>
           </Button>
-          <RestRing endsAt={endsAt} total={total} view={view} />
+          <RestRing endsAt={endsAt} total={total} view={view} bpm={heart?.bpm ?? null} />
           <Button variant="secondary" className="size-14 flex-col gap-0 rounded-full text-base leading-none tabular-nums" onClick={() => onAdjust(15)} aria-label="Dinlenmeyi 15 saniye uzat">
             +15
             <span className="text-[0.6875rem] font-medium text-muted-foreground">sn</span>
           </Button>
         </div>
         <p className="min-h-5.5 shrink-0 text-center text-[0.9375rem] font-medium text-primary tabular-nums">
-          {ended ? `Dinlenme ${clockText(view.seconds)} önce bitti` : ''}
+          {view.state === 'hold' && heart ? (
+            calmText(heart.recovery)
+          ) : ended && view.heartHigh ? (
+            <>
+              <span className="text-destructive-text">Nabız hâlâ yüksek</span> · {clockText(view.seconds)} önce bitti
+            </>
+          ) : ended ? (
+            `Dinlenme ${clockText(view.seconds)} önce bitti`
+          ) : (
+            ''
+          )}
         </p>
 
         <div className="relative mt-1 shrink-0">
@@ -376,13 +407,15 @@ export function RestPanel({
  * Küçültülmüş dinlenme: 48 px şerit, tablo ve giriş paneli geri gelir; "Set bitti" dinlenmeyi bitirir. Listede alt
  * çubuğun üstünde ("‹ Liste" ve geri tuşu tam paneli küçültür; listeden harekete dokunmak dinlenmeyi bitirmez).
  */
-export function RestStrip({ view, onExpand, onSkip }: { view: RestView; onExpand: () => void; onSkip: () => void }) {
+export function RestStrip({ view, bpm, onExpand, onSkip }: { view: RestView; bpm: number | null; onExpand: () => void; onSkip: () => void }) {
   const ended = view.state === 'ended';
+  const hold = view.state === 'hold';
   return (
     <div className="flex h-12 items-center gap-1 border-t bg-primary/10 pr-1 pl-4 tabular-nums">
-      <span className="flex-1 text-sm text-muted-foreground">Dinlenme</span>
-      <b className={cn('min-w-14 text-lg font-semibold', view.state !== 'running' && 'text-primary')}>
-        {ended ? `+${clockText(view.seconds)}` : clockText(view.seconds)}
+      <span className="flex-1 text-sm text-muted-foreground">{hold ? 'Nabız bekleniyor' : 'Dinlenme'}</span>
+      <b className={cn('inline-flex min-w-14 items-center gap-1 text-lg font-semibold', view.state !== 'running' && 'text-primary')}>
+        {hold ? <Heart weight="fill" className="size-4 text-destructive" aria-hidden /> : null}
+        {hold ? (bpm ?? '—') : ended ? `+${clockText(view.seconds)}` : clockText(view.seconds)}
       </b>
       <Button variant="ghost" className="h-11 px-3" onClick={onExpand}>
         Büyüt

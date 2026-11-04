@@ -25,8 +25,11 @@ import {
 import {
   CLIENT_ID_PATTERN,
   clientFormSchema,
+  clientSaveSchema,
+  clientSchema,
   HEALTH_CONSENT_VERSION,
   HEALTH_FIELD_VERSIONS,
+  heartRateOf,
   trainingOf,
   type Client,
   type ClientIndexEntry,
@@ -351,5 +354,61 @@ describe('danışan formu', () => {
     assert.deepEqual(trainingOf({}, { experience: 'six_months' }), { training: { experience: 'six_months' } });
     assert.deepEqual(trainingOf({ trainingExperience: 'new' }, { experience: 'six_months' }), { training: { experience: 'new' } });
     assert.deepEqual(trainingOf({}), {});
+  });
+
+  test('nabız sınırları isteğe bağlı: ikisi birlikte ya da ikisi de boş (otomatik); 60–220, toparlanma uyarıdan düşük', () => {
+    const parse = (heartRecovery: string, heartAlert: string) => v.safeParse(clientFormSchema, { ...temel, heartRecovery, heartAlert });
+    const paths = (heartRecovery: string, heartAlert: string) =>
+      parse(heartRecovery, heartAlert).issues?.map((issue) => issue.path?.map((segment) => segment.key).join('.'));
+    const empty = parse('', ' ');
+    assert.deepEqual(empty.success && [empty.output.heartRecovery, empty.output.heartAlert], [null, null]);
+    const set = parse(' 115 ', '165');
+    assert.deepEqual(set.success && [set.output.heartRecovery, set.output.heartAlert], [115, 165]);
+    assert.deepEqual(paths('120', ''), ['heartAlert']);
+    assert.deepEqual(paths('', '170'), ['heartRecovery']);
+    assert.deepEqual(paths('170', '120'), ['heartRecovery']);
+    assert.deepEqual(paths('150', '150'), ['heartRecovery']);
+    assert.deepEqual(paths('59', '170'), ['heartRecovery']);
+    assert.deepEqual(paths('120', '221'), ['heartAlert']);
+    assert.deepEqual(paths('12a', '170'), ['heartRecovery']);
+    assert.deepEqual(paths('120.5', '170'), ['heartRecovery']);
+  });
+
+  test('kayıt ucu: nabız sınırı sayı, boşaltılmış (null) ya da hiç yok (eski istemci)', () => {
+    const save = (extra: object) => v.safeParse(clientSaveSchema, { ...temel, ...extra }).success;
+    assert.equal(save({}), true);
+    assert.equal(save({ heartRecovery: null, heartAlert: null }), true);
+    assert.equal(save({ heartRecovery: 115, heartAlert: 165 }), true);
+    assert.equal(save({ heartRecovery: 115 }), false);
+    assert.equal(save({ heartRecovery: 165, heartAlert: 115 }), false);
+    assert.equal(save({ heartRecovery: '115', heartAlert: '165' }), false);
+  });
+});
+
+describe('danışan kaydı: nabız sınırları', () => {
+  const kayit = {
+    id: 'c_abc12345',
+    name: 'Ayşe Demir',
+    createdAt: simdi.toISOString(),
+    status: 'active',
+    modules: { health: { enabled: false, fields: [] } },
+    consents: {},
+    access: { version: 1 },
+    visibleTo: [],
+  };
+
+  test('eski kayıt (alan yok) olduğu gibi okunur; alan varsa aralıkta olmalı', () => {
+    const eski = v.safeParse(clientSchema, kayit);
+    assert.equal(eski.success && eski.output.heartRate, undefined);
+    assert.equal(v.safeParse(clientSchema, { ...kayit, heartRate: { recovery: 110, alert: 160 } }).success, true);
+    assert.equal(v.safeParse(clientSchema, { ...kayit, heartRate: { recovery: 110, alert: 400 } }).success, false);
+  });
+
+  test('formdan kayda: sayılar yazılır, boşaltılınca alan düşer, formda gelmezse kayıttaki kalır', () => {
+    const current = { recovery: 110, alert: 160 };
+    assert.deepEqual(heartRateOf({ heartRecovery: 115, heartAlert: 165 }, current), { heartRate: { recovery: 115, alert: 165 } });
+    assert.deepEqual(heartRateOf({ heartRecovery: null, heartAlert: null }, current), {});
+    assert.deepEqual(heartRateOf({}, current), { heartRate: current });
+    assert.deepEqual(heartRateOf({}), {});
   });
 });

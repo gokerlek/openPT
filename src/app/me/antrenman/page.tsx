@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { currentClient } from '@/lib/guards';
+import { resolveHeartLimits } from '@/lib/heart-rate';
 import { isOwnProgramId } from '@/lib/own-programs';
 import { WorkoutScreen } from './workout-screen';
 
@@ -16,5 +17,7 @@ export default async function WorkoutPage({ searchParams }: { searchParams: Prom
   const [client, params] = await Promise.all([currentClient(), searchParams]);
   const day = typeof params.day === 'string' ? params.day : null;
   const program = typeof params.program === 'string' && (params.program === 'pt' || isOwnProgramId(params.program)) ? params.program : null;
-  return <WorkoutScreen clientId={client.id} dayParam={day} programParam={program} finishOnOpen={params.bitir === '1'} />;
+  // Nabız sınırları (Paket C): PT'nin girdiği ya da otomatik; yaş kayıtta tutulmuyor, otomatik genel değerler.
+  const heartLimits = resolveHeartLimits({ pt: client.heartRate ?? null });
+  return <WorkoutScreen clientId={client.id} dayParam={day} programParam={program} finishOnOpen={params.bitir === '1'} heartLimits={heartLimits} />;
 }

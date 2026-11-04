@@ -45,9 +45,10 @@ import {
   type FinishReason,
 } from '@/lib/workout-flow';
 import { groupView, nextMemberLetter } from '@/lib/workout-groups';
+import type { HeartLimits } from '@/lib/heart-rate';
 import { FOCUS_PARAM, focusOf, LIST_PARAM, pauseSteps, workoutHref } from '@/lib/workout-nav';
 import { createLocalWorkout, setsMissingOn, unsentSets, untouchedWorkout, withChange, type LocalWorkout } from '@/lib/workout-outbox';
-import { acknowledgeRest, adjustRest, alarmPending, LATE_MS, startRest, tickRest, type RestEvent, type RestTimer } from '@/lib/workout-rest';
+import { acknowledgeRest, adjustRest, alarmPending, LATE_MS, startRest, tickRest, type RestEvent, type RestHeart, type RestTimer } from '@/lib/workout-rest';
 import { afterFinish, extraKey, rekeyExtra, type WorkoutDay } from '@/lib/workout-plan';
 import type { AddedRowResponse, LibraryItem, SwapOption, WorkoutResponse } from '@/lib/workout-routes';
 import {
@@ -100,6 +101,7 @@ import { clearLocalWorkout, clearWorkoutCache, readLocalWorkout, readWorkoutCach
 import { AddExerciseSheet } from './add-exercise-sheet';
 import { ENTRY_PANEL_TOGGLE_ID, EntryPanel, type TimerView, type TransitionView } from './entry-panel';
 import { WorkoutExerciseCard } from './exercise-card';
+import { HeartAlertBanner, HeartBadge, HeartSheet } from './heart-rate-panel';
 import { ProgramUpdateSheet, type ProgramAnswer } from './program-update-sheet';
 import { RestPanel, RestStrip, type EffortPromptView, type RestView } from './rest-panel';
 import { SetEditPanel, type SetEditValues, type SetEditView } from './set-edit-panel';
@@ -107,6 +109,7 @@ import { useEntryPanelClosed } from './panel-pref';
 import { ROW_DONE_ID, setEditButtonId, type FixSet, type RowEntry } from './set-row';
 import { StartCheck, type StartCheckHandle } from './start-check';
 import { SwapSheet, type SwapTarget } from './swap-sheet';
+import { useHeartAlert, useHeartRate } from './use-heart-rate';
 import { useWorkoutOutbox } from './use-workout-outbox';
 import { beep, isIOS, unlockAudio, useWakeLock } from './workout-feedback';
 import { vibrate } from '@/lib/haptics';
@@ -134,7 +137,7 @@ type PendingUpdate = { items: FeedbackItem[]; health: FinishHealth | undefined }
 type Saving = { next: NextSet };
 
 /** Ekranın sheet ve dialog'ları (açık katman; "Ara verilsin mi?" hariç). */
-type Layer = 'elsewhere' | 'check' | 'swap' | 'add' | 'update' | 'finish' | 'switch';
+type Layer = 'elsewhere' | 'check' | 'swap' | 'add' | 'update' | 'finish' | 'switch' | 'heart';
 
 function useNow(intervalMs: number): number {
   const [now, setNow] = useState(() => Date.now());
@@ -342,12 +345,15 @@ export function WorkoutScreen({
   dayParam,
   programParam = null,
   finishOnOpen,
+  heartLimits,
 }: {
   clientId: string;
   dayParam: string | null;
   /** Bugün'ün tek seferlik program seçimi (`op_…` ya da `pt`); yoksa kalıcı seçim. */
   programParam?: string | null;
   finishOnOpen: boolean;
+  /** Danışanın nabız sınırları (PT'nin girdiği ya da otomatik) ve kaynağı. */
+  heartLimits: HeartLimits;
 }) {
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -389,6 +395,16 @@ export function WorkoutScreen({
   // Yoklama sheet'i açık mı (`StartCheck` bildirir) ve onu kapatmak: açık katmanın altında geri tuşu (aşağıda).
   const [checkOpen, setCheckOpen] = useState(false);
   const checkRef = useRef<StartCheckHandle>(null);
+  // Nabız bandı (Paket C): bağlantı paneli açık mı, yüksek nabız şeridi (uyarının çaldığı nabız; kapatılınca null).
+  const [heartOpen, setHeartOpen] = useState(false);
+  const [heartAlarm, setHeartAlarm] = useState<number | null>(null);
+  const heart = useHeartRate(Boolean(local?.rest));
+  // Dinlenme sayacı nabzı kare kare buradan okur (effect nabız değiştikçe yeniden kurulmasın). Band bağlı değilse yok:
+  // bugünkü sayaç; koptuysa ölçüm yok, uzayan dinlenme o an biter.
+  const restHeart = useRef<RestHeart | undefined>(undefined);
+  useEffect(() => {
+    restHeart.current = heart.status === 'connected' || heart.status === 'lost' ? { bpm: heart.bpm, recovery: heartLimits.recovery } : undefined;
+  });
 
   const guardUntil = useRef(0);
   const timers = useRef<number[]>([]);
@@ -472,6 +488,18 @@ export function WorkoutScreen({
     setAnnouncement('');
     window.requestAnimationFrame(() => setAnnouncement(text));
   }, []);
+
+  // Yüksek nabız: şerit (kendisi `role="alert"`) + titreşim + ses; nabız sınırın 5 altına inince şerit kalkar.
+  useHeartAlert(
+    heart.bpm,
+    heartLimits.alert,
+    (bpm) => {
+      setHeartAlarm(bpm);
+      beep(3, 1175);
+      vibrate([200, 100, 200, 100, 200]);
+    },
+    () => setHeartAlarm(null),
+  );
 
   // Set giriş paneli kapalı mı (danışanın bu cihazdaki tercihi): kapalıyken set tablodaki satırdan girilir.
   const [panelClosed, setPanelClosed] = useEntryPanelClosed();
@@ -964,16 +992,19 @@ export function WorkoutScreen({
 
   const restKey = local?.rest ? `${local.rest.setId}@${local.rest.startedAt}` : null;
   const handleRestEvents = useCallback(
-    (events: RestEvent[]) => {
+    (events: RestEvent[], heartHigh: boolean) => {
       for (const event of events) {
         if (event === 'warn') {
           beep(1, 660);
           announce('10 saniye kaldı');
+        } else if (event === 'hold') {
+          // Süre doldu ama nabız yüksek: sessiz uzar, ekranda "Nabzın … altına inince devam".
+          announce('Nabzın yüksek; dinlenme uzuyor.');
         } else {
           beep(3);
           vibrate([80, 60, 80]);
           if (event === 'end') {
-            announce('Dinlenme bitti. Hazırsın.');
+            announce(heartHigh ? 'Dinlenme bitti. Nabız hâlâ yüksek.' : 'Dinlenme bitti. Hazırsın.');
             guard();
           }
         }
@@ -991,15 +1022,21 @@ export function WorkoutScreen({
     const loop = () => {
       const current = localRef.current;
       if (!current?.rest) return;
-      const tick = tickRest(current.rest, Date.now());
-      if (tick.events.length > 0) handleRestEvents(tick.events);
+      const tick = tickRest(current.rest, Date.now(), restHeart.current);
+      const heartHigh = tick.timer.heartHigh === true;
+      if (tick.events.length > 0) handleRestEvents(tick.events, heartHigh);
       if (tick.timer !== current.rest) commit({ ...current, rest: tick.timer });
-      const seconds = tick.state === 'ended' ? Math.floor(tick.overrunMs / 1000) : Math.ceil(tick.remainingMs / 1000);
+      const seconds =
+        tick.state === 'ended'
+          ? Math.floor(tick.overrunMs / 1000)
+          : tick.state === 'hold'
+            ? Math.floor(-tick.remainingMs / 1000)
+            : Math.ceil(tick.remainingMs / 1000);
       const pending = alarmPending(tick.timer);
-      const key = `${tick.state}:${seconds}:${pending}`;
+      const key = `${tick.state}:${seconds}:${pending}:${heartHigh}`;
       if (key !== shown) {
         shown = key;
-        setRestTick({ key: restKey, view: { state: tick.state, seconds, alarmPending: pending } });
+        setRestTick({ key: restKey, view: { state: tick.state, seconds, alarmPending: pending, heartHigh } });
       }
       frame = window.requestAnimationFrame(loop);
     };
@@ -2416,7 +2453,9 @@ export function WorkoutScreen({
               ? 'finish'
               : switchOpen
                 ? 'switch'
-                : null;
+                : heartOpen
+                  ? 'heart'
+                  : null;
   const layerClosable =
     topLayer !== null && topLayer !== 'elsewhere' && !(finishing && (topLayer === 'update' || topLayer === 'finish' || topLayer === 'switch'));
   const marked = params.has(LIST_PARAM) || params.has(FOCUS_PARAM);
@@ -2430,6 +2469,7 @@ export function WorkoutScreen({
       else if (layer === 'update') onProgramAnswer(null);
       else if (layer === 'finish') setFinishOpen(false);
       else if (layer === 'switch') setSwitchOpen(false);
+      else if (layer === 'heart') setHeartOpen(false);
     },
     [onProgramAnswer],
   );
@@ -2640,12 +2680,14 @@ export function WorkoutScreen({
         status={status}
         busy={finishing}
         focusActions={focusActions}
+        heart={<HeartBadge heart={heart} limits={heartLimits} onOpen={() => setHeartOpen(true)} />}
         onList={listMode ? null : onList}
         onFinish={() => setFinishOpen(true)}
         onSwitch={() => setSwitchOpen(true)}
         onPause={onPause}
         onRetry={() => outbox.retry()}
       />
+      {heartAlarm !== null ? <HeartAlertBanner bpm={heartAlarm} onDismiss={() => setHeartAlarm(null)} /> : null}
 
       <div className="relative flex min-h-0 flex-1 flex-col">
         {/* Kip değişince kaydırma yeri sıfırlanır (anahtar): listede aşağı kaydırıp açılan hareket kartın başından görünür. */}
@@ -2719,6 +2761,7 @@ export function WorkoutScreen({
             <div onPointerDownCapture={swallow} onClickCapture={swallow}>
               <RestStrip
                 view={restView}
+                bpm={heart.status === 'connected' ? heart.bpm : null}
                 onExpand={() => {
                   updateRest((timer) => ({ ...timer, mode: 'full' }));
                   guard();
@@ -2784,6 +2827,7 @@ export function WorkoutScreen({
                 endsAt={rest.endsAt}
                 total={rest.total}
                 view={restView}
+                heart={heart.status === 'connected' || heart.status === 'lost' ? { bpm: heart.bpm, recovery: heartLimits.recovery } : null}
                 summary={restSummary}
                 saved={restSet ? { text: `Set ${(restPosition ?? 0) + 1} kaydedildi · ${setValueText(restSet, plan.bodyMassKg)}`, setId: restSet.id } : null}
                 lockWarning={local.restCount === 1 && (isIOS() || !wakeHeld)}
@@ -2836,6 +2880,7 @@ export function WorkoutScreen({
         onSwitch={(program, day) => void onSwitchWorkout(program, day)}
       />
       <SwapSheet target={swapTarget} onClose={() => setSwapTarget(null)} onPick={onPickSwap} />
+      <HeartSheet open={heartOpen} onOpenChange={setHeartOpen} heart={heart} limits={heartLimits} />
       <AddExerciseSheet open={addOpen} onOpenChange={setAddOpen} todayIds={todayIds} busyId={addBusy} onPick={(item) => void onPickAdd(item)} />
       <ProgramUpdateSheet
         items={update?.items ?? null}

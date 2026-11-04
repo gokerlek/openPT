@@ -19,10 +19,12 @@ import { Button } from '@/components/ui/button';
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
+import { InputGroup, InputGroupAddon, InputGroupInput, InputGroupText } from '@/components/ui/input-group';
 import { Spinner } from '@/components/ui/spinner';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { healthConsentState, healthScopeGrows } from '@/lib/client-status';
+import { DEFAULT_HEART_LIMITS } from '@/lib/heart-rate';
 import { fetchJson } from '@/lib/query/errors';
 import { applyFieldErrors } from '@/lib/query/field-errors';
 import { useServiceMutation } from '@/lib/query/use-service';
@@ -50,9 +52,15 @@ const HEALTH_FIELD_ICONS: Record<HealthField, PhosphorIcon> = {
   screening: PersonSimpleWalk,
 };
 
+/** Nabız sınırlarının kutuları: boşken otomatik değer soluk yazar. */
+const HEART_RATE_FIELDS = [
+  { path: 'heartRecovery', id: 'heart-recovery', label: 'Toparlanma', auto: DEFAULT_HEART_LIMITS.recovery, hint: 'Dinlenme, nabız buna inene kadar uzar.' },
+  { path: 'heartAlert', id: 'heart-alert', label: 'Uyarı', auto: DEFAULT_HEART_LIMITS.alert, hint: 'Nabız 5 sn bunun üstünde kalırsa danışan uyarılır.' },
+] as const;
+
 /**
  * Danışan ekleme/düzenleme: kişisel bilgiler, antrenman geçmişi (öneri motorunun aşama tabanı,
- * `exposure.ts`) ve izinler (sağlık modülü). Yeni danışan
+ * `exposure.ts`), nabız sınırları (antrenmanda nabız bandıyla) ve izinler (sağlık modülü). Yeni danışan
  * kaydedilince sunucu özel repo'sunu açar ve PT davet ekranına geçer. Program ve ölçümler
  * danışanın bir özelliği değil, yapılan iştir: danışanın sayfasından yönetilir.
  */
@@ -68,6 +76,8 @@ export function ClientForm({ editing }: { editing: Client | null }) {
       healthEnabled: editing?.modules.health.enabled ?? false,
       healthFields: editing?.modules.health.fields ?? [],
       trainingExperience: editing?.training?.experience ?? 'new',
+      heartRecovery: editing?.heartRate ? String(editing.heartRate.recovery) : '',
+      heartAlert: editing?.heartRate ? String(editing.heartRate.alert) : '',
     },
   });
   const consented = editing?.consents.health?.granted ? editing.consents.health.fields : null;
@@ -193,6 +203,47 @@ export function ClientForm({ editing }: { editing: Client | null }) {
           </CardHeader>
         </Card>}
       </FormField>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Nabız sınırları</CardTitle>
+          <CardDescription>
+            Danışan antrenmanda nabız bandı bağlarsa kullanılır: dinlenme en çok 2 dakika uzayabilir, yüksek nabızda
+            uyarı çıkar. İkisi de boş bırakılırsa otomatik: toparlanma {DEFAULT_HEART_LIMITS.recovery}, uyarı{' '}
+            {DEFAULT_HEART_LIMITS.alert} bpm (genel değerler).
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid max-w-xl gap-x-6 gap-y-5 sm:grid-cols-2">
+          {HEART_RATE_FIELDS.map((item) => (
+            <FormField key={item.path} of={form} path={[item.path]}>
+              {(field) => (
+                <Field data-invalid={Boolean(field.errors) || undefined}>
+                  <FieldLabel htmlFor={item.id}>{item.label}</FieldLabel>
+                  <InputGroup>
+                    <InputGroupInput
+                      {...field.props}
+                      id={item.id}
+                      type="text"
+                      inputMode="numeric"
+                      autoComplete="off"
+                      className="tabular-nums"
+                      value={field.input ?? ''}
+                      placeholder={`Otomatik (${item.auto})`}
+                      aria-invalid={Boolean(field.errors) || undefined}
+                      onChange={(event) => setInput(form, { path: [item.path], input: event.currentTarget.value })}
+                    />
+                    <InputGroupAddon align="inline-end">
+                      <InputGroupText>bpm</InputGroupText>
+                    </InputGroupAddon>
+                  </InputGroup>
+                  <FieldDescription>{item.hint}</FieldDescription>
+                  <FieldError>{field.errors?.[0]}</FieldError>
+                </Field>
+              )}
+            </FormField>
+          ))}
+        </CardContent>
+      </Card>
 
       <FormField of={form} path={['healthEnabled']}>
         {(enabledField) => (

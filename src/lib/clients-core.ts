@@ -28,6 +28,7 @@ import {
   clientIndexSchema,
   HEALTH_CONSENT_VERSION,
   HEALTH_FIELD_VERSIONS,
+  heartRateOf,
   inviteSchema,
   trainingOf,
   type Client,
@@ -136,13 +137,14 @@ export async function updateClient(store: ClientStore, id: string, input: Client
   const stored = await store.readClient(id);
   if (!stored) throw new GithubError('Danışan bulunamadı.', 404);
   const { client, sha } = stored;
-  const { note: _note, training: _training, ...rest } = client;
+  const { note: _note, training: _training, heartRate: _heartRate, ...rest } = client;
   const next: Client = {
     ...rest,
     name: input.name,
     ...(input.note ? { note: input.note } : {}),
-    // Antrenman geçmişi formda seçilmediyse (eski istemci) kayıttaki kalır.
+    // Antrenman geçmişi ve nabız sınırları formda gelmediyse (eski istemci) kayıttaki kalır.
     ...trainingOf(input, client.training),
+    ...heartRateOf(input, client.heartRate),
     status: input.status,
     // Yalnız durum gerçekten değiştiyse (duraklatmadan dönüşte kaçan gün penceresi baştan başlar).
     ...(input.status !== client.status ? { statusChangedAt: store.now().toISOString() } : {}),
