@@ -122,11 +122,13 @@ describe('skeletonKind: geçişte hedef sayfaya benzeyen iskelet', () => {
     assert.equal(skeletonKind('/dashboard/clients'), 'list');
   });
 
-  test('Ayarlar: üç sekmesi de sekmeli iskelet (sondaki eğik çizgi sayılmaz)', () => {
+  test('Ayarlar: dört sekmesi de sekmeli iskelet (sondaki eğik çizgi sayılmaz)', () => {
     assert.equal(skeletonKind('/dashboard/settings'), 'settings');
     assert.equal(skeletonKind('/dashboard/settings/'), 'settings');
     assert.equal(skeletonKind('/dashboard/settings/ai'), 'settings');
     assert.equal(skeletonKind('/dashboard/settings/updates'), 'settings');
+    assert.equal(skeletonKind('/dashboard/settings/app'), 'settings');
+    assert.deepEqual(SETTINGS_SECTIONS.map((section) => section.label), ['Görünüm', 'Yapay zekâ', 'Sürüm', 'Uygulama']);
     // Sekmelerin listesi tek yerde: her sekme Ayarlar iskeletiyle açılır.
     for (const section of SETTINGS_SECTIONS) assert.equal(skeletonKind(section.href), 'settings', section.label);
     // Bilinmeyen alt sayfa Ayarlar'ın sekmeleriyle açılmaz.

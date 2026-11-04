@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { InstallHelper } from '@/components/install/install-helper';
 import { loadTodayCare } from '@/lib/client-care';
 import { canRecordHealth, canSetPassword, healthConsentState, outdatedHealthFields } from '@/lib/client-status';
 import { readAppConfig } from '@/lib/config';
@@ -25,6 +26,8 @@ export const metadata: Metadata = { title: 'Bugün' };
  * durur, verilmiş sağlık onayı Ayarlar'da. Altında sıradaki antrenman ("Antrenmana başla", "bu hafta
  * x/3") ya da yarım kalan antrenman, ve bugünkü su (tasarım §0, §2.1); antrenörünün önerilerine kararı
  * (tasarım §6.4). Antrenmandan 10 dk – 24 saat sonra üstte "Antrenman ne kadar zordu?" kartı (§2.9).
+ * Uygulama olarak açılmamışsa en üstte (karar bekleyen onay ve şifreden sonra) "Uygulamayı ana ekrana ekle"
+ * (tasarım `2026-11-05-mobil-uygulama-ve-kolay-kurulum-design.md`, Paket A).
  */
 export default async function MePage({ searchParams }: { searchParams: Promise<{ program?: string | string[] }> }) {
   const [client, config, session, query] = await Promise.all([currentClient(), readAppConfig(), readClientSession(), searchParams]);
@@ -55,6 +58,9 @@ export default async function MePage({ searchParams }: { searchParams: Promise<{
       {canSetPassword(client.access, session ?? {}, new Date()) ? (
         <PasswordCard reset={Boolean(client.access.passwordSetAt)} />
       ) : null}
+
+      {/* Yüklüyse ya da "Şimdi değil" denmişse (14 gün, o telefonda) hiç çizilmez. Başka tarayıcıda açılacak adres girişe kimlikle gider. */}
+      <InstallHelper variant="card" audience="client" openPath={`/giris?c=${encodeURIComponent(client.id)}`} />
 
       {/* Antrenmandan 10 dk – 24 saat sonra "Antrenman ne kadar zordu?" (§2.9); yoklamanın girdisini de telefona alır. */}
       <AfterCheck clientId={client.id} />

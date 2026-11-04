@@ -21,7 +21,8 @@ const errors: Record<string, string> = {
 };
 
 /**
- * Kare kodla giriş (SPEC §5), iki adım: (1) kod, (2) şifre belirle → `/me`. Kare kod bu adrese
+ * Kare kodla giriş (SPEC §5), üç adım: (1) kod, (2) şifre belirle, (3) uygulamayı ana ekrana ekle → `/me`
+ * (2 ve 3 `password-step.tsx`'te; uygulama olarak açıksa 3 atlanır). Kare kod bu adrese
  * `?c=<kimlik>&k=<kod>` ile gelir; kod burada KULLANILMAZ, danışan "Devam"a dokununca kullanılır —
  * mesajlaşma uygulamalarının bağlantı önizlemesi kodu harcamasın. Kod kullanılınca oturum açılır ve
  * sayfa `?c=<kimlik>` ile yeniden çizilir: açık oturumu olan ve şifre belirleyebilen danışan (yeni
@@ -40,7 +41,7 @@ export default async function JoinPage({
   // Adreste kod yoksa açık oturuma bakılır. Hata varsa bakılmaz: /me geçersiz oturumu buraya
   // gönderir, döngü olmasın. PT oturumu engel değil (ayrı çerez). Kodla gelen her zaman birinci
   // adımı görür: PT'nin yeni kare kodu (şifre sıfırlama) açık oturumda da kullanılabilsin.
-  let passwordStep = false;
+  let passwordFor: string | null = null;
   if (!errorCode && !code) {
     const session = await readClientSession();
     if (session && (!clientId || clientId === session.clientId)) {
@@ -48,7 +49,7 @@ export default async function JoinPage({
       const client = await sessionClient(session).catch(() => undefined);
       if (client === undefined) redirect('/me');
       if (client && !canSetPassword(client.access, session, new Date())) redirect('/me');
-      if (client) passwordStep = true;
+      if (client) passwordFor = session.clientId;
       else error = errors.erisim ?? null;
     }
   }
@@ -64,24 +65,17 @@ export default async function JoinPage({
           <p className="text-muted-foreground">Antrenmanına hoş geldin.</p>
         </div>
 
-        {passwordStep ? (
-          <Card>
-            <CardHeader>
-              <CardDescription>Adım 2 / 2</CardDescription>
-              <CardTitle className="text-xl">Şifreni belirle</CardTitle>
-              <CardDescription>Bir dahaki sefere bu telefonda ya da başka bir telefonda şifrenle girersin.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <JoinPasswordStep />
-            </CardContent>
-          </Card>
+        {passwordFor ? (
+          <JoinPasswordStep clientId={passwordFor} />
         ) : (
           <Card>
             {clientId ? (
               <CardHeader>
-                <CardDescription>Adım 1 / 2</CardDescription>
+                <CardDescription>Adım 1 / 3</CardDescription>
                 <CardTitle className="text-xl">Kodunu onayla</CardTitle>
-                <CardDescription>Kare koddan geldiysen kod hazır. Sonra şifreni belirleyeceksin.</CardDescription>
+                <CardDescription>
+                  Kare koddan geldiysen kod hazır. Sonra şifreni belirleyip uygulamayı ana ekrana ekleyeceksin.
+                </CardDescription>
               </CardHeader>
             ) : null}
             <CardContent className="flex flex-col gap-4">

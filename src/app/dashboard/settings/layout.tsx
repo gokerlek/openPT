@@ -1,7 +1,7 @@
 import { SettingsTabs } from './settings-tabs';
 
 /**
- * Ayarlar tek bölüm: üstte sekmeler (Görünüm · Yapay zekâ · Sürüm), altta seçili sayfa. Sekmeler
+ * Ayarlar tek bölüm: üstte sekmeler (Görünüm · Yapay zekâ · Sürüm · Uygulama), altta seçili sayfa. Sekmeler
  * sayfanın ilk satırıdır ve kullanıcı menüsüne yer bırakır. Sayfalar başlığını (`PageHeader`) ve
  * yetki denetimini (`requirePt`) yine kendileri yapar: layout kardeş sayfanın çalışmasını durdurmaz.
  */

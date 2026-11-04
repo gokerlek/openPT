@@ -96,6 +96,7 @@ export const SETTINGS_SECTIONS = [
   { href: '/dashboard/settings', label: 'Görünüm' },
   { href: '/dashboard/settings/ai', label: 'Yapay zekâ' },
   { href: '/dashboard/settings/updates', label: 'Sürüm' },
+  { href: '/dashboard/settings/app', label: 'Uygulama' },
 ] as const;
 
 const SETTINGS_PAGES: readonly string[] = SETTINGS_SECTIONS.map((section) => section.href);

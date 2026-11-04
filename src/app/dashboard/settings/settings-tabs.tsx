@@ -7,7 +7,7 @@ import { USER_MENU_SPOT } from '@/components/user-menu-spot';
 import { SETTINGS_SECTIONS } from '@/lib/navigation';
 
 /**
- * Ayarlar bölümünün sekmeleri: Görünüm · Yapay zekâ · Sürüm (`SETTINGS_SECTIONS`, `lib/navigation.ts`). Her
+ * Ayarlar bölümünün sekmeleri: Görünüm · Yapay zekâ · Sürüm · Uygulama (`SETTINGS_SECTIONS`, `lib/navigation.ts`). Her
  * sekme kendi sayfasıdır (adres değişir, geri tuşu çalışır): gezinme, `tablist` değil (`TabsNav`). Etkin sekme
  * adresle birebir eşleşir (sondaki `/` sayılmaz); Görünüm bölümün kökü olduğu için önek eşleşmesi yapılmaz.
  *
