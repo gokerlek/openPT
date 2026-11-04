@@ -1,5 +1,5 @@
 import 'server-only';
-import { appRepo, clientRepoName, gh, GithubError, isClientRepo, owner, toGithubError } from './client';
+import { appRepo, clientRepoName, gh, githubMode, GithubError, isClientRepo, owner, toGithubError } from './client';
 import { CLIENT_REPO_PREFIX } from '../env';
 
 /**
@@ -113,8 +113,24 @@ export async function clientRepoExists(clientId: string): Promise<boolean> {
   }
 }
 
-/** Hesaptaki danışan repolarının kimlikleri. Uygulama repo'su ve diğer projeler elenir. */
+/**
+ * Hesaptaki danışan repolarının kimlikleri. Uygulama repo'su ve diğer projeler elenir. Uygulama modunda
+ * liste kurulumun erişebildiği repolardan (`GET /installation/repositories`), yeniden eskiye.
+ */
 export async function listClientIds(): Promise<string[]> {
+  if (githubMode() === 'app') {
+    try {
+      const repos = await gh().paginate(gh().rest.apps.listReposAccessibleToInstallation, { per_page: 100 });
+      return repos
+        .filter((repo) => repo.owner.login.toLowerCase() === owner().toLowerCase())
+        .sort((a, b) => (b.created_at ?? '').localeCompare(a.created_at ?? ''))
+        .map((repo) => repo.name)
+        .filter(isClientRepo)
+        .map((name) => name.slice(CLIENT_REPO_PREFIX.length));
+    } catch (error) {
+      throw toGithubError(error, 'repo listesi');
+    }
+  }
   try {
     const repos = await gh().paginate(gh().rest.repos.listForAuthenticatedUser, {
       per_page: 100,

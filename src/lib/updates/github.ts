@@ -1,13 +1,15 @@
 import 'server-only';
 import * as v from 'valibot';
 import {serverEnv} from '@/lib/env';
+import {githubAccessToken} from '@/lib/github/app-auth';
 import {codeRepository,newerRelease,UPSTREAM,WORKFLOW,RELEASE_PATTERN,updateStep,validUpdateCommit} from './core';
 import pkg from '../../../package.json';
 import {githubRequest} from './request';
 import {requireUpdateWorkflow} from './readiness';
 
+/** Kod reposu istekleri: kişisel anahtar ya da GitHub uygulamasının kurulum anahtarı (`githubAccessToken`). */
 async function github<T>(path:string, init:RequestInit={}, allowMissing=false):Promise<T|null> {
-  return githubRequest<T>(serverEnv().githubToken,path,init,allowMissing);
+  return githubRequest<T>(await githubAccessToken(),path,init,allowMissing);
 }
 const releaseSchema=v.object({tag_name:v.string(),draft:v.boolean(),prerelease:v.boolean()});
 const manifestSchema=v.object({version:v.string(),automaticUpdate:v.boolean(),dataMigration:v.boolean()});
@@ -83,8 +85,8 @@ export async function applyUpdate(runId:number) {
   const old=await github<{object:{sha:string}}>(`/repos/${repo}/git/ref/${backup}`,{},true);
   if(old && old.object.sha!==head!.object.sha)throw new Error('Yedek etiketi eşleşmiyor.');
   if(!old)await github(`/repos/${repo}/git/refs`,{method:'POST',body:JSON.stringify({ref:`refs/${backup}`,sha:head!.object.sha})});
-  // PT OAuth token moves the production branch, so Vercel receives a normal push.
-  // GitHub Actions' temporary token is only used to prepare the staging branch.
+  // PT's own credential (PAT or the GitHub App installation token) moves the production branch, so Vercel
+  // receives a normal push. GitHub Actions' temporary token is only used to prepare the staging branch.
   await github(`/repos/${repo}/git/refs/heads/${encodeURIComponent(branch)}`,{method:'PATCH',body:JSON.stringify({sha:staged!.object.sha,force:false})});
 }
 export const currentVersion=pkg.version;

@@ -1,7 +1,10 @@
 import 'server-only';
 import { Octokit } from 'octokit';
 import { CLIENT_REPO_PREFIX, serverEnv } from '../env';
+import { installationProblems, installationSettingsUrl } from '../installation/github-app';
 import { CLIENT_ID_PATTERN } from '../schemas/client';
+import type { GithubAccess } from './access';
+import { installationAuthStrategy, installationInfo } from './app-auth';
 import { GithubError, rateLimitOf } from './errors';
 
 /** Hata tipi saf modülde (`errors.ts`): testlerdeki çekirdekler de aynı sınıfı kullanır. */
@@ -15,13 +18,24 @@ export { GithubError };
  *   1. uygulama repo'su (APP_REPO)
  *   2. `client-` önekli danışan repoları
  * Başka bir repo adı buraya gelirse istek hiç çıkmaz. Bu kontrol tek noktada,
- * bilerek: bir hata ya da kötü girdi gidip başka bir repoyu silemesin.
+ * bilerek: bir hata ya da kötü girdi gidip başka bir repoyu silemesin. GitHub uygulaması
+ * modunda da aynen geçerli: kurulum "All repositories" ile hesabın bütün repolarına erişir.
+ *
+ * Kimlik iki moddan biri (`serverEnv().githubAccess`): kişisel anahtar (PAT, eski kurulumlar,
+ * davranış aynı) ya da GitHub uygulamasının kurulum anahtarı (`app-auth.ts`). Repo açma/silme
+ * uygulama modunda PT'nin kullanıcı anahtarıyla yapılır (`user-auth.ts`, `repos.ts`).
  */
+
+/** Octokit'in kimlik seçenekleri: kişisel anahtar olduğu gibi, uygulamada kurulum anahtarı stratejisi. */
+function authOptions(): { auth: string } | { authStrategy: typeof installationAuthStrategy } {
+  const access = serverEnv().githubAccess;
+  return access.mode === 'token' ? { auth: access.token } : { authStrategy: installationAuthStrategy };
+}
 
 let client: Octokit | null = null;
 
 export function gh(): Octokit {
-  client ??= new Octokit({ auth: serverEnv().githubToken, userAgent: 'pulsecoach' });
+  client ??= new Octokit({ ...authOptions(), userAgent: 'pulsecoach' });
   return client;
 }
 
@@ -38,7 +52,7 @@ let sessionClient: Octokit | null = null;
  */
 export function sessionWriter(): Octokit {
   sessionClient ??= new Octokit({
-    auth: serverEnv().githubToken,
+    ...authOptions(),
     userAgent: 'pulsecoach',
     retry: { doNotRetry: [400, 401, 403, 404, 409, 410, 422, 429, 451], retries: 1 },
     throttle: { onRateLimit: () => false, onSecondaryRateLimit: () => false },
@@ -69,6 +83,35 @@ export function assertRepoAllowed(repo: string): void {
 
 export function owner(): string {
   return serverEnv().owner;
+}
+
+/** Hangi kimlikle çalışılıyor: `token` (kişisel anahtar) ya da `app` (GitHub uygulaması). */
+export function githubMode(): GithubAccess['mode'] {
+  return serverEnv().githubAccess.mode;
+}
+
+export type GithubConnection = {
+  mode: GithubAccess['mode'];
+  /** Bağlı GitHub hesabı: kişisel anahtarın sahibi ya da uygulamanın kurulu olduğu hesap. */
+  login: string;
+  /** Uygulama kurulumunun sorunları (PT'ye söylenecek sırayla); kişisel anahtarda boş. */
+  problems: string[];
+  /** Uygulama modunda GitHub'daki kurulum ayarı. */
+  settingsUrl?: string;
+};
+
+/**
+ * Kurulum durumu ve Ayarlar uyarısı için GitHub bağlantısının özeti. Kişisel anahtarda anahtarın sahibi
+ * (`GET /user`); uygulamada kurulumun hesabı ve sorunları ("All repositories", izinler, askı) — kurulum
+ * anahtarı `GET /user`'ı çağıramaz.
+ */
+export async function githubConnection(): Promise<GithubConnection> {
+  if (githubMode() === 'token') {
+    const user = await gh().rest.users.getAuthenticated();
+    return { mode: 'token', login: user.data.login, problems: [] };
+  }
+  const info = await installationInfo();
+  return { mode: 'app', login: info.account, problems: installationProblems(info, owner()), settingsUrl: installationSettingsUrl(info.id) };
 }
 
 export function appRepo(): string {
