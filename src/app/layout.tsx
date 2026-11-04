@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import { Geist_Mono, Outfit } from 'next/font/google';
+import { PwaRoot } from '@/components/install/pwa-root';
 import { Providers } from '@/components/providers';
 import { readAppConfig } from '@/lib/config';
 import { RADIUS_OPTIONS } from '@/lib/schemas/config';
@@ -56,6 +57,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       <body className="min-h-dvh bg-background text-foreground">
         <style id="app-palette">{paletteCss(config.palette)}</style>
         <Providers defaultTheme={config.theme}>{children}</Providers>
+        <PwaRoot />
       </body>
     </html>
   );

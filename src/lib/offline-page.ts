@@ -1,0 +1,52 @@
+/**
+ * Ağ yokken gösterilen sayfa (`/offline`, `public/sw.js`). Service worker onu kurulurken bir kez önbelleğe
+ * alır ve sayfa gezinmesi ağa ulaşamayınca bunu döner. Önbellekte yalnız bu HTML durur: Next'in stil ve
+ * betik dosyaları alınmadığı için sayfa kendi başına çalışır (satır içi stil, tek düğme). Marka adı ve
+ * rengi kurulum anındaki ayardan gelir (düğme yazısı renge göre okunaklı); tema cihazın açık/koyu
+ * tercihine uyar.
+ */
+import { readableOn } from './color.ts';
+
+const DEFAULT_ACCENT = '#c4f000';
+
+const ENTITIES: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+
+function escapeHtml(text: string): string {
+  return text.replace(/[&<>"']/g, (char) => ENTITIES[char] ?? char);
+}
+
+export function offlineHtml({ appName, accent }: { appName: string; accent: string | null }): string {
+  const name = escapeHtml(appName);
+  const color = accent && /^#[0-9a-fA-F]{6}$/.test(accent) ? accent : DEFAULT_ACCENT;
+  return `<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>Bağlantı yok · ${name}</title>
+<style>
+:root { --accent: ${color}; --on-accent: ${readableOn(color)}; --bg: #171717; --fg: #fafafa; --muted: #a3a3a3; color-scheme: dark; }
+@media (prefers-color-scheme: light) { :root { --bg: #fafafa; --fg: #171717; --muted: #525252; color-scheme: light; } }
+* { box-sizing: border-box; }
+body { margin: 0; min-height: 100dvh; display: grid; place-items: center; padding: max(1.5rem, env(safe-area-inset-top)) 1rem max(1.5rem, env(safe-area-inset-bottom));
+  background: var(--bg); color: var(--fg); font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; text-align: center; }
+main { width: 100%; max-width: 22rem; display: flex; flex-direction: column; align-items: center; gap: 0.75rem; }
+svg { width: 10rem; height: 1.5rem; }
+h1 { margin: 0.5rem 0 0; font-size: 1.375rem; line-height: 1.3; }
+p { margin: 0; color: var(--muted); }
+button { margin-top: 1rem; min-height: 2.75rem; width: 100%; border: 0; border-radius: 0.625rem; background: var(--accent); color: var(--on-accent); font: inherit; font-weight: 600; cursor: pointer; }
+</style>
+</head>
+<body>
+<main>
+<svg viewBox="0 0 240 40" fill="none" aria-hidden="true"><path d="M0 20h78l8-13 10 26 9-19 7 6h128" stroke="var(--accent)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+<p>${name}</p>
+<h1>Bağlantı yok</h1>
+<p>Sayfa internete bağlanınca açılır.</p>
+<button type="button" onclick="location.reload()">Yeniden dene</button>
+</main>
+</body>
+</html>
+`;
+}
