@@ -1,13 +1,24 @@
 'use client';
 
 import { useEffect, useRef, useSyncExternalStore } from 'react';
-import { fakeHeartRate, HEART_ALERT_IDLE, heartAlertStep, parseHeartRateMeasurement } from '@/lib/heart-rate';
+import {
+  fakeHeartRate,
+  HEART_ALERT_IDLE,
+  heartAlertStep,
+  parseHeartRateMeasurement,
+  READING_STALE_MS,
+  readingBpm,
+  takeReading,
+  type HeartReading,
+} from '@/lib/heart-rate';
 
 /**
  * Nabız bandı (Paket C) — tarayıcıya bağlı. Göğüs bandı ya da nabız yayınlayan saat Web Bluetooth'la (`heart_rate`
  * servisi, ölçüm karakteristiğinin bildirimleri) bağlanır: Android Chrome ve yüklü uygulama; iPhone Safari'de yok.
- * Bağlantı modül düzeyinde tutulur: antrenman ekranından çıkıp dönünce (aynı sekmede) yeniden eşleştirmek gerekmez.
- * Durumlar: desteklenmiyor · bağlı değil · bağlanıyor · bağlı · koptu (kendiliğinden yeniden dener, "Kes"e kadar).
+ * Bağlantı modül düzeyinde tutulur: antrenman ekranından çıkıp dönünce (aynı sekmede) yeniden eşleştirmek gerekmez;
+ * antrenman bitince ekran keser (`disconnectHeartRate`). Durumlar: desteklenmiyor · bağlı değil · bağlanıyor · bağlı ·
+ * koptu (kendiliğinden yeniden dener, "Kes"e kadar). Boş ölçüm (ten teması yok) son ölçümü hemen silmez: 5 sn yeni
+ * ölçüm gelmezse nabız yok sayılır.
  * Kararlar (`heart-rate.ts`) saf; burada yalnız bağlantı ve okumalar. Nabız kayda yazılmaz.
  *
  * Yerel geliştirmede (`NODE_ENV !== 'production'`) bant yerine "Deneme nabzı": sette yükselen, dinlenmede inen yapay
@@ -33,8 +44,6 @@ function bluetooth(): Bluetooth | null {
 /** Yapay nabız yalnız yerel geliştirmede: üretim paketinde `false` olur, yol düşer. */
 export const FAKE_HEART_RATE = process.env.NODE_ENV !== 'production';
 
-/** Bu kadar süre ölçüm gelmezse nabız yok sayılır (band çıkarıldı, ölçmüyor). */
-const READING_STALE_MS = 5000;
 /** Kopunca yeniden deneme: 1, 2, 4, 8 sn, sonra 10 sn'de bir. */
 const RETRY_MAX_MS = 10_000;
 const FAKE_START_BPM = 95;
@@ -72,12 +81,30 @@ function subscribe(listener: () => void): () => void {
 
 /* --- okumalar --- */
 
+let last: HeartReading | null = null;
 let staleTimer: number | undefined;
 
-function onReading(bpm: number | null): void {
-  window.clearTimeout(staleTimer);
+function publish(): void {
+  const bpm = readingBpm(last, Date.now());
   if (bpm !== state.bpm) update({ bpm });
-  if (bpm !== null) staleTimer = window.setTimeout(() => update({ bpm: null }), READING_STALE_MS);
+}
+
+/** Bandın ölçümü (`takeReading`): boşsa son geçerli ölçüm kalır; 5 sn yeni ölçüm gelmezse nabız yok. */
+function onMeasurement(bpm: number | null): void {
+  const next = takeReading(last, bpm, Date.now());
+  if (next !== last) {
+    last = next;
+    window.clearTimeout(staleTimer);
+    staleTimer = window.setTimeout(publish, READING_STALE_MS);
+  }
+  publish();
+}
+
+/** Bağlantı kesildi ya da koptu: nabız hemen yok (uzayan dinlenme biter, uyarı şeridi kalkar). */
+function clearReading(): void {
+  window.clearTimeout(staleTimer);
+  last = null;
+  publish();
 }
 
 /* --- bant --- */
@@ -91,19 +118,42 @@ let retries = 0;
 
 function onValue(event: Event): void {
   const value = (event.target as BluetoothCharacteristic | null)?.value;
-  onReading(value ? parseHeartRateMeasurement(value) : null);
+  onMeasurement(value ? parseHeartRateMeasurement(value) : null);
 }
 
-async function attach(target: BluetoothDevice): Promise<void> {
+/** Bu cihaz hâlâ isteniyor mu ("Kes"e ya da yeni "Bağlan"a o arada basılmadı). */
+function stillWanted(target: BluetoothDevice): boolean {
+  return wanted && device === target;
+}
+
+function closeGatt(target: BluetoothDevice): void {
+  try {
+    if (target.gatt?.connected) target.gatt.disconnect();
+  } catch {
+    // Zaten kopmuş: bırakmak yeter.
+  }
+}
+
+/**
+ * Bağlanır ve bildirimleri açar. Bağlantı kurulurken "Kes"e basıldıysa (bağlantı artık istenmiyor) açılan bağlantı
+ * kapanır, okumalar gelmez: false.
+ */
+async function attach(target: BluetoothDevice): Promise<boolean> {
   const server = await target.gatt?.connect();
   if (!server) throw new Error('GATT yok');
   const service = await server.getPrimaryService('heart_rate');
   const next = await service.getCharacteristic('heart_rate_measurement');
   next.addEventListener('characteristicvaluechanged', onValue);
   await next.startNotifications();
+  if (!stillWanted(target)) {
+    next.removeEventListener('characteristicvaluechanged', onValue);
+    closeGatt(target);
+    return false;
+  }
   characteristic?.removeEventListener('characteristicvaluechanged', onValue);
   characteristic = next;
   retries = 0;
+  return true;
 }
 
 function retry(): void {
@@ -112,13 +162,14 @@ function retry(): void {
   retries += 1;
   retryTimer = window.setTimeout(() => {
     const target = device;
-    if (!wanted || !target) return;
+    if (!target || !stillWanted(target)) return;
     attach(target).then(
-      () => {
-        if (wanted && device === target) update({ status: 'connected', problem: null });
+      (attached) => {
+        if (attached) update({ status: 'connected', problem: null });
       },
       () => {
-        if (wanted && device === target) retry();
+        if (stillWanted(target)) retry();
+        else closeGatt(target);
       },
     );
   }, delay);
@@ -127,7 +178,7 @@ function retry(): void {
 function onDisconnected(): void {
   characteristic?.removeEventListener('characteristicvaluechanged', onValue);
   characteristic = null;
-  onReading(null);
+  clearReading();
   if (!wanted) return;
   update({ status: 'lost' });
   retry();
@@ -140,11 +191,7 @@ function release(): void {
   characteristic = null;
   if (device) {
     device.removeEventListener('gattserverdisconnected', onDisconnected);
-    try {
-      if (device.gatt?.connected) device.gatt.disconnect();
-    } catch {
-      // Zaten kopmuş: bırakmak yeter.
-    }
+    closeGatt(device);
   }
   device = null;
 }
@@ -161,8 +208,7 @@ export async function connectHeartRate(): Promise<void> {
     device = picked;
     wanted = true;
     picked.addEventListener('gattserverdisconnected', onDisconnected);
-    await attach(picked);
-    update({ status: 'connected', device: picked.name?.trim() || 'Nabız bandı', problem: null });
+    if (await attach(picked)) update({ status: 'connected', device: picked.name?.trim() || 'Nabız bandı', problem: null });
   } catch (error) {
     // Seçici kapatıldı (`NotFoundError`): sorun değil.
     const cancelled = error instanceof DOMException && error.name === 'NotFoundError';
@@ -171,11 +217,11 @@ export async function connectHeartRate(): Promise<void> {
   }
 }
 
-/** "Bağlantıyı kes" (bant ya da deneme nabzı). */
+/** "Bağlantıyı kes" ve antrenmanın bitişi (bant ya da deneme nabzı): yeniden deneme de durur. */
 export function disconnectHeartRate(): void {
   stopFake();
   release();
-  onReading(null);
+  clearReading();
   update(IDLE);
 }
 
@@ -204,7 +250,7 @@ function fakeTick(): void {
   const now = Date.now();
   fakeBpm = fakeHeartRate(fakeBpm, fakeResting, now - fakeAt);
   fakeAt = now;
-  if (!fakeDropped) onReading(Math.round(fakeBpm));
+  if (!fakeDropped) onMeasurement(Math.round(fakeBpm));
 }
 
 export function startFakeHeartRate(): void {
@@ -215,26 +261,26 @@ export function startFakeHeartRate(): void {
   fakeAt = Date.now();
   fakeTimer = window.setInterval(fakeTick, FAKE_TICK_MS);
   update({ status: 'connected', device: 'Deneme nabzı', fake: true, problem: null });
-  onReading(fakeBpm);
+  onMeasurement(fakeBpm);
 }
 
 /** Deneme nabzını elle oynatır (uyarıyı ya da "Nabız hâlâ yüksek"i denemek için). */
 export function nudgeFakeHeartRate(delta: number): void {
   if (!FAKE_HEART_RATE || !state.fake) return;
   fakeBpm = fakeHeartRate(fakeBpm + delta, fakeResting, 0);
-  if (!fakeDropped) onReading(Math.round(fakeBpm));
+  if (!fakeDropped) onMeasurement(Math.round(fakeBpm));
 }
 
 /** "Kopmayı dene": ölçümler durur, durum "koptu"; biraz sonra kendiliğinden yeniden bağlanır. */
 export function dropFakeHeartRate(): void {
   if (!FAKE_HEART_RATE || !state.fake || fakeDropped) return;
   fakeDropped = true;
-  onReading(null);
+  clearReading();
   update({ status: 'lost' });
   fakeDropTimer = window.setTimeout(() => {
     fakeDropped = false;
     update({ status: 'connected' });
-    onReading(Math.round(fakeBpm));
+    onMeasurement(Math.round(fakeBpm));
   }, FAKE_DROP_MS);
 }
 
@@ -255,7 +301,7 @@ export function useHeartRate(resting: boolean): HeartRateState {
 
 /**
  * Yüksek nabız uyarısı (`heartAlertStep`): saniyede iki kez bakılır. Uyarı çalınca `onFire(bpm)`; nabız sınırın 5 altına
- * inip uyarı yeniden kurulunca `onCalm()` (şerit kendiliğinden kalkar).
+ * inince ya da ölçüm kalmayınca (bağlantı kesildi, koptu) `onCalm()`: şerit kendiliğinden kalkar.
  */
 export function useHeartAlert(bpm: number | null, alert: number, onFire: (bpm: number) => void, onCalm: () => void): void {
   const latest = useRef({ bpm, alert, onFire, onCalm });

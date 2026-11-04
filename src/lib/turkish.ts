@@ -1,6 +1,6 @@
 /**
  * Serbest metin adlara ve sayılara Türkçe ek (kendi programın adı: "Evde'ye yaz", `docs/design/kendi-program.md` §2.9;
- * nabız sınırı: "121'in altına") — saf.
+ * nabız sınırı: "120'ye inince") — saf.
  * Özel ad gibi kesme işaretiyle; son ünlüye göre büyük ünlü uyumu, ünlüyle biten adda kaynaştırma (y). Sayıyla
  * biten ad okunuşuna göre ("Programım 2" → "2'ye"). Ünlüsü olmayan kısaltma harf harf okunur ("PPL" → "PPL'ye").
  */
@@ -75,12 +75,4 @@ export function accusative(word: string): string {
   const end = ending(name);
   if (!end) return name;
   return `${name}'${end.open ? 'y' : ''}${NARROW[end.vowel] ?? 'i'}`;
-}
-
-/** Tamlayan: "Evde" → "Evde'nin", "Salon" → "Salon'un", "121" → "121'in", "126" → "126'nın", "100" → "100'ün". */
-export function genitive(word: string): string {
-  const name = word.trim();
-  const end = ending(name);
-  if (!end) return name;
-  return `${name}'${end.open ? 'n' : ''}${NARROW[end.vowel] ?? 'i'}n`;
 }

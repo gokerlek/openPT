@@ -1,13 +1,16 @@
-import { genitive } from './turkish.ts';
+import { dative } from './turkish.ts';
 
 /**
  * Nabız (tasarım `docs/plans/2026-11-05-mobil-uygulama-ve-kolay-kurulum-design.md`, Paket C) — saf. Göğüs bandı ya da
  * nabız yayınlayan saat Web Bluetooth'la bağlanır (`me/antrenman/use-heart-rate.ts`); burada yalnız kararlar var:
  * - bandın gönderdiği ölçümü (0x2A37) çözmek;
  * - danışanın sınırları: PT'nin girdiği → yaştan → genel değerler (hangisi kullanıldıysa ekranda yazar);
+ * - okumalar: boş ölçüm (ten teması yok) son geçerli ölçümü silmez; 5 sn yeni ölçüm gelmezse nabız yok sayılır;
  * - dinlenme: temel süre bitti ve nabız toparlanma sınırının üstündeyse uzar, 3 sn boyunca sınırda ya da altında kalınca
- *   biter; en çok 120 sn uzar, sonra "Nabız hâlâ yüksek" notuyla biter. Nabız yoksa bugünkü sayaç (`workout-rest.ts`);
- * - uyarı: 5 sn boyunca uyarı sınırının üstündeyse bir kez; sınırın 5 altına inene kadar yeniden uyarmaz.
+ *   biter; en çok 120 sn uzar (temel sürenin ilk bittiği andan; hiçbir düğme sıfırlamaz), sonra "Nabız hâlâ yüksek"
+ *   notuyla biter. Nabız yoksa bugünkü sayaç (`workout-rest.ts`);
+ * - uyarı: 5 sn boyunca uyarı sınırının üstündeyse bir kez; sınırın 5 altına inene kadar yeniden uyarmaz; ölçüm yoksa
+ *   (bağlantı yok) düşer.
  * Kararlar zaman damgasından (epoch ms): dinlenme sayacı gibi, kare kare çağrılsa da geç fark edilse de doğru kalır.
  * Tıbbi cihaz değildir; nabız kayda yazılmaz.
  */
@@ -32,6 +35,8 @@ export const REST_EXTEND_MAX_MS = 120_000;
 export const ALERT_AFTER_MS = 5000;
 /** Uyarıdan sonra nabız sınırın bu kadar altına inince uyarı yeniden kurulur. */
 export const ALERT_REARM_BPM = 5;
+/** Bu kadar süre geçerli ölçüm gelmezse nabız yok sayılır (band çıkarıldı, ölçmüyor, bağlantı sessizce düştü). */
+export const READING_STALE_MS = 5000;
 
 /* --- ölçüm --- */
 
@@ -50,6 +55,19 @@ export function parseHeartRateMeasurement(data: DataView): number | null {
   if (wide && data.byteLength < 3) return null;
   const bpm = wide ? data.getUint16(1, true) : data.getUint8(1);
   return bpm > 0 ? bpm : null;
+}
+
+/** Son geçerli ölçüm ve geldiği an. */
+export type HeartReading = { bpm: number; at: number };
+
+/** Bandın yeni ölçümü: geçerliyse alınır; boşsa (ten teması yok, 0) son geçerli ölçüm kalır, bayatlayana kadar. */
+export function takeReading(last: HeartReading | null, bpm: number | null, now: number): HeartReading | null {
+  return bpm !== null ? { bpm, at: now } : last;
+}
+
+/** Şu anki nabız: son geçerli ölçüm 5 sn'den eskiyse yok. */
+export function readingBpm(last: HeartReading | null, now: number): number | null {
+  return last && now - last.at < READING_STALE_MS ? last.bpm : null;
 }
 
 /* --- sınırlar --- */
@@ -99,7 +117,10 @@ export function heartZone(bpm: number, limits: Pick<HeartLimits, 'recovery' | 'a
 
 /* --- dinlenme --- */
 
-/** Uzayan dinlenme: temel sürenin bittiği an ve nabzın sınırın altına indiği an (inmediyse null). */
+/**
+ * Uzayan dinlenme: tavanın sayıldığı an (temel sürenin ilk bittiği an) ve nabzın sınıra ya da altına indiği an
+ * (inmediyse null).
+ */
 export type RestHold = { since: number; calmSince: number | null };
 
 export type RestHoldStep =
@@ -108,14 +129,25 @@ export type RestHoldStep =
   | { kind: 'end'; at: number; high: boolean };
 
 /**
- * Temel süre (`baseEnd`) bitti: dinlenme uzar mı, sürer mi, bitti mi. Değişmeyen bekleme aynı nesne döner (sayaç kare
- * kare çağrılır, değişmeyen durum yazılmasın). Bitiş anı gerçekte bittiği an: 3 sn'nin dolduğu an ya da 120 sn sınırı
- * (geç fark edildiyse de); bağlantı koptuysa o an.
+ * Temel süre (`baseEnd`) bitti: dinlenme uzar mı, sürer mi, bitti mi. Tavan `origin`'den sayılır: temel sürenin ilk
+ * bittiği an (beklerken +15'le uzatılan dinlenmede de o an; yoksa `baseEnd`). Temel süre tavandan sonra bittiyse yeniden
+ * uzamaz. Değişmeyen bekleme aynı nesne döner (sayaç kare kare çağrılır, değişmeyen durum yazılmasın). Bitiş anı gerçekte
+ * bittiği an: 3 sn'nin dolduğu an ya da tavan (geç fark edildiyse de); bağlantı koptuysa o an.
  */
-export function restHoldStep(hold: RestHold | null, bpm: number | null, recovery: number, baseEnd: number, now: number): RestHoldStep {
+export function restHoldStep(
+  hold: RestHold | null,
+  bpm: number | null,
+  recovery: number,
+  baseEnd: number,
+  now: number,
+  origin: number = baseEnd,
+): RestHoldStep {
   if (bpm === null) return { kind: 'end', at: hold ? now : baseEnd, high: false };
-  const current = hold ?? (bpm > recovery ? { since: baseEnd, calmSince: null } : null);
-  if (!current) return { kind: 'end', at: baseEnd, high: false };
+  if (!hold) {
+    if (bpm <= recovery) return { kind: 'end', at: baseEnd, high: false };
+    if (baseEnd >= origin + REST_EXTEND_MAX_MS) return { kind: 'end', at: baseEnd, high: true };
+  }
+  const current = hold ?? { since: origin, calmSince: null };
   const calmSince = bpm <= recovery ? (current.calmSince ?? now) : null;
   const cap = current.since + REST_EXTEND_MAX_MS;
   if (calmSince !== null && calmSince + REST_CALM_MS <= Math.min(now, cap)) return { kind: 'end', at: calmSince + REST_CALM_MS, high: false };
@@ -124,9 +156,9 @@ export function restHoldStep(hold: RestHold | null, bpm: number | null, recovery
   return { kind: 'hold', hold: hold && hold.calmSince === calmSince ? hold : { since: current.since, calmSince } };
 }
 
-/** Dinlenme panelinde uzarken: "Nabzın 121'in altına inince devam" (sınır dahil; sınırın bir fazlasının altı). */
+/** Dinlenme panelinde uzarken: "Nabzın 120'ye inince devam" (sınırın kendisi; sınırda ya da altında 3 sn). */
 export function calmText(recovery: number): string {
-  return `Nabzın ${genitive(String(recovery + 1))} altına inince devam`;
+  return `Nabzın ${dative(String(recovery))} inince devam`;
 }
 
 /* --- uyarı --- */
@@ -137,11 +169,13 @@ export const HEART_ALERT_IDLE: HeartAlertState = { aboveSince: null, fired: fals
 
 /**
  * Nabız 5 sn boyunca uyarı sınırının üstündeyse bir kez uyarır (`fire`); sınırın 5 altına inene kadar yeniden uyarmaz.
- * Ölçüm yoksa (bağlantı koptu) üstündeki süre sayılmaz; çalmış uyarı da kurulmaz.
+ * Ölçüm yoksa (bağlantı kesildi, koptu ya da 5 sn ölçüm gelmedi) uyarı düşer (şerit kalkar); bağlantı dönünce yeniden
+ * sayılır.
  */
 export function heartAlertStep(state: HeartAlertState, bpm: number | null, alert: number, now: number): { state: HeartAlertState; fire: boolean } {
-  const fired = state.fired && !(bpm !== null && bpm <= alert - ALERT_REARM_BPM);
-  const aboveSince = bpm !== null && bpm > alert ? (state.aboveSince ?? now) : null;
+  if (bpm === null) return { state: state.aboveSince === null && !state.fired ? state : HEART_ALERT_IDLE, fire: false };
+  const fired = state.fired && bpm > alert - ALERT_REARM_BPM;
+  const aboveSince = bpm > alert ? (state.aboveSince ?? now) : null;
   const fire = !fired && aboveSince !== null && now - aboveSince >= ALERT_AFTER_MS;
   const next = { aboveSince, fired: fired || fire };
   return { state: next.aboveSince === state.aboveSince && next.fired === state.fired ? state : next, fire };

@@ -374,6 +374,19 @@ describe('danışan formu', () => {
     assert.deepEqual(paths('120.5', '170'), ['heartRecovery']);
   });
 
+  test('nabız sınırı yalnız rakamlardan oluşan tam sayı: "0x78", "1e2", "+120", "12 0" kabul edilmez', () => {
+    for (const text of ['0x78', '1e2', '+120', '-120', '12 0', '120,0', '١٢٠']) {
+      const result = v.safeParse(clientFormSchema, { ...temel, heartRecovery: text, heartAlert: '170' });
+      assert.deepEqual(
+        result.issues?.map((issue) => [issue.path?.map((segment) => segment.key).join('.'), issue.message]),
+        [['heartRecovery', 'Yalnız rakam girilmeli.']],
+        text,
+      );
+    }
+    const result = v.safeParse(clientFormSchema, { ...temel, heartRecovery: '0120', heartAlert: '170' });
+    assert.equal(result.success && result.output.heartRecovery, 120);
+  });
+
   test('kayıt ucu: nabız sınırı sayı, boşaltılmış (null) ya da hiç yok (eski istemci)', () => {
     const save = (extra: object) => v.safeParse(clientSaveSchema, { ...temel, ...extra }).success;
     assert.equal(save({}), true);
@@ -382,6 +395,10 @@ describe('danışan formu', () => {
     assert.equal(save({ heartRecovery: 115 }), false);
     assert.equal(save({ heartRecovery: 165, heartAlert: 115 }), false);
     assert.equal(save({ heartRecovery: '115', heartAlert: '165' }), false);
+    // Sunucu metin hiç almaz: "0x78" gibi biçimler kayda ulaşamaz; kesirli ya da sonsuz sayı da yok.
+    assert.equal(save({ heartRecovery: '0x78', heartAlert: 170 }), false);
+    assert.equal(save({ heartRecovery: 120.5, heartAlert: 170 }), false);
+    assert.equal(save({ heartRecovery: Number.POSITIVE_INFINITY, heartAlert: 170 }), false);
   });
 });
 
