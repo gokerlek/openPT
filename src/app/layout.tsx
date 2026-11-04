@@ -22,9 +22,12 @@ export async function generateMetadata(): Promise<Metadata> {
     description: `${config.appName} — antrenman takibi`,
     applicationName: config.appName,
     appleWebApp: { capable: true, title: config.appName, statusBarStyle: 'black-translucent' },
-    // Logo yüklendiyse sekme ve telefon kısayol ikonu da ondan üretilir; yoksa markanın nabız
-    // çizgisi (`public/favicon.ico`).
-    icons: config.logo ? { icon: '/api/brand/logo', apple: '/api/brand/logo' } : { icon: '/favicon.ico' },
+    // Sekme ikonu: logo yüklendiyse o, yoksa markanın nabız çizgisi (`public/favicon.ico`). iPhone ana ekran
+    // simgesi her zaman 180 px marka simgesi (manifest'lerle aynı; logo ya da nabız çizgisi, koyu zemin).
+    icons: {
+      icon: config.logo ? '/api/brand/logo' : '/favicon.ico',
+      apple: { url: '/api/brand/app-icon?size=180', sizes: '180x180', type: 'image/png' },
+    },
   };
 }
 

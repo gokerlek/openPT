@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import { CoachLauncher } from '@/components/coach/coach-launcher';
 import { redirect } from 'next/navigation';
 import { loadAppConfig } from '@/lib/config';
@@ -22,6 +23,12 @@ const PAGE_WIDTH = 'mx-auto w-full max-w-5xl px-4 md:px-8';
 /** Menünün üst kenarı: 12 px ya da güvenli alan. İçerik bundan 12 px aşağıda başlar (ilk satırın ortası = menünün ortası). */
 const MENU_TOP = 'top-[max(0.75rem,env(safe-area-inset-top))]';
 const CONTENT_TOP = 'pt-[calc(max(0.75rem,env(safe-area-inset-top))_+_0.75rem)]';
+
+/**
+ * Panel kendi manifest'iyle yüklenir (`panel.webmanifest/route.ts`): danışan uygulamasından ayrı simge ve ad,
+ * açılışı `/dashboard`. Kök düzenin bağladığı danışan manifest'inin yerini alır.
+ */
+export const metadata: Metadata = { manifest: '/panel.webmanifest' };
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const session = await requirePt();

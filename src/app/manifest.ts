@@ -1,9 +1,15 @@
 import type { MetadataRoute } from 'next';
+import { manifestIcons } from '@/lib/brand-icon';
 import { readAppConfig } from '@/lib/config';
 
 // Marka ayarları değişince yeni kurulumlar güncel adı görür.
 export const dynamic = 'force-dynamic';
 
+/**
+ * Danışan uygulamasının manifest'i (kök düzen bağlar). Kimliği (`id: '/'`) ve başlangıcı (`/me`) değişmez:
+ * değişirse telefonlardaki eski yüklemeler başka uygulama sayılır. PT paneli ayrı simgeyle kendi manifest'ini
+ * kullanır (`panel.webmanifest/route.ts`).
+ */
 export default async function manifest(): Promise<MetadataRoute.Manifest> {
   const config = await readAppConfig();
   return {
@@ -17,11 +23,6 @@ export default async function manifest(): Promise<MetadataRoute.Manifest> {
     display: 'standalone',
     background_color: '#171717',
     theme_color: '#171717',
-    icons: [192, 512].flatMap((size) => (['any', 'maskable'] as const).map((purpose) => ({
-      src: `/api/brand/app-icon?size=${size}`,
-      sizes: `${size}x${size}`,
-      type: 'image/png',
-      purpose,
-    }))),
+    icons: manifestIcons(),
   };
 }
