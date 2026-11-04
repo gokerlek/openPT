@@ -84,10 +84,10 @@ export const clientIdSchema = v.pipe(v.string(), v.regex(CLIENT_ID_PATTERN, 'Dan
 
 /** Nabız sınırı (bpm): tam sayı, `HEART_RATE_MIN`–`HEART_RATE_MAX`. */
 const heartRateBpmSchema = v.pipe(
-  v.number('Sayı gir.'),
-  v.integer('Tam sayı gir.'),
-  v.minValue(HEART_RATE_MIN, `En az ${HEART_RATE_MIN}.`),
-  v.maxValue(HEART_RATE_MAX, `En fazla ${HEART_RATE_MAX}.`),
+  v.number('Sayı olmalı.'),
+  v.integer('Tam sayı olmalı.'),
+  v.minValue(HEART_RATE_MIN, `En az ${HEART_RATE_MIN} olmalı.`),
+  v.maxValue(HEART_RATE_MAX, `En fazla ${HEART_RATE_MAX} olmalı.`),
 );
 
 const timestamp = v.pipe(v.string(), v.isoTimestamp());
@@ -206,7 +206,7 @@ export type Invite = v.InferOutput<typeof inviteSchema>;
 /** Formdaki antrenman geçmişi: verilmezse kayıttaki kalır (yeni danışanda "yeni"). */
 const trainingExperienceSchema = v.optional(v.picklist(TRAINING_EXPERIENCES, 'Antrenman geçmişini seç.'));
 
-/** Formdaki nabız sınırı: metin kutusu; boş → null (otomatik), sayı değilse "Sayı gir.". */
+/** Formdaki nabız sınırı: metin kutusu; boş → null (otomatik), sayı değilse "Sayı olmalı.". */
 const heartRateInputSchema = v.optional(
   v.pipe(
     v.string(),
@@ -218,7 +218,7 @@ const heartRateInputSchema = v.optional(
 /** Kayıt ucunda nabız sınırı: sayı, boşaltıldıysa null; hiç yoksa (eski istemci) kayıttaki kalır. */
 const heartRateSaveSchema = v.optional(v.nullable(heartRateBpmSchema));
 
-const HEART_RATE_PAIR = 'İkisini birlikte gir ya da ikisini de boş bırak.';
+const HEART_RATE_PAIR = 'İkisi birlikte girilmeli ya da ikisi de boş bırakılmalı.';
 const HEART_RATE_ORDER = 'Toparlanma sınırı uyarı sınırından düşük olmalı.';
 
 /** PT'nin formu. Durum yalnız düzenlemede görünür; yeni danışan aktif başlar. */
