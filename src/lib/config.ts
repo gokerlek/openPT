@@ -1,6 +1,7 @@
 import 'server-only';
 import { environmentStatus } from './installation/readiness';
 import { revalidateTag, unstable_cache } from 'next/cache';
+import { refreshInstallationToken } from './github/app-auth';
 import { appRepo } from './github/client';
 import { sleep } from './github/errors';
 import { readJson, writeJson } from './github/files';
@@ -32,7 +33,7 @@ const access = configAccess(
     wrap: (read) => unstable_cache(read, ['app-config'], { tags: [CONFIG_TAG], revalidate: 300 }),
     invalidate: () => revalidateTag(CONFIG_TAG, { expire: 0 }),
   },
-  { log: (message) => console.error(message), wait: sleep },
+  { log: (message) => console.error(message), wait: sleep, refreshAccess: refreshInstallationToken },
 );
 
 /**

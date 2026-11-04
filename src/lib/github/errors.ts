@@ -79,14 +79,26 @@ const FRESH_REPO_RETRIES = 3;
 /**
  * Repo yeni açıldığında içerik ucu kısa bir süre 404/409 verebilir: ilk yazma birkaç kez denenir
  * (0,6 · 1,2 · 1,8 sn arayla). Başka hatalar ve son denemenin hatası yukarı çıkar.
+ *
+ * `refreshAccess` (GitHub uygulaması modu): ilk 404'te yeniden denemeden önce bir kez çağrılır. Önbellekteki
+ * kurulum anahtarı repo açılmadan alınmış ve yeni repoyu görmüyor olabilir. Yenileme düşerse yazma yine denenir.
  */
-export async function writeToFreshRepo<T>(write: () => Promise<T>, wait: (ms: number) => Promise<void> = sleep): Promise<T> {
+export async function writeToFreshRepo<T>(
+  write: () => Promise<T>,
+  wait: (ms: number) => Promise<void> = sleep,
+  refreshAccess?: () => Promise<void>,
+): Promise<T> {
+  let refreshed = false;
   for (let attempt = 0; ; attempt += 1) {
     try {
       return await write();
     } catch (error) {
       const retryable = error instanceof GithubError && (error.status === 404 || error.status === 409);
       if (!retryable || attempt >= FRESH_REPO_RETRIES) throw error;
+      if (error.status === 404 && refreshAccess && !refreshed) {
+        refreshed = true;
+        await refreshAccess().catch(() => undefined);
+      }
       await wait(600 * (attempt + 1));
     }
   }

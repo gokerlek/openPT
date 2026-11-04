@@ -39,6 +39,8 @@ export type ConfigStore = {
   log(message: string): void;
   /** Yeni repo'ya ilk yazmayı yeniden denerken bekleme (testte anında). */
   wait?: (ms: number) => Promise<void>;
+  /** Yeni repo'ya ilk yazma 404 verince erişimi yeniler (GitHub uygulamasında kurulum anahtarı; `writeToFreshRepo`). */
+  refreshAccess?: () => Promise<void>;
 };
 
 /** Logo dosyasının GitHub işleri (logo ucu bağlar). */
@@ -92,7 +94,7 @@ export type ConfigCache = {
 export function configAccess(
   source: ConfigSource,
   cache: ConfigCache,
-  runtime: { log(message: string): void; wait?: (ms: number) => Promise<void> },
+  runtime: { log(message: string): void; wait?: (ms: number) => Promise<void>; refreshAccess?: () => Promise<void> },
 ) {
   const readFresh = async (): Promise<StoredConfig> => {
     try {
@@ -114,6 +116,7 @@ export function configAccess(
     },
     log: runtime.log,
     ...(runtime.wait ? { wait: runtime.wait } : {}),
+    ...(runtime.refreshAccess ? { refreshAccess: runtime.refreshAccess } : {}),
   };
   const load = async (): Promise<AppConfig> => (await readConfigBase({ read: readCached, log: runtime.log })).config;
   const display = async (): Promise<AppConfig> => {
@@ -173,8 +176,8 @@ export async function ensureAppRepo(store: Pick<ConfigStore, 'createRepo' | 'che
 }
 
 /** Repo bu kayıtta açıldıysa ilk yazma birkaç kez denenir (içerik ucu kısa bir süre 404/409 verebilir). */
-function firstWrite(store: Pick<ConfigStore, 'wait'>, created: boolean, write: () => Promise<void>): Promise<void> {
-  return created ? writeToFreshRepo(write, store.wait) : write();
+function firstWrite(store: Pick<ConfigStore, 'wait' | 'refreshAccess'>, created: boolean, write: () => Promise<void>): Promise<void> {
+  return created ? writeToFreshRepo(write, store.wait, store.refreshAccess) : write();
 }
 
 /** Görünüm kaydı (sihirbaz ve Ayarlar → Görünüm). Formda olmayan alanlar (logo, saat dilimi) korunur. */

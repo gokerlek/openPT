@@ -90,6 +90,9 @@ function fakeGithub(options: {
     wait: async (ms) => {
       waits.push(ms);
     },
+    refreshAccess: async () => {
+      log.push('refreshAccess');
+    },
   };
   const logo: LogoFiles = {
     sha: async (path) => files.get(path) ?? null,
@@ -172,16 +175,16 @@ describe('kurulum: yazmadan önce veri repo\'su (SPEC §2, §9.8)', () => {
     assert.equal(gh.files.size, 0);
   });
 
-  test('repo bu kayıtta açıldıysa ilk yazma 404/409\'da yeniden denenir', async () => {
+  test('repo bu kayıtta açıldıysa ilk yazma 404/409\'da yeniden denenir; 404\'te erişim bir kez yenilenir', async () => {
     const gh = fakeGithub({ failWrites: [404, 409] });
     await saveAppearance(gh.store, FORM);
-    assert.deepEqual(gh.log, ['read', 'createRepo', 'writeConfig', 'writeConfig', 'writeConfig']);
+    assert.deepEqual(gh.log, ['read', 'createRepo', 'writeConfig', 'refreshAccess', 'writeConfig', 'writeConfig']);
     assert.deepEqual(gh.waits, [600, 1200]);
     assert.equal(gh.writes.length, 1);
 
     const logo = fakeGithub({ failLogoWrites: [404] });
     await replaceLogo(logo.store, logo.logo, NEW_LOGO, BYTES);
-    assert.deepEqual(logo.log, ['read', 'createRepo', `writeLogo ${NEW_LOGO} sha=null`, `writeLogo ${NEW_LOGO} sha=null`, 'writeConfig']);
+    assert.deepEqual(logo.log, ['read', 'createRepo', `writeLogo ${NEW_LOGO} sha=null`, 'refreshAccess', `writeLogo ${NEW_LOGO} sha=null`, 'writeConfig']);
   });
 
   test('repo zaten varsa yeniden denenmez: hata PT\'ye döner', async () => {

@@ -8,7 +8,8 @@ import * as core from './clients-core';
 import { CLIENT_INDEX_PATH, type ClientStore } from './clients-core';
 import { serverEnv } from './env';
 import { appRepo, clientRepoName, GithubError } from './github/client';
-import { writeToFreshRepo } from './github/errors';
+import { refreshInstallationToken } from './github/app-auth';
+import { sleep, writeToFreshRepo } from './github/errors';
 import { deleteFile, readJson, writeJson } from './github/files';
 import { clientRepoExists, createClientRepo, deleteClientRepo } from './github/repos';
 import { dropNotices } from './notices-store';
@@ -199,8 +200,9 @@ export async function createClient(input: ClientInput, options: { program?: Prog
   };
 
   try {
-    // Repo yeni açıldı: içerik ucu kısa bir süre 404/409 verebilir, ilk yazma birkaç kez denenir.
-    await writeToFreshRepo(() => writeClient(client, undefined, 'Danışan kaydı oluşturuldu'));
+    // Repo yeni açıldı: içerik ucu kısa bir süre 404/409 verebilir, ilk yazma birkaç kez denenir. 404'te
+    // kurulum anahtarı (uygulama modu) bir kez yenilenir: repo açılmadan alınmış anahtar onu görmeyebilir.
+    await writeToFreshRepo(() => writeClient(client, undefined, 'Danışan kaydı oluşturuldu'), sleep, refreshInstallationToken);
     if (options.program) {
       await writeProgramFile(id, options.program, { message: commitMessage('create', options.program.log[0]?.changes ?? []) });
     }

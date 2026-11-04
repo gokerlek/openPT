@@ -102,6 +102,8 @@ export type LoginCodeStore = {
   ensureRepo(): Promise<{ created: boolean }>;
   /** Yeni repo'ya ilk yazmayı yeniden denerken bekleme (testte anında). */
   wait?: (ms: number) => Promise<void>;
+  /** Yeni repo'ya ilk yazma 404 verince erişimi yeniler (GitHub uygulamasında kurulum anahtarı; `writeToFreshRepo`). */
+  refreshAccess?: () => Promise<void>;
 };
 
 export type SessionStore = {
@@ -288,7 +290,7 @@ export async function issueLoginCode(store: Pick<SessionStore, 'env' | 'now' | '
   const request = requestLoginCode(parseLoginCode(fresh), context);
   if (!request.ok) return null;
   const write = () => loginCode.write(request.state, fresh?.sha, 'Yeni giriş kodu');
-  await (created ? writeToFreshRepo(write, loginCode.wait) : write());
+  await (created ? writeToFreshRepo(write, loginCode.wait, loginCode.refreshAccess) : write());
   loginCode.invalidate();
   return request.code;
 }

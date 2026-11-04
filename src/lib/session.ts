@@ -3,6 +3,7 @@ import { revalidateTag, unstable_cache } from 'next/cache';
 import { cookies } from 'next/headers';
 import { readClient } from './client-record';
 import { emailLoginEnabled, serverEnv } from './env';
+import { refreshInstallationToken } from './github/app-auth';
 import { appRepo, GithubError } from './github/client';
 import { sleep } from './github/errors';
 import { readJson, writeJson } from './github/files';
@@ -55,6 +56,7 @@ const loginCode: LoginCodeStore = {
   repoProblem: () => appRepoProblem(appRepo()),
   ensureRepo: createAppRepo,
   wait: sleep,
+  refreshAccess: refreshInstallationToken,
 };
 
 function authEnv(): AuthEnv {
