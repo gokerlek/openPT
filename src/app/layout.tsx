@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import { Geist_Mono, Outfit } from 'next/font/google';
 import { PwaRoot } from '@/components/install/pwa-root';
 import { Providers } from '@/components/providers';
+import { CLIENT_MANIFEST_PATH } from '@/lib/client-manifest';
 import { readAppConfig } from '@/lib/config';
 import { RADIUS_OPTIONS } from '@/lib/schemas/config';
 import { brandStyle as accentStyle } from '@/lib/color';
@@ -23,6 +24,8 @@ export async function generateMetadata(): Promise<Metadata> {
     description: `${config.appName} — antrenman takibi`,
     applicationName: config.appName,
     appleWebApp: { capable: true, title: config.appName, statusBarStyle: 'black-translucent' },
+    // Danışan manifest'i; danışan sayfaları kimlikle (`?c=`), panel kendi manifest'iyle ezer (`lib/client-manifest.ts`).
+    manifest: CLIENT_MANIFEST_PATH,
     // Sekme ikonu: logo yüklendiyse o, yoksa markanın nabız çizgisi (`public/favicon.ico`). iPhone ana ekran
     // simgesi her zaman 180 px marka simgesi (manifest'lerle aynı; logo ya da nabız çizgisi, koyu zemin).
     icons: {

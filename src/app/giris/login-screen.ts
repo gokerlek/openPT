@@ -54,3 +54,12 @@ export function logoutPath(clientId: string | null, password: boolean | null): s
   if (password === false) params.set('sifre', '0');
   return `/giris?${params.toString()}`;
 }
+
+/**
+ * Açık oturumla gelen giriş atlanır, doğrudan programa: ana ekrandaki danışan uygulaması `/giris?c=<kimlik>` ile
+ * açılır (`lib/client-manifest.ts`), oturum varsa danışan girişi görmez. Çıkıştan hemen sonra (`?cikis=1`)
+ * atlanmaz. Kaydın hâlâ geçerli olup olmadığına `/me` bakar: geçersizse nedeniyle `/join`'e (döngü yok).
+ */
+export function signedInRedirect({ signedIn, loggedOut }: { signedIn: boolean; loggedOut: boolean }): '/me' | null {
+  return signedIn && !loggedOut ? '/me' : null;
+}

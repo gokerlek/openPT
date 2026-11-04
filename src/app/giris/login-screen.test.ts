@@ -1,6 +1,6 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { LOGGED_OUT_NOTICE, loginScreen, logoutPath } from './login-screen.ts';
+import { LOGGED_OUT_NOTICE, loginScreen, logoutPath, signedInRedirect } from './login-screen.ts';
 
 describe('/giris ekranı: çıkış onayıyla aynı şeyi söyler', () => {
   test('şifresi olmayan danışan çıkınca şifre kutusu yok, yeni kare kod istenir (kimlik bilinse de)', () => {
@@ -34,5 +34,11 @@ describe('/giris ekranı: çıkış onayıyla aynı şeyi söyler', () => {
     assert.equal(logoutPath('c_abc123', true), '/giris?c=c_abc123&cikis=1');
     assert.equal(logoutPath('c_abc123', null), '/giris?c=c_abc123&cikis=1');
     assert.equal(logoutPath(null, false), '/giris?cikis=1&sifre=0');
+  });
+
+  test('oturum açıksa giriş atlanır (ana ekran uygulaması /giris?c= ile açılır); çıkıştan sonra atlanmaz', () => {
+    assert.equal(signedInRedirect({ signedIn: true, loggedOut: false }), '/me');
+    assert.equal(signedInRedirect({ signedIn: false, loggedOut: false }), null);
+    assert.equal(signedInRedirect({ signedIn: true, loggedOut: true }), null);
   });
 });

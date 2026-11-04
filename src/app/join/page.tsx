@@ -6,6 +6,7 @@ import { PulseLine } from '@/components/pulse-line';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
+import { clientManifestHref } from '@/lib/client-manifest';
 import { canSetPassword } from '@/lib/client-status';
 import { readAppConfig } from '@/lib/config';
 import { CLIENT_ID_PATTERN } from '@/lib/schemas/client';
@@ -13,8 +14,13 @@ import { readClientSession, sessionClient } from '@/lib/session';
 import { JoinForm } from './join-form';
 import { JoinPasswordStep } from './password-step';
 import { PasswordLoginLink } from './password-login-link';
+import { JoinStepLabel } from './step-label';
 
-export const metadata: Metadata = { title: 'Katıl' };
+/** Davetin danışanı biliniyorsa manifest onun kimliğiyle (`lib/client-manifest.ts`): katılırken eklenen uygulama onu tanır. */
+export async function generateMetadata({ searchParams }: { searchParams: Promise<{ c?: string }> }): Promise<Metadata> {
+  const { c } = await searchParams;
+  return { title: 'Katıl', manifest: clientManifestHref(c) };
+}
 
 const errors: Record<string, string> = {
   erisim: 'Oturumun kapandı. Antrenöründen yeni bir kare kod iste.',
@@ -71,7 +77,9 @@ export default async function JoinPage({
           <Card>
             {clientId ? (
               <CardHeader>
-                <CardDescription>Adım 1 / 3</CardDescription>
+                <CardDescription>
+                  <JoinStepLabel step={1} />
+                </CardDescription>
                 <CardTitle className="text-xl">Kodunu onayla</CardTitle>
                 <CardDescription>
                   Kare koddan geldiysen kod hazır. Sonra şifreni belirleyip uygulamayı ana ekrana ekleyeceksin.

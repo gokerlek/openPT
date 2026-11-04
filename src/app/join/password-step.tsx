@@ -1,31 +1,40 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { SetPasswordForm } from '@/app/giris/set-password-form';
 import { InstallHelper } from '@/components/install/install-helper';
 import { useInstall } from '@/components/install/install-state';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { JoinStepLabel } from './step-label';
 
 /**
  * Kare kodla girişin son iki adımı: şifre belirle, sonra bir kez "uygulamayı ana ekrana ekle" (tasarım
  * Paket A). Sıra bilerek böyle: ana ekrandaki uygulama tarayıcının oturumunu her zaman taşımaz (iPhone),
  * danışan orada şifresiyle girer. Uygulamanın içinden katıldıysa (zaten yüklü) yükleme adımı atlanır.
  * Yükleme adımı yalnız bu sekmenin belleğinde: sayfa yenilenirse doğrudan programa gidilir (`page.tsx`), orada
- * Bugün ekranının üstündeki kart aynı yardımcıyı gösterir. "Devam" programa (`/me`).
+ * Bugün ekranının üstündeki kart aynı yardımcıyı gösterir. "Devam" programa (`/me`). Şifre kaydedilip form kalkınca
+ * odak yeni adımın başlığına geçer (sayfanın başına düşmez).
  */
 export function JoinPasswordStep({ clientId }: { clientId: string }) {
   const router = useRouter();
   const { state } = useInstall();
   const [saved, setSaved] = useState(false);
+  const titleRef = useRef<HTMLDivElement>(null);
   const toProgram = () => router.replace('/me');
+
+  useEffect(() => {
+    if (saved) titleRef.current?.focus();
+  }, [saved]);
 
   if (!saved) {
     return (
       <Card>
         <CardHeader>
-          <CardDescription>Adım 2 / 3</CardDescription>
+          <CardDescription>
+            <JoinStepLabel step={2} />
+          </CardDescription>
           <CardTitle className="text-xl">Şifreni belirle</CardTitle>
           <CardDescription>Bir dahaki sefere bu telefonda ya da başka bir telefonda şifrenle girersin.</CardDescription>
         </CardHeader>
@@ -45,8 +54,12 @@ export function JoinPasswordStep({ clientId }: { clientId: string }) {
   return (
     <Card>
       <CardHeader>
-        <CardDescription>Adım 3 / 3</CardDescription>
-        <CardTitle className="text-xl">Uygulamayı ana ekrana ekle</CardTitle>
+        <CardDescription>
+          <JoinStepLabel step={3} />
+        </CardDescription>
+        <CardTitle ref={titleRef} tabIndex={-1} className="text-xl outline-none">
+          Uygulamayı ana ekrana ekle
+        </CardTitle>
         <CardDescription>
           {installed
             ? 'Uygulama yüklendi. Programın bundan sonra ana ekrandaki simgeden açılır.'

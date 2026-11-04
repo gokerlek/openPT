@@ -8,9 +8,13 @@
  * - `ios-safari`: iPhone/iPad Safari: Paylaş → Ana Ekrana Ekle → Ekle.
  * - `ios-other`: iPhone/iPad'de Safari dışı tarayıcı ya da uygulama içi tarayıcı (Instagram, Facebook…): Safari'de aç.
  * - `android-in-app`: Android'de uygulama içi tarayıcı (WebView): Chrome'da aç.
- * - `menu`: geri kalanı (pencere henüz gelmemiş Chrome, Firefox, Mac Safari…): tarayıcı menüsünden ekle.
+ * - `mac-safari`: Mac Safari (dokunmatik değil): Dosya → Dock'a Ekle.
+ * - `menu`: geri kalanı (pencere henüz gelmemiş Chrome, Firefox…): tarayıcı menüsünden ekle.
  */
-export type InstallGuide = 'installed' | 'prompt' | 'ios-safari' | 'ios-other' | 'android-in-app' | 'menu';
+export type InstallGuide = 'installed' | 'prompt' | 'ios-safari' | 'ios-other' | 'android-in-app' | 'mac-safari' | 'menu';
+
+/** Yardımcıyı kimin gördüğü: metinler ve "Şimdi değil" anahtarı buna göre ayrılır. */
+export type InstallAudience = 'client' | 'pt';
 
 export type InstallEnv = {
   userAgent: string;
@@ -38,6 +42,11 @@ function isIosSafari(userAgent: string): boolean {
   return /Version\/[\d.]+.*Safari\//.test(userAgent) && !IOS_NOT_SAFARI.test(userAgent);
 }
 
+/** Mac'te Safari: "Version/… Safari/" var; Chrome, Edge, Opera ve Firefox kendi adını ekler. */
+function isMacSafari(userAgent: string): boolean {
+  return /Macintosh/.test(userAgent) && /Version\/[\d.]+.*Safari\//.test(userAgent) && !/Chrome|Chromium|Edg\/|OPR\/|Firefox/.test(userAgent);
+}
+
 /** Android WebView'i dizesine "; wv)" koyar; bazı uygulamalar ayrıca kendi adını ekler. */
 const ANDROID_IN_APP = /; wv\)|FB_IAB|FBAN|FBAV|Instagram|Line\/|musical_ly|BytedanceWebview|Snapchat|Twitter|LinkedInApp|Pinterest|MicroMessenger/;
 
@@ -45,6 +54,7 @@ export function installGuide(env: InstallEnv): InstallGuide {
   if (env.standalone) return 'installed';
   if (env.canPrompt) return 'prompt';
   if (isIos(env)) return isIosSafari(env.userAgent) ? 'ios-safari' : 'ios-other';
+  if (isMacSafari(env.userAgent)) return 'mac-safari';
   if (/Android/.test(env.userAgent) && ANDROID_IN_APP.test(env.userAgent)) return 'android-in-app';
   return 'menu';
 }
@@ -52,6 +62,11 @@ export function installGuide(env: InstallEnv): InstallGuide {
 /** "Şimdi değil" bu kadar gün gizler (yalnız o cihazda). */
 export const INSTALL_SNOOZE_DAYS = 14;
 const SNOOZE_MS = INSTALL_SNOOZE_DAYS * 24 * 60 * 60 * 1000;
+
+/** "Şimdi değil"in `localStorage` anahtarı; danışan ve PT ayrı (aynı cihazda biri ötekini gizlemesin). */
+export function installSnoozeKey(audience: InstallAudience): string {
+  return `pulsecoach.install-snoozed-until.${audience}`;
+}
 
 /** Telefona yazılacak değer: gizlemenin bittiği an (ISO). */
 export function snoozeUntil(now: Date): string {

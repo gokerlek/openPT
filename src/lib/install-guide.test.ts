@@ -4,6 +4,7 @@ import {
   chromeIntentUrl,
   INSTALL_SNOOZE_DAYS,
   installGuide,
+  installSnoozeKey,
   isSnoozed,
   safariUrl,
   snoozeUntil,
@@ -29,6 +30,11 @@ const UA = {
   iphoneWebView: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148',
   macSafari:
     'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Safari/605.1.15',
+  macChrome:
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+  macEdge:
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36 Edg/126.0.2592.68',
+  macFirefox: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 14.5; rv:127.0) Gecko/20100101 Firefox/127.0',
   androidChrome:
     'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36',
   androidWebView:
@@ -67,8 +73,14 @@ describe('yükleme yardımcısı: hangi anlatım', () => {
     assert.equal(installGuide(env(UA.ipadDesktop, { maxTouchPoints: 5 })), 'ios-safari');
   });
 
-  test('dokunmatik olmayan Mac Safari iPad sayılmaz', () => {
-    assert.equal(installGuide(env(UA.macSafari, { maxTouchPoints: 0 })), 'menu');
+  test("Mac Safari (dokunmatik değil, iPad sayılmaz): Dosya → Dock'a Ekle", () => {
+    assert.equal(installGuide(env(UA.macSafari, { maxTouchPoints: 0 })), 'mac-safari');
+    assert.equal(installGuide(env(UA.macSafari, { maxTouchPoints: 1 })), 'mac-safari');
+  });
+
+  test('Mac’te Safari dışı tarayıcılar Safari sayılmaz: pencere varsa düğme, yoksa menü', () => {
+    assert.equal(installGuide(env(UA.macChrome, { canPrompt: true })), 'prompt');
+    for (const ua of [UA.macChrome, UA.macEdge, UA.macFirefox]) assert.equal(installGuide(env(ua)), 'menu', ua);
   });
 
   test("iPhone'da Safari dışı tarayıcı ve uygulama içi tarayıcı: Safari'de aç", () => {
@@ -94,6 +106,11 @@ describe('yükleme yardımcısı: hangi anlatım', () => {
 
 describe('"Şimdi değil": 14 gün gizli (o cihazda)', () => {
   const now = new Date('2026-11-05T10:00:00.000Z');
+
+  test('danışan ve PT ayrı anahtar: birinin "Şimdi değil"i ötekini gizlemez', () => {
+    assert.equal(installSnoozeKey('client'), 'pulsecoach.install-snoozed-until.client');
+    assert.equal(installSnoozeKey('pt'), 'pulsecoach.install-snoozed-until.pt');
+  });
 
   test('gizleme süresi 14 gün sonrası', () => {
     assert.equal(INSTALL_SNOOZE_DAYS, 14);
