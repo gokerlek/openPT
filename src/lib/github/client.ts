@@ -4,7 +4,7 @@ import { CLIENT_REPO_PREFIX, serverEnv } from '../env';
 import { installationProblems, installationSettingsUrl } from '../installation/github-app';
 import { CLIENT_ID_PATTERN } from '../schemas/client';
 import type { GithubAccess } from './access';
-import { installationAuthStrategy, installationInfo } from './app-auth';
+import { InstallationAccessError, installationAuthStrategy, installationInfo } from './app-auth';
 import { GithubError, rateLimitOf } from './errors';
 
 /** Hata tipi saf modülde (`errors.ts`): testlerdeki çekirdekler de aynı sınıfı kullanır. */
@@ -124,6 +124,8 @@ export function appRepo(): string {
  * telefona ne kadar bekleyeceğini söyleyebilsin. İzin 403'ü 403 kalır.
  */
 export function toGithubError(error: unknown, context: string): GithubError {
+  // GitHub uygulamasının kurulumuna erişilemiyor: mesajı zaten Türkçe ve ne yapılacağını söylüyor.
+  if (error instanceof InstallationAccessError) return error;
   const status = typeof error === 'object' && error && 'status' in error ? Number(error.status) : 500;
   const response = typeof error === 'object' && error && 'response' in error ? (error.response as { headers?: Record<string, unknown> }) : undefined;
   const message = error instanceof Error ? error.message : '';

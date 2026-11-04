@@ -29,9 +29,33 @@ function appAccess(): AppAccess {
 
 const api = () => githubAppApi(appJwt);
 
-/** GitHub uygulaması hatasını veri katmanının tek hata tipine çevirir (mesaj Türkçe, sırsız). */
+/**
+ * Kuruluma erişilemiyor (uygulama kaldırılmış, kurulum kimliği eskimiş, anahtar yanlış). Durum 503: veri
+ * katmanı 404'ü "dosya yok" sayar, 401'i giriş anahtarına bağlar; kurulum sorunu ikisine de karışmamalı.
+ * `toGithubError` bunu olduğu gibi geçirir (Türkçe, sırsız mesaj kaybolmasın). Kişisel anahtarda oluşmaz.
+ */
+export class InstallationAccessError extends GithubError {
+  constructor(message: string) {
+    super(message, 503);
+    this.name = 'InstallationAccessError';
+  }
+}
+
+/** GitHub uygulaması hatasını veri katmanının hata tipine çevirir (mesaj Türkçe, sırsız). */
 function asGithubError(error: unknown): unknown {
-  return error instanceof GithubAppError ? new GithubError(error.message, error.status === 404 ? 503 : error.status) : error;
+  if (!(error instanceof GithubAppError)) return error;
+  return error.status === 404 || error.status === 401 || error.status === 400 ? new InstallationAccessError(error.message) : new GithubError(error.message, error.status);
+}
+
+/**
+ * Kurulum anahtarı alınamadı (`POST /app/installations/{id}/access_tokens`). 404/401 kurulum ya da uygulama
+ * kimliği sorunudur: istenen dosyanın 404'ü gibi görünmesin. Diğer hatalar (ağ, sınır) olduğu gibi kalır.
+ */
+function tokenError(error: unknown): unknown {
+  const status = typeof error === 'object' && error && 'status' in error ? Number(error.status) : 0;
+  if (status === 404) return new InstallationAccessError('GitHub uygulamasının kurulumuna erişilemiyor (kaldırılmış ya da kurulum kimliği eski olabilir). Uygulamayı GitHub’da yeniden kur; GITHUB_APP_INSTALLATION_ID’yi kontrol et.');
+  if (status === 401) return new InstallationAccessError('GitHub uygulamasının kimliği doğrulanamadı. GITHUB_APP_ID ve GITHUB_APP_PRIVATE_KEY değerlerini kontrol et.');
+  return error;
 }
 
 let installationIdPromise: Promise<number> | null = null;
@@ -44,7 +68,7 @@ function installationId(access: AppAccess): Promise<number> {
       throw asGithubError(error);
     });
     if (!found) {
-      throw new GithubError(`GitHub uygulaması ${owner} hesabına kurulu değil. GitHub → Settings → Applications ekranından uygulamayı kur ya da GITHUB_APP_INSTALLATION_ID ekle.`, 503);
+      throw new InstallationAccessError(`GitHub uygulaması ${owner} hesabına kurulu değil. GitHub → Settings → Applications ekranından uygulamayı kur ya da GITHUB_APP_INSTALLATION_ID ekle.`);
     }
     return found.id;
   })().catch((error) => {
@@ -66,16 +90,28 @@ function installationAuth(access: AppAccess): Promise<AppAuth> {
   return installationAuthPromise;
 }
 
+/** Kurulum anahtarı (`@octokit/auth-app` önbellekte tutar, bitmeden yeniler); alınamazsa `tokenError`. */
+async function installationToken(app: AppAuth) {
+  return app({ type: 'installation' }).catch((error: unknown) => {
+    throw tokenError(error);
+  });
+}
+
 /**
  * Octokit için kimlik stratejisi: her istek kurulum anahtarıyla gider (`@octokit/auth-app`'in kancası:
  * anahtar alma, önbellek, yeni anahtarın 401'inde yeniden deneme). Kurulum kimliği ilk istekte çözülür,
- * böylece `gh()` eşzamanlı kalır.
+ * böylece `gh()` eşzamanlı kalır. Anahtar kancadan önce alınır (kanca önbellekten okur): alınamazsa hata
+ * isteğin kendi 404'ü sanılmasın.
  */
 export function installationAuthStrategy() {
   const access = appAccess();
-  const auth = async () => (await installationAuth(access))({ type: 'installation' });
+  const auth = async () => installationToken(await installationAuth(access));
   return Object.assign(auth, {
-    hook: async (...args: Parameters<AppAuth['hook']>) => (await installationAuth(access)).hook(...args),
+    hook: async (...args: Parameters<AppAuth['hook']>) => {
+      const app = await installationAuth(access);
+      await installationToken(app);
+      return app.hook(...args);
+    },
   });
 }
 
@@ -83,7 +119,7 @@ export function installationAuthStrategy() {
 export async function githubAccessToken(): Promise<string> {
   const access = serverEnv().githubAccess;
   if (access.mode === 'token') return access.token;
-  return (await (await installationAuth(access))({ type: 'installation' })).token;
+  return (await installationToken(await installationAuth(access))).token;
 }
 
 let infoCache: { at: number; value: Promise<InstallationInfo> } | null = null;
