@@ -3,12 +3,18 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { PulseLine } from '@/components/pulse-line';
 import { Card, CardContent } from '@/components/ui/card';
+import { clientManifestHref } from '@/lib/client-manifest';
 import { readAppConfig } from '@/lib/config';
 import { CLIENT_ID_PATTERN } from '@/lib/schemas/client';
 import { readClientSession } from '@/lib/session';
 import { ClientLoginForm } from './login-form';
+import { signedInRedirect } from './login-screen';
 
-export const metadata: Metadata = { title: 'Giriş' };
+/** Manifest adresteki kimlikle (`lib/client-manifest.ts`): buradan eklenen uygulama da danışanı tanır. */
+export async function generateMetadata({ searchParams }: { searchParams: Promise<{ c?: string }> }): Promise<Metadata> {
+  const { c } = await searchParams;
+  return { title: 'Giriş', manifest: clientManifestHref(c) };
+}
 
 /**
  * Danışanın şifreyle girişi (SPEC §5). İlk giriş kare kodla (`/join`), sonrakiler burada. Kimlik
@@ -22,8 +28,10 @@ export default async function ClientLoginPage({
 }) {
   const { c, cikis, sifre } = await searchParams;
   const loggedOut = cikis === '1';
-  // Açık oturum doğrudan programa; geçersizse /me onu nedeniyle /join'e gönderir (döngü yok).
-  if (!loggedOut && (await readClientSession())) redirect('/me');
+  // Açık oturum doğrudan programa (ana ekrandaki uygulama da buradan açılır); geçersizse /me onu nedeniyle
+  // /join'e gönderir (döngü yok).
+  const target = signedInRedirect({ signedIn: !loggedOut && (await readClientSession()) !== null, loggedOut });
+  if (target) redirect(target);
 
   const config = await readAppConfig();
   const clientId = c && CLIENT_ID_PATTERN.test(c) ? c : null;

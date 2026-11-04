@@ -1,5 +1,5 @@
 /**
- * Marka simgesinin (`/api/brand/app-icon`) ölçüleri; iki manifest (danışan `app/manifest.ts`, panel
+ * Marka simgesinin (`/api/brand/app-icon`) ölçüleri; iki manifest (danışan `lib/client-manifest.ts`, panel
  * `app/panel.webmanifest/route.ts`) ve iPhone ana ekran simgesi (`apple-touch-icon`, kök düzen) aynı simgeyi
  * kullanır.
  *
