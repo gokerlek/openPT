@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { readPtSession } from '@/lib/session';
-import { appRepo, gh, GithubError, owner } from '@/lib/github/client';
+import { appRepo, githubConnection, GithubError, owner } from '@/lib/github/client';
 import { checkAppRepo, listClientIds } from '@/lib/github/repos';
 
 /**
@@ -8,6 +8,10 @@ import { checkAppRepo, listClientIds } from '@/lib/github/repos';
  * Kurulum sihirbazı bununla açılır; aynı zamanda "bir şey mi bozuldu" kontrolüdür.
  * Yalnız okuma yapar. Repo'nun görünürlüğü kurulum tamamlanmış olsa da denetlenir: açık ya da
  * fork ise `uygulamaReposu.sorun` açıklamayı taşır (SPEC §9.8).
+ *
+ * GitHub uygulaması kurulumunda hesap kurulumun hesabıdır (kurulum anahtarı `GET /user`'ı çağıramaz);
+ * kurulumun sorunları ("All repositories" değil, izin eksik, askıda) `githubUyarilari` ile ve GitHub'daki
+ * kurulum ayarının adresiyle döner. Kişisel anahtarda bu alanlar boş.
  */
 export async function GET() {
   const session = await readPtSession();
@@ -16,7 +20,7 @@ export async function GET() {
   }
 
   try {
-    const user = await gh().rest.users.getAuthenticated();
+    const connection = await githubConnection();
     const repo = appRepo();
 
     let appRepoExists = true;
@@ -31,8 +35,11 @@ export async function GET() {
     const clientIds = appRepoExists ? await listClientIds() : [];
 
     return NextResponse.json({
-      githubKullanicisi: user.data.login,
-      sahibiyleeslesiyor: user.data.login.toLowerCase() === owner().toLowerCase(),
+      githubKullanicisi: connection.login,
+      sahibiyleeslesiyor: connection.login.toLowerCase() === owner().toLowerCase(),
+      githubBaglantisi: connection.mode === 'app' ? 'uygulama' : 'anahtar',
+      githubUyarilari: connection.problems,
+      ...(connection.settingsUrl ? { githubAyarlari: connection.settingsUrl } : {}),
       uygulamaReposu: { ad: repo, var: appRepoExists, ...(problem ? { sorun: problem } : {}) },
       danisanSayisi: clientIds.length,
     });

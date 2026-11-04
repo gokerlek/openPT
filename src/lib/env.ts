@@ -1,11 +1,12 @@
 import 'server-only';
+import { githubAccessFrom, type GithubAccess } from './github/access';
 
 /**
  * Sunucu ortam değişkenleri — TEK okuma noktası.
  *
  * `server-only` bilerek en üstte: bu modül bir client bileşeninden import edilirse
- * derleme hatası verir, yani GITHUB_TOKEN yanlışlıkla tarayıcı paketine giremez.
- * Hiçbir değişken NEXT_PUBLIC_ ile başlamaz.
+ * derleme hatası verir, yani GITHUB_TOKEN ya da GitHub uygulamasının özel anahtarı yanlışlıkla
+ * tarayıcı paketine giremez. Hiçbir değişken NEXT_PUBLIC_ ile başlamaz.
  */
 
 class EnvError extends Error {}
@@ -32,13 +33,20 @@ export type ServerEnv = {
   owner: string;
   /** Uygulama repo'sunun adı (kişisel veri içermez). */
   appRepo: string;
-  /** Repo oluşturma/silme yetkili token. Yalnız sunucuda; asla log'lanmaz. */
-  githubToken: string;
+  /**
+   * GitHub'a hangi kimlikle gidileceği (`github/access.ts`, seçim tek yerde): GitHub uygulaması
+   * (`GITHUB_APP_ID` + `GITHUB_APP_PRIVATE_KEY`) ya da kişisel anahtar (`GITHUB_TOKEN`, eski kurulumlar).
+   * Yalnız sunucuda; asla log'lanmaz.
+   */
+  githubAccess: GithubAccess;
   /** Yalnız yedek e-posta kodu yolu için; GitHub girişinde kullanılmaz. */
   ptEmail: string;
   /** Oturum çerezlerini imzalayan sır. */
   authSecret: string;
-  /** GitHub ile giriş (PT'nin tek giriş yöntemi). */
+  /**
+   * GitHub ile giriş (PT'nin asıl giriş yöntemi). Uygulama modunda bunlar GitHub uygulamasının kendi
+   * giriş bilgileridir; kullanıcı anahtarının yenilenmesi de bunlarla yapılır.
+   */
   github?: { clientId: string; clientSecret: string };
   /** Yalnız yedek e-posta kodu yolu için; yoksa o yol kapalıdır. */
   resendApiKey?: string;
@@ -72,7 +80,7 @@ export function serverEnv(): ServerEnv {
   cached = {
     owner: required('GITHUB_OWNER'),
     appRepo: required('APP_REPO'),
-    githubToken: required('GITHUB_TOKEN'),
+    githubAccess: githubAccessFrom(process.env),
     ptEmail: (optional('PT_EMAIL') ?? '').trim().toLowerCase(),
     authSecret,
     ...(githubClientId && githubClientSecret

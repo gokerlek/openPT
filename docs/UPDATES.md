@@ -5,10 +5,12 @@ PT panelinde Ayarlar → Uygulama sürümü açılır. Danışanlar bu sayfaya v
 ## Otomatik yol
 
 1. GitHub Actions açık olmalı. Vercel Git bağlantısının Production Branch'i kod reposunun default branch'i olmalı. `AXON_CODE_REPO=hesabın/kod-repon` tanımla; sihirbaz bunu oluşturduğu .env çıktısına ekler. Veri repo'sunu bu alana yazma. Geliştiricinin `gokerlek/axon-fit` reposu güncelleme hedefi olamaz.
-2. GitHub tokenının kendi kod reposuna erişmesi ve Actions workflow dispatch yetkisi olması gerekir. PT'nin kendi veri tokenı kullanılır; ayrı geliştirici kişisel tokenı veya servis gerekmez.
+2. Uygulamanın GitHub erişimi kendi kod reposuna da yetmeli ve Actions workflow dispatch yapabilmeli. Erişim PT'nin kendisinindir; ayrı geliştirici anahtarı veya servis gerekmez:
+   - **GitHub uygulaması** (yeni kurulumlar): kurulum anahtarı kullanılır. Kurulum "All repositories" ile yapıldıysa kod reposunu da kapsar; Contents ve Actions yazma izinleri manifest'te vardır.
+   - **Kişisel anahtar** (eski kurulumlar): Vercel'deki `GITHUB_TOKEN` kullanılır.
 3. Güncellemeleri kontrol et. Kararlı release'in `axon-release.json` dosyası tam sürümü içermeli, `automaticUpdate:true` ve `dataMigration:false` olmalı. Veri dönüşümü gerektiren sürüm otomatik açılmaz.
 4. Kod değişikliklerinin üzerine yazılmasını onayla → Yeni sürümü hazırla. Actions sadece `axon-update-<run-id>` dalını hazırlar. Varsayılan üretim dalına dokunmaz.
-5. Durumunu tekrar kontrol et. Başarılı hazırlıkta Güncellemeyi yayınla butonu gelir. Sunucu önce `axon-backup-<run-id>` etiketiyle eski kodu saklar, ardından PT'nin kendi GitHub tokenıyla üretim dalını normal fast-forward olarak ilerletir. Böylece Vercel normal Git push alır. Kod bu sırada değişmişse işlem durur; force push yapılmaz.
+5. Durumunu tekrar kontrol et. Başarılı hazırlıkta Güncellemeyi yayınla butonu gelir. Sunucu önce `axon-backup-<run-id>` etiketiyle eski kodu saklar, ardından PT'nin kendi GitHub erişimiyle (GitHub uygulamasının kurulum anahtarı ya da eski kurulumlarda `GITHUB_TOKEN`) üretim dalını normal fast-forward olarak ilerletir. Böylece Vercel normal Git push alır. Kod bu sırada değişmişse işlem durur; force push yapılmaz.
 6. Vercel yayınının sonucunu kontrol et. Sürüm numarası yeni uygulama yayını hazır olduğunda değişir. "Kod aktarıldı" bildirimi deployment başarısı anlamına gelmez. Dal koruması, Vercel erişimi/planı, kota veya derleme hatası yayını engelleyebilir.
 
 Danışan/veri repoları ve ortam değişkenleri güncelleme tarafından değiştirilmez. Repo'ya yanlışlıkla veri veya `.env` koyduysan otomatik güncelleme kullanma. Workflow dosyaları eski sürümden korunur; bunların güncellenmesi ayrı manuel işlemdir. İhtiyaç kalmayan `axon-update-*` dallarını GitHub'dan silebilirsin; bu dallar Vercel'de Preview yayını oluşturabilir.
@@ -19,9 +21,14 @@ Danışan/veri repoları ve ortam değişkenleri güncelleme tarafından değiş
 
 Workflow hiç yoksa kod reponun varsayılan dalında `.github/workflows/axon-update.yml` dosyasını kontrol et. Dosya kopyanda eksikse [ana repodaki dosyanın](https://github.com/gokerlek/axon-fit/blob/main/.github/workflows/axon-update.yml) içeriğini aynı yola ekle. GitHub'ın web editöründen **Add file → Create new file** ile ekleyebilirsin. Bu tek seferlik onarımdan sonra uygulamada yeniden sürüm kontrolü yapıp hazırlığı başlat.
 
-Güncel Vercel kurulum sihirbazı GitHub hesabını bağladığında bu dosya eksikse kendisi oluşturur; hem otomatik env aktarımı hem manuel dışa aktarma bu hazırlığı kullanır. İlk kurulum anahtarındaki `workflow` izni bunun içindir; dosya zaten varsa üzerine yazılmaz. Kurulu eski kopyalar için yukarıdaki tek seferlik manuel onarım geçerlidir.
+Güncel kurulum (sihirbazın "GitHub'a bağla" adımı ve `kur` komutu) bu dosya eksikse kendisi oluşturur; hem otomatik env aktarımı hem manuel dışa aktarma bu hazırlığı kullanır. GitHub uygulamasının Workflows yazma izni bunun içindir (eski kurulumlarda anahtarın `workflow` izni); dosya zaten varsa üzerine yazılmaz. Kurulu eski kopyalar için yukarıdaki tek seferlik manuel onarım geçerlidir.
 
-Dosya ve etkin workflow mevcutsa Vercel'deki `GITHUB_TOKEN` anahtarının **kod reposuna** erişimini kontrol et. Yalnız veri reposuna izin veren bir anahtar güncelleme yapamaz. Classic token için `repo`, fine-grained token için ilgili kod reposunda Contents okuma/yazma ve Actions okuma/yazma gerekir. Workflow dosyalarını API veya Git ile değiştirmek ayrıca workflow izni gerektirebilir; sırf workflow çalıştırmak için bu ek izin gerekmez.
+Dosya ve etkin workflow mevcutsa GitHub erişiminin **kod reposuna** yettiğini kontrol et. Yalnız veri reposuna izin veren bir erişim güncelleme yapamaz.
+
+- **GitHub uygulaması:** GitHub → Settings → Applications → uygulaman → Configure ekranında **All repositories** seçili olmalı (seçili repolarla kurulduysa kod reposu listede olmalı) ve izin değişikliği istendiyse onaylanmış olmalı. Ayarlar → Sürüm kurulumun eksiğini ve bu ekranın bağlantısını gösterir.
+- **Kişisel anahtar:** Vercel'deki `GITHUB_TOKEN` için classic token'da `repo`, fine-grained token'da ilgili kod reposunda Contents okuma/yazma ve Actions okuma/yazma gerekir.
+
+Workflow dosyalarını API veya Git ile değiştirmek ayrıca workflow izni gerektirebilir; sırf workflow çalıştırmak için bu ek izin gerekmez.
 
 Sürüm kontrolü artık yeni sürümü göstermek ile otomatik güncellemenin hazır olup olmadığını ayrı raporlar. Eksik workflow veya repo erişiminde otomatik işlem açılmaz; sürüm bilgisi kaybolmaz.
 

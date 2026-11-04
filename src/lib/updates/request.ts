@@ -4,10 +4,10 @@ function failure(path:string,status:number) {
     if(path.includes('/actions/workflows/'))return `${repo}: axon-update.yml workflow’una erişilemedi (404). Dosyanın varsayılan dalda bulunduğunu ve Actions’ın açık olduğunu kontrol et.`;
     const branch=path.match(/\/git\/ref\/heads\/(.+)$/)?.[1];
     if(branch)return `${decodeURIComponent(branch)} dalına erişilemedi (404): ${repo}. Kod reposunun varsayılan dalını ve AXON_CODE_BRANCH ayarını kontrol et.`;
-    return `${repo} reposuna erişilemedi (404). AXON_CODE_REPO doğruysa Vercel’deki GITHUB_TOKEN anahtarının bu kod reposuna da erişebildiğini kontrol et. Veri reposuna erişim tek başına yeterli değil.`;
+    return `${repo} reposuna erişilemedi (404). AXON_CODE_REPO doğruysa Vercel’deki GITHUB_TOKEN anahtarının (GitHub uygulamasıyla kurulduysa uygulama kurulumunun) bu kod reposuna da erişebildiğini kontrol et. Veri reposuna erişim tek başına yeterli değil.`;
   }
-  if(status===401)return 'GitHub anahtarı doğrulanamadı (401). Vercel’deki GITHUB_TOKEN anahtarının geçerliliğini kontrol et.';
-  if(status===403)return `${repo}: GitHub işlemi engellendi (403). Anahtar izinlerini, Actions ayarlarını ve GitHub API kullanım sınırını kontrol et.`;
+  if(status===401)return 'GitHub anahtarı doğrulanamadı (401). Vercel’deki GITHUB_TOKEN anahtarının (ya da GitHub uygulaması ayarlarının) geçerliliğini kontrol et.';
+  if(status===403)return `${repo}: GitHub işlemi engellendi (403). Anahtar ya da GitHub uygulaması izinlerini, Actions ayarlarını ve GitHub API kullanım sınırını kontrol et.`;
   return `${repo}: GitHub işlemi tamamlanamadı (${status}).`;
 }
 

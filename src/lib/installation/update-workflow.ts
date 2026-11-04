@@ -5,7 +5,7 @@ export async function ensureUpdateWorkflow(token:string,repo:string,branch:strin
   const headers={Authorization:`Bearer ${token}`,Accept:'application/vnd.github+json','X-GitHub-Api-Version':'2022-11-28','Content-Type':'application/json'};
   const request=(path:string,init:RequestInit={})=>fetcher(`https://api.github.com${path}`,{...init,headers,cache:'no-store',signal:AbortSignal.timeout(15000)});
   const repository=await request(`/repos/${repo}`);
-  if(!repository.ok)throw new WorkflowSetupError(`Güncelleme dosyası için ${repo} kod reposuna erişilemiyor (${repository.status}). GitHub anahtarının kod reposuna erişimini kontrol et.`);
+  if(!repository.ok)throw new WorkflowSetupError(`Güncelleme dosyası için ${repo} kod reposuna erişilemiyor (${repository.status}). GitHub anahtarının ya da uygulamasının kod reposuna erişimini kontrol et.`);
   const metadata=await repository.json() as {full_name?:string};
   if(metadata.full_name?.toLowerCase()!==repo.toLowerCase())throw new WorkflowSetupError('GitHub kod reposu kurulumla eşleşmiyor.');
   const path=`/repos/${repo}/contents/.github/workflows/axon-update.yml`;
@@ -18,7 +18,7 @@ export async function ensureUpdateWorkflow(token:string,repo:string,branch:strin
     return true;
   }
   if(await exists())return;
-  if(!scopes.includes('workflow'))throw new WorkflowSetupError('Güncelleme dosyasını otomatik oluşturmak için GitHub anahtarında workflow izni gerekiyor. GitHub anahtarını repo, delete_repo ve workflow seçenekleriyle oluşturup kurulumu tekrar dene.');
+  if(!scopes.includes('workflow'))throw new WorkflowSetupError('Güncelleme dosyasını otomatik oluşturmak için workflow izni gerekiyor (GitHub uygulamasında Workflows yazma izni). İzni onaylayıp kurulumu tekrar dene.');
   const created=await request(path,{method:'PUT',body:JSON.stringify({message:'Set up Axon Fit automatic updates',branch,content:Buffer.from(template.content).toString('base64')})});
   // No SHA is sent: GitHub refuses to replace a file created concurrently.
   if([409,422].includes(created.status)&&await exists())return;

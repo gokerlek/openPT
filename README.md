@@ -6,9 +6,29 @@ Antrenör programı hazırlar ve danışanını davet eder. Danışan telefonund
 
 > **Bir kurulum = bir antrenör.** Bu sürüm, herkesin aynı sitede GitHub ile kaydolup ayrı antrenör hesabı açtığı bir SaaS değildir. Yönetici girişi yalnız `GITHUB_OWNER` kullanıcısına açıktır. Başka bir antrenör kendi GitHub hesabı, Vercel projesi ve veri repolarıyla ayrı kurulum yapar. Danışanların GitHub hesabı gerekmez.
 
+## Kurulum
+
+İki yol var; ikisi de aynı sonucu verir: kendi Vercel projen, kendi GitHub hesabında özel repolar ve o hesapta sana ait küçük bir **GitHub uygulaması** (GitHub ile giriş ve veri erişimi bunun üzerinden). Anahtar kopyalaman, OAuth App açman gerekmez. **Ortak kurulum servisi, Vercel entegrasyonu, geliştiricinin anahtarı veya DB gerekmez.**
+
+### Tek komut
+
+macOS ya da Linux'ta, Node.js 20+ ile terminale yapıştır:
+
+```sh
+node --input-type=module -e "$(curl -fsSL https://raw.githubusercontent.com/gokerlek/axon-fit/main/kur/kur.mjs)"
+```
+
+Komut her adımda ne yaptığını Türkçe söyler: Vercel'e giriş (tarayıcıda onay), uygulama adı, GitHub'da **Create GitHub App** ve **Install** (tarayıcıda iki düğme), kod ve veri repolarının açılması, Vercel ayarları ve ilk yayın. Sonunda uygulamanın adresini yazar ve açar; **GitHub ile giriş yap**.
+
+### Tarayıcıdan (Deploy düğmesi)
+
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fgokerlek%2Faxon-fit)
 
-Env olmadan ilk yayın `/install` sihirbazını açar. Sihirbaz bu kopyanın içinde çalışır: kendi GitHub tokenını ve OAuth App bilgilerini gir, callback adresini al, rastgele oturum anahtarıyla `.env` ayarlarını hazırla. Son adımda kendi geçici Vercel tokenınla ayarları otomatik Production ortamına yazıp yeni yayın başlat; bu token saklanmaz. İstersen .env çıktısını manuel aktarabilirsin. **Ortak kurulum servisi, Vercel entegrasyonu, geliştiricinin anahtarı veya DB gerekmez.** [Adım adım bağımsız kurulum](docs/INSTALLER.md).
+Env olmadan ilk yayın `/install` sihirbazını açar; sihirbaz bu kopyanın içinde çalışır. **GitHub'a bağla** adımı GitHub'da sana ait uygulamayı oluşturur: GitHub'da **Create GitHub App**, ardından **All repositories** seçiliyken **Install** düğmesine basarsın, GitHub seni sihirbaza döndürür ve kurulum doğrulanır. Gemini anahtarı isteğe bağlıdır. Son adımda kendi geçici Vercel tokenınla ayarları otomatik Production ortamına yazıp yeni yayın başlat; bu token saklanmaz. İstersen .env çıktısını elle aktarabilirsin. [Adım adım bağımsız kurulum](docs/INSTALLER.md).
+
+Eski kurulumlar (kişisel anahtar `GITHUB_TOKEN` ve OAuth App) olduğu gibi çalışmaya devam eder; geçmek zorunda değilsin.
+
+### Kurulumdan sonra
 
 Gemini anahtarını kurulumda atladıysan sonradan **Ayarlar → Yapay zekâ ve Gemini anahtarı** ekranından ekleyebilirsin. Panelde girilen anahtar kendi özel veri reposunda şifrelenerek saklanır; Vercel tokenı veya yeniden deployment gerekmez.
 
@@ -39,19 +59,28 @@ Next.js uygulaması (Vercel)
 axon-fit                       → uygulamanın kaynak kodu (bu repo)
 ```
 
-`GITHUB_TOKEN` uygulama çalışırken yalnız sunucuda kullanılır. Tarayıcı GitHub veri repolarına doğrudan bağlanmaz. PT kendi veri tokenını Vercel Production ortamına Secret olarak ekler; GitHub OAuth girişte yalnız kimliği doğrular. Kurulum sihirbazındaki sırlar açık sekmede hazırlanır; otomatik aktarımda yalnız kendi uygulamanın sunucusundan kendi Vercel projenine gönderilir. Manuel .env çıktısı sunucuya gönderilmez. Danışanlar uygulamanın davet akışıyla erişir.
+GitHub erişimi yalnız sunucuda kullanılır; tarayıcı GitHub veri repolarına doğrudan bağlanmaz. İki mod var ve seçim env'den kendiliğinden yapılır:
+
+- **GitHub uygulaması** (yeni kurulumlar; `GITHUB_APP_ID` + `GITHUB_APP_PRIVATE_KEY`): okuma ve yazma uygulamanın kurulum anahtarıyla yapılır (bir saatlik, kendiliğinden yenilenir). Danışan reposu açma/silme PT'nin GitHub girişinden gelen kullanıcı anahtarıyla yapılır; bu anahtar şifreli, httpOnly bir çerezde durur ve çıkışta silinir. E-posta koduyla girmiş PT repo açamaz/silemez: "Bu işlem için GitHub ile yeniden giriş yap." Uygulama **All repositories** erişimiyle kurulmalı; seçili repolarla kurulduysa Ayarlar → Sürüm açık uyarı ve GitHub ayar bağlantısı gösterir.
+- **Kişisel anahtar** (eski kurulumlar; `GITHUB_TOKEN`): davranış aynı; GitHub OAuth girişte yalnız kimliği doğrular, giriş anahtarı saklanmaz.
+
+Kurulum sihirbazındaki sırlar açık sekmede hazırlanır; otomatik aktarımda yalnız kendi uygulamanın sunucusundan kendi Vercel projenine gönderilir. Manuel .env çıktısı sunucuya gönderilmez. Danışanlar uygulamanın davet akışıyla erişir.
 
 **`APP_REPO` kod reposundan farklı ve private olmalıdır.** Örneğin kod `axon-fit`, veri `axon-fit-data`. Veri reposunu önceden oluşturman gerekmez; ilk kurulum kaydında uygulama oluşturur. Var olan repo kullanılıyorsa private olmalı ve fork olmamalıdır. Danışan repoları da uygulama tarafından oluşturulur.
+
+## Elle kurulum ve yerel geliştirme
+
+Yukarıdaki iki yol bu bölümü gerektirmez. Burası env'i elle hazırlamak, yerelde çalıştırmak ya da kişisel anahtarla (PAT) kurulmuş eski bir kopyayı bakımda tutmak içindir. GitHub uygulamasıyla elle kurmak istersen uygulamayı sihirbazla (yerelde `/install`) ya da GitHub → Settings → Developer settings → GitHub Apps ekranından oluştur ve 3. adımdaki `GITHUB_APP_*` değerlerini kullan; o zaman 1. ve 2. adımlar gerekmez.
 
 ## Gerekenler
 
 - Kendi kişisel GitHub hesabın.
 - Vercel hesabı ve GitHub bağlantısı (yayına almak için).
 - Yerel geliştirme için **Node.js 22+** ve npm. Tekrarlanabilir kurulum için `npm ci` kullan.
-- GitHub erişim token'ı, GitHub OAuth App bilgileri ve oturum sırrı.
+- GitHub erişimi (GitHub uygulaması ya da kişisel anahtar), GitHub ile giriş bilgileri ve oturum sırrı.
 - İsteğe bağlı yedek e-posta girişi için Resend hesabı.
 
-## 1. GitHub veri erişim token'ını oluştur
+## 1. GitHub veri erişim token'ını oluştur (kişisel anahtar yolu)
 
 [GitHub → Settings → Developer settings → Personal access tokens → Tokens (classic)](https://github.com/settings/tokens) bölümünden bu uygulamaya özel, süreli bir **classic personal access token** oluştur.
 
@@ -69,7 +98,7 @@ GitHub girişinde oluşan OAuth token'ı bu token'ın yerine geçmez. Token sür
 
 Kaynak: [GitHub repository API ve token kapsamları](https://docs.github.com/en/rest/repos/repos).
 
-## 2. GitHub ile giriş için OAuth App oluştur
+## 2. GitHub ile giriş için OAuth App oluştur (kişisel anahtar yolu)
 
 [GitHub → Settings → Developer settings → OAuth Apps → New OAuth App](https://github.com/settings/applications/new) sayfasını aç.
 
@@ -93,9 +122,13 @@ Canlı site için ayrı bir OAuth App kullan. Homepage URL canlı siten; callbac
 | --- | --- | --- |
 | `GITHUB_OWNER` | GitHub kullanıcı adın; ör. `gokerlek`. URL veya e-posta yazma. | Evet |
 | `APP_REPO` | Ayrı özel veri reposunun adı; ör. `axon-fit-data`. | Evet |
-| `GITHUB_TOKEN` | 1. adımda oluşturduğun kişisel token. | Evet |
-| `GITHUB_CLIENT_ID` | 2. adımdaki OAuth App Client ID. | GitHub girişi için |
-| `GITHUB_CLIENT_SECRET` | Aynı OAuth App'in client secret değeri. | GitHub girişi için |
+| `GITHUB_APP_ID` | GitHub uygulamasının **App ID** değeri. | Uygulama modunda |
+| `GITHUB_APP_PRIVATE_KEY` | Uygulamanın `.pem` özel anahtarı. Satır sonları `\n` kaçışlı tek satır da olur. | Uygulama modunda |
+| `GITHUB_APP_INSTALLATION_ID` | Uygulamanın hesabındaki kurulum kimliği. Boşsa `GITHUB_OWNER` hesabındaki kurulum bulunur. | İsteğe bağlı |
+| `GITHUB_TOKEN` | 1. adımda oluşturduğun kişisel token. `GITHUB_APP_*` tanımlıysa kullanılmaz. | Kişisel anahtar modunda |
+| `GITHUB_CLIENT_ID` | GitHub uygulamasının ya da 2. adımdaki OAuth App'in Client ID değeri. | GitHub girişi için |
+| `GITHUB_CLIENT_SECRET` | Aynı uygulamanın client secret değeri. | GitHub girişi için |
+| `AXON_CODE_REPO` | Kendi kod repon, `kullanıcı/repo` biçiminde (güncellemeler için). | Güncellemeler için |
 | `AUTH_SECRET` | Aşağıdaki komutla ürettiğin rastgele sır. En az 32 bayt. | Evet |
 | `PT_EMAIL` | Yedek e-posta girişini kullanacak antrenör adresi. | E-posta girişi için |
 | `RESEND_API_KEY` | Resend hesabından alınan API anahtarı. | İsteğe bağlı |
@@ -182,7 +215,8 @@ npm start
 | GitHub girişinden sonra erişim yok | Giriş yaptığın kullanıcı `GITHUB_OWNER` ile aynı mı? |
 | OAuth callback hatası | Protokol, alan adı ve `/api/auth/github/callback` yolu doğru mu? Yerel/canlı Client ID'ler karışmış mı? |
 | Veri reposu açık/fork uyarısı | `APP_REPO` kod reposundan farklı, private ve fork olmayan bir repo olmalı. |
-| GitHub 401 / 403 / 404 | Token süresi, sahibi, izinleri ve repo adlarını kontrol et; private repoda erişim eksikliği 404 de verebilir. |
+| GitHub 401 / 403 / 404 | Token süresi, sahibi, izinleri ve repo adlarını kontrol et; private repoda erişim eksikliği 404 de verebilir. GitHub uygulamasında kurulumun **All repositories** ve izinlerin onaylı olduğunu kontrol et. |
+| "Bu işlem için GitHub ile yeniden giriş yap" | GitHub uygulaması kurulumunda danışan reposu açma/silme PT'nin GitHub girişini ister. Çıkış yapıp GitHub ile yeniden gir. |
 | Ortam değişkenini değiştirdim, etkilenmedi | Vercel'de doğru ortamı seçip yeniden deploy et. |
 | Telefonda localhost açılmıyor | Telefonun localhost'u bilgisayarın değildir; canlı HTTPS adresini kullan. |
 | Veri talepleri sınıra takılıyor | GitHub API kota/erişim durumunu kontrol et; sistem GitHub kullanılabilirliğine bağlıdır. |
