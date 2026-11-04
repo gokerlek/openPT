@@ -2,6 +2,7 @@ import 'server-only';
 import type { Octokit } from 'octokit';
 import { requireAllRepositories } from './app-auth';
 import { appRepo, clientRepoName, gh, githubMode, GithubError, isClientRepo, owner, toGithubError } from './client';
+import { repoAdminStep } from './repo-admin';
 import { reauthError, userOctokit } from './user-auth';
 import { CLIENT_REPO_PREFIX } from '../env';
 
@@ -12,19 +13,19 @@ import { CLIENT_REPO_PREFIX } from '../env';
  * geçmişi yeniden yazılmaz. Repo adında isim geçmez, yalnız kimlik: repo adları
  * silindikten sonra da denetim kayıtlarında kalabiliyor.
  *
- * Repo açma/silme kimliği moda göre (`repoAdmin`): kişisel anahtar kurulumunda aynı anahtar (bugünkü gibi);
+ * Repo açma/silme kimliği moda göre (`asRepoAdmin`): kişisel anahtar kurulumunda aynı anahtar (bugünkü gibi);
  * GitHub uygulamasında PT'nin kullanıcı anahtarı — kişisel hesapta kurulum anahtarı repo açamaz. Bu işlerin
  * hepsi zaten yalnız PT'nin yaptığı işler; anahtar yoksa "Bu işlem için GitHub ile yeniden giriş yap."
  */
 
 /**
- * Repo açacak/silecek Octokit. Uygulama modunda açmadan önce kurulumun "All repositories" olduğu
- * denetlenir: değilse yeni repo kurulum anahtarına görünmez, açılıp yazılamadan kalırdı.
+ * Repo açma/silme işi. Uygulama modunda önce kurulumun "All repositories" olduğu taze olarak doğrulanır
+ * (`repoAdminStep`: açarken yeni repo görünmez kalmasın, silerken 404 "zaten silinmiş" sanılmasın), sonra
+ * PT'nin kullanıcı anahtarı alınır. Kişisel anahtar modunda aynı anahtar, doğrulama yok.
  */
-async function repoAdmin(purpose: 'create' | 'delete'): Promise<Octokit> {
-  if (githubMode() === 'token') return gh();
-  if (purpose === 'create') await requireAllRepositories();
-  return userOctokit();
+function asRepoAdmin<T>(run: (admin: Octokit) => Promise<T>): Promise<T> {
+  const mode = githubMode();
+  return repoAdminStep(mode, requireAllRepositories, async () => run(mode === 'token' ? gh() : await userOctokit()));
 }
 
 /** Repo açma/silme hatası. Uygulama modunda 401 kullanıcı anahtarınındır (iptal, süre): yeniden giriş. */
@@ -70,44 +71,46 @@ export async function createAppRepo(): Promise<{ created: boolean }> {
   const repo = appRepo();
   if ((await checkAppRepo()).exists) return { created: false };
 
-  const admin = await repoAdmin('create');
-  try {
-    await admin.rest.repos.createForAuthenticatedUser({
-      name: repo,
-      private: true,
-      auto_init: true,
-      description: 'PulseCoach — uygulama ayarları ve antrenman kütüphanesi',
-      has_issues: false,
-      has_projects: false,
-      has_wiki: false,
-    });
-    return { created: true };
-  } catch (error) {
-    throw adminError(error, repo);
-  }
+  return asRepoAdmin(async (admin) => {
+    try {
+      await admin.rest.repos.createForAuthenticatedUser({
+        name: repo,
+        private: true,
+        auto_init: true,
+        description: 'PulseCoach — uygulama ayarları ve antrenman kütüphanesi',
+        has_issues: false,
+        has_projects: false,
+        has_wiki: false,
+      });
+      return { created: true };
+    } catch (error) {
+      throw adminError(error, repo);
+    }
+  });
 }
 
 export async function createClientRepo(clientId: string): Promise<{ repo: string }> {
   const repo = clientRepoName(clientId);
-  const admin = await repoAdmin('create');
-  try {
-    await admin.rest.repos.createForAuthenticatedUser({
-      name: repo,
-      // ÖZEL olmak zorunda: içinde danışan adı ve antrenman kayıtları var.
-      private: true,
-      auto_init: true,
-      description: 'PulseCoach danışan verisi',
-      has_issues: false,
-      has_projects: false,
-      has_wiki: false,
-    });
-    return { repo };
-  } catch (error) {
-    if (typeof error === 'object' && error && 'status' in error && error.status === 422) {
-      throw new GithubError('Bu kimlikle bir repo zaten var.', 409);
+  return asRepoAdmin(async (admin) => {
+    try {
+      await admin.rest.repos.createForAuthenticatedUser({
+        name: repo,
+        // ÖZEL olmak zorunda: içinde danışan adı ve antrenman kayıtları var.
+        private: true,
+        auto_init: true,
+        description: 'PulseCoach danışan verisi',
+        has_issues: false,
+        has_projects: false,
+        has_wiki: false,
+      });
+      return { repo };
+    } catch (error) {
+      if (typeof error === 'object' && error && 'status' in error && error.status === 422) {
+        throw new GithubError('Bu kimlikle bir repo zaten var.', 409);
+      }
+      throw adminError(error, repo);
     }
-    throw adminError(error, repo);
-  }
+  });
 }
 
 /**
@@ -121,12 +124,13 @@ export async function deleteClientRepo(clientId: string): Promise<void> {
   if (!isClientRepo(repo)) {
     throw new GithubError('Yalnız danışan repoları silinebilir.', 403);
   }
-  const admin = await repoAdmin('delete');
-  try {
-    await admin.rest.repos.delete({ owner: owner(), repo });
-  } catch (error) {
-    throw adminError(error, repo);
-  }
+  await asRepoAdmin(async (admin) => {
+    try {
+      await admin.rest.repos.delete({ owner: owner(), repo });
+    } catch (error) {
+      throw adminError(error, repo);
+    }
+  });
 }
 
 export async function clientRepoExists(clientId: string): Promise<boolean> {
