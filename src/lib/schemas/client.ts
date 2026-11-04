@@ -206,16 +206,23 @@ export type Invite = v.InferOutput<typeof inviteSchema>;
 /** Formdaki antrenman geçmişi: verilmezse kayıttaki kalır (yeni danışanda "yeni"). */
 const trainingExperienceSchema = v.optional(v.picklist(TRAINING_EXPERIENCES, 'Antrenman geçmişini seç.'));
 
-/** Formdaki nabız sınırı: metin kutusu; boş → null (otomatik), sayı değilse "Sayı olmalı.". */
+/**
+ * Formdaki nabız sınırı: metin kutusu; boş → null (otomatik). Yalnız rakamlar: `Number` "0x78", "1e2", "+120" gibi
+ * biçimleri de sayı sayardı.
+ */
 const heartRateInputSchema = v.optional(
   v.pipe(
     v.string(),
     v.trim(),
+    v.regex(/^\d*$/, 'Yalnız rakam girilmeli.'),
     v.transform((text) => (text === '' ? null : Number(text))),
     v.nullable(heartRateBpmSchema),
   ),
 );
-/** Kayıt ucunda nabız sınırı: sayı, boşaltıldıysa null; hiç yoksa (eski istemci) kayıttaki kalır. */
+/**
+ * Kayıt ucunda nabız sınırı: JSON tam sayı (metin hiç kabul edilmez), boşaltıldıysa null; hiç yoksa (eski istemci)
+ * kayıttaki kalır.
+ */
 const heartRateSaveSchema = v.optional(v.nullable(heartRateBpmSchema));
 
 const HEART_RATE_PAIR = 'İkisi birlikte girilmeli ya da ikisi de boş bırakılmalı.';
