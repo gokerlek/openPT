@@ -109,7 +109,7 @@ import { useEntryPanelClosed } from './panel-pref';
 import { ROW_DONE_ID, setEditButtonId, type FixSet, type RowEntry } from './set-row';
 import { StartCheck, type StartCheckHandle } from './start-check';
 import { SwapSheet, type SwapTarget } from './swap-sheet';
-import { useHeartAlert, useHeartRate } from './use-heart-rate';
+import { disconnectHeartRate, useHeartAlert, useHeartRate } from './use-heart-rate';
 import { useWorkoutOutbox } from './use-workout-outbox';
 import { beep, isIOS, unlockAudio, useWakeLock } from './workout-feedback';
 import { vibrate } from '@/lib/haptics';
@@ -701,6 +701,8 @@ export function WorkoutScreen({
   const leave = useCallback(
     (message: string, kind: 'success' | 'info' = 'success') => {
       release();
+      // Antrenman bitti: nabız bandı kesilir, yeniden deneme durur.
+      disconnectHeartRate();
       exitTo('/me', { canStay: false });
       if (kind === 'success') toast.success(message);
       else toast(message);
@@ -998,7 +1000,7 @@ export function WorkoutScreen({
           beep(1, 660);
           announce('10 saniye kaldı');
         } else if (event === 'hold') {
-          // Süre doldu ama nabız yüksek: sessiz uzar, ekranda "Nabzın … altına inince devam".
+          // Süre doldu ama nabız yüksek: sessiz uzar, ekranda "Nabzın 120'ye inince devam".
           announce('Nabzın yüksek; dinlenme uzuyor.');
         } else {
           beep(3);
@@ -1774,6 +1776,8 @@ export function WorkoutScreen({
         void queryClient.invalidateQueries({ queryKey: ['coach', clientId, 'highlights'] });
         queryClient.setQueriesData<WorkoutResponse>({ queryKey: WORKOUT_OVERVIEW_KEY }, (old) => (old ? afterFinish(old, saved) : old));
         release();
+        // Antrenman bitti (özete gidiliyor): nabız bandı kesilir. Başka antrenmana geçilirken bağlı kalır.
+        if (!mountedRef.current || !switchTarget.current) disconnectHeartRate();
         if (!mountedRef.current) {
           // İstek sürerken ekran kapandı (danışan başka sayfaya geçti): bulunduğu sayfa değiştirilmez, seçilen antrenman da
           // açılmaz. Antrenman bitti ve yerel kopya düştü; özet Geçmiş'teki ayrıntıdan açılır.
