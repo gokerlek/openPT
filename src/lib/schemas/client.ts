@@ -1,4 +1,5 @@
 import * as v from 'valibot';
+import { HEART_RATE_MAX, HEART_RATE_MIN } from '../heart-rate.ts';
 
 /**
  * Danışan şeması — sunucu ve istemci ortak (SPEC §3, §4).
@@ -81,6 +82,14 @@ export const TRAINING_EXPERIENCE_LABELS: Record<TrainingExperience, string> = {
 
 export const clientIdSchema = v.pipe(v.string(), v.regex(CLIENT_ID_PATTERN, 'Danışan kimliği geçersiz.'));
 
+/** Nabız sınırı (bpm): tam sayı, `HEART_RATE_MIN`–`HEART_RATE_MAX`. */
+const heartRateBpmSchema = v.pipe(
+  v.number('Sayı gir.'),
+  v.integer('Tam sayı gir.'),
+  v.minValue(HEART_RATE_MIN, `En az ${HEART_RATE_MIN}.`),
+  v.maxValue(HEART_RATE_MAX, `En fazla ${HEART_RATE_MAX}.`),
+);
+
 const timestamp = v.pipe(v.string(), v.isoTimestamp());
 
 const nameSchema = v.pipe(
@@ -142,6 +151,11 @@ export const clientSchema = v.object({
   /** PT'nin girdiği antrenman geçmişi; yoksa yeni sayılır (öneri motorunda aşama tabanı). */
   training: v.optional(v.object({ experience: v.picklist(TRAINING_EXPERIENCES) })),
   /**
+   * PT'nin girdiği nabız sınırları (bpm; Paket C): dinlenme nabız `recovery`'ye inene kadar uzar, `alert`'in üstünde
+   * danışan uyarılır. Yoksa otomatik (`resolveHeartLimits`: yaştan ya da genel 120/170).
+   */
+  heartRate: v.optional(v.object({ recovery: heartRateBpmSchema, alert: heartRateBpmSchema })),
+  /**
    * Oturum kuşağı: danışanın oturum çerezi bu sayıyı taşır. PT "erişimi kapat" deyince
    * artar ve açık bütün oturumlar bir sonraki istekte düşer.
    */
@@ -192,6 +206,21 @@ export type Invite = v.InferOutput<typeof inviteSchema>;
 /** Formdaki antrenman geçmişi: verilmezse kayıttaki kalır (yeni danışanda "yeni"). */
 const trainingExperienceSchema = v.optional(v.picklist(TRAINING_EXPERIENCES, 'Antrenman geçmişini seç.'));
 
+/** Formdaki nabız sınırı: metin kutusu; boş → null (otomatik), sayı değilse "Sayı gir.". */
+const heartRateInputSchema = v.optional(
+  v.pipe(
+    v.string(),
+    v.trim(),
+    v.transform((text) => (text === '' ? null : Number(text))),
+    v.nullable(heartRateBpmSchema),
+  ),
+);
+/** Kayıt ucunda nabız sınırı: sayı, boşaltıldıysa null; hiç yoksa (eski istemci) kayıttaki kalır. */
+const heartRateSaveSchema = v.optional(v.nullable(heartRateBpmSchema));
+
+const HEART_RATE_PAIR = 'İkisini birlikte gir ya da ikisini de boş bırak.';
+const HEART_RATE_ORDER = 'Toparlanma sınırı uyarı sınırından düşük olmalı.';
+
 /** PT'nin formu. Durum yalnız düzenlemede görünür; yeni danışan aktif başlar. */
 export const clientFormSchema = v.pipe(
   v.object({
@@ -202,6 +231,8 @@ export const clientFormSchema = v.pipe(
     healthEnabled: v.boolean(),
     healthFields: healthFieldsSchema,
     trainingExperience: trainingExperienceSchema,
+    heartRecovery: heartRateInputSchema,
+    heartAlert: heartRateInputSchema,
   }),
   v.forward(
     v.partialCheck(
@@ -210,6 +241,13 @@ export const clientFormSchema = v.pipe(
       'Modül açıksa en az bir parça seç.',
     ),
     ['healthFields'],
+  ),
+  // Nabız sınırları ikisi birlikte girilir (ya da ikisi de boş: otomatik); hata boş kalan alana düşer.
+  v.forward(v.partialCheck([['heartRecovery'], ['heartAlert']], (input) => input.heartRecovery == null || input.heartAlert != null, HEART_RATE_PAIR), ['heartAlert']),
+  v.forward(v.partialCheck([['heartRecovery'], ['heartAlert']], (input) => input.heartAlert == null || input.heartRecovery != null, HEART_RATE_PAIR), ['heartRecovery']),
+  v.forward(
+    v.partialCheck([['heartRecovery'], ['heartAlert']], (input) => input.heartRecovery == null || input.heartAlert == null || input.heartRecovery < input.heartAlert, HEART_RATE_ORDER),
+    ['heartRecovery'],
   ),
 );
 export type ClientInput = v.InferOutput<typeof clientFormSchema>;
@@ -225,6 +263,8 @@ export const clientSaveSchema = v.pipe(
     healthEnabled: v.boolean(),
     healthFields: healthFieldsSchema,
     trainingExperience: trainingExperienceSchema,
+    heartRecovery: heartRateSaveSchema,
+    heartAlert: heartRateSaveSchema,
   }),
   v.forward(
     v.partialCheck(
@@ -233,6 +273,12 @@ export const clientSaveSchema = v.pipe(
       'Modül açıksa en az bir parça seç.',
     ),
     ['healthFields'],
+  ),
+  v.forward(v.partialCheck([['heartRecovery'], ['heartAlert']], (input) => input.heartRecovery == null || input.heartAlert != null, HEART_RATE_PAIR), ['heartAlert']),
+  v.forward(v.partialCheck([['heartRecovery'], ['heartAlert']], (input) => input.heartAlert == null || input.heartRecovery != null, HEART_RATE_PAIR), ['heartRecovery']),
+  v.forward(
+    v.partialCheck([['heartRecovery'], ['heartAlert']], (input) => input.heartRecovery == null || input.heartAlert == null || input.heartRecovery < input.heartAlert, HEART_RATE_ORDER),
+    ['heartRecovery'],
   ),
 );
 
@@ -243,4 +289,17 @@ export function trainingOf(
 ): Pick<Client, 'training'> {
   const experience = input.trainingExperience ?? current?.experience;
   return experience ? { training: { experience } } : {};
+}
+
+/**
+ * Kaydın nabız sınırları: formda ikisi de sayıysa onlar; boşaltıldıysa (null) alan düşer, sınırlar otomatiğe döner;
+ * formda hiç gelmediyse (eski istemci) kayıttaki kalır.
+ */
+export function heartRateOf(
+  input: Pick<ClientInput, 'heartRecovery' | 'heartAlert'>,
+  current?: Client['heartRate'],
+): Pick<Client, 'heartRate'> {
+  const { heartRecovery: recovery, heartAlert: alert } = input;
+  if (recovery === undefined && alert === undefined) return current ? { heartRate: current } : {};
+  return typeof recovery === 'number' && typeof alert === 'number' ? { heartRate: { recovery, alert } } : {};
 }

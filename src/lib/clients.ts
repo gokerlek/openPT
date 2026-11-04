@@ -15,7 +15,7 @@ import { dropNotices } from './notices-store';
 import { commitMessage } from './program-diff';
 import type { ProgramState } from './program-plan';
 import { writeProgramFile } from './programs';
-import { trainingOf, type Client, type ClientIndexEntry, type ClientInput, type ClientStatus, type HealthField, type Invite } from './schemas/client';
+import { heartRateOf, trainingOf, type Client, type ClientIndexEntry, type ClientInput, type ClientStatus, type HealthField, type Invite } from './schemas/client';
 
 /**
  * Danışanlar (SPEC §3, §5) — GitHub'a ve Next'e bağlama. Akışlar (düzenleme, davet, erişim, onay)
@@ -189,6 +189,7 @@ export async function createClient(input: ClientInput, options: { program?: Prog
     name: input.name,
     ...(input.note ? { note: input.note } : {}),
     ...trainingOf(input),
+    ...heartRateOf(input),
     createdAt: now,
     status: 'active',
     modules: { ...(input.aiEnabled !== undefined ? { ai: { enabled: input.aiEnabled } } : {}), health: nextHealthModule(null, { enabled: input.healthEnabled, fields: input.healthFields }, now) },
@@ -213,7 +214,7 @@ export async function createClient(input: ClientInput, options: { program?: Prog
   return id;
 }
 
-/** PT'nin düzenlemesi (ad, not, durum, sağlık modülü); bkz. `clients-core.ts`. */
+/** PT'nin düzenlemesi (ad, not, durum, nabız sınırları, sağlık modülü); bkz. `clients-core.ts`. */
 export async function updateClient(id: string, input: ClientInput): Promise<void> {
   await core.updateClient(store(), id, input);
 }

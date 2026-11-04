@@ -222,6 +222,19 @@ describe('danışan listesi: durum kayıtla aynı kalır', () => {
     await updateClient(w.store, client.id, form(client, { trainingExperience: 'new' }));
     assert.deepEqual((await w.record(client.id)).training, { experience: 'new' });
   });
+
+  test('nabız sınırları kayda yazılır; boşaltılınca otomatiğe döner, formda gelmezse kayıttaki kalır (eski kayıt etkilenmez)', async () => {
+    const w = world();
+    const client = seedClient(w.gh, w.clock);
+    await updateClient(w.store, client.id, form(client, { name: 'Ayşe Demir-Kaya' }));
+    assert.equal('heartRate' in (await w.record(client.id)), false);
+    await updateClient(w.store, client.id, form(client, { heartRecovery: 115, heartAlert: 165 }));
+    assert.deepEqual((await w.record(client.id)).heartRate, { recovery: 115, alert: 165 });
+    await updateClient(w.store, client.id, form(client, { note: 'Tansiyon' }));
+    assert.deepEqual((await w.record(client.id)).heartRate, { recovery: 115, alert: 165 });
+    await updateClient(w.store, client.id, form(client, { heartRecovery: null, heartAlert: null }));
+    assert.equal('heartRate' in (await w.record(client.id)), false);
+  });
 });
 
 describe('sağlık onayı: modül kapatılıp açılınca yeniden sorulur (SPEC §4, §9.4)', () => {
