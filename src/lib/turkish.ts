@@ -1,5 +1,6 @@
 /**
- * Serbest metin adlara Türkçe ek (kendi programın adı: "Evde'ye yaz", `docs/design/kendi-program.md` §2.9) — saf.
+ * Serbest metin adlara ve sayılara Türkçe ek (kendi programın adı: "Evde'ye yaz", `docs/design/kendi-program.md` §2.9;
+ * nabız sınırı: "121'in altına") — saf.
  * Özel ad gibi kesme işaretiyle; son ünlüye göre büyük ünlü uyumu, ünlüyle biten adda kaynaştırma (y). Sayıyla
  * biten ad okunuşuna göre ("Programım 2" → "2'ye"). Ünlüsü olmayan kısaltma harf harf okunur ("PPL" → "PPL'ye").
  */
@@ -27,6 +28,9 @@ function ending(word: string): { vowel: string; open: boolean } | null {
   const last = text.at(-1);
   if (!last) return null;
   if (/\d/.test(last)) {
+    // "1000" bin, "100" ve "200" yüz diye biter (nabız sınırı: "100'ün altına").
+    if (/\d000$/.test(text)) return { vowel: 'i', open: false };
+    if (/\d00$/.test(text)) return { vowel: 'ü', open: false };
     // "10", "20" … onlar basamağı sıfırsa ("on", "yirmi"): yaklaşık olarak son rakamdan; 0'da onluk okunuşu.
     if (last === '0' && text.length > 1) {
       const tens: Record<string, { vowel: string; open: boolean }> = {
@@ -34,10 +38,10 @@ function ending(word: string): { vowel: string; open: boolean } | null {
         '2': { vowel: 'i', open: true },
         '3': { vowel: 'u', open: false },
         '4': { vowel: 'ı', open: false },
-        '5': { vowel: 'i', open: false },
+        '5': { vowel: 'i', open: true },
         '6': { vowel: 'ı', open: false },
         '7': { vowel: 'i', open: false },
-        '8': { vowel: 'e', open: true },
+        '8': { vowel: 'e', open: false },
         '9': { vowel: 'a', open: false },
       };
       return tens[text.at(-2) ?? ''] ?? DIGITS['0'] ?? null;
@@ -71,4 +75,12 @@ export function accusative(word: string): string {
   const end = ending(name);
   if (!end) return name;
   return `${name}'${end.open ? 'y' : ''}${NARROW[end.vowel] ?? 'i'}`;
+}
+
+/** Tamlayan: "Evde" → "Evde'nin", "Salon" → "Salon'un", "121" → "121'in", "126" → "126'nın", "100" → "100'ün". */
+export function genitive(word: string): string {
+  const name = word.trim();
+  const end = ending(name);
+  if (!end) return name;
+  return `${name}'${end.open ? 'n' : ''}${NARROW[end.vowel] ?? 'i'}n`;
 }
