@@ -94,16 +94,20 @@
   1. Node sürümü kontrolü.
   2. Vercel girişi: `npx --yes vercel@<sabit sürüm> login` (tarayıcıda onay), ardından Vercel CLI'nin kayıtlı anahtarı okunur.
      Bulunamazsa Vercel anahtarını yapıştırma seçeneği (yedek yol).
-  3. Uygulama adı sorulur (varsayılan `axon-fit-<4 harf>`); `<ad>.vercel.app` boş mu bakılır; Vercel projesi açılır (Next.js).
-  4. Yerelde (`127.0.0.1`, rastgele port) küçük sunucu; tarayıcı açılır, GitHub App manifest'i gönderilir. `redirect_url`,
-     `setup_url` yerel; `callback_urls` = [Production giriş dönüşü, yerel dönüş]; `request_oauth_on_install: true`.
-     PT "Create" → "Install" basar; betik bilgileri ve PT'nin kullanıcı anahtarını alır.
-  5. Kod reposu `gokerlek/axon-fit` şablonundan özel repo olarak üretilir (`POST /repos/gokerlek/axon-fit/generate`).
-     Veri reposu (`axon-fit-data`) özel olarak açılır.
-  6. Vercel projesi kod reposuna bağlanır. Vercel'in GitHub uygulaması o repoya erişemiyorsa betik kurulum bağlantısını açar ve bekler.
+  3. Uygulama adı sorulur (varsayılan `axon-fit-<4 harf>`); `<ad>.vercel.app` boş mu bakılır.
+  4. Son kararlı sürümün arşivi indirilir (`releases/latest`, yoksa varsayılan dal; `codeload` tar.gz). Arşivdeki
+     `axon-release.json` `capabilities` içinde `github-app` yoksa hiçbir şey oluşturulmadan durulur (eski sürüm bu modu bilmez).
+  5. Yerelde (`127.0.0.1`, rastgele port) küçük sunucu; tarayıcı açılır, GitHub App manifest'i gönderilir. `redirect_url`
+     yerel; `callback_urls` = [yerel dönüş, Production giriş dönüşü] (kurulumdan sonraki yetkilendirme kodu ilk adrese gelir;
+     `request_oauth_on_install: true` iken `setup_url` kullanılmaz). PT "Create" → "Install" basar; betik bilgileri ve
+     PT'nin kullanıcı anahtarını alır.
+  6. Kod reposu PT hesabında özel açılır ve arşivin içeriği Git Data API ile tek, ebeveynsiz commit olarak yüklenir
+     (şablon gerekmez; GitHub uygulamasının kullanıcı anahtarı başka hesaptaki şablona erişemeyebilir). Veri reposu
+     (`axon-fit-data`) özel olarak açılır. Vercel projesi `gitRepository` ile bu repoya bağlı açılır; Vercel'in GitHub
+     uygulaması repoya erişemiyorsa betik kurulum bağlantısını açar ve bekler.
   7. Env yazılır (B1 listesi + rastgele `AUTH_SECRET`, sırlar "sensitive"), Production yayını başlatılır, hazır olana kadar beklenir.
   8. Adres yazdırılır ve tarayıcıda açılır: "GitHub ile giriş yap".
-- Ön koşul: `gokerlek/axon-fit` GitHub'da "Template repository" olarak işaretli olmalı (kullanıcının bir kez açacağı ayar).
+- Ön koşul yok (Node 20+ dışında); kaynak reponun şablon olması gerekmez. Komut, bu dalı içeren sürüm yayımlanınca çalışır.
 
 ### B4. Belgeler
 
