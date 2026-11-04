@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {generateKeyPairSync} from 'node:crypto';
 import * as v from 'valibot';
 import {authSecret,environmentFile,environmentValues,initialWizardValues,installationCheckSchema,validateStep,WIZARD_STEPS,type WizardValues} from './wizard.ts';
-import {environmentStatus} from './readiness.ts';
+import {environmentStatus,githubSetupProblem} from './readiness.ts';
 const {privateKey:pem}=generateKeyPairSync('rsa',{modulusLength:1024,privateKeyEncoding:{type:'pkcs1',format:'pem'},publicKeyEncoding:{type:'spki',format:'pem'}});
 const input:WizardValues={owner:'coach',codeRepo:'coach-app',appRepo:'coach-data',codeBranch:'main',appId:'123456',installationId:'42',privateKey:pem,clientId:'Iv23liTestOnly',clientSecret:'test-secret',geminiKey:'',authSecret:'a'.repeat(64)};
 test('setup derives repo defaults, always uses main and starts without sample credentials',()=>{
@@ -57,9 +57,25 @@ test('auth secret encodes all 32 crypto-random bytes without truncation',()=>{
 test('readiness accepts a GitHub App or a legacy token and cannot be bypassed by old bootstrap credentials',()=>{
   const env={GITHUB_OWNER:'coach',APP_REPO:'data',AUTH_SECRET:'a'.repeat(64),GITHUB_CLIENT_ID:'id',GITHUB_CLIENT_SECRET:'secret'};
   assert.equal(environmentStatus({...env,GITHUB_TOKEN:'token'}),'ready');
-  assert.equal(environmentStatus({...env,GITHUB_APP_ID:'1',GITHUB_APP_PRIVATE_KEY:'pem'}),'ready');
+  assert.equal(environmentStatus({...env,GITHUB_APP_ID:'1',GITHUB_APP_PRIVATE_KEY:pem}),'ready');
+  assert.equal(environmentStatus({...env,GITHUB_APP_ID:'1',GITHUB_APP_PRIVATE_KEY:pem.trimEnd().replace(/\n/g,'\\n')}),'ready');
   assert.equal(environmentStatus({...env,GITHUB_APP_ID:'1'}),'missing');
   assert.equal(environmentStatus({...env,AXON_BOOTSTRAP:'old'}),'missing');
   assert.equal(environmentStatus({...env,AUTH_SECRET:'short',GITHUB_TOKEN:'token'}),'missing');
-  assert.equal(environmentStatus({GITHUB_OWNER:'coach',APP_REPO:'data',AUTH_SECRET:'a'.repeat(64),GITHUB_APP_ID:'1',GITHUB_APP_PRIVATE_KEY:'pem'}),'missing');
+  assert.equal(environmentStatus({GITHUB_OWNER:'coach',APP_REPO:'data',AUTH_SECRET:'a'.repeat(64),GITHUB_APP_ID:'1',GITHUB_APP_PRIVATE_KEY:pem}),'missing');
+});
+test('broken GitHub App settings keep the wizard open and say what is wrong without echoing the key',()=>{
+  const env={GITHUB_OWNER:'coach',APP_REPO:'data',AUTH_SECRET:'a'.repeat(64),GITHUB_CLIENT_ID:'id',GITHUB_CLIENT_SECRET:'secret'};
+  for(const broken of [{GITHUB_APP_ID:'abc',GITHUB_APP_PRIVATE_KEY:pem},{GITHUB_APP_ID:'1',GITHUB_APP_PRIVATE_KEY:'secret-key-part'},{GITHUB_APP_ID:'1',GITHUB_APP_PRIVATE_KEY:pem,GITHUB_APP_INSTALLATION_ID:'x'},{GITHUB_APP_ID:'1',GITHUB_TOKEN:'token'}]){
+    assert.equal(environmentStatus({...env,...broken}),'missing');
+    const problem=githubSetupProblem({...env,...broken});
+    assert.match(problem??'',/GITHUB_APP/);
+    assert.ok(!problem?.includes('secret-key-part'));
+  }
+  assert.match(githubSetupProblem({...env,GITHUB_APP_ID:'abc',GITHUB_APP_PRIVATE_KEY:pem})??'',/GITHUB_APP_ID/);
+  assert.match(githubSetupProblem({...env,GITHUB_APP_ID:'1',GITHUB_APP_PRIVATE_KEY:'x'})??'',/GITHUB_APP_PRIVATE_KEY.*PEM/);
+  // İlk kurulumda (hiç uygulama ayarı yok) ve sağlam ayarda söylenecek sorun yok.
+  assert.equal(githubSetupProblem(env),null);
+  assert.equal(githubSetupProblem({...env,GITHUB_TOKEN:'token'}),null);
+  assert.equal(githubSetupProblem({...env,GITHUB_APP_ID:'1',GITHUB_APP_PRIVATE_KEY:pem}),null);
 });
