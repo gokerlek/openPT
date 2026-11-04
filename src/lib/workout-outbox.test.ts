@@ -111,6 +111,14 @@ describe('kuyruk: telefondaki kayıt', () => {
     assert.deepEqual(parsed, local);
   });
 
+  test('dinlenmenin nabız beklemesi ve "nabız hâlâ yüksek" notu korunur; bozuksa atlanır, eski kayıtta yok', () => {
+    const rest = { ...startRest('st_aaaaaaaa', 90, 1_000), hold: { since: 91_000, calmSince: 95_000 }, heartHigh: true };
+    const local = { ...createLocalWorkout(docWith([]), workoutDay()), rest, restCount: 1 };
+    assert.deepEqual(parseLocalWorkout(JSON.stringify(local))?.rest, rest);
+    const broken = parseLocalWorkout(JSON.stringify({ ...local, rest: { ...rest, hold: { since: 'x' }, heartHigh: 'evet' } }));
+    assert.deepEqual(broken?.rest, startRest('st_aaaaaaaa', 90, 1_000));
+  });
+
   test('okunamayan kayıt yok sayılır: bozuk JSON, başka sürüm, bitmiş ya da şemaya uymayan belge', () => {
     const local = createLocalWorkout(docWith([]), workoutDay());
     assert.equal(parseLocalWorkout(null), null);

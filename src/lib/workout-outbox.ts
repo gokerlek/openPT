@@ -202,7 +202,15 @@ function restOf(value: unknown): RestTimer | null {
     lastAlarmAt: typeof value.lastAlarmAt === 'number' ? value.lastAlarmAt : null,
     ack: value.ack === true,
     mode: value.mode === 'mini' ? 'mini' : 'full',
+    ...holdOf(value.hold),
+    ...(value.heartHigh === true ? { heartHigh: true } : {}),
   };
+}
+
+/** Dinlenmenin nabız beklemesi (`hold`); bozuksa ya da yoksa alan yazılmaz (sayaç bugünkü gibi biter). */
+function holdOf(value: unknown): Pick<RestTimer, 'hold'> {
+  if (!isRecord(value) || typeof value.since !== 'number') return {};
+  return { hold: { since: value.since, calmSince: typeof value.calmSince === 'number' ? value.calmSince : null } };
 }
 
 function isPlan(value: unknown): value is WorkoutDay {
