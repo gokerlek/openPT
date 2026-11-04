@@ -94,7 +94,7 @@ export function InvitePanel({
                   ? 'Şifresiyle girer, yeni kare kod gerekmez. Yeni kod kullanılınca eski şifresi açmaz; açık oturumları kapanmaz. Telefonu kaybolduysa önce düzenleme sayfasından erişimi kapat.'
                   : hasPending
                     ? 'Kodun kendisi saklanmadığı için yeniden gösterilemez. Yenisini üretirsen eskisi anında geçersiz olur.'
-                    : `${clientName} kare kodu okutup şifresini belirler. Kod tek kullanımlıktır.`}
+                    : `${clientName} kare kodu okutur, şifresini belirler ve uygulamayı ana ekrana ekler. Kod tek kullanımlıktır.`}
               </EmptyDescription>
             </EmptyHeader>
             <EmptyContent>{generate}</EmptyContent>

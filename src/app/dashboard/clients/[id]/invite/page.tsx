@@ -15,8 +15,9 @@ export const metadata: Metadata = { title: 'Davet' };
 
 /**
  * Davet ekranı (SPEC §5): solda kare kod, sağda durum ve adımlar. Danışan ilk kez kare kodla
- * girer ve şifre belirler, sonra şifresiyle girer; şifresini unutursa PT yeni kare kod üretir (tek
- * sıfırlama yolu). Kod ancak "üret" denince oluşur — sayfayı açmak eski kodu geçersiz kılmaz.
+ * girer, şifre belirler ve uygulamayı ana ekrana ekler (tasarım Paket A), sonra şifresiyle girer; şifresini
+ * unutursa PT yeni kare kod üretir (tek sıfırlama yolu). "Nasıl katılır" PT'nin danışana söyleyeceği sırayı
+ * verir. Kod ancak "üret" denince oluşur — sayfayı açmak eski kodu geçersiz kılmaz.
  */
 export default async function InvitePage({ params }: { params: Promise<{ id: string }> }) {
   await requirePt();
@@ -33,7 +34,7 @@ export default async function InvitePage({ params }: { params: Promise<{ id: str
       <SectionHeader
         back={{ href: `/dashboard/clients/${id}`, label: 'Genel' }}
         title="Davet"
-        description={`${client.name} ilk kez kare kodla girer ve şifresini belirler; sonra şifresiyle girer. GitHub hesabı gerekmez.`}
+        description={`${client.name} telefon kamerasıyla kare kodu okutur, şifresini belirler ve uygulamayı ana ekrana ekler; sonra ana ekrandaki simgeden şifresiyle girer. GitHub hesabı gerekmez.`}
       />
 
       <div className="grid gap-6 lg:grid-cols-2">
@@ -68,19 +69,26 @@ export default async function InvitePage({ params }: { params: Promise<{ id: str
           <Card>
             <CardHeader>
               <CardTitle>Nasıl katılır</CardTitle>
+              <CardDescription>
+                Danışana söylenecek sıra: “Telefon kamerasıyla kodu okut → şifreni belirle → uygulamayı ana ekrana ekle.”
+              </CardDescription>
             </CardHeader>
             <CardContent>
               <ol className="flex list-decimal flex-col gap-2 pl-5 text-sm">
-                <li>Danışan telefonunun kamerasıyla kare kodu okutur ya da bağlantıyı açar.</li>
-                <li>Açılan ekranda kod hazır gelir; “Devam”a dokunur ve kendine şifre belirler.</li>
-                <li>Sonraki girişleri şifreyle. Oturumu 30 gün açık kalır; kod bir kez kullanılır.</li>
+                <li>Danışan telefonunun kamerasıyla kare kodu okutur ya da bağlantıyı açar; kod hazır gelir, “Devam”a dokunur.</li>
+                <li>Kendine şifre belirler.</li>
                 <li>
-                  Şifresini unutursa sana söyler: yeni kare kod üretirsin. Kod kullanılınca eski şifre geçersiz olur,
-                  danışan yeni şifre belirler.
+                  Ekran uygulamayı ana ekrana eklemeyi adım adım gösterir: Android’de “Uygulamayı yükle”, iPhone’da Safari’de
+                  Paylaş → Ana Ekrana Ekle → Ekle. Atlarsa Bugün ekranının üstünde yeniden görür.
+                </li>
+                <li>Sonraki girişleri ana ekrandaki simgeden, şifreyle. Oturumu 30 gün açık kalır; kod bir kez kullanılır.</li>
+                <li>
+                  Şifresini unutursa PT’ye söyler, PT yeni kare kod üretir. Kod kullanılınca eski şifre geçersiz olur, danışan
+                  yeni şifre belirler.
                 </li>
                 <li>
-                  Telefonunu kaybederse danışanı düzenleyip <Badge variant="outline">Erişimi kapat</Badge> de (oturumları ve
-                  şifresi geçersiz olur), sonra yeni kare kod üret.
+                  Telefonunu kaybederse danışan düzenlenip <Badge variant="outline">Erişimi kapat</Badge> denir (oturumları ve
+                  şifresi geçersiz olur), sonra yeni kare kod üretilir.
                 </li>
               </ol>
             </CardContent>
