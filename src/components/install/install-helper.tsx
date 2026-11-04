@@ -1,19 +1,19 @@
 'use client';
 
+import { useRef } from 'react';
 import { ArrowSquareOut, CheckCircle, Compass, Copy, DeviceMobile, DownloadSimple, Export, PlusSquare } from '@phosphor-icons/react';
 import { toast } from 'sonner';
+import { focusAfterRemoval } from '@/components/focus-next';
 import { DotsThree } from '@/components/line-icons';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { chromeIntentUrl, safariUrl, type InstallGuide } from '@/lib/install-guide';
+import { chromeIntentUrl, safariUrl, type InstallAudience, type InstallGuide } from '@/lib/install-guide';
 import { cn } from '@/lib/utils';
 import { useInstall } from './install-state';
 
-type Audience = 'client' | 'pt';
-
-const TEXT: Record<Audience, { title: string; description: string; installed: string }> = {
+const TEXT: Record<InstallAudience, { title: string; description: string; installed: string }> = {
   client: {
     title: 'Uygulamayı ana ekrana ekle',
     description: 'Antrenmanın tek dokunuşla, tarayıcı çubuğu olmadan tam ekran açılır.',
@@ -30,8 +30,8 @@ const TEXT: Record<Audience, { title: string; description: string; installed: st
  * Yükleme yardımcısı (tasarım Paket A): danışan ve PT aynı bileşeni kullanır; hangi anlatımın çıkacağı
  * `lib/install-guide.ts`'te, cihaz bilgisi ve "Şimdi değil" `install-state.ts`'te.
  *
- * - `card`: Bugün ekranının üstü ve PT genel bakışı. Yüklüyse ya da "Şimdi değil" denmişse (14 gün, o cihazda)
- *   hiç çizilmez.
+ * - `card`: Bugün ekranının üstü ve PT genel bakışı. Yüklüyse ya da "Şimdi değil" denmişse (14 gün, o cihazda,
+ *   danışan ve PT ayrı) hiç çizilmez. Kart kalkınca odak yerine gelen öğeye geçer (`focusAfterRemoval`).
  * - `inline`: yalnız anlatım, kartsız ve "Şimdi değil"siz: katılımın son adımı (`join/password-step.tsx`) kendi
  *   kartını ve "Devam"ını çizer.
  * - `status`: PT Ayarlar → Uygulama; her zaman görünür, yüklüyse "Yüklü" yazar.
@@ -47,12 +47,13 @@ export function InstallHelper({
   className,
 }: {
   variant: 'card' | 'inline' | 'status';
-  audience: Audience;
+  audience: InstallAudience;
   /** Safari'de / Chrome'da açılacak ve kopyalanacak yol (`/giris?c=…`, `/dashboard`). */
   openPath: string;
   className?: string;
 }) {
   const { state, promptInstall, snooze } = useInstall();
+  const cardRef = useRef<HTMLDivElement>(null);
   const text = TEXT[audience];
 
   if (variant === 'inline') {
@@ -61,9 +62,9 @@ export function InstallHelper({
   }
 
   if (variant === 'card') {
-    if (!state || state.guide === 'installed' || state.snoozed) return null;
+    if (!state || state.guide === 'installed' || state.snoozed[audience]) return null;
     return (
-      <Card size="sm" className={className}>
+      <Card ref={cardRef} size="sm" className={className}>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <DeviceMobile weight="fill" className="size-5 shrink-0 text-primary" />
@@ -71,7 +72,14 @@ export function InstallHelper({
           </CardTitle>
           <CardDescription>{text.description}</CardDescription>
           <CardAction>
-            <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={snooze}>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-muted-foreground"
+              onClick={() => {
+                focusAfterRemoval(cardRef.current);
+                snooze(audience);
+              }}>
               Şimdi değil
             </Button>
           </CardAction>
@@ -154,7 +162,7 @@ function GuideBody({
               <span className="font-medium">Paylaş</span> simgesi (kare ve yukarı ok)
             </span>
             <span className="flex flex-wrap items-center gap-x-1 text-xs text-muted-foreground">
-              Görünmüyorsa önce <DotsThree aria-label="üç nokta" className="size-4" /> menüsü
+              Görünmüyorsa önce <DotsThree role="img" aria-label="üç nokta" className="size-4" /> menüsü
             </span>
           </span>
         </li>
@@ -181,6 +189,14 @@ function GuideBody({
 
   if (guide === 'ios-other' || guide === 'android-in-app') {
     return <OpenElsewhere ios={guide === 'ios-other'} openPath={openPath} className={className} />;
+  }
+
+  if (guide === 'mac-safari') {
+    return (
+      <p className={cn('text-sm', className)}>
+        Safari’nin menü çubuğunda <span className="font-medium">Dosya</span> → <span className="font-medium">Dock’a Ekle</span>.
+      </p>
+    );
   }
 
   return (

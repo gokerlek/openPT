@@ -1,7 +1,7 @@
 'use client';
 
 import { useSyncExternalStore } from 'react';
-import { installGuide, isSnoozed, snoozeUntil, type InstallGuide } from '@/lib/install-guide';
+import { installGuide, installSnoozeKey, isSnoozed, snoozeUntil, type InstallAudience, type InstallGuide } from '@/lib/install-guide';
 
 /**
  * Yükleme yardımcısının tarayıcı tarafı: tarayıcı bilgisini toplar, kararı `lib/install-guide.ts` verir.
@@ -11,22 +11,22 @@ import { installGuide, isSnoozed, snoozeUntil, type InstallGuide } from '@/lib/i
  *   küçük çubuğu çıkmaz; "Uygulamayı yükle" düğmesi sistem penceresini açar. Pencere bir kez kullanılır.
  * - Yüklü mü: uygulama olarak açık (`display-mode: standalone`, iOS `navigator.standalone`) ya da bu sayfada
  *   yükleme kabul edildi (`appinstalled`).
- * - "Şimdi değil" 14 gün gizler, yalnız bu cihazda: `localStorage`, her erişim try/catch içinde. Depo kapalıysa
- *   (gizli pencere) yalnız bu sayfa açıkken gizli kalır.
+ * - "Şimdi değil" 14 gün gizler, yalnız bu cihazda ve yalnız o kitle için (danışan ve PT ayrı anahtar,
+ *   `installSnoozeKey`): `localStorage`, her erişim try/catch içinde. Depo kapalıysa (gizli pencere) yalnız bu
+ *   sayfa açıkken gizli kalır.
  */
 type PromptEvent = Event & {
   prompt: () => Promise<void>;
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
 };
 
-export type InstallState = { guide: InstallGuide; snoozed: boolean };
+export type InstallState = { guide: InstallGuide; snoozed: Record<InstallAudience, boolean> };
 
-const SNOOZE_KEY = 'pulsecoach.install-snoozed-until';
 const STANDALONE = '(display-mode: standalone)';
 
 let deferred: PromptEvent | null = null;
 let acceptedHere = false;
-let snoozedHere = false;
+const snoozedHere: Record<InstallAudience, boolean> = { client: false, pt: false };
 let snapshot: InstallState | null = null;
 const listeners = new Set<() => void>();
 
@@ -35,12 +35,16 @@ function changed() {
   for (const listener of listeners) listener();
 }
 
-function readSnooze(): string | null {
+function readSnooze(audience: InstallAudience): string | null {
   try {
-    return window.localStorage.getItem(SNOOZE_KEY);
+    return window.localStorage.getItem(installSnoozeKey(audience));
   } catch {
     return null;
   }
+}
+
+function snoozedNow(audience: InstallAudience, now: Date): boolean {
+  return snoozedHere[audience] || isSnoozed(readSnooze(audience), now);
 }
 
 function isStandalone(): boolean {
@@ -68,6 +72,7 @@ export function captureInstallPrompt(): void {
 captureInstallPrompt();
 
 function getSnapshot(): InstallState {
+  const now = new Date();
   snapshot ??= {
     guide: acceptedHere
       ? 'installed'
@@ -77,7 +82,7 @@ function getSnapshot(): InstallState {
           standalone: isStandalone(),
           canPrompt: deferred !== null,
         }),
-    snoozed: snoozedHere || isSnoozed(readSnooze(), new Date()),
+    snoozed: { client: snoozedNow('client', now), pt: snoozedNow('pt', now) },
   };
   return snapshot;
 }
@@ -119,10 +124,10 @@ async function promptInstall(): Promise<'accepted' | 'dismissed' | 'unavailable'
   }
 }
 
-function snooze(): void {
-  snoozedHere = true;
+function snooze(audience: InstallAudience): void {
+  snoozedHere[audience] = true;
   try {
-    window.localStorage.setItem(SNOOZE_KEY, snoozeUntil(new Date()));
+    window.localStorage.setItem(installSnoozeKey(audience), snoozeUntil(new Date()));
   } catch {
     // Depo kapalı: yalnız bu sayfa açıkken gizli.
   }
