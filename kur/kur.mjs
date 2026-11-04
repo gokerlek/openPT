@@ -7,7 +7,7 @@
  * değerlendirilir: başka dosya import etmez, `import.meta.url` ve `process.argv[1]`e dayanmaz.
  * Saf parçalar dışa aktarılır ve `kur/kur.test.mjs` ile sınanır; `AXON_KUR_TEST=1` iken ana akış başlamaz.
  * Eski Node'da da sürüm mesajı görünsün diye yalnız eski sürümlerde de olan modüller en üstte içe
- * aktarılır (`readline/promises` sonra, dinamik) ve mantıksal atama gibi yeni sözdizimi kullanılmaz.
+ * aktarılır (`readline` sonra, dinamik) ve mantıksal atama gibi yeni sözdizimi kullanılmaz.
  *
  * Sırlar (GitHub uygulamasının özel anahtarı ve client secret'ı, AUTH_SECRET, Vercel ve GitHub
  * anahtarları) yalnız bellekte durur: ekrana, dosyaya ya da URL'ye yazılmaz, yalnız Vercel env'ine gider.
@@ -49,6 +49,10 @@ const VERCEL_API = 'https://api.vercel.com';
 const USER_AGENT = 'axon-fit-kur';
 const VERCEL_TOKENS_URL = 'https://vercel.com/account/settings/tokens';
 const VERCEL_GITHUB_INSTALL_URL = 'https://github.com/apps/vercel/installations/new';
+/** Vercel belgesi (docs/accounts → Login methods and connections): hesap ayarları → Authentication. */
+export const VERCEL_LOGIN_CONNECTIONS_URL = 'https://vercel.com/account/authentication';
+/** Kaynağın kök `axon-release.json` dosyasında olması gereken yetenek (GitHub uygulaması modu). */
+export const REQUIRED_CAPABILITY = 'github-app';
 const NETWORK_HINT = 'İnternet bağlantını kontrol edip yeniden dene.';
 const BROWSER_WAIT_MS = 30 * 60 * 1000;
 const DEPLOY_WAIT_MS = 20 * 60 * 1000;
@@ -67,6 +71,14 @@ export class KurError extends Error {
     super(message);
     this.name = 'KurError';
     this.hint = hint;
+  }
+}
+
+/** Ağ hatası ya da zaman aşımı: yalnız bunda internet önerilir ve güvenli isteklerde yeniden denenir. */
+export class NetworkError extends KurError {
+  constructor(message) {
+    super(message, NETWORK_HINT);
+    this.name = 'NetworkError';
   }
 }
 
@@ -136,13 +148,22 @@ function apiHint(error) {
   if (error.status === 401) return `${error.service} oturumu geçersiz ya da süresi dolmuş. Komutu yeniden çalıştırıp yeniden giriş yap.`;
   if (error.status === 403) return `${error.service} bu işleme izin vermedi. Doğru hesapla giriş yaptığını ve izinleri kontrol et.`;
   if (error.status === 404) return `${error.service} istenen kaydı bulamadı. Adları kontrol edip komutu yeniden çalıştır.`;
-  if (error.status === 409 || error.status === 422 || error.status === 400) return 'İstek reddedildi; yukarıdaki mesaja göre düzeltip (gerekirse başka bir ad seçerek) komutu yeniden çalıştır.';
+  if (error.status === 409 || error.status === 422 || error.status === 400) {
+    return isNameConflict(error)
+      ? 'Bu ad kullanılıyor. Komutu yeniden çalıştırıp başka bir ad seç.'
+      : 'İstek reddedildi; yukarıdaki mesaja göre düzeltip komutu yeniden çalıştır.';
+  }
   if (error.status >= 500) return `${error.service} tarafında geçici bir sorun var. Birkaç dakika sonra komutu yeniden çalıştır.`;
   return 'Komutu yeniden çalıştır.';
 }
 
+/** Yalnız gerçek ad çakışması: GitHub "name already exists", Vercel proje adı "already exists". */
+export function isNameConflict(error) {
+  return error instanceof ApiError && [400, 409, 422].includes(error.status) && /already exists|already taken|name is taken/i.test(error.message);
+}
+
 function networkError(service) {
-  return new KurError(`${service}'a ulaşılamadı.`, NETWORK_HINT);
+  return new NetworkError(`${service}'a ulaşılamadı.`);
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -644,28 +665,51 @@ async function readJson(response) {
   }
 }
 
-/** `ctx` verilirse (sleep/say/nowSeconds) GitHub'ın istek sınırında bekleyip yeniden dener. */
+/** İstek süresi gövde boyutuna göre: 60 sn + her 50 KB için 1 sn (7,7 MB blob ≈ 4 dk). */
+export function requestTimeoutMs(bodyBytes) {
+  return 60_000 + Math.ceil(Math.max(0, bodyBytes) / 51_200) * 1000;
+}
+
+/**
+ * `ctx` verilirse (sleep/say/nowSeconds): GitHub'ın istek sınırında bekleyip yeniden dener; ağ hatası ya da
+ * zaman aşımında GET'leri ve `retry: true` verilen (aynı sonucu veren) yazmaları 3 kez daha dener.
+ */
 export function githubApi(fetchImpl, ctx = null) {
   async function once(pathname, { token, method = 'GET', body } = {}) {
     const headers = { Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28', 'User-Agent': USER_AGENT };
     if (token) headers.Authorization = `Bearer ${token}`;
-    if (body !== undefined) headers['Content-Type'] = 'application/json';
+    const payload = body === undefined ? undefined : JSON.stringify(body);
+    if (payload !== undefined) headers['Content-Type'] = 'application/json';
     let response;
+    let data;
     try {
       response = await fetchImpl(`${GITHUB_API}${pathname}`, {
         method,
         headers,
-        body: body === undefined ? undefined : JSON.stringify(body),
-        signal: AbortSignal.timeout(120_000),
+        body: payload,
+        signal: AbortSignal.timeout(requestTimeoutMs(payload === undefined ? 0 : Buffer.byteLength(payload))),
       });
+      data = await readJson(response);
     } catch {
       throw networkError('GitHub');
     }
-    return { status: response.status, headers: response.headers, data: await readJson(response) };
+    return { status: response.status, headers: response.headers, data };
   }
   return async function github(pathname, options = {}) {
+    const retryNetwork = Boolean(ctx) && ((options.method || 'GET') === 'GET' || options.retry === true);
+    let networkFailures = 0;
     for (let attempt = 0; ; attempt += 1) {
-      const result = await once(pathname, options);
+      let result;
+      try {
+        result = await once(pathname, options);
+      } catch (error) {
+        if (!(error instanceof NetworkError) || !retryNetwork || networkFailures >= 3) throw error;
+        networkFailures += 1;
+        const wait = 2 ** networkFailures;
+        ctx.io.say(`  … GitHub'a ulaşılamadı; ${wait} sn sonra yeniden deneniyor (${networkFailures}/3).`);
+        await ctx.sleep(wait * 1000);
+        continue;
+      }
       const wait = ctx && attempt < 4 ? rateLimitWait(result, ctx.nowSeconds(), attempt) : null;
       if (wait === null) return result;
       ctx.io.say(`  … GitHub istek sınırı: ${wait} sn bekleniyor.`);
@@ -718,7 +762,7 @@ export async function vercelAppDomainFree(fetchImpl, name) {
       signal: AbortSignal.timeout(15_000),
     });
   } catch {
-    throw new KurError(`${name}.vercel.app adresine bakılamadı.`, NETWORK_HINT);
+    throw new NetworkError(`${name}.vercel.app adresine bakılamadı.`);
   }
   const body = response.status === 404 ? await response.text().catch(() => '') : '';
   return isDeploymentNotFound(response.status, response.headers, body);
@@ -765,7 +809,29 @@ export async function exchangeUserCode(fetchImpl, { clientId, clientSecret, code
 }
 
 /**
- * 1. adım: kaynağın son kararlı sürümü (yoksa varsayılan dal) kimliksiz bulunur, arşivi indirilip bellekte açılır.
+ * Kurulacak sürüm GitHub uygulaması modunu biliyor mu: kök `axon-release.json` → `capabilities` dizisinde
+ * `github-app`. Yoksa (ör. v0.2.1 yalnız GITHUB_TOKEN bilir) hiçbir şey oluşturulmadan durulur.
+ */
+export function checkSourceCapabilities(files, label = '') {
+  const manifest = files.find((file) => file.path === 'axon-release.json' && file.type === 'file');
+  let capabilities = [];
+  try {
+    const data = manifest ? JSON.parse(manifest.data.toString('utf8')) : null;
+    if (data && Array.isArray(data.capabilities)) capabilities = data.capabilities;
+  } catch {
+    capabilities = [];
+  }
+  if (!capabilities.includes(REQUIRED_CAPABILITY)) {
+    throw new KurError(
+      `Axon Fit'in kurulacak sürümü${label ? ` (${label})` : ''} bu kurulum yolunu (GitHub uygulaması) henüz desteklemiyor.`,
+      "Bu kurulum yolu Axon Fit'in yeni sürümüyle gelecek; şimdilik README'deki Deploy düğmesini kullan.",
+    );
+  }
+}
+
+/**
+ * 1. adım: kaynağın son kararlı sürümü (yoksa varsayılan dal) kimliksiz bulunur, arşivi indirilip bellekte açılır
+ * ve GitHub uygulaması modunu desteklediği denetlenir (hesaplarda hiçbir şey oluşturulmadan önce).
  * Döner: `{ ref, version, commit, files, totalBytes }`.
  */
 export async function downloadSource(ctx, source) {
@@ -787,16 +853,21 @@ export async function downloadSource(ctx, source) {
   }
 
   const url = `https://codeload.github.com/${source}/tar.gz/${ref.split('/').map(encodeURIComponent).join('/')}`;
-  let response;
-  try {
-    response = await ctx.fetch(url, { headers: { 'User-Agent': USER_AGENT }, signal: AbortSignal.timeout(300_000) });
-  } catch {
-    throw new KurError('Kaynak kodu indirilemedi.', NETWORK_HINT);
+  let compressed = null;
+  for (let attempt = 1; compressed === null; attempt += 1) {
+    try {
+      const response = await ctx.fetch(url, { headers: { 'User-Agent': USER_AGENT }, signal: AbortSignal.timeout(300_000) });
+      if (response.status !== 200) throw new KurError(`Kaynak kodu indirilemedi (${response.status}).`, 'Biraz bekleyip komutu yeniden çalıştır.');
+      const length = Number(response.headers.get('content-length'));
+      if (Number.isFinite(length) && length > MAX_ARCHIVE_BYTES) throw corrupt('arşiv çok büyük');
+      compressed = Buffer.from(await response.arrayBuffer());
+    } catch (error) {
+      if (error instanceof KurError) throw error;
+      if (attempt >= 3) throw new NetworkError('Kaynak kodu indirilemedi.');
+      ctx.io.say(`  … Kaynak indirilemedi; ${2 ** attempt} sn sonra yeniden deneniyor (${attempt}/2).`);
+      await ctx.sleep(2 ** attempt * 1000);
+    }
   }
-  if (response.status !== 200) throw new KurError(`Kaynak kodu indirilemedi (${response.status}).`, 'Biraz bekleyip komutu yeniden çalıştır.');
-  const length = Number(response.headers.get('content-length'));
-  if (Number.isFinite(length) && length > MAX_ARCHIVE_BYTES) throw corrupt('arşiv çok büyük');
-  const compressed = Buffer.from(await response.arrayBuffer());
   if (compressed.length > MAX_ARCHIVE_BYTES) throw corrupt('arşiv çok büyük');
   let tar;
   try {
@@ -807,6 +878,7 @@ export async function downloadSource(ctx, source) {
   const parsed = parseTar(tar);
   const files = stripTopFolder(parsed.entries);
   if (files.length === 0) throw corrupt('boş arşiv');
+  checkSourceCapabilities(files, version || ref);
   if (!version) {
     const pkg = files.find((file) => file.path === 'package.json' && file.type === 'file');
     try {
@@ -1223,7 +1295,8 @@ export async function uploadSource(ctx, { github, token, fullName, branch, sourc
       if (wait > 0) await ctx.sleep(wait);
     }
     last = ctx.nowMs();
-    return github(pathname, { token, method, body });
+    // Blob/ağaç içerikle adreslenir, ref `force` ile aynı yere taşınır: yeniden denemek güvenli.
+    return github(pathname, { token, method, body, retry: true });
   };
   const plan = planSourceTree(source.files);
   ctx.io.say(`  → Kod yükleniyor: ${source.files.length} dosya (${formatMegabytes(source.totalBytes)} MB). Birkaç dakika sürebilir.`);
@@ -1281,8 +1354,10 @@ function linkedTo(project, fullName) {
 }
 
 /**
- * 6. adım: repo hazır olunca Vercel projesi `gitRepository` ile açılır (belgeli uç). Ad o arada dolduysa
- * yeni ad sorulur. Vercel'in GitHub uygulaması repoyu görmüyorsa kurulum sayfası açılır, onaydan sonra yeniden denenir.
+ * 6. adım: repo hazır olunca Vercel projesi `gitRepository` ile açılır (belgeli uç). Vercel'in GitHub uygulaması
+ * repoyu görmüyorsa kurulum sayfası açılır, onaydan sonra yeniden denenir. Git erişim hatasında Vercel projeyi
+ * bağlantısız açmış olabilir: sonraki deneme o adla çakışırsa ve proje BU çalıştırmada açıldıysa boş proje silinip
+ * yeniden açılır (PT'ye yeni ad sorulmaz). Ad başka biri/başka bir projeyle dolduysa yeni ad sorulur.
  */
 export async function ensureVercelProject(ctx, vercel, { name, repoFullName }) {
   const api = vercelApi(ctx.fetch, vercel.session);
@@ -1291,8 +1366,12 @@ export async function ensureVercelProject(ctx, vercel, { name, repoFullName }) {
     if (result.status === 404) return null;
     return expect(result, [200], 'Vercel', 'Vercel projesini okuma');
   };
+  const projectUrl = (projectName) => `https://vercel.com/${vercel.team ? vercel.team.slug : vercel.user.username}/${projectName}`;
+  const posted = new Set();
   let current = name;
   for (let attempt = 1; ; attempt += 1) {
+    const postedBefore = posted.has(current);
+    posted.add(current);
     const created = await api('/v11/projects', {
       method: 'POST',
       body: { name: current, framework: 'nextjs', gitRepository: { type: 'github', repo: repoFullName } },
@@ -1302,14 +1381,9 @@ export async function ensureVercelProject(ctx, vercel, { name, repoFullName }) {
       project = await getProject((created.data && created.data.id) || current);
     } else {
       const error = new ApiError('Vercel', created.status, created.data, 'Vercel projesini açma');
-      const existing = isVercelGitAccessError(error) || isVercelLoginConnectionError(error) ? null : await getProject(current);
-      if (existing && linkedTo(existing, repoFullName)) {
-        project = existing; // önceki deneme aslında başarılı olmuş
-      } else if (existing) {
-        ctx.io.say(`  ! "${current}" adı Vercel'de artık dolu.`);
-        current = await askFreeProjectName(ctx, api, '  Uygulama için başka bir ad');
-        continue;
-      } else if (attempt < 8 && isVercelGitAccessError(error)) {
+      if (attempt < 12 && isVercelGitAccessError(error)) {
+        // Bağlantısız açılmış olabilir: başarısız biterse "oluşturulanlar" listesinde görünsün.
+        if (await getProject(current)) ctx.created.vercelProject = `${projectUrl(current)} (GitHub'a bağlanmadı)`;
         // Yeni açılan repoyu Vercel birkaç saniye sonra görebilir: önce kendiliğinden yeniden dene.
         if (attempt <= 2) {
           await ctx.sleep(5000);
@@ -1320,18 +1394,31 @@ export async function ensureVercelProject(ctx, vercel, { name, repoFullName }) {
         await showUrl(ctx, safeLink(error.link, ['github.com']) || VERCEL_GITHUB_INSTALL_URL);
         await ctx.io.pause("  Tamam olunca Enter'a bas.");
         continue;
-      } else if (attempt < 8 && isVercelLoginConnectionError(error)) {
-        ctx.io.say('  ! Vercel hesabın GitHub hesabına bağlı değil. Vercel ayarlarında GitHub bağlantısını ekle.');
-        const link = safeLink(error.link);
-        if (link) await showUrl(ctx, link);
+      }
+      if (attempt < 12 && isVercelLoginConnectionError(error)) {
+        ctx.io.say('  ! Vercel hesabın GitHub hesabına bağlı değil. Vercel hesap ayarlarının "Authentication" bölümünde GitHub bağlantısını ekle.');
+        await showUrl(ctx, safeLink(error.link) || VERCEL_LOGIN_CONNECTIONS_URL);
         await ctx.io.pause("  Tamam olunca Enter'a bas.");
+        continue;
+      }
+      const existing = await getProject(current);
+      if (existing && linkedTo(existing, repoFullName)) {
+        project = existing; // önceki deneme aslında başarılı olmuş
+      } else if (existing && !existing.link && postedBefore && attempt < 12) {
+        ctx.io.say(`  → Önceki denemede GitHub'a bağlanmadan açılan "${current}" projesi silinip bağlı olarak yeniden açılıyor.`);
+        expect(await api(`/v9/projects/${encodeURIComponent(existing.id)}`, { method: 'DELETE' }), [200, 204], 'Vercel', 'Bağlantısız projeyi silme');
+        delete ctx.created.vercelProject;
+        continue;
+      } else if (existing) {
+        ctx.io.say(`  ! "${current}" adı Vercel'de artık dolu.`);
+        current = await askFreeProjectName(ctx, api, '  Uygulama için başka bir ad');
         continue;
       } else {
         throw error;
       }
     }
     if (!project || !project.id) throw new KurError('Vercel projesi okunamadı.', 'Komutu yeniden çalıştır.');
-    ctx.created.vercelProject = `https://vercel.com/${vercel.team ? vercel.team.slug : vercel.user.username}/${project.name || current}`;
+    ctx.created.vercelProject = projectUrl(project.name || current);
     if (!linkedTo(project, repoFullName)) {
       throw new KurError('Vercel projesi GitHub reposuna bağlanamadı.', `${ctx.created.vercelProject}/settings/git adresinden ${repoFullName} reposunu bağla, sonra Vercel'de "Redeploy" de.`);
     }
@@ -1430,7 +1517,8 @@ export async function kur(ctx) {
   const { io } = ctx;
   const step = (n, text) => io.say(`\n[${n}/${STEP_COUNT}] ${text}`);
 
-  step(1, 'Hazırlık: Node sürümü kontrol ediliyor, Axon Fit\'in son sürümü indiriliyor…');
+  // Kaynak, hesaplarda hiçbir şey oluşturulmadan (Vercel girişinden bile önce) indirilip denetlenir.
+  step(1, 'Hazırlık: Node sürümü kontrol ediliyor, Axon Fit\'in son sürümü indirilip denetleniyor…');
   checkNodeVersion(ctx.nodeVersion);
   const sourceName = parseSource(ctx.env.AXON_KUR_SOURCE || DEFAULT_SOURCE);
   const source = { name: sourceName, ...(await downloadSource(ctx, sourceName)) };
@@ -1520,6 +1608,7 @@ export async function main(ctx, { handleSigint = false } = {}) {
     return error instanceof KurCancelled && error.reason === 'sigint' ? 130 : 1;
   } finally {
     if (handleSigint) process.off('SIGINT', onSigint);
+    if (typeof ctx.io.close === 'function') ctx.io.close();
   }
 }
 
@@ -1528,38 +1617,78 @@ export async function main(ctx, { handleSigint = false } = {}) {
 // ---------------------------------------------------------------------------------------------
 
 /**
- * Terminal girişi. `readline/promises` burada dinamik içe aktarılır (eski Node'da sürüm mesajından önce
- * çökmesin). Giriş kapanırsa (Ctrl+D, boru bitti) her soru `KurCancelled('eof')` ile biter.
+ * Terminal girişi: TEK readline arayüzü, okunan satırlar kuyruğa girer (yapıştırılan çok satırlı girdi
+ * kaybolmaz, sıradaki sorulara gider). readline burada dinamik içe aktarılır (eski Node'da sürüm mesajından
+ * önce çökmesin). Arayüz `terminal: false`: Ctrl+C gerçek SIGINT olarak gelir. Sorular arasında giriş
+ * duraklatılır (Vercel aracı ve gizli giriş karışmasın). Giriş kapanırsa (Ctrl+D, boru bitti) her soru
+ * `KurCancelled('eof')` ile biter.
  */
 export function terminalIo({ input = process.stdin, output = process.stdout } = {}) {
   const say = (line = '') => output.write(`${line}\n`);
+  const queue = [];
+  let waiter = null;
+  let rl = null;
+  let opening = null;
+  let closingOurselves = false;
   let ended = Boolean(input.readableEnded);
   input.once('end', () => {
     ended = true;
   });
 
+  const settle = (error, line) => {
+    const current = waiter;
+    waiter = null;
+    if (!current) return;
+    if (error) current.reject(error);
+    else current.resolve(line);
+  };
+
+  function open() {
+    if (rl) return Promise.resolve(rl);
+    if (!opening) {
+      opening = import('node:readline').then(({ createInterface }) => {
+        const iface = createInterface({ input, terminal: false, crlfDelay: Infinity });
+        iface.on('line', (line) => {
+          if (waiter) settle(null, line);
+          else queue.push(line);
+        });
+        iface.on('close', () => {
+          rl = null;
+          opening = null;
+          if (closingOurselves) {
+            closingOurselves = false;
+            return;
+          }
+          ended = true;
+          settle(new KurCancelled('eof'));
+        });
+        rl = iface;
+        return iface;
+      });
+    }
+    return opening;
+  }
+
+  function closeInterface() {
+    if (!rl) return;
+    closingOurselves = true;
+    rl.close();
+  }
+
   async function prompt(text) {
+    output.write(text);
+    if (queue.length) return queue.shift();
     if (ended) throw new KurCancelled('eof');
-    const { createInterface } = await import('node:readline/promises');
-    const rl = createInterface({ input, output, terminal: Boolean(input.isTTY && output.isTTY) });
-    const controller = new AbortController();
-    let closing = false;
+    const iface = await open();
+    if (queue.length) return queue.shift();
+    if (ended) throw new KurCancelled('eof');
     try {
       return await new Promise((resolve, reject) => {
-        rl.once('SIGINT', () => {
-          controller.abort();
-          reject(new KurCancelled('sigint'));
-        });
-        rl.once('close', () => {
-          if (!closing) reject(new KurCancelled('eof'));
-        });
-        rl.question(text, { signal: controller.signal }).then(resolve, (error) => {
-          reject(controller.signal.aborted ? new KurCancelled('sigint') : error);
-        });
+        waiter = { resolve, reject };
+        iface.resume();
       });
     } finally {
-      closing = true;
-      rl.close();
+      if (rl) rl.pause();
     }
   }
   async function ask(question, fallback = '') {
@@ -1578,9 +1707,15 @@ export function terminalIo({ input = process.stdin, output = process.stdout } = 
   async function pause(message) {
     await prompt(`${message} `);
   }
-  function askSecret(question) {
+  async function askSecret(question) {
     if (!input.isTTY || typeof input.setRawMode !== 'function') return prompt(question);
-    if (ended) return Promise.reject(new KurCancelled('eof'));
+    if (queue.length) {
+      output.write(`${question}\n`);
+      return queue.shift();
+    }
+    if (ended) throw new KurCancelled('eof');
+    // Gizli girişi readline görmesin (satır olarak kuyruğa düşmesin): arayüz kapanır, sonra yeniden açılır.
+    closeInterface();
     output.write(question);
     return new Promise((resolve, reject) => {
       let value = '';
@@ -1614,7 +1749,7 @@ export function terminalIo({ input = process.stdin, output = process.stdout } = 
       input.once('end', onEnd);
     });
   }
-  return { say, ask, confirm, pause, askSecret };
+  return { say, ask, confirm, pause, askSecret, close: closeInterface };
 }
 
 function runCommand(command, args) {
