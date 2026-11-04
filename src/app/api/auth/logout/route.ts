@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { logoutPath } from '@/app/giris/login-screen';
 import { hasPassword } from '@/lib/client-status';
+import { clearUserToken } from '@/lib/github/user-auth';
 import { endSession, readClientSession, sessionClient } from '@/lib/session';
 
 /**
@@ -12,13 +13,14 @@ import { endSession, readClientSession, sessionClient } from '@/lib/session';
  * adreste de taşınır ki depo kapalı tarayıcıda da girilebilsin. Adres şifre durumunu da taşır: açan
  * şifresi yoksa (hiç belirlememiş, kare kodla sıfırlanmış, kilitlenmiş ya da erişimi kapanmış) sayfa
  * çıkış onayıyla aynı şeyi söyler, yeni kare kod ister ve şifre kutusunu göstermez. Kayıt okunamazsa
- * bilgi taşınmaz; çıkış yine yapılır.
+ * bilgi taşınmaz; çıkış yine yapılır. PT çıkışında GitHub kullanıcı anahtarının çerezi de silinir.
  */
 export async function POST(request: Request) {
   const form = await request.formData().catch(() => null);
   const role = form?.get('rol') === 'danisan' ? 'client' : 'pt';
   if (role === 'pt') {
     await endSession('pt');
+    await clearUserToken();
     return NextResponse.redirect(new URL('/login', request.url), { status: 303 });
   }
   const session = await readClientSession();

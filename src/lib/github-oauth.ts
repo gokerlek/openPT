@@ -2,6 +2,7 @@ import 'server-only';
 import { randomBytes } from 'node:crypto';
 import { cookies } from 'next/headers';
 import { serverEnv } from './env';
+import { userTokenFromGrant, type UserToken } from './github/user-token';
 import { safeReturnPath } from './navigation';
 
 /**
@@ -10,6 +11,10 @@ import { safeReturnPath } from './navigation';
  * Kimlik kuralı: dönen GitHub kullanıcısı `GITHUB_OWNER` ile aynı kişi olmalı. Yani
  * "bu repoların sahibi mi" diye sorulur; e-posta karşılaştırması yapılmaz.
  * Harici kütüphane yok: iki HTTP çağrısı yeterli (Octokit veri katmanında kullanılacak).
+ *
+ * Kişisel anahtar kurulumunda (OAuth App) giriş anahtarı saklanmaz. GitHub uygulaması kurulumunda aynı
+ * akış uygulamanın kendi giriş bilgileriyle çalışır; dönen kullanıcı anahtarı repo açma/silme için
+ * şifreli çerezde tutulur (`github/user-auth.ts`; dönüş ucu yazar). Uygulamalar `scope`'u yok sayar.
  */
 
 const STATE_COOKIE = 'pc_oauth_state';
@@ -74,9 +79,11 @@ export async function consumeState(received: string | null): Promise<boolean> {
 }
 
 export type GithubUser = { login: string; id: number };
+/** Giriş sonucu: kullanıcı ve (geçerli yanıt geldiyse) kullanıcı anahtarı. Anahtarı saklayıp saklamamak çağıranın kararı. */
+export type GithubLogin = { user: GithubUser; token: UserToken | null };
 
-/** Yetki kodunu erişim anahtarına çevirir ve kullanıcıyı okur. Anahtar saklanmaz. */
-export async function exchangeCodeForUser(code: string, callbackUrl: string): Promise<GithubUser | null> {
+/** Yetki kodunu erişim anahtarına çevirir ve kullanıcıyı okur. Burada hiçbir şey saklanmaz. */
+export async function exchangeCodeForUser(code: string, callbackUrl: string): Promise<GithubLogin | null> {
   const { id, secret } = clientCredentials();
 
   const tokenResponse = await fetch('https://github.com/login/oauth/access_token', {
@@ -86,7 +93,8 @@ export async function exchangeCodeForUser(code: string, callbackUrl: string): Pr
   });
   if (!tokenResponse.ok) return null;
 
-  const token = (await tokenResponse.json()) as { access_token?: string; error?: string };
+  const grant: unknown = await tokenResponse.json();
+  const token = grant as { access_token?: string; error?: string };
   if (!token.access_token) return null;
 
   const userResponse = await fetch('https://api.github.com/user', {
@@ -100,7 +108,7 @@ export async function exchangeCodeForUser(code: string, callbackUrl: string): Pr
 
   const user = (await userResponse.json()) as { login?: unknown; id?: unknown };
   if (typeof user.login !== 'string' || typeof user.id !== 'number') return null;
-  return { login: user.login, id: user.id };
+  return { user: { login: user.login, id: user.id }, token: userTokenFromGrant(grant, user.login, new Date()) };
 }
 
 /** Giren kişi uygulamanın sahibi mi? (SPEC §5: kimlik kontrolü budur.) */

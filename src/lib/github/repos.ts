@@ -1,5 +1,8 @@
 import 'server-only';
+import type { Octokit } from 'octokit';
+import { requireAllRepositories } from './app-auth';
 import { appRepo, clientRepoName, gh, githubMode, GithubError, isClientRepo, owner, toGithubError } from './client';
+import { reauthError, userOctokit } from './user-auth';
 import { CLIENT_REPO_PREFIX } from '../env';
 
 /**
@@ -8,7 +11,28 @@ import { CLIENT_REPO_PREFIX } from '../env';
  * Her danışan ayrı ÖZEL repo: silme istendiğinde repo silinir, başka hiçbir verinin
  * geçmişi yeniden yazılmaz. Repo adında isim geçmez, yalnız kimlik: repo adları
  * silindikten sonra da denetim kayıtlarında kalabiliyor.
+ *
+ * Repo açma/silme kimliği moda göre (`repoAdmin`): kişisel anahtar kurulumunda aynı anahtar (bugünkü gibi);
+ * GitHub uygulamasında PT'nin kullanıcı anahtarı — kişisel hesapta kurulum anahtarı repo açamaz. Bu işlerin
+ * hepsi zaten yalnız PT'nin yaptığı işler; anahtar yoksa "Bu işlem için GitHub ile yeniden giriş yap."
  */
+
+/**
+ * Repo açacak/silecek Octokit. Uygulama modunda açmadan önce kurulumun "All repositories" olduğu
+ * denetlenir: değilse yeni repo kurulum anahtarına görünmez, açılıp yazılamadan kalırdı.
+ */
+async function repoAdmin(purpose: 'create' | 'delete'): Promise<Octokit> {
+  if (githubMode() === 'token') return gh();
+  if (purpose === 'create') await requireAllRepositories();
+  return userOctokit();
+}
+
+/** Repo açma/silme hatası. Uygulama modunda 401 kullanıcı anahtarınındır (iptal, süre): yeniden giriş. */
+function adminError(error: unknown, context: string): GithubError {
+  const status = typeof error === 'object' && error && 'status' in error ? Number(error.status) : 0;
+  if (status === 401 && githubMode() === 'app') return reauthError();
+  return toGithubError(error, context);
+}
 
 /**
  * Uygulama (veri) repo'sunun denetimi, OLUŞTURMADAN: yalnız `repos.get`. Repo yoksa `exists: false`.
@@ -46,8 +70,9 @@ export async function createAppRepo(): Promise<{ created: boolean }> {
   const repo = appRepo();
   if ((await checkAppRepo()).exists) return { created: false };
 
+  const admin = await repoAdmin('create');
   try {
-    await gh().rest.repos.createForAuthenticatedUser({
+    await admin.rest.repos.createForAuthenticatedUser({
       name: repo,
       private: true,
       auto_init: true,
@@ -58,14 +83,15 @@ export async function createAppRepo(): Promise<{ created: boolean }> {
     });
     return { created: true };
   } catch (error) {
-    throw toGithubError(error, repo);
+    throw adminError(error, repo);
   }
 }
 
 export async function createClientRepo(clientId: string): Promise<{ repo: string }> {
   const repo = clientRepoName(clientId);
+  const admin = await repoAdmin('create');
   try {
-    await gh().rest.repos.createForAuthenticatedUser({
+    await admin.rest.repos.createForAuthenticatedUser({
       name: repo,
       // ÖZEL olmak zorunda: içinde danışan adı ve antrenman kayıtları var.
       private: true,
@@ -80,7 +106,7 @@ export async function createClientRepo(clientId: string): Promise<{ repo: string
     if (typeof error === 'object' && error && 'status' in error && error.status === 422) {
       throw new GithubError('Bu kimlikle bir repo zaten var.', 409);
     }
-    throw toGithubError(error, repo);
+    throw adminError(error, repo);
   }
 }
 
@@ -95,10 +121,11 @@ export async function deleteClientRepo(clientId: string): Promise<void> {
   if (!isClientRepo(repo)) {
     throw new GithubError('Yalnız danışan repoları silinebilir.', 403);
   }
+  const admin = await repoAdmin('delete');
   try {
-    await gh().rest.repos.delete({ owner: owner(), repo });
+    await admin.rest.repos.delete({ owner: owner(), repo });
   } catch (error) {
-    throw toGithubError(error, repo);
+    throw adminError(error, repo);
   }
 }
 
