@@ -6,6 +6,8 @@
  * Tek dosya, bağımlılıksız (yalnız Node yerleşikleri), Node 20+, macOS ve Linux. `-e` ile ESM olarak
  * değerlendirilir: başka dosya import etmez, `import.meta.url` ve `process.argv[1]`e dayanmaz.
  * Saf parçalar dışa aktarılır ve `kur/kur.test.mjs` ile sınanır; `AXON_KUR_TEST=1` iken ana akış başlamaz.
+ * Eski Node'da da sürüm mesajı görünsün diye yalnız eski sürümlerde de olan modüller en üstte içe
+ * aktarılır (`readline/promises` sonra, dinamik) ve mantıksal atama gibi yeni sözdizimi kullanılmaz.
  *
  * Sırlar (GitHub uygulamasının özel anahtarı ve client secret'ı, AUTH_SECRET, Vercel ve GitHub
  * anahtarları) yalnız bellekte durur: ekrana, dosyaya ya da URL'ye yazılmaz, yalnız Vercel env'ine gider.
@@ -14,13 +16,16 @@
  * - GitHub App manifest akışı: docs.github.com/en/apps/sharing-github-apps/registering-a-github-app-from-a-manifest
  * - "Request user authorization (OAuth) during installation" seçiliyken Setup URL kullanılamaz; kullanıcı
  *   ilk Callback URL'e döner (creating-a-github-app, generating-a-user-access-token-for-a-github-app).
- * - Vercel REST: POST /v11/projects, POST /v10/projects/{id}/env, POST /v13/deployments,
+ * - Git Data API: blobs (base64), trees (`content` ya da `sha`, `base_tree` ile birleştirme, kip 100755/120000),
+ *   commits (`parents` boşsa kök commit), refs (PATCH, `force`). İkincil sınırlar: içerik oluşturan istek
+ *   dakikada en çok 80; `retry-after` varsa o kadar, yoksa `x-ratelimit-reset`, yoksa en az 1 dk bekle.
+ * - Vercel REST: POST /v11/projects (`gitRepository`), POST /v10/projects/{id}/env, POST /v13/deployments,
  *   GET /v13/deployments/{id}, GET /v9/projects/{id}, GET /v9/projects/{id}/domains, GET /v2/user, GET /v2/teams.
  * - Vercel CLI anahtar dosyası: <veri klasörü>/com.vercel.cli/auth.json, alanlar token / expiresAt (saniye).
  */
 import http from 'node:http';
 import crypto from 'node:crypto';
-import readline from 'node:readline/promises';
+import zlib from 'node:zlib';
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -28,17 +33,27 @@ import path from 'node:path';
 
 export const VERCEL_CLI_VERSION = '65.11.0';
 export const DEFAULT_SOURCE = 'gokerlek/axon-fit';
+export const DEFAULT_CODE_REPO = 'axon-fit';
 export const MIN_NODE_MAJOR = 20;
 export const STEP_COUNT = 8;
 export const SECRET_ENV_KEYS = Object.freeze(['AUTH_SECRET', 'GITHUB_APP_PRIVATE_KEY', 'GITHUB_CLIENT_SECRET']);
+/** İçerik oluşturan GitHub istekleri arası en az bu kadar: dakikada en çok 60 (sınır 80). */
+export const WRITE_GAP_MS = 1000;
+/** Ağaç isteği başına en çok bu kadar JSON (yaklaşık). */
+export const TREE_CHUNK_BYTES = 2_000_000;
+/** Bundan büyük metin dosyaları ağaca gömülmez, blob olarak yüklenir. */
+export const INLINE_TEXT_MAX_BYTES = 1_000_000;
 
 const GITHUB_API = 'https://api.github.com';
 const VERCEL_API = 'https://api.vercel.com';
 const USER_AGENT = 'axon-fit-kur';
 const VERCEL_TOKENS_URL = 'https://vercel.com/account/settings/tokens';
 const VERCEL_GITHUB_INSTALL_URL = 'https://github.com/apps/vercel/installations/new';
+const NETWORK_HINT = 'İnternet bağlantını kontrol edip yeniden dene.';
 const BROWSER_WAIT_MS = 30 * 60 * 1000;
 const DEPLOY_WAIT_MS = 20 * 60 * 1000;
+const MAX_ARCHIVE_BYTES = 300 * 1024 * 1024;
+const MAX_RATE_WAIT_SECONDS = 300;
 const LOWER = 'abcdefghijklmnopqrstuvwxyz';
 const LOWER_DIGITS = `${LOWER}0123456789`;
 
@@ -55,14 +70,16 @@ export class KurError extends Error {
   }
 }
 
+/** `reason`: 'sigint' (Ctrl+C) ya da 'eof' (Ctrl+D / giriş kapandı). */
 export class KurCancelled extends Error {
-  constructor() {
+  constructor(reason = 'sigint') {
     super('Kurulum durduruldu.');
     this.name = 'KurCancelled';
+    this.reason = reason;
   }
 }
 
-/** GitHub/Vercel'in hata yanıtı. Yanıtın gövdesi saklanmaz (sır taşıyabilir); yalnız kod ve mesaj. */
+/** GitHub/Vercel'in hata yanıtı. Yanıtın gövdesi saklanmaz (sır taşıyabilir); yalnız kod, mesaj, öneri. */
 export class ApiError extends Error {
   constructor(service, status, data, what = '') {
     const detail = apiErrorDetail(data);
@@ -73,6 +90,7 @@ export class ApiError extends Error {
     this.code = detail.code;
     this.action = detail.action;
     this.link = detail.link;
+    this.rateLimited = status === 429 || /rate limit/i.test(detail.message || '');
   }
 }
 
@@ -85,10 +103,46 @@ export function apiErrorDetail(data) {
     return { code: text(data.error.code), message: text(data.error.message), action: text(data.error.action), link: text(data.error.link) };
   }
   const extra = Array.isArray(data.errors)
-    ? data.errors.map((item) => text(item?.message) ?? text(item?.code)).filter(Boolean).join('; ')
+    ? data.errors.map((item) => text(item && item.message) || text(item && item.code)).filter(Boolean).join('; ')
     : '';
   const message = [text(data.message), extra].filter(Boolean).join(' — ');
   return { code: text(typeof data.error === 'string' ? data.error : undefined), message: message || undefined };
+}
+
+/** Hata ipucu türe göre: ağ hatası değilse internet önerilmez; Vercel/GitHub'ın önerisi varsa yazılır. */
+export function failureLines(error) {
+  if (error instanceof KurCancelled) {
+    return [error.reason === 'eof' ? 'Kurulum durduruldu: terminal girişi kapandı (Ctrl+D).' : 'Kurulum durduruldu.'];
+  }
+  if (error instanceof KurError) {
+    return [`Kurulum tamamlanamadı: ${error.message}`, `Ne yapmalı: ${error.hint || 'Komutu yeniden çalıştır.'}`];
+  }
+  if (error instanceof ApiError) {
+    const lines = [`Kurulum tamamlanamadı: ${error.message}`];
+    const link = safeLink(error.link);
+    if (error.action || link) lines.push(`${error.service} öneriyor: ${[error.action, link].filter(Boolean).join(' — ')}`);
+    lines.push(`Ne yapmalı: ${apiHint(error)}`);
+    return lines;
+  }
+  const detail = `${(error && error.name) || 'Error'}: ${String((error && error.message) || '').slice(0, 200)}`;
+  return [
+    `Kurulum tamamlanamadı: beklenmeyen bir hata oluştu (${detail}).`,
+    "Ne yapmalı: Komutu yeniden çalıştır. Sorun sürerse bu çıktıyla birlikte GitHub'da konu aç.",
+  ];
+}
+
+function apiHint(error) {
+  if (error.rateLimited) return `${error.service} istek sınırına takıldın. Bir saat kadar bekleyip komutu yeniden çalıştır.`;
+  if (error.status === 401) return `${error.service} oturumu geçersiz ya da süresi dolmuş. Komutu yeniden çalıştırıp yeniden giriş yap.`;
+  if (error.status === 403) return `${error.service} bu işleme izin vermedi. Doğru hesapla giriş yaptığını ve izinleri kontrol et.`;
+  if (error.status === 404) return `${error.service} istenen kaydı bulamadı. Adları kontrol edip komutu yeniden çalıştır.`;
+  if (error.status === 409 || error.status === 422 || error.status === 400) return 'İstek reddedildi; yukarıdaki mesaja göre düzeltip (gerekirse başka bir ad seçerek) komutu yeniden çalıştır.';
+  if (error.status >= 500) return `${error.service} tarafında geçici bir sorun var. Birkaç dakika sonra komutu yeniden çalıştır.`;
+  return 'Komutu yeniden çalıştır.';
+}
+
+function networkError(service) {
+  return new KurError(`${service}'a ulaşılamadı.`, NETWORK_HINT);
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -99,8 +153,14 @@ export function nodeMajor(version) {
   return Number.parseInt(String(version).replace(/^v/, '').split('.')[0], 10) || 0;
 }
 
+/** Her şeyden önce: Node çok eskiyse gösterilecek mesaj, değilse null. */
+export function startupProblem(version) {
+  if (nodeMajor(version) >= MIN_NODE_MAJOR) return null;
+  return `Bilgisayarındaki Node sürümü (${version}) çok eski; en az Node ${MIN_NODE_MAJOR} gerekiyor. https://nodejs.org adresinden güncel LTS sürümünü kur, sonra komutu yeniden çalıştır.`;
+}
+
 export function checkNodeVersion(version) {
-  if (nodeMajor(version) < MIN_NODE_MAJOR) {
+  if (startupProblem(version)) {
     throw new KurError(
       `Bilgisayarındaki Node sürümü (${version}) çok eski; en az Node ${MIN_NODE_MAJOR} gerekiyor.`,
       'https://nodejs.org adresinden güncel LTS sürümünü kur, sonra komutu yeniden çalıştır.',
@@ -149,7 +209,7 @@ export function dataRepoName(codeRepo) {
 
 /** `sahip/repo` biçimi; değilse KurError. */
 export function parseSource(value) {
-  const match = /^([A-Za-z0-9](?:[A-Za-z0-9-]{0,38}))\/([A-Za-z0-9._-]{1,100})$/.exec(String(value ?? '').trim());
+  const match = /^([A-Za-z0-9](?:[A-Za-z0-9-]{0,38}))\/([A-Za-z0-9._-]{1,100})$/.exec(String(value == null ? '' : value).trim());
   if (!match) {
     throw new KurError(`Kaynak repo "${value}" geçerli değil.`, 'AXON_KUR_SOURCE değeri "sahip/repo" biçiminde olmalı ya da hiç verilmemeli.');
   }
@@ -163,6 +223,10 @@ export function escapeHtml(value) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
+}
+
+export function formatMegabytes(bytes) {
+  return (bytes / 1024 / 1024).toFixed(1).replace('.', ',');
 }
 
 /**
@@ -289,7 +353,7 @@ export function parseVercelAuth(text, nowSeconds) {
 export function parseVercelCurrentTeam(text) {
   try {
     const data = JSON.parse(text);
-    return typeof data?.currentTeam === 'string' && data.currentTeam ? data.currentTeam : null;
+    return data && typeof data.currentTeam === 'string' && data.currentTeam ? data.currentTeam : null;
   } catch {
     return null;
   }
@@ -298,23 +362,20 @@ export function parseVercelCurrentTeam(text) {
 /** `<ad>.vercel.app` boş mu: Vercel boş alt alan için 404 DEPLOYMENT_NOT_FOUND döner. */
 export function isDeploymentNotFound(status, headers, bodyText) {
   if (status !== 404) return false;
-  const header = typeof headers?.get === 'function' ? headers.get('x-vercel-error') : null;
-  return header === 'DEPLOYMENT_NOT_FOUND' || /DEPLOYMENT_NOT_FOUND/.test(bodyText ?? '');
+  const header = headers && typeof headers.get === 'function' ? headers.get('x-vercel-error') : null;
+  return header === 'DEPLOYMENT_NOT_FOUND' || /DEPLOYMENT_NOT_FOUND/.test(bodyText || '');
 }
 
-/** Vercel'in GitHub uygulaması repoyu göremiyor (Vercel CLI'nin `git connect` kontrolüyle aynı). */
+/** Vercel'in GitHub uygulaması repoyu göremiyor: Vercel CLI'nin `git connect` kontrolündeki kodlar. */
 export function isVercelGitAccessError(error) {
-  if (!(error instanceof ApiError) || error.service !== 'Vercel') return false;
-  if (error.action === 'Install GitHub App' || error.code === 'repo_not_found') return true;
-  // Yedek: belgelenmemiş başka bir kodla gelirse mesajdan tanı.
-  return /install[^.]*github|github (app|integration)/i.test(error.message);
+  return error instanceof ApiError && error.service === 'Vercel' && (error.action === 'Install GitHub App' || error.code === 'repo_not_found');
 }
 
 export function isVercelLoginConnectionError(error) {
   return error instanceof ApiError && error.service === 'Vercel' && error.action === 'Add a Login Connection';
 }
 
-/** Yalnız github.com / vercel.com https bağlantıları açılır. */
+/** Yalnız github.com / vercel.com https bağlantıları açılır ya da yazılır. */
 export function safeLink(value, hosts = ['github.com', 'vercel.com']) {
   try {
     const url = new URL(value);
@@ -341,6 +402,38 @@ export function browserCommand(platform) {
   return null;
 }
 
+/**
+ * `open`/`xdg-open` ile açar. Çıkış kodu 0 değilse ya da komut yoksa başarısız. Bazı Linux masaüstlerinde
+ * xdg-open tarayıcı kapanana dek bekler: süre dolarsa açılmış sayılır (adres her durumda ekrana yazılır).
+ */
+export function openWith(spawnImpl, platform, url, timeoutMs = 5000) {
+  const command = browserCommand(platform);
+  if (!command) return Promise.resolve(false);
+  return new Promise((resolve) => {
+    let settled = false;
+    let timer = null;
+    const done = (value) => {
+      if (settled) return;
+      settled = true;
+      if (timer) clearTimeout(timer);
+      resolve(value);
+    };
+    let child;
+    try {
+      child = spawnImpl(command, [url], { stdio: 'ignore', detached: true });
+    } catch {
+      done(false);
+      return;
+    }
+    child.once('error', () => done(false));
+    child.once('exit', (code) => done(code === 0));
+    timer = setTimeout(() => {
+      if (typeof child.unref === 'function') child.unref();
+      done(true);
+    }, timeoutMs);
+  });
+}
+
 const DEPLOY_STATES = {
   QUEUED: 'sırada',
   INITIALIZING: 'hazırlanıyor',
@@ -350,6 +443,192 @@ const DEPLOY_STATES = {
   CANCELED: 'iptal edildi',
   BLOCKED: 'engellendi',
 };
+
+// ---------------------------------------------------------------------------------------------
+// Kaynak arşivi: gzip + tar (ustar, pax x/g, GNU L/K), bellekte
+// ---------------------------------------------------------------------------------------------
+
+function corrupt(detail) {
+  return new KurError(`Kaynak arşivi okunamadı (${detail}).`, 'Komutu yeniden çalıştır; sürerse GitHub\'da konu aç.');
+}
+
+function readCString(buffer, start, length) {
+  const field = buffer.subarray(start, start + length);
+  const end = field.indexOf(0);
+  return (end === -1 ? field : field.subarray(0, end)).toString('utf8');
+}
+
+function readNumber(buffer, start, length) {
+  const field = buffer.subarray(start, start + length);
+  if (field[0] & 0x80) {
+    // GNU base-256 kodlaması (çok büyük dosyalar).
+    let value = field[0] & 0x7f;
+    for (let i = 1; i < field.length; i += 1) value = value * 256 + field[i];
+    return value;
+  }
+  const text = readCString(buffer, start, length).trim();
+  if (text === '') return 0;
+  if (!/^[0-7]+$/.test(text)) throw corrupt('sayı alanı');
+  return Number.parseInt(text, 8);
+}
+
+function parsePax(data) {
+  const records = {};
+  let offset = 0;
+  while (offset < data.length) {
+    const space = data.indexOf(0x20, offset);
+    if (space === -1) break;
+    const length = Number.parseInt(data.toString('utf8', offset, space), 10);
+    if (!Number.isSafeInteger(length) || length <= 0 || offset + length > data.length) throw corrupt('pax kaydı');
+    const record = data.toString('utf8', space + 1, offset + length - 1);
+    const equals = record.indexOf('=');
+    if (equals > 0) records[record.slice(0, equals)] = record.slice(equals + 1);
+    offset += length;
+  }
+  return records;
+}
+
+/**
+ * Tar ayrıştırıcı (saf). Döner: `{ entries: [{ path, type: 'file'|'symlink', mode, data?, linkTarget? }], comment }`.
+ * Klasör ve sabit bağ kayıtları atlanır; `comment` GitHub arşivlerinde kaynağın commit kimliğidir.
+ */
+export function parseTar(buffer) {
+  const entries = [];
+  let offset = 0;
+  let pax = {};
+  let globalPax = {};
+  let longName = null;
+  let longLink = null;
+  while (offset + 512 <= buffer.length) {
+    const header = buffer.subarray(offset, offset + 512);
+    if (header.every((byte) => byte === 0)) break;
+    let sum = 0;
+    for (let i = 0; i < 512; i += 1) sum += i >= 148 && i < 156 ? 0x20 : header[i];
+    if (sum !== readNumber(header, 148, 8)) throw corrupt('başlık sağlaması');
+    const typeflag = header[156] === 0 ? '0' : String.fromCharCode(header[156]);
+    const size = typeflag !== 'x' && typeflag !== 'g' && pax.size !== undefined ? Number(pax.size) : readNumber(header, 124, 12);
+    if (!Number.isSafeInteger(size) || size < 0) throw corrupt('boyut');
+    const dataStart = offset + 512;
+    if (dataStart + size > buffer.length) throw corrupt('eksik veri');
+    const data = buffer.subarray(dataStart, dataStart + size);
+    offset = dataStart + Math.ceil(size / 512) * 512;
+
+    if (typeflag === 'x') {
+      pax = parsePax(data);
+      continue;
+    }
+    if (typeflag === 'g') {
+      globalPax = { ...globalPax, ...parsePax(data) };
+      continue;
+    }
+    if (typeflag === 'L') {
+      longName = readCString(data, 0, data.length);
+      continue;
+    }
+    if (typeflag === 'K') {
+      longLink = readCString(data, 0, data.length);
+      continue;
+    }
+    const posix = header.toString('latin1', 257, 263) === 'ustar\u0000';
+    const prefix = posix ? readCString(header, 345, 155) : '';
+    const shortName = readCString(header, 0, 100);
+    const entryPath = pax.path !== undefined ? pax.path : longName !== null ? longName : prefix ? `${prefix}/${shortName}` : shortName;
+    const linkTarget = pax.linkpath !== undefined ? pax.linkpath : longLink !== null ? longLink : readCString(header, 157, 100);
+    const mode = readNumber(header, 100, 8);
+    pax = {};
+    longName = null;
+    longLink = null;
+    if (typeflag === '0' || typeflag === '7') entries.push({ path: entryPath, type: 'file', mode, data });
+    else if (typeflag === '2') entries.push({ path: entryPath, type: 'symlink', mode, linkTarget });
+  }
+  return { entries, comment: typeof globalPax.comment === 'string' ? globalPax.comment : null };
+}
+
+/** GitHub arşivindeki tek üst klasörü (`repo-sürüm/`) atar; güvensiz yol varsa durur. */
+export function stripTopFolder(entries) {
+  let top = null;
+  const out = [];
+  for (const entry of entries) {
+    const parts = entry.path.split('/');
+    if (parts[parts.length - 1] === '') parts.pop();
+    if (top === null) top = parts[0];
+    if (parts[0] !== top) throw corrupt('birden çok üst klasör');
+    const rest = parts.slice(1);
+    if (rest.length === 0) continue;
+    if (rest.some((part) => part === '' || part === '.' || part === '..') || entry.path.startsWith('/')) throw corrupt('güvensiz yol');
+    if (rest[0] === '.git') continue;
+    out.push({ ...entry, path: rest.join('/') });
+  }
+  return out;
+}
+
+/** Geçerli UTF-8 ve NUL içermiyorsa metin (BOM korunur), değilse null. */
+export function decodeText(buffer) {
+  if (buffer.includes(0)) return null;
+  try {
+    return new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(buffer);
+  } catch {
+    return null;
+  }
+}
+
+export function gitMode(file) {
+  if (file.type === 'symlink') return '120000';
+  return file.mode & 0o111 ? '100755' : '100644';
+}
+
+/** Metin dosyaları ağaçta `content` ile; ikili ya da büyük dosyalar ayrı blob olarak yüklenir. */
+export function planSourceTree(files, { inlineMaxBytes = INLINE_TEXT_MAX_BYTES } = {}) {
+  const inline = [];
+  const blobs = [];
+  for (const file of files) {
+    const mode = gitMode(file);
+    if (file.type === 'symlink') {
+      inline.push({ path: file.path, mode, type: 'blob', content: file.linkTarget });
+      continue;
+    }
+    const text = file.data.length <= inlineMaxBytes ? decodeText(file.data) : null;
+    if (text !== null) inline.push({ path: file.path, mode, type: 'blob', content: text });
+    else blobs.push({ path: file.path, mode, data: file.data });
+  }
+  return { inline, blobs };
+}
+
+/** Ağaç girdilerini istek başına ~`maxBytes` JSON olacak parçalara böler (tek büyük girdi tek başına). */
+export function chunkTreeEntries(entries, maxBytes = TREE_CHUNK_BYTES) {
+  const chunks = [];
+  let current = [];
+  let size = 0;
+  for (const entry of entries) {
+    const entrySize = Buffer.byteLength(JSON.stringify(entry)) + 1;
+    if (current.length > 0 && size + entrySize > maxBytes) {
+      chunks.push(current);
+      current = [];
+      size = 0;
+    }
+    current.push(entry);
+    size += entrySize;
+  }
+  if (current.length > 0) chunks.push(current);
+  return chunks;
+}
+
+/**
+ * GitHub sınır yanıtında beklenecek saniye; sınır değilse ya da çok uzunsa null.
+ * Sıra: `retry-after`, sonra `x-ratelimit-remaining: 0` ise `x-ratelimit-reset`, sonra en az 1 dk (üstel).
+ */
+export function rateLimitWait({ status, headers, data }, nowSeconds, attempt = 0) {
+  if (status !== 403 && status !== 429) return null;
+  const header = (name) => (headers && typeof headers.get === 'function' ? headers.get(name) : null);
+  const retryAfter = header('retry-after');
+  const message = apiErrorDetail(data).message || '';
+  let wait;
+  if (retryAfter !== null && /^\d+$/.test(retryAfter.trim())) wait = Number(retryAfter);
+  else if (header('x-ratelimit-remaining') === '0' && /^\d+$/.test(String(header('x-ratelimit-reset')))) wait = Math.max(1, Number(header('x-ratelimit-reset')) - nowSeconds);
+  else if (status === 429 || /rate limit/i.test(message)) wait = 60 * 2 ** attempt;
+  else return null;
+  return wait > MAX_RATE_WAIT_SECONDS ? null : Math.ceil(wait);
+}
 
 // ---------------------------------------------------------------------------------------------
 // HTTP istemcileri (fetch enjekte edilir; testler taklit verir)
@@ -365,8 +644,9 @@ async function readJson(response) {
   }
 }
 
-export function githubApi(fetchImpl) {
-  return async function github(pathname, { token, method = 'GET', body } = {}) {
+/** `ctx` verilirse (sleep/say/nowSeconds) GitHub'ın istek sınırında bekleyip yeniden dener. */
+export function githubApi(fetchImpl, ctx = null) {
+  async function once(pathname, { token, method = 'GET', body } = {}) {
     const headers = { Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28', 'User-Agent': USER_AGENT };
     if (token) headers.Authorization = `Bearer ${token}`;
     if (body !== undefined) headers['Content-Type'] = 'application/json';
@@ -376,12 +656,21 @@ export function githubApi(fetchImpl) {
         method,
         headers,
         body: body === undefined ? undefined : JSON.stringify(body),
-        signal: AbortSignal.timeout(30_000),
+        signal: AbortSignal.timeout(120_000),
       });
     } catch {
-      throw new KurError("GitHub'a ulaşılamadı.", 'İnternet bağlantını kontrol edip yeniden dene.');
+      throw networkError('GitHub');
     }
-    return { status: response.status, data: await readJson(response) };
+    return { status: response.status, headers: response.headers, data: await readJson(response) };
+  }
+  return async function github(pathname, options = {}) {
+    for (let attempt = 0; ; attempt += 1) {
+      const result = await once(pathname, options);
+      const wait = ctx && attempt < 4 ? rateLimitWait(result, ctx.nowSeconds(), attempt) : null;
+      if (wait === null) return result;
+      ctx.io.say(`  … GitHub istek sınırı: ${wait} sn bekleniyor.`);
+      await ctx.sleep(wait * 1000);
+    }
   };
 }
 
@@ -402,7 +691,7 @@ export function vercelApi(fetchImpl, session) {
         signal: AbortSignal.timeout(30_000),
       });
     } catch {
-      throw new KurError("Vercel'e ulaşılamadı.", 'İnternet bağlantını kontrol edip yeniden dene.');
+      throw networkError('Vercel');
     }
     return { status: response.status, data: await readJson(response) };
   };
@@ -411,6 +700,12 @@ export function vercelApi(fetchImpl, session) {
 function expect(result, statuses, service, what) {
   if (!statuses.includes(result.status)) throw new ApiError(service, result.status, result.data, what);
   return result.data;
+}
+
+function shaOf(result, what) {
+  const data = expect(result, [200, 201], 'GitHub', what);
+  if (!data || typeof data.sha !== 'string' || !/^[0-9a-f]{40,64}$/.test(data.sha)) throw new KurError(`${what}: GitHub beklenmeyen bir yanıt verdi.`, 'Komutu yeniden çalıştır.');
+  return data.sha;
 }
 
 export async function vercelAppDomainFree(fetchImpl, name) {
@@ -423,17 +718,17 @@ export async function vercelAppDomainFree(fetchImpl, name) {
       signal: AbortSignal.timeout(15_000),
     });
   } catch {
-    throw new KurError(`${name}.vercel.app adresine bakılamadı.`, 'İnternet bağlantını kontrol edip yeniden dene.');
+    throw new KurError(`${name}.vercel.app adresine bakılamadı.`, NETWORK_HINT);
   }
   const body = response.status === 404 ? await response.text().catch(() => '') : '';
   return isDeploymentNotFound(response.status, response.headers, body);
 }
 
 export async function convertManifestCode(fetchImpl, code) {
-  if (!/^[A-Za-z0-9_-]{1,200}$/.test(code ?? '')) throw new KurError('GitHub geçersiz bir dönüş kodu gönderdi.', 'Komutu yeniden çalıştır.');
+  if (!/^[A-Za-z0-9_-]{1,200}$/.test(code || '')) throw new KurError('GitHub geçersiz bir dönüş kodu gönderdi.', 'Komutu yeniden çalıştır.');
   const result = await githubApi(fetchImpl)(`/app-manifests/${encodeURIComponent(code)}/conversions`, { method: 'POST' });
   const data = expect(result, [201], 'GitHub', 'GitHub uygulamasının bilgilerini alma');
-  if (!data?.id || !data.slug || !data.client_id || !data.client_secret || !data.pem) {
+  if (!data || !data.id || !data.slug || !data.client_id || !data.client_secret || !data.pem) {
     throw new KurError('GitHub uygulamasının bilgileri eksik geldi.', 'Komutu yeniden çalıştır.');
   }
   return {
@@ -443,13 +738,13 @@ export async function convertManifestCode(fetchImpl, code) {
     clientId: data.client_id,
     clientSecret: data.client_secret,
     pem: data.pem,
-    ownerLogin: typeof data.owner?.login === 'string' ? data.owner.login : null,
+    ownerLogin: data.owner && typeof data.owner.login === 'string' ? data.owner.login : null,
   };
 }
 
 /** Kurulumdaki yetkilendirme kodunu kullanıcı anahtarına çevirir (client id/secret ile). */
 export async function exchangeUserCode(fetchImpl, { clientId, clientSecret, code }) {
-  if (!/^[A-Za-z0-9_-]{1,200}$/.test(code ?? '')) throw new KurError('GitHub geçersiz bir yetki kodu gönderdi.');
+  if (!/^[A-Za-z0-9_-]{1,200}$/.test(code || '')) throw new KurError('GitHub geçersiz bir yetki kodu gönderdi.');
   let response;
   try {
     response = await fetchImpl('https://github.com/login/oauth/access_token', {
@@ -459,14 +754,70 @@ export async function exchangeUserCode(fetchImpl, { clientId, clientSecret, code
       signal: AbortSignal.timeout(30_000),
     });
   } catch {
-    throw new KurError("GitHub'a ulaşılamadı.", 'İnternet bağlantını kontrol edip yeniden dene.');
+    throw networkError('GitHub');
   }
   const data = await readJson(response);
-  if (!response.ok || typeof data?.access_token !== 'string' || !data.access_token) {
-    const reason = typeof data?.error === 'string' && /^[a-z_]{1,60}$/.test(data.error) ? ` (${data.error})` : '';
-    throw new KurError(`GitHub kullanıcı yetkisi alınamadı${reason}.`);
+  if (!response.ok || !data || typeof data.access_token !== 'string' || !data.access_token) {
+    const reason = data && typeof data.error === 'string' && /^[a-z_]{1,60}$/.test(data.error) ? ` (${data.error})` : '';
+    throw new KurError(`GitHub kullanıcı yetkisi alınamadı${reason}.`, 'Tarayıcıdaki "Yeniden dene" düğmesine bas ya da komutu yeniden çalıştır.');
   }
   return data.access_token;
+}
+
+/**
+ * 1. adım: kaynağın son kararlı sürümü (yoksa varsayılan dal) kimliksiz bulunur, arşivi indirilip bellekte açılır.
+ * Döner: `{ ref, version, commit, files, totalBytes }`.
+ */
+export async function downloadSource(ctx, source) {
+  const github = githubApi(ctx.fetch, ctx);
+  let ref;
+  let version = null;
+  const release = await github(`/repos/${source}/releases/latest`);
+  const tag = release.status === 200 && release.data && typeof release.data.tag_name === 'string' ? release.data.tag_name : '';
+  if (tag) {
+    ref = tag;
+    version = tag;
+  } else if (release.status === 404 || release.status === 200) {
+    const repo = await github(`/repos/${source}`);
+    if (repo.status === 404) throw new KurError(`Kaynak repo bulunamadı: ${source}.`, 'AXON_KUR_SOURCE değerini kontrol et ya da kaldırıp yeniden dene.');
+    const data = expect(repo, [200], 'GitHub', 'Kaynak repoyu okuma');
+    ref = data && typeof data.default_branch === 'string' && data.default_branch ? data.default_branch : 'main';
+  } else {
+    throw new ApiError('GitHub', release.status, release.data, 'Kaynağın son sürümünü okuma');
+  }
+
+  const url = `https://codeload.github.com/${source}/tar.gz/${ref.split('/').map(encodeURIComponent).join('/')}`;
+  let response;
+  try {
+    response = await ctx.fetch(url, { headers: { 'User-Agent': USER_AGENT }, signal: AbortSignal.timeout(300_000) });
+  } catch {
+    throw new KurError('Kaynak kodu indirilemedi.', NETWORK_HINT);
+  }
+  if (response.status !== 200) throw new KurError(`Kaynak kodu indirilemedi (${response.status}).`, 'Biraz bekleyip komutu yeniden çalıştır.');
+  const length = Number(response.headers.get('content-length'));
+  if (Number.isFinite(length) && length > MAX_ARCHIVE_BYTES) throw corrupt('arşiv çok büyük');
+  const compressed = Buffer.from(await response.arrayBuffer());
+  if (compressed.length > MAX_ARCHIVE_BYTES) throw corrupt('arşiv çok büyük');
+  let tar;
+  try {
+    tar = zlib.gunzipSync(compressed, { maxOutputLength: 4 * MAX_ARCHIVE_BYTES });
+  } catch {
+    throw corrupt('gzip');
+  }
+  const parsed = parseTar(tar);
+  const files = stripTopFolder(parsed.entries);
+  if (files.length === 0) throw corrupt('boş arşiv');
+  if (!version) {
+    const pkg = files.find((file) => file.path === 'package.json' && file.type === 'file');
+    try {
+      const value = pkg ? JSON.parse(pkg.data.toString('utf8')).version : null;
+      if (typeof value === 'string' && /^[\w.+-]{1,40}$/.test(value)) version = `v${value}`;
+    } catch {
+      // sürüm bilinmiyor
+    }
+  }
+  const totalBytes = files.reduce((sum, file) => sum + (file.data ? file.data.length : 0), 0);
+  return { ref, version, commit: parsed.comment, files, totalBytes };
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -529,7 +880,7 @@ export async function runGithubAppFlow(ctx, { appName, productionUrl, timeoutMs 
     // DNS yeniden bağlama saldırısına karşı yalnız kendi adresimiz.
     if (req.headers.host !== `127.0.0.1:${port}`) return sendHtml(res, 421, resultPage('Geçersiz adres', 'Bu sayfa yalnız kurulum adresinden açılır.'));
     if (req.method !== 'GET') return sendHtml(res, 405, resultPage('Geçersiz istek', 'Bu sayfa yalnız açılabilir.'));
-    const url = new URL(req.url ?? '/', base);
+    const url = new URL(req.url || '/', base);
 
     if (url.pathname === '/') {
       if (app) return sendHtml(res, 200, resultPage('GitHub uygulaması hazır', 'Kuruluma devam et.', { href: installUrl(app.slug), label: 'Uygulamayı kur' }));
@@ -541,7 +892,7 @@ export async function runGithubAppFlow(ctx, { appName, productionUrl, timeoutMs 
         return sendHtml(res, 400, resultPage('Geçersiz istek', 'Bu bağlantı bu kuruluma ait değil. Terminaldeki adımları izle.'));
       }
       if (!app) {
-        converting ??= convertManifestCode(ctx.fetch, url.searchParams.get('code'));
+        if (!converting) converting = convertManifestCode(ctx.fetch, url.searchParams.get('code'));
         try {
           app = await converting;
         } catch (error) {
@@ -551,7 +902,8 @@ export async function runGithubAppFlow(ctx, { appName, productionUrl, timeoutMs 
         ctx.created.githubApp = { name: app.name, slug: app.slug, settingsUrl: `https://github.com/settings/apps/${app.slug}` };
         ctx.io.say(`  ✓ GitHub uygulaması oluşturuldu: ${app.name}`);
         ctx.io.say('  → Şimdi tarayıcıda "Install" düğmesine bas ("All repositories" seçili kalsın), sorulursa "Authorize" de.');
-        ctx.io.say(`    Kurulumdan sonra tarayıcı buraya dönmezse şu adresi aç: ${authorizeUrl()}`);
+        ctx.io.say(`    Kurulum sayfası açılmadıysa bu adresi aç: ${installUrl(app.slug)}`);
+        ctx.io.say(`    Kurulumdan sonra tarayıcı buraya dönmezse bu adresi aç: ${authorizeUrl()}`);
       }
       res.writeHead(302, { Location: installUrl(app.slug), 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer' });
       return res.end();
@@ -601,7 +953,7 @@ export async function runGithubAppFlow(ctx, { appName, productionUrl, timeoutMs 
   } finally {
     clearTimeout(timer);
     server.close();
-    server.closeAllConnections?.();
+    if (typeof server.closeAllConnections === 'function') server.closeAllConnections();
   }
 }
 
@@ -609,6 +961,7 @@ export async function runGithubAppFlow(ctx, { appName, productionUrl, timeoutMs 
 // Adımlar
 // ---------------------------------------------------------------------------------------------
 
+/** Tarayıcıda açmayı dener; açılsa da açılmasa da adres HER ZAMAN ekrana yazılır. */
 async function showUrl(ctx, url) {
   let opened = false;
   try {
@@ -616,20 +969,8 @@ async function showUrl(ctx, url) {
   } catch {
     opened = false;
   }
-  if (!opened) ctx.io.say(`  Tarayıcı açılamadı. Bu adresi kendin aç: ${url}`);
+  ctx.io.say(opened ? `  Tarayıcı açılmadıysa bu adresi aç: ${url}` : `  Tarayıcı açılamadı. Bu adresi aç: ${url}`);
   return opened;
-}
-
-/** Kaynak repo şablon mu? GitHub uygulaması oluşmadan önce, anahtarsız bakılır (herkese açık repo). */
-export async function preflightSource(ctx, source) {
-  const result = await githubApi(ctx.fetch)(`/repos/${source}`);
-  if (result.status === 200 && result.data?.is_template !== true) {
-    throw new KurError(
-      'Kaynak repo şablon olarak işaretli değil.',
-      `${source} reposunun sahibi GitHub'da Settings → General → "Template repository" kutusunu işaretlemeli. Sonra komutu yeniden çalıştır.`,
-    );
-  }
-  return result.status === 200;
 }
 
 function readVercelAuthFile(ctx) {
@@ -638,19 +979,21 @@ function readVercelAuthFile(ctx) {
     if (!text) continue;
     const auth = parseVercelAuth(text, ctx.nowSeconds());
     if (!auth) continue;
-    return { ...auth, currentTeam: parseVercelCurrentTeam(ctx.readText(path.join(dir, 'config.json')) ?? '') };
+    return { ...auth, currentTeam: parseVercelCurrentTeam(ctx.readText(path.join(dir, 'config.json')) || '') };
   }
   return null;
 }
 
 async function vercelUser(ctx, token) {
   const result = await vercelApi(ctx.fetch, { token })('/v2/user');
-  if (result.status !== 200 || typeof result.data?.user?.username !== 'string') return null;
-  return { username: result.data.user.username, defaultTeamId: result.data.user.defaultTeamId ?? null };
+  const user = result.data && result.data.user;
+  if (result.status !== 200 || !user || typeof user.username !== 'string') return null;
+  return { username: user.username, defaultTeamId: user.defaultTeamId || null };
 }
 
 async function runVercelLogin(ctx) {
   ctx.io.say('  → Tarayıcıda Vercel açılacak; orada girişi onayla. (Vercel aracı ilk seferde indirilir, biraz sürebilir.)');
+  ctx.io.say('    Vercel aracı bir adres yazarsa ve tarayıcı açılmazsa o adresi kendin aç.');
   const code = await ctx.run('npx', ['--yes', `vercel@${VERCEL_CLI_VERSION}`, 'login']);
   if (code !== 0) ctx.io.say('  ! Vercel girişi tamamlanamadı.');
   return code === 0;
@@ -673,7 +1016,7 @@ async function loginFromPaste(ctx) {
     if (!token) continue;
     const user = await vercelUser(ctx, token);
     if (user) return { auth: { token, expiresAt: null, currentTeam: null }, user };
-    ctx.io.say('  ! Bu anahtar Vercel\'de geçmedi. Tamamını kopyalayıp yeniden yapıştır.');
+    ctx.io.say("  ! Bu anahtar Vercel'de geçmedi. Tamamını kopyalayıp yeniden yapıştır.");
   }
   throw new KurError('Vercel hesabına bağlanılamadı.', `${VERCEL_TOKENS_URL} adresinden yeni bir anahtar oluşturup komutu yeniden çalıştır.`);
 }
@@ -694,17 +1037,18 @@ export async function vercelLogin(ctx) {
   }
   const session = { token: login.auth.token, teamId: null, source: login.source, expiresAt: login.auth.expiresAt };
   const team = await chooseVercelTeam(ctx, session, login.user, login.auth.currentTeam);
-  session.teamId = team?.id ?? null;
+  session.teamId = team ? team.id : null;
   ctx.io.say(`  ✓ Vercel hesabı: ${login.user.username}${team ? ` (ekip: ${team.slug})` : ''}`);
   return { session, user: login.user, team };
 }
 
 async function chooseVercelTeam(ctx, session, user, currentTeam) {
   const result = await vercelApi(ctx.fetch, { token: session.token })('/v2/teams', { query: { limit: 100 } });
-  const teams = expect(result, [200], 'Vercel', 'Vercel ekiplerini okuma')?.teams ?? [];
-  const usable = teams.filter((team) => typeof team?.id === 'string' && typeof team?.slug === 'string');
-  if (usable.length <= 1) return usable[0] ?? null;
-  const preferred = usable.findIndex((team) => team.id === (currentTeam ?? user.defaultTeamId));
+  const data = expect(result, [200], 'Vercel', 'Vercel ekiplerini okuma');
+  const teams = data && Array.isArray(data.teams) ? data.teams : [];
+  const usable = teams.filter((team) => team && typeof team.id === 'string' && typeof team.slug === 'string');
+  if (usable.length <= 1) return usable[0] || null;
+  const preferred = usable.findIndex((team) => team.id === (currentTeam || user.defaultTeamId));
   ctx.io.say('  Vercel hesabında birden çok ekip var. Uygulama hangisinde dursun?');
   usable.forEach((team, index) => ctx.io.say(`    ${index + 1}) ${team.slug}${team.name && team.name !== team.slug ? ` (${team.name})` : ''}`));
   for (;;) {
@@ -720,7 +1064,7 @@ export async function ensureFreshVercel(ctx, vercel) {
   const { session } = vercel;
   if (session.source !== 'file' || session.expiresAt === null || session.expiresAt - ctx.nowSeconds() > 300) return;
   ctx.io.say('  Vercel oturumunun süresi dolmak üzere; yeniden giriş yapılacak.');
-  const fresh = (await loginFromCli(ctx)) ?? (await loginFromPaste(ctx));
+  const fresh = (await loginFromCli(ctx)) || (await loginFromPaste(ctx));
   if (fresh.user.username !== vercel.user.username) {
     throw new KurError(`Vercel'e başka bir hesapla (${fresh.user.username}) giriş yapıldı.`, `"${vercel.user.username}" hesabıyla giriş yapıp komutu yeniden çalıştır.`);
   }
@@ -728,11 +1072,10 @@ export async function ensureFreshVercel(ctx, vercel) {
   session.expiresAt = fresh.auth.expiresAt;
 }
 
-/** 3. adım: ad seçimi; `<ad>.vercel.app` boş olmalı, Vercel hesabında aynı adlı proje olmamalı. */
-export async function chooseProjectName(ctx, vercel) {
-  const api = vercelApi(ctx.fetch, vercel.session);
+/** Boş bir ad sorar: DNS'e uygun, `<ad>.vercel.app` boş, Vercel hesabında aynı adlı proje yok. */
+async function askFreeProjectName(ctx, api, question) {
   for (;;) {
-    const answer = (await ctx.io.ask('  Uygulamanın adı (adresin https://<ad>.vercel.app olur)', defaultProjectName(ctx.randomInt))).trim().toLowerCase();
+    const answer = (await ctx.io.ask(question, defaultProjectName(ctx.randomInt))).trim().toLowerCase();
     const problem = validateProjectName(answer);
     if (problem) {
       ctx.io.say(`  ! ${problem}`);
@@ -748,22 +1091,28 @@ export async function chooseProjectName(ctx, vercel) {
       continue;
     }
     expect(existing, [404], 'Vercel', 'Vercel projesine bakma');
-    ctx.io.say(`  ✓ Adres boş: https://${answer}.vercel.app`);
     return answer;
   }
+}
+
+/** 3. adım: ad seçimi (proje 6. adımda, repo hazır olunca açılır). */
+export async function chooseProjectName(ctx, vercel) {
+  const name = await askFreeProjectName(ctx, vercelApi(ctx.fetch, vercel.session), '  Uygulamanın adı (adresin https://<ad>.vercel.app olur)');
+  ctx.io.say(`  ✓ Adres boş: https://${name}.vercel.app`);
+  return name;
 }
 
 /** 4. adım: GitHub uygulaması, kullanıcı anahtarı ve kurulum. */
 export async function setupGithub(ctx, { productionUrl }) {
   const { app, userToken, installationIdHint } = await runGithubAppFlow(ctx, { appName: githubAppName(ctx.randomInt), productionUrl });
-  const github = githubApi(ctx.fetch);
+  const github = githubApi(ctx.fetch, ctx);
   const user = expect(await github('/user', { token: userToken }), [200], 'GitHub', 'GitHub hesabını okuma');
-  const login = user?.login;
+  const login = user && user.login;
   if (typeof login !== 'string') throw new KurError('GitHub hesabı okunamadı.', 'Komutu yeniden çalıştır.');
   if (app.ownerLogin && app.ownerLogin.toLowerCase() !== login.toLowerCase()) {
     throw new KurError(
       `GitHub uygulaması "${app.ownerLogin}" hesabında, yetki ise "${login}" hesabından verildi.`,
-      'Tarayıcıda GitHub\'a tek hesapla giriş yapıp komutu yeniden çalıştır.',
+      "Tarayıcıda GitHub'a tek hesapla giriş yapıp komutu yeniden çalıştır.",
     );
   }
   ctx.io.say(`  ✓ GitHub hesabın: ${login}`);
@@ -772,7 +1121,7 @@ export async function setupGithub(ctx, { productionUrl }) {
 }
 
 async function ensureInstallation(ctx, app, login, installationIdHint) {
-  const github = githubApi(ctx.fetch);
+  const github = githubApi(ctx.fetch, ctx);
   const settingsUrl = (id) => `https://github.com/settings/installations/${id}`;
   for (let attempt = 1; ; attempt += 1) {
     const jwt = githubAppJwt({ issuer: app.clientId, pem: app.pem, nowSeconds: ctx.nowSeconds() });
@@ -786,7 +1135,7 @@ async function ensureInstallation(ctx, app, login, installationIdHint) {
     }
     const data = expect(result, [200], 'GitHub', 'GitHub uygulamasının kurulumunu okuma');
     if (installationIdHint && String(data.id) !== String(installationIdHint)) {
-      ctx.io.say('  ! GitHub\'ın döndüğü kurulum kimliği eşleşmedi; hesabındaki kurulum kullanılacak.');
+      ctx.io.say("  ! GitHub'ın döndüğü kurulum kimliği eşleşmedi; hesabındaki kurulum kullanılacak.");
     }
     if (data.repository_selection === 'all') {
       ctx.io.say('  ✓ Uygulama hesabına kuruldu (tüm repolar).');
@@ -830,115 +1179,111 @@ async function waitForBranch(ctx, github, token, fullName, branch) {
     await ctx.sleep(2000);
   }
   throw new KurError(
-    'Kod reposu GitHub\'da hazırlanırken süre doldu.',
-    `https://github.com/${fullName} sayfasında dosyalar görünüyorsa GitHub uygulamasının "All repositories" erişimiyle kurulu olduğunu kontrol et, sonra komutu yeniden çalıştır.`,
+    "Yeni repo GitHub'da hazırlanırken süre doldu.",
+    `https://github.com/${fullName} sayfası açılıyorsa GitHub uygulamasının "All repositories" erişimiyle kurulu olduğunu kontrol et, sonra komutu yeniden çalıştır.`,
   );
 }
 
-/** Şablondan üretim GitHub'da izinle reddedilirse: aynı şablondan tarayıcıda elle oluşturma. */
-async function manualTemplateRepo(ctx, github, token, { source, login, name, status }) {
-  ctx.io.say(`  ! GitHub kod reposunu otomatik oluşturmaya izin vermedi (${status}). Tarayıcıda elle oluşturalım:`);
-  ctx.io.say('    1) Açılan sayfada "Use this template" → "Create a new repository" seç.');
-  ctx.io.say(`    2) Owner: ${login}, Repository name: ${name}, görünürlük: Private.`);
-  ctx.io.say('    3) "Create repository" de.');
-  await showUrl(ctx, `https://github.com/${source}`);
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    await ctx.io.pause('  Repo oluşunca Enter\'a bas.');
-    const result = await github(`/repos/${login}/${name}`, { token });
-    if (result.status === 200 && result.data?.private === true) return result.data;
-    if (result.status === 200) ctx.io.say(`  ! ${login}/${name} herkese açık. Repo ayarlarında (Settings → Danger Zone) Private yap.`);
-    else ctx.io.say(`  ! ${login}/${name} henüz görünmüyor.`);
+/** Özel repo açar (`auto_init`); ad doluysa yenisini sorar. Döner: `{ name, data, created }`. */
+async function createPrivateRepo(ctx, github, token, { login, name, label, description, forbidden = [], allowExisting = false }) {
+  let current = name;
+  for (;;) {
+    const existing = await github(`/repos/${login}/${current}`, { token });
+    if (existing.status === 200) {
+      if (allowExisting && existing.data && existing.data.private === true && existing.data.fork !== true) {
+        if (await ctx.io.confirm(`  ${login}/${current} zaten var (özel). ${label} olarak bu kullanılsın mı?`, true)) return { name: current, data: existing.data, created: false };
+      } else if (allowExisting) {
+        ctx.io.say(`  ! ${login}/${current} herkese açık ya da fork; ${label.toLowerCase()} olamaz.`);
+      }
+      current = await askRepoName(ctx, `  ${login}/${current} kullanılamıyor. ${label} için başka bir ad`, `${current}-2`, { forbidden });
+      continue;
+    }
+    expect(existing, [404], 'GitHub', 'Repo adına bakma');
+    const created = await github('/user/repos', { token, method: 'POST', body: { name: current, description, private: true, auto_init: true } });
+    if (created.status === 201) return { name: current, data: created.data || {}, created: true };
+    if (created.status === 422) {
+      ctx.io.say(`  ! ${login}/${current} açılamadı (${apiErrorDetail(created.data).message || 'ad kullanılıyor'}).`);
+      current = await askRepoName(ctx, `  ${label} için başka bir ad`, `${current}-2`, { forbidden });
+      continue;
+    }
+    throw new ApiError('GitHub', created.status, created.data, `${label} oluşturma`);
   }
-  throw new KurError(`${login}/${name} özel repo olarak bulunamadı.`, 'Repoyu özel olarak oluşturup komutu yeniden çalıştır.');
 }
 
-/** 5. adım: kod reposu (şablondan, özel) ve veri reposu (özel, README'li). */
-export async function createRepos(ctx, { source, sourceVerified = false, login, token, projectName }) {
-  const github = githubApi(ctx.fetch);
-  if (!sourceVerified) {
-    // Hazırlıkta anahtarsız bakılamadıysa (ör. özel kaynak ya da istek sınırı) şimdi kullanıcı anahtarıyla.
-    const sourceRepo = await github(`/repos/${source}`, { token });
-    if (sourceRepo.status === 404) throw new KurError(`Kaynak repo bulunamadı: ${source}.`, 'AXON_KUR_SOURCE değerini kontrol et ya da kaldırıp yeniden dene.');
-    if (expect(sourceRepo, [200], 'GitHub', 'Kaynak repoyu okuma')?.is_template !== true) {
-      throw new KurError('Kaynak repo şablon olarak işaretli değil.', `${source} reposunun sahibi GitHub'da Settings → General → "Template repository" kutusunu işaretlemeli.`);
+/**
+ * Kaynağı tek, ebeveynsiz commit olarak yükler (Git Data API): ikili/büyük dosyalar blob, metinler
+ * ağaçta `content`; ağaç ~2 MB'lık parçalarla `base_tree` üzerine kurulur; dal `force` ile taşınır.
+ * İçerik oluşturan istekler arasında en az WRITE_GAP_MS beklenir.
+ */
+export async function uploadSource(ctx, { github, token, fullName, branch, source }) {
+  let last = null;
+  const write = async (pathname, body, method = 'POST') => {
+    if (last !== null) {
+      const wait = last + WRITE_GAP_MS - ctx.nowMs();
+      if (wait > 0) await ctx.sleep(wait);
     }
+    last = ctx.nowMs();
+    return github(pathname, { token, method, body });
+  };
+  const plan = planSourceTree(source.files);
+  ctx.io.say(`  → Kod yükleniyor: ${source.files.length} dosya (${formatMegabytes(source.totalBytes)} MB). Birkaç dakika sürebilir.`);
+  const blobEntries = [];
+  for (const blob of plan.blobs) {
+    const result = await write(`/repos/${fullName}/git/blobs`, { content: blob.data.toString('base64'), encoding: 'base64' });
+    blobEntries.push({ path: blob.path, mode: blob.mode, type: 'blob', sha: shaOf(result, `${blob.path} dosyasını yükleme`) });
   }
+  const chunks = chunkTreeEntries([...plan.inline, ...blobEntries]);
+  let tree = null;
+  for (let i = 0; i < chunks.length; i += 1) {
+    const result = await write(`/repos/${fullName}/git/trees`, tree ? { base_tree: tree, tree: chunks[i] } : { tree: chunks[i] });
+    tree = shaOf(result, 'Kod ağacını kurma');
+    ctx.io.say(`    Dosyalar: ${i + 1}/${chunks.length}`);
+  }
+  const title = `Axon Fit ${source.version || `(${source.ref})`}`;
+  const message = source.commit ? `${title}\n\nKaynak: ${source.name}@${source.commit}` : title;
+  const commit = shaOf(await write(`/repos/${fullName}/git/commits`, { message, tree, parents: [] }), 'Commit oluşturma');
+  expect(await write(`/repos/${fullName}/git/refs/heads/${encodeURIComponent(branch)}`, { sha: commit, force: true }, 'PATCH'), [200], 'GitHub', `${branch} dalını güncelleme`);
+  return { commit, tree, requests: plan.blobs.length + chunks.length + 2 };
+}
 
-  let codeName = projectName;
-  let code;
-  for (;;) {
-    const existing = await github(`/repos/${login}/${codeName}`, { token });
-    if (existing.status === 200) {
-      codeName = await askRepoName(ctx, `  ${login}/${codeName} zaten var. Kod reposu için başka bir ad`, `${codeName}-2`);
-      continue;
-    }
-    expect(existing, [404], 'GitHub', 'Repo adına bakma');
-    const generated = await github(`/repos/${source}/generate`, {
-      token,
-      method: 'POST',
-      body: { owner: login, name: codeName, description: 'Axon Fit — kendi kopyam (kod)', include_all_branches: false, private: true },
-    });
-    if (generated.status === 201) {
-      code = generated.data;
-      break;
-    }
-    if (generated.status === 422 && /already exists/i.test(apiErrorDetail(generated.data).message ?? '')) {
-      codeName = await askRepoName(ctx, `  ${login}/${codeName} zaten var. Kod reposu için başka bir ad`, `${codeName}-2`);
-      continue;
-    }
-    if (generated.status === 403 || generated.status === 404) {
-      code = await manualTemplateRepo(ctx, github, token, { source, login, name: codeName, status: generated.status });
-      break;
-    }
-    throw new ApiError('GitHub', generated.status, generated.data, 'Kod reposunu oluşturma');
-  }
-  const codeFullName = `${login}/${codeName}`;
+/** 5. adım: kod reposu (kaynaktan tek commit, özel) ve veri reposu (özel, README'li). */
+export async function createRepos(ctx, { login, token, source }) {
+  const github = githubApi(ctx.fetch, ctx);
+  const code = await createPrivateRepo(ctx, github, token, {
+    login,
+    name: DEFAULT_CODE_REPO,
+    label: 'Kod reposu',
+    description: 'Axon Fit — kendi kopyam (kod)',
+  });
+  const codeFullName = `${login}/${code.name}`;
   ctx.created.codeRepo = `https://github.com/${codeFullName}`;
-  const branch = typeof code?.default_branch === 'string' && code.default_branch ? code.default_branch : 'main';
+  const branch = typeof code.data.default_branch === 'string' && code.data.default_branch ? code.data.default_branch : 'main';
   await waitForBranch(ctx, github, token, codeFullName, branch);
-  ctx.io.say(`  ✓ Kod reposu (özel): https://github.com/${codeFullName}`);
+  await uploadSource(ctx, { github, token, fullName: codeFullName, branch, source });
+  ctx.io.say(`  ✓ Kod reposu (özel, ${source.version || source.ref}): https://github.com/${codeFullName}`);
 
-  let dataName = dataRepoName(codeName);
-  let dataCreated = false;
-  for (;;) {
-    const existing = await github(`/repos/${login}/${dataName}`, { token });
-    if (existing.status === 200) {
-      if (existing.data?.private === true && existing.data?.fork !== true) {
-        if (await ctx.io.confirm(`  ${login}/${dataName} zaten var (özel). Veri reposu olarak bu kullanılsın mı?`, true)) break;
-      } else {
-        ctx.io.say(`  ! ${login}/${dataName} herkese açık ya da fork; veri reposu olamaz.`);
-      }
-      dataName = await askRepoName(ctx, '  Veri reposu için başka bir ad', `${dataName}-2`, { forbidden: [codeName] });
-      continue;
-    }
-    expect(existing, [404], 'GitHub', 'Repo adına bakma');
-    const created = await github('/user/repos', {
-      token,
-      method: 'POST',
-      body: { name: dataName, description: 'Axon Fit verileri (özel)', private: true, auto_init: true },
-    });
-    if (created.status === 201) {
-      dataCreated = true;
-      break;
-    }
-    if (created.status === 422) {
-      ctx.io.say(`  ! ${login}/${dataName} açılamadı (${apiErrorDetail(created.data).message ?? 'ad kullanılıyor'}).`);
-      dataName = await askRepoName(ctx, '  Veri reposu için başka bir ad', `${dataName}-2`, { forbidden: [codeName] });
-      continue;
-    }
-    throw new ApiError('GitHub', created.status, created.data, 'Veri reposunu oluşturma');
-  }
-  if (dataCreated) ctx.created.dataRepo = `https://github.com/${login}/${dataName}`;
-  ctx.io.say(`  ✓ Veri reposu (özel): https://github.com/${login}/${dataName}`);
-  return { codeName, codeFullName, codeRepoId: code?.id ?? null, branch, dataName };
+  const data = await createPrivateRepo(ctx, github, token, {
+    login,
+    name: dataRepoName(code.name),
+    label: 'Veri reposu',
+    description: 'Axon Fit verileri (özel)',
+    forbidden: [code.name],
+    allowExisting: true,
+  });
+  if (data.created) ctx.created.dataRepo = `https://github.com/${login}/${data.name}`;
+  ctx.io.say(`  ✓ Veri reposu (özel): https://github.com/${login}/${data.name}`);
+  return { codeName: code.name, codeFullName, codeRepoId: code.data.id || null, branch, dataName: data.name };
 }
 
 function linkedTo(project, fullName) {
-  const link = project?.link;
-  return link?.type === 'github' && typeof link.org === 'string' && typeof link.repo === 'string' && `${link.org}/${link.repo}`.toLowerCase() === fullName.toLowerCase();
+  const link = project && project.link;
+  return Boolean(link) && link.type === 'github' && typeof link.org === 'string' && typeof link.repo === 'string' && `${link.org}/${link.repo}`.toLowerCase() === fullName.toLowerCase();
 }
 
-/** 6. adım: Vercel projesi, GitHub kod reposuna bağlı. Vercel'in GitHub uygulaması repoyu görmüyorsa kurdurur. */
+/**
+ * 6. adım: repo hazır olunca Vercel projesi `gitRepository` ile açılır (belgeli uç). Ad o arada dolduysa
+ * yeni ad sorulur. Vercel'in GitHub uygulaması repoyu görmüyorsa kurulum sayfası açılır, onaydan sonra yeniden denenir.
+ */
 export async function ensureVercelProject(ctx, vercel, { name, repoFullName }) {
   const api = vercelApi(ctx.fetch, vercel.session);
   const getProject = async (idOrName) => {
@@ -946,31 +1291,25 @@ export async function ensureVercelProject(ctx, vercel, { name, repoFullName }) {
     if (result.status === 404) return null;
     return expect(result, [200], 'Vercel', 'Vercel projesini okuma');
   };
+  let current = name;
   for (let attempt = 1; ; attempt += 1) {
-    try {
-      let project = await getProject(name);
-      if (project && !linkedTo(project, repoFullName)) {
-        if (project.link) throw new KurError(`Vercel'deki "${name}" projesi başka bir repoya bağlı.`, 'Komutu yeniden çalıştırıp başka bir ad seç.');
-        // Proje var ama bağlı değil (yarım kalmış deneme): Vercel CLI'nin `git connect` ucuyla bağla.
-        expect(await api(`/v9/projects/${encodeURIComponent(project.id)}/link`, { method: 'POST', body: { type: 'github', repo: repoFullName } }), [200, 201], 'Vercel', 'Vercel projesini repoya bağlama');
-        project = await getProject(project.id);
-      }
-      if (!project) {
-        const created = await api('/v11/projects', {
-          method: 'POST',
-          body: { name, framework: 'nextjs', gitRepository: { type: 'github', repo: repoFullName } },
-        });
-        const data = expect(created, [200, 201], 'Vercel', 'Vercel projesini açma');
-        project = await getProject(data?.id ?? name);
-      }
-      if (!project?.id) throw new KurError('Vercel projesi okunamadı.', 'Komutu yeniden çalıştır.');
-      ctx.created.vercelProject = `https://vercel.com/${vercel.team?.slug ?? vercel.user.username}/${project.name ?? name}`;
-      if (!linkedTo(project, repoFullName)) throw new KurError('Vercel projesi GitHub reposuna bağlanamadı.', `${ctx.created.vercelProject}/settings/git adresinden ${repoFullName} reposunu bağla, sonra komutu yeniden çalıştır.`);
-      ctx.io.say(`  ✓ Vercel projesi: ${ctx.created.vercelProject} (${repoFullName} reposuna bağlı)`);
-      return project;
-    } catch (error) {
-      if (attempt >= 8) throw error;
-      if (isVercelGitAccessError(error)) {
+    const created = await api('/v11/projects', {
+      method: 'POST',
+      body: { name: current, framework: 'nextjs', gitRepository: { type: 'github', repo: repoFullName } },
+    });
+    let project = null;
+    if (created.status === 200 || created.status === 201) {
+      project = await getProject((created.data && created.data.id) || current);
+    } else {
+      const error = new ApiError('Vercel', created.status, created.data, 'Vercel projesini açma');
+      const existing = isVercelGitAccessError(error) || isVercelLoginConnectionError(error) ? null : await getProject(current);
+      if (existing && linkedTo(existing, repoFullName)) {
+        project = existing; // önceki deneme aslında başarılı olmuş
+      } else if (existing) {
+        ctx.io.say(`  ! "${current}" adı Vercel'de artık dolu.`);
+        current = await askFreeProjectName(ctx, api, '  Uygulama için başka bir ad');
+        continue;
+      } else if (attempt < 8 && isVercelGitAccessError(error)) {
         // Yeni açılan repoyu Vercel birkaç saniye sonra görebilir: önce kendiliğinden yeniden dene.
         if (attempt <= 2) {
           await ctx.sleep(5000);
@@ -978,19 +1317,26 @@ export async function ensureVercelProject(ctx, vercel, { name, repoFullName }) {
         }
         ctx.io.say(`  ! Vercel'in GitHub uygulaması ${repoFullName} reposunu göremiyor.`);
         ctx.io.say('    Açılan sayfada Vercel\'i kendi GitHub hesabına kur ("All repositories" ya da bu repoyu seç) ve kaydet.');
-        await showUrl(ctx, safeLink(error.link, ['github.com']) ?? VERCEL_GITHUB_INSTALL_URL);
-        await ctx.io.pause('  Tamam olunca Enter\'a bas.');
+        await showUrl(ctx, safeLink(error.link, ['github.com']) || VERCEL_GITHUB_INSTALL_URL);
+        await ctx.io.pause("  Tamam olunca Enter'a bas.");
         continue;
-      }
-      if (isVercelLoginConnectionError(error)) {
-        ctx.io.say('  ! Vercel hesabın GitHub hesabına bağlı değil. Açılan sayfada GitHub bağlantısını ekle.');
+      } else if (attempt < 8 && isVercelLoginConnectionError(error)) {
+        ctx.io.say('  ! Vercel hesabın GitHub hesabına bağlı değil. Vercel ayarlarında GitHub bağlantısını ekle.');
         const link = safeLink(error.link);
         if (link) await showUrl(ctx, link);
-        await ctx.io.pause('  Tamam olunca Enter\'a bas.');
+        await ctx.io.pause("  Tamam olunca Enter'a bas.");
         continue;
+      } else {
+        throw error;
       }
-      throw error;
     }
+    if (!project || !project.id) throw new KurError('Vercel projesi okunamadı.', 'Komutu yeniden çalıştır.');
+    ctx.created.vercelProject = `https://vercel.com/${vercel.team ? vercel.team.slug : vercel.user.username}/${project.name || current}`;
+    if (!linkedTo(project, repoFullName)) {
+      throw new KurError('Vercel projesi GitHub reposuna bağlanamadı.', `${ctx.created.vercelProject}/settings/git adresinden ${repoFullName} reposunu bağla, sonra Vercel'de "Redeploy" de.`);
+    }
+    ctx.io.say(`  ✓ Vercel projesi: ${ctx.created.vercelProject} (${repoFullName} reposuna bağlı)`);
+    return project;
   }
 }
 
@@ -998,15 +1344,22 @@ export async function ensureVercelProject(ctx, vercel, { name, repoFullName }) {
 export async function writeEnv(ctx, vercel, projectId, items) {
   const api = vercelApi(ctx.fetch, vercel.session);
   const result = await api(`/v10/projects/${encodeURIComponent(projectId)}/env`, { method: 'POST', query: { upsert: 'true' }, body: items });
-  if (result.status !== 200 && result.status !== 201) throw new ApiError('Vercel', result.status, result.data, 'Ayarları Vercel\'e yazma');
-  const failed = Array.isArray(result.data?.failed) ? result.data.failed : [];
+  if (result.status !== 200 && result.status !== 201) throw new ApiError('Vercel', result.status, result.data, "Ayarları Vercel'e yazma");
+  const failed = result.data && Array.isArray(result.data.failed) ? result.data.failed : [];
   if (failed.length) {
-    const keys = failed.map((item) => `${item?.error?.key ?? item?.error?.envVarKey ?? '?'}${item?.error?.code ? ` (${item.error.code})` : ''}`).join(', ');
-    throw new KurError(`Bazı ayarlar Vercel'e yazılamadı: ${keys}.`, 'Komutu yeniden çalıştırmadan önce Vercel projesinin Settings → Environment Variables ekranına bak.');
+    const keys = failed
+      .map((item) => {
+        const error = (item && item.error) || {};
+        const key = /^[A-Z0-9_]{1,100}$/.test(error.key || '') ? error.key : /^[A-Z0-9_]{1,100}$/.test(error.envVarKey || '') ? error.envVarKey : '?';
+        const code = /^[a-z0-9_]{1,60}$/.test(error.code || '') ? ` (${error.code})` : '';
+        return `${key}${code}`;
+      })
+      .join(', ');
+    throw new KurError(`Bazı ayarlar Vercel'e yazılamadı: ${keys}.`, 'Vercel projesinin Settings → Environment Variables ekranına bak; eksikleri ekleyip "Redeploy" de.');
   }
   const saved = expect(await api(`/v10/projects/${encodeURIComponent(projectId)}/env`), [200], 'Vercel', 'Ayarları geri okuma');
-  const envs = Array.isArray(saved?.envs) ? saved.envs : [];
-  const missing = items.filter((item) => !envs.some((env) => env?.key === item.key && (Array.isArray(env.target) ? env.target.includes('production') : env.target === 'production')));
+  const envs = saved && Array.isArray(saved.envs) ? saved.envs : [];
+  const missing = items.filter((item) => !envs.some((env) => env && env.key === item.key && (Array.isArray(env.target) ? env.target.includes('production') : env.target === 'production')));
   if (missing.length) throw new KurError(`Vercel'de görünmeyen ayarlar: ${missing.map((item) => item.key).join(', ')}.`, 'Vercel projesinin Settings → Environment Variables ekranına bak.');
   ctx.created.env = true;
   ctx.io.say(`  ✓ ${items.length} ayar Production ortamına yazıldı (sırlar gizli tutuluyor).`);
@@ -1015,24 +1368,25 @@ export async function writeEnv(ctx, vercel, projectId, items) {
 /** 7b: Production yayını (gitSource) ve hazır olana dek bekleme. */
 export async function deployAndWait(ctx, vercel, { project, repoId, branch, timeoutMs = DEPLOY_WAIT_MS }) {
   const api = vercelApi(ctx.fetch, vercel.session);
-  const numericRepoId = Number(project.link?.repoId ?? repoId);
+  const link = project.link || {};
+  const numericRepoId = Number(link.repoId !== undefined && link.repoId !== null ? link.repoId : repoId);
   const gitSource = Number.isSafeInteger(numericRepoId) && numericRepoId > 0
     ? { type: 'github', repoId: numericRepoId, ref: branch }
-    : { type: 'github', org: project.link?.org, repo: project.link?.repo, ref: branch };
+    : { type: 'github', org: link.org, repo: link.repo, ref: branch };
   const created = await api('/v13/deployments', {
     method: 'POST',
     query: { skipAutoDetectionConfirmation: '1' },
     body: { name: project.name, project: project.id, target: 'production', gitSource, projectSettings: { framework: 'nextjs' } },
   });
   let deployment = expect(created, [200, 201], 'Vercel', 'Yayını başlatma');
-  if (!deployment?.id) throw new KurError('Vercel yayını başlatılamadı.', 'Vercel projesinde "Redeploy" ile yayını kendin başlat.');
+  if (!deployment || !deployment.id) throw new KurError('Vercel yayını başlatılamadı.', 'Vercel projesinde "Redeploy" ile yayını kendin başlat.');
   ctx.io.say('  → Yayın başladı; hazır olması genelde 2-5 dakika sürer.');
-  const started = Date.now();
+  const started = ctx.nowMs();
   let lastState = null;
   for (;;) {
     const state = deployment.readyState;
     if (state && state !== lastState) {
-      ctx.io.say(`    Yayın durumu: ${DEPLOY_STATES[state] ?? state}`);
+      ctx.io.say(`    Yayın durumu: ${DEPLOY_STATES[state] || state}`);
       lastState = state;
     }
     if (state === 'READY') return deployment;
@@ -1043,7 +1397,7 @@ export async function deployAndWait(ctx, vercel, { project, repoId, branch, time
         `${where ? `Ayrıntı: ${where}. ` : ''}Ayarlar kaydedildi; sorun giderilince Vercel projesinde "Redeploy" yeterli.`,
       );
     }
-    if (Date.now() - started > timeoutMs) {
+    if (ctx.nowMs() - started > timeoutMs) {
       throw new KurError('Yayın beklenenden uzun sürdü.', 'Vercel projesinin Deployments ekranından durumu izle; hazır olunca adresini aç.');
     }
     await ctx.sleep(5000);
@@ -1061,9 +1415,11 @@ export async function productionDomain(ctx, vercel, { project, deployment, expec
   }
   if (Array.isArray(current.alias) && current.alias.includes(expectedHost)) return expectedHost;
   const domains = await api(`/v9/projects/${encodeURIComponent(project.id)}/domains`, { query: { production: 'true' } });
-  const names = domains.status === 200 && Array.isArray(domains.data?.domains) ? domains.data.domains.map((domain) => domain?.name).filter((name) => typeof name === 'string') : [];
+  const names = domains.status === 200 && domains.data && Array.isArray(domains.data.domains)
+    ? domains.data.domains.map((domain) => domain && domain.name).filter((name) => typeof name === 'string')
+    : [];
   if (names.includes(expectedHost)) return expectedHost;
-  return names.find((name) => name.endsWith('.vercel.app')) ?? names[0] ?? expectedHost;
+  return names.find((name) => name.endsWith('.vercel.app')) || names[0] || expectedHost;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -1074,25 +1430,25 @@ export async function kur(ctx) {
   const { io } = ctx;
   const step = (n, text) => io.say(`\n[${n}/${STEP_COUNT}] ${text}`);
 
-  step(1, 'Hazırlık: Node sürümü ve kaynak kontrol ediliyor…');
+  step(1, 'Hazırlık: Node sürümü kontrol ediliyor, Axon Fit\'in son sürümü indiriliyor…');
   checkNodeVersion(ctx.nodeVersion);
-  const source = parseSource(ctx.env.AXON_KUR_SOURCE || DEFAULT_SOURCE);
-  const sourceVerified = await preflightSource(ctx, source);
-  io.say(`  ✓ Node ${ctx.nodeVersion}, kaynak: ${source}`);
+  const sourceName = parseSource(ctx.env.AXON_KUR_SOURCE || DEFAULT_SOURCE);
+  const source = { name: sourceName, ...(await downloadSource(ctx, sourceName)) };
+  io.say(`  ✓ Node ${ctx.nodeVersion}; kaynak ${sourceName} ${source.version || source.ref} (${source.files.length} dosya, ${formatMegabytes(source.totalBytes)} MB)`);
 
   step(2, 'Vercel hesabına giriş…');
   const vercel = await vercelLogin(ctx);
 
   step(3, 'Uygulamanın adı ve adresi…');
   const name = await chooseProjectName(ctx, vercel);
-  const expectedHost = `${name}.vercel.app`;
-  const productionUrl = `https://${expectedHost}`;
+  const callbackHost = `${name}.vercel.app`;
+  const productionUrl = `https://${callbackHost}`;
 
   step(4, 'GitHub uygulaması (giriş ve veri erişimi) oluşturuluyor…');
   const github = await setupGithub(ctx, { productionUrl });
 
-  step(5, 'GitHub\'da kod ve veri repoların açılıyor…');
-  const repos = await createRepos(ctx, { source, sourceVerified, login: github.login, token: github.userToken, projectName: name });
+  step(5, "GitHub'da kod ve veri repoların açılıyor…");
+  const repos = await createRepos(ctx, { login: github.login, token: github.userToken, source });
 
   step(6, 'Vercel projesi açılıyor ve kod reposuna bağlanıyor…');
   await ensureFreshVercel(ctx, vercel);
@@ -1114,10 +1470,10 @@ export async function kur(ctx) {
   });
   await writeEnv(ctx, vercel, project.id, items);
   const deployment = await deployAndWait(ctx, vercel, { project, repoId: repos.codeRepoId, branch: repos.branch });
-  const host = await productionDomain(ctx, vercel, { project, deployment, expectedHost });
+  const host = await productionDomain(ctx, vercel, { project, deployment, expectedHost: `${project.name || name}.vercel.app` });
   const siteUrl = `https://${host}`;
-  if (host !== expectedHost) {
-    io.say(`  ! Vercel adresi beklenenden farklı çıktı: ${siteUrl}`);
+  if (host !== callbackHost) {
+    io.say(`  ! Adresin GitHub uygulamasına yazılandan farklı: ${siteUrl}`);
     io.say(`    GitHub ile girişin çalışması için ${ctx.created.githubApp.settingsUrl} sayfasında "Callback URL" listesine`);
     io.say(`    ${siteUrl}/api/auth/github/callback adresini ekleyip "Save changes" de.`);
   }
@@ -1136,15 +1492,8 @@ export async function kur(ctx) {
 
 export function reportFailure(ctx, error) {
   const { io } = ctx;
-  if (error instanceof KurCancelled) {
-    io.say('\nKurulum durduruldu.');
-  } else {
-    const known = error instanceof KurError || error instanceof ApiError;
-    const detail = `${error?.name ?? 'Error'}: ${String(error?.message ?? '').slice(0, 200)}`;
-    io.say(`\nKurulum tamamlanamadı: ${known ? error.message : `beklenmeyen bir hata oluştu (${detail}).`}`);
-    if (error instanceof KurError && error.hint) io.say(`Ne yapmalı: ${error.hint}`);
-    else io.say('Ne yapmalı: İnternet bağlantını kontrol edip komutu yeniden çalıştır. Sorun sürerse bu çıktıyla birlikte GitHub\'da konu aç.');
-  }
+  io.say('');
+  for (const line of failureLines(error)) io.say(line);
   const lines = describeCreated(ctx.created);
   if (lines.length === 0) {
     io.say('Henüz hiçbir şey oluşturulmadı.');
@@ -1155,9 +1504,10 @@ export function reportFailure(ctx, error) {
   io.say('Komutu yeniden çalıştırırsan yeni bir GitHub uygulaması açılır ve yeni ad sorulur; yukarıdakileri istersen silebilirsin.');
 }
 
+/** Çıkış kodu: 0 başarı, 130 Ctrl+C, 1 diğer her şey (Ctrl+D / giriş kapanması dahil). */
 export async function main(ctx, { handleSigint = false } = {}) {
   const onSigint = () => {
-    reportFailure(ctx, new KurCancelled());
+    reportFailure(ctx, new KurCancelled('sigint'));
     process.exit(130);
   };
   if (handleSigint) process.once('SIGINT', onSigint);
@@ -1167,7 +1517,7 @@ export async function main(ctx, { handleSigint = false } = {}) {
     return 0;
   } catch (error) {
     reportFailure(ctx, error);
-    return error instanceof KurCancelled ? 130 : 1;
+    return error instanceof KurCancelled && error.reason === 'sigint' ? 130 : 1;
   } finally {
     if (handleSigint) process.off('SIGINT', onSigint);
   }
@@ -1177,18 +1527,38 @@ export async function main(ctx, { handleSigint = false } = {}) {
 // Gerçek terminal, tarayıcı ve komut çalıştırıcı
 // ---------------------------------------------------------------------------------------------
 
-function terminalIo() {
-  const say = (line = '') => process.stdout.write(`${line}\n`);
+/**
+ * Terminal girişi. `readline/promises` burada dinamik içe aktarılır (eski Node'da sürüm mesajından önce
+ * çökmesin). Giriş kapanırsa (Ctrl+D, boru bitti) her soru `KurCancelled('eof')` ile biter.
+ */
+export function terminalIo({ input = process.stdin, output = process.stdout } = {}) {
+  const say = (line = '') => output.write(`${line}\n`);
+  let ended = Boolean(input.readableEnded);
+  input.once('end', () => {
+    ended = true;
+  });
+
   async function prompt(text) {
-    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+    if (ended) throw new KurCancelled('eof');
+    const { createInterface } = await import('node:readline/promises');
+    const rl = createInterface({ input, output, terminal: Boolean(input.isTTY && output.isTTY) });
     const controller = new AbortController();
-    rl.on('SIGINT', () => controller.abort());
+    let closing = false;
     try {
-      return await rl.question(text, { signal: controller.signal });
-    } catch (error) {
-      if (controller.signal.aborted) throw new KurCancelled();
-      throw error;
+      return await new Promise((resolve, reject) => {
+        rl.once('SIGINT', () => {
+          controller.abort();
+          reject(new KurCancelled('sigint'));
+        });
+        rl.once('close', () => {
+          if (!closing) reject(new KurCancelled('eof'));
+        });
+        rl.question(text, { signal: controller.signal }).then(resolve, (error) => {
+          reject(controller.signal.aborted ? new KurCancelled('sigint') : error);
+        });
+      });
     } finally {
+      closing = true;
       rl.close();
     }
   }
@@ -1209,59 +1579,49 @@ function terminalIo() {
     await prompt(`${message} `);
   }
   function askSecret(question) {
-    const { stdin, stdout } = process;
-    if (!stdin.isTTY) return prompt(question);
-    stdout.write(question);
+    if (!input.isTTY || typeof input.setRawMode !== 'function') return prompt(question);
+    if (ended) return Promise.reject(new KurCancelled('eof'));
+    output.write(question);
     return new Promise((resolve, reject) => {
       let value = '';
       const cleanup = () => {
-        stdin.off('data', onData);
-        stdin.setRawMode(false);
-        stdin.pause();
+        input.off('data', onData);
+        input.off('end', onEnd);
+        input.setRawMode(false);
+        input.pause();
       };
+      const finish = (error, result) => {
+        cleanup();
+        output.write('\n');
+        if (error) reject(error);
+        else resolve(result);
+      };
+      const onEnd = () => finish(new KurCancelled('eof'));
       const onData = (chunk) => {
         for (const char of String(chunk).replace(/\x1b\[20[01]~/g, '')) {
-          if (char === '\r' || char === '\n') {
-            cleanup();
-            stdout.write('\n');
-            return resolve(value);
-          }
-          if (char === '\u0003') {
-            cleanup();
-            stdout.write('\n');
-            return reject(new KurCancelled());
-          }
+          if (char === '\r' || char === '\n') return finish(null, value);
+          if (char === '\u0003') return finish(new KurCancelled('sigint'));
+          if (char === '\u0004') return finish(new KurCancelled('eof'));
           if (char === '\u007f' || char === '\b') value = value.slice(0, -1);
           else if (char >= ' ' && char !== '\u001b') value += char;
         }
+        return undefined;
       };
-      stdin.setRawMode(true);
-      stdin.setEncoding('utf8');
-      stdin.resume();
-      stdin.on('data', onData);
+      input.setRawMode(true);
+      input.setEncoding('utf8');
+      input.resume();
+      input.on('data', onData);
+      input.once('end', onEnd);
     });
   }
   return { say, ask, confirm, pause, askSecret };
-}
-
-function openBrowser(url) {
-  const command = browserCommand(process.platform);
-  if (!command) return Promise.resolve(false);
-  return new Promise((resolve) => {
-    const child = spawn(command, [url], { stdio: 'ignore', detached: true });
-    child.once('error', () => resolve(false));
-    child.once('spawn', () => {
-      child.unref();
-      resolve(true);
-    });
-  });
 }
 
 function runCommand(command, args) {
   return new Promise((resolve) => {
     const child = spawn(command, args, { stdio: 'inherit' });
     child.once('error', () => resolve(-1));
-    child.once('exit', (code) => resolve(code ?? 1));
+    child.once('exit', (code) => resolve(code === null ? 1 : code));
   });
 }
 
@@ -1269,7 +1629,7 @@ export function realContext() {
   return {
     fetch: globalThis.fetch,
     io: terminalIo(),
-    open: openBrowser,
+    open: (url) => openWith(spawn, process.platform, url),
     run: runCommand,
     readText: (file) => {
       try {
@@ -1286,13 +1646,16 @@ export function realContext() {
     randomInt: crypto.randomInt,
     randomBytes: crypto.randomBytes,
     nowSeconds: () => Math.floor(Date.now() / 1000),
+    nowMs: () => Date.now(),
     created: {},
   };
 }
 
 if (process.env.AXON_KUR_TEST !== '1') {
-  if (typeof globalThis.fetch !== 'function') {
-    process.stdout.write(`Bu kurulum en az Node ${MIN_NODE_MAJOR} ister (bilgisayarındaki: ${process.versions.node}). https://nodejs.org adresinden güncelle.\n`);
+  // Sürüm denetimi her şeyden önce: eski Node'da başka hiçbir şey çalışmadan anlaşılır mesaj.
+  const problem = startupProblem(process.versions.node);
+  if (problem) {
+    process.stdout.write(`${problem}\n`);
     process.exitCode = 1;
   } else {
     main(realContext(), { handleSigint: true }).then((code) => {
