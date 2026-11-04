@@ -235,7 +235,7 @@ export function RestPanel({
   endsAt: number;
   total: number;
   view: RestView;
-  /** Nabız bandı bağlıysa (dinlenme uzarken canlı nabız ve "Nabzın 121'in altına inince devam"). */
+  /** Nabız bandı bağlıysa (dinlenme uzarken canlı nabız ve "Nabzın 120'ye inince devam"). */
   heart: RestHeartView | null;
   /** Kartın tek satırı: "Goblet Squat · 2/3 set" (grupta "A + B · 4/6 set"; bittiyse ✓); setin hareketi bilinmiyorsa yok. */
   summary: { title: string; done: number; planned: number; finished: boolean } | null;

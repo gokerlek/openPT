@@ -130,10 +130,16 @@ describe('dinlenme sayacı: nabızla uzama', () => {
     assert.deepEqual([tick.events, tick.state, tick.timer.endsAt], [['end'], 'ended', s(75)]);
   });
 
-  test('temel bitiş geç fark edildiyse uzamaz (sekme arkadaydı): bugünkü gibi sessiz', () => {
+  test('temel bitiş geç fark edildiyse de (sekme arkadaydı) nabız yüksekse ve tavan dolmadıysa bekler; bip yok', () => {
     const late = runHeart(startRest('st_aaaaaaaa', 60, T0), [[60 + LATE_MS / 1000 + 1, 150]]);
-    assert.deepEqual(late.events, []);
-    assert.equal(late.last?.state, 'ended');
+    assert.deepEqual(late.events, ['63:hold']);
+    assert.equal(late.last?.state, 'hold');
+    assert.deepEqual(late.timer.hold, { since: s(60), calmSince: null });
+    assert.deepEqual(runHeart(late.timer, [[70, 110], [73, 110]]).events, ['73:end']);
+    // Tavan da geçtiyse bugünkü gibi sessiz biter; bitiş anı tavan.
+    const over = runHeart(startRest('st_aaaaaaaa', 60, T0), [[300, 150]]);
+    assert.deepEqual(over.events, []);
+    assert.deepEqual([over.last?.state, over.timer.endsAt, over.timer.heartHigh], ['ended', s(180), true]);
   });
 
   test('uzama sınırı geç fark edildiyse bitiş sessiz', () => {
@@ -144,12 +150,32 @@ describe('dinlenme sayacı: nabızla uzama', () => {
     assert.equal(last?.timer.heartHigh, true);
   });
 
-  test('uzarken ±15 şimdiden sayılır; bitmiş dinlenme uzatılınca not düşer', () => {
+  test('beklerken −15 beklemeyi bitirir; o dinlenme bir daha nabız için uzamaz', () => {
+    const held = runHeart(startRest('st_aaaaaaaa', 60, T0), [[60, 140]]).timer;
+    const shorter = adjustRest(held, -15, s(70));
+    assert.equal(shorter.hold, undefined);
+    assert.equal(shorter.endsAt, s(70));
+    const { events, last } = runHeart(shorter, [[70, 140], [71, 150]]);
+    assert.deepEqual(events, ['70:end']);
+    assert.equal(last?.state, 'ended');
+  });
+
+  test('beklerken +15 bugünkü gibi süre ekler; tavan temel sürenin ilk bittiği andan sayılır, düğmeyle sıfırlanmaz', () => {
     const held = runHeart(startRest('st_aaaaaaaa', 60, T0), [[60, 140]]).timer;
     const longer = adjustRest(held, 15, s(70));
-    assert.equal(longer.endsAt, s(85));
-    assert.equal(longer.hold, undefined);
-    assert.equal(adjustRest(held, -15, s(70)).endsAt, s(71));
+    assert.deepEqual([longer.endsAt, longer.hold, longer.holdFrom], [s(85), undefined, s(60)]);
+    // 85'te yeniden bekler (tavan yine 60 + 120); beklerken bir +15 daha tavanı uzatmaz.
+    const again = runHeart(longer, [[84, 140], [85, 140]]);
+    assert.deepEqual([again.events, again.timer.hold?.since], [['85:hold'], s(60)]);
+    const end = runHeart(again.timer, [[179, 140], [180, 140]]);
+    assert.deepEqual([end.events, end.timer.endsAt, end.timer.heartHigh], [['180:end'], s(180), true]);
+    // Tavana 5 sn kala +15: temel süre tavandan sonra biter, yeniden uzamaz (toplam uzama 120 sn'yi geçmez).
+    const late = adjustRest(runHeart(again.timer, [[175, 140]]).timer, 15, s(175));
+    assert.deepEqual(runHeart(late, [[189, 140], [190, 140], [191, 140]]).events, ['190:end']);
+  });
+
+  test('bitmiş dinlenme uzatılınca "Nabız hâlâ yüksek" notu düşer', () => {
+    const held = runHeart(startRest('st_aaaaaaaa', 60, T0), [[60, 140]]).timer;
     const high = runHeart(held, [[180, 140]]).timer;
     const again = adjustRest(high, 15, s(185));
     assert.equal(again.heartHigh, undefined);

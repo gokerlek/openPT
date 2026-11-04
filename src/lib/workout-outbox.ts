@@ -203,6 +203,8 @@ function restOf(value: unknown): RestTimer | null {
     ack: value.ack === true,
     mode: value.mode === 'mini' ? 'mini' : 'full',
     ...holdOf(value.hold),
+    ...(typeof value.holdFrom === 'number' ? { holdFrom: value.holdFrom } : {}),
+    ...(value.heartOff === true ? { heartOff: true } : {}),
     ...(value.heartHigh === true ? { heartHigh: true } : {}),
   };
 }

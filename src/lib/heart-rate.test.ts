@@ -10,10 +10,13 @@ import {
   heartAlertText,
   heartZone,
   parseHeartRateMeasurement,
+  READING_STALE_MS,
+  readingBpm,
   resolveHeartLimits,
   REST_CALM_MS,
   REST_EXTEND_MAX_MS,
   restHoldStep,
+  takeReading,
   type HeartAlertState,
   type RestHold,
 } from './heart-rate.ts';
@@ -137,10 +140,28 @@ describe('dinlenme: nabız toparlanma sınırına inene kadar uzar', () => {
     assert.deepEqual(restHoldStep({ since: s(90), calmSince: s(200) }, 115, RECOVERY, s(90), s(260)), { kind: 'end', at: s(203), high: false });
   });
 
-  test('metin: "Nabzın 121\'in altına inince devam"', () => {
-    assert.equal(calmText(120), "Nabzın 121'in altına inince devam");
-    assert.equal(calmText(125), "Nabzın 126'nın altına inince devam");
-    assert.equal(calmText(99), "Nabzın 100'ün altına inince devam");
+  test('tavan temel sürenin ilk bittiği andan sayılır (+15 sonrası yeni bekleme de)', () => {
+    // İlk bekleme 60. sn'de başladı, +15'le temel süre 85'e uzadı: yeni beklemenin tavanı yine 60 + 120.
+    const step = restHoldStep(null, 140, RECOVERY, s(85), s(85), s(60));
+    assert.deepEqual(step, { kind: 'hold', hold: { since: s(60), calmSince: null } });
+    if (step.kind !== 'hold') return;
+    assert.deepEqual(restHoldStep(step.hold, 140, RECOVERY, s(85), s(180), s(60)), { kind: 'end', at: s(180), high: true });
+    // Temel süre tavandan sonraya uzatıldıysa yeniden uzamaz; nabız yüksekse not yazılır.
+    assert.deepEqual(restHoldStep(null, 140, RECOVERY, s(185), s(185), s(60)), { kind: 'end', at: s(185), high: true });
+    assert.deepEqual(restHoldStep(null, 110, RECOVERY, s(185), s(185), s(60)), { kind: 'end', at: s(185), high: false });
+  });
+
+  test('geç fark edildiyse de tavan dolmadıysa bekler; dolduysa bitiş anı tavan', () => {
+    assert.deepEqual(restHoldStep(null, 140, RECOVERY, s(60), s(100)), { kind: 'hold', hold: { since: s(60), calmSince: null } });
+    assert.deepEqual(restHoldStep(null, 140, RECOVERY, s(60), s(300)), { kind: 'end', at: s(180), high: true });
+  });
+
+  test('metin: sınırın kendisi ve yönelme eki ("Nabzın 120\'ye inince devam")', () => {
+    assert.equal(calmText(120), "Nabzın 120'ye inince devam");
+    assert.equal(calmText(126), "Nabzın 126'ya inince devam");
+    assert.equal(calmText(125), "Nabzın 125'e inince devam");
+    assert.equal(calmText(100), "Nabzın 100'e inince devam");
+    assert.equal(calmText(90), "Nabzın 90'a inince devam");
   });
 });
 
@@ -172,12 +193,30 @@ describe('uyarı: 5 sn boyunca uyarı sınırının üstünde', () => {
     assert.deepEqual(fired, [5, 19]);
   });
 
-  test('ölçüm yoksa sayım durur, uyarı kurulmaz', () => {
+  test('ölçüm yoksa (bağlantı kesildi, koptu ya da 5 sn ölçüm yok) sayım durur, çalmış uyarı düşer (şerit kalkar)', () => {
     assert.deepEqual(run([[0, 175], [3, null], [4, 175], [8, 175], [9, 175]]).fired, [9]);
+    const { fired, state } = run([[0, 175], [5, 175], [6, null]]);
+    assert.deepEqual([fired, state], [[5], HEART_ALERT_IDLE]);
+    // Bağlantı dönünce yeniden sayılır.
+    assert.deepEqual(run([[0, 175], [5, 175], [6, null], [7, 175], [12, 175]]).fired, [5, 12]);
   });
 
   test('metin', () => {
     assert.equal(heartAlertText(175), 'Nabzın çok yüksek (175). Tempoyu düşür ve dinlen.');
+  });
+});
+
+describe('okumalar: boş ölçüm hemen silmez, 5 sn sonra bayatlar', () => {
+  test('geçerli ölçüm alınır; boş ölçüm (ten teması yok, 0) son geçerli ölçümü bırakır', () => {
+    let last = takeReading(null, 140, s(0));
+    assert.deepEqual(last, { bpm: 140, at: s(0) });
+    last = takeReading(last, null, s(1));
+    assert.deepEqual(last, { bpm: 140, at: s(0) });
+    assert.equal(readingBpm(last, s(1)), 140);
+    assert.equal(readingBpm(last, s(0) + READING_STALE_MS - 1), 140);
+    assert.equal(readingBpm(last, s(0) + READING_STALE_MS), null);
+    assert.equal(readingBpm(takeReading(last, 120, s(4)), s(8)), 120);
+    assert.equal(readingBpm(null, s(0)), null);
   });
 });
 

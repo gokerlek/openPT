@@ -11,8 +11,10 @@ import { WORKOUT } from './motion.ts';
  * ("Dinlenme 1:40 önce bitti"); arkadayken biriken alarmlar da dönüşte art arda çalmaz.
  *
  * Nabız bandı bağlıysa (isteğe bağlı `RestHeart`): temel süre bittiğinde nabız toparlanma sınırının üstündeyse dinlenme
- * uzar (`hold`, sessiz); nabız inince ya da 120 sn sonra ("Nabız hâlâ yüksek") biter. Kararlar `heart-rate.ts`'te;
- * bitiş anı uzamanın bittiği an olur, aşım ve geç fark etme ondan sayılır. Nabız yoksa bugünkü sayaç.
+ * uzar (`hold`, sessiz; geç fark edilse de tavan dolmadıysa); nabız inince ya da temel sürenin ilk bittiği andan 120 sn
+ * sonra ("Nabız hâlâ yüksek") biter. Beklerken −15 beklemeyi bitirir, +15 süre ekler; tavanı hiçbir düğme sıfırlamaz.
+ * Kararlar `heart-rate.ts`'te; bitiş anı uzamanın bittiği an olur, aşım ve geç fark etme ondan sayılır. Nabız yoksa
+ * bugünkü sayaç.
  */
 
 /** Olay bu kadar geç fark edildiyse ses yok (sekme arkadaydı, telefon kilitliydi). */
@@ -37,6 +39,10 @@ export type RestTimer = {
   mode: 'full' | 'mini';
   /** Temel süre bitti, nabız bekleniyor (dinlenme uzuyor). */
   hold?: RestHold;
+  /** Temel sürenin ilk bittiği an (ilk bekleme): uzama tavanı buradan sayılır, ±15 sıfırlamaz. */
+  holdFrom?: number;
+  /** Beklerken −15'e basıldı ("daha az dinlen"): bu dinlenme bir daha nabız için uzamaz. */
+  heartOff?: boolean;
   /** Dinlenme en çok uzadı ve nabız inmeden bitti: "Nabız hâlâ yüksek". */
   heartHigh?: boolean;
 };
@@ -76,14 +82,16 @@ export function startRest(setId: string, seconds: number, now: number): RestTime
 
 /**
  * ±15 sn (yalnız bu dinlenme): bitiş en erken bir saniye sonrası. Uzayınca son 10 sn uyarısı yeniden
- * kurulur; bitmiş dinlenme uzatılırsa yeniden koşar ve bitişte yine çalar. Nabız beklenirken (temel süre bitti)
- * şimdiden sayılır; bekleme ve "Nabız hâlâ yüksek" notu düşer, yeni bitişte nabza yeniden bakılır.
+ * kurulur; bitmiş dinlenme uzatılırsa yeniden koşar ve bitişte yine çalar ("Nabız hâlâ yüksek" notu düşer). Nabız
+ * beklenirken (temel süre bitti) −15 beklemeyi o an bitirir ve bu dinlenme bir daha uzamaz; +15 şimdiden 15 sn ekler,
+ * yeni bitişte nabza yeniden bakılır. Tavan temel sürenin ilk bittiği andan (`holdFrom`) sayılmaya devam eder.
  */
 export function adjustRest(timer: RestTimer, deltaSeconds: number, now: number): RestTimer {
-  const endsAt = Math.max(now + 1000, (timer.hold ? now : timer.endsAt) + deltaSeconds * 1000);
+  const { hold, heartHigh: _heartHigh, ...rest } = timer;
+  if (hold && deltaSeconds < 0) return { ...rest, endsAt: now, heartOff: true };
+  const endsAt = Math.max(now + 1000, (hold ? now : timer.endsAt) + deltaSeconds * 1000);
   const remaining = endsAt - now;
   const rearm = timer.endedAt !== null;
-  const { hold: _hold, heartHigh: _heartHigh, ...rest } = timer;
   return {
     ...rest,
     endsAt,
@@ -119,14 +127,14 @@ export function tickRest(timer: RestTimer, now: number, heart?: RestHeart): Rest
     };
   }
 
-  // Temel süre bitti: nabız ölçülüyorsa uzayabilir. Bitiş zamanında fark edilmediyse (sekme arkadaydı) uzamaz, bugünkü
-  // gibi sessiz biter; uzarken bağlantı koparsa (nabız yok) o an biter.
-  if (timer.endedAt === null && (timer.hold || (heart && heart.bpm !== null && -remainingMs <= LATE_MS))) {
-    const step = restHoldStep(timer.hold ?? null, heart?.bpm ?? null, heart?.recovery ?? 0, timer.endsAt, now);
+  // Temel süre bitti: nabız ölçülüyorsa uzayabilir (geç fark edildiyse de; tavan doldu mu `restHoldStep` bakar, geç
+  // fark edilen bitiş sessiz). Uzarken bağlantı koparsa (nabız yok) o an biter. Beklerken −15'e basıldıysa uzamaz.
+  if (timer.endedAt === null && !timer.heartOff && (timer.hold || (heart && heart.bpm !== null))) {
+    const step = restHoldStep(timer.hold ?? null, heart?.bpm ?? null, heart?.recovery ?? 0, timer.endsAt, now, timer.holdFrom ?? timer.endsAt);
     if (step.kind === 'hold') {
       if (!timer.hold) events.push('hold');
       return {
-        timer: step.hold === timer.hold ? timer : { ...timer, hold: step.hold },
+        timer: step.hold === timer.hold ? timer : { ...timer, hold: step.hold, holdFrom: step.hold.since },
         remainingMs,
         overrunMs: 0,
         state: 'hold',
