@@ -92,6 +92,23 @@ export function parseConversion(json:unknown):AppCredentials {
   return {appId:String(data.id),slug:data.slug,owner:data.owner.login,clientId:data.client_id,clientSecret:data.client_secret,privateKey:normalizePrivateKey(data.pem)};
 }
 
+const storedSchema=v.object({
+  appId:v.pipe(v.string(),v.regex(/^[1-9]\d{0,14}$/)),
+  slug:v.pipe(v.string(),v.regex(SLUG)),
+  owner:v.pipe(v.string(),v.regex(LOGIN)),
+  clientId:v.pipe(v.string(),v.regex(CREDENTIAL)),
+  clientSecret:v.pipe(v.string(),v.regex(CREDENTIAL)),
+  privateKey:v.pipe(v.string(),v.check(isPrivateKey)),
+});
+/** Sekmenin sessionStorage'ındaki bilgiler (dönüş sayfası yazar); bozuk ya da eksikse null. */
+export function readStoredCredentials(text:string|null):AppCredentials|null {
+  if(!text)return null;
+  try{
+    const parsed=v.safeParse(storedSchema,JSON.parse(text));
+    return parsed.success?{...parsed.output,privateKey:normalizePrivateKey(parsed.output.privateKey)}:null;
+  }catch{return null;}
+}
+
 export type InstallationInfo={id:number;account:string;selection:'all'|'selected';permissions:Record<string,string>;suspended:boolean};
 const installationSchema=v.object({
   id:v.pipe(v.number(),v.integer(),v.minValue(1)),

@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {generateKeyPairSync} from 'node:crypto';
-import {APP_PERMISSIONS,githubAppManifest,handoffHeaders,handoffPage,installationProblems,installationSettingsUrl,installUrl,manifestFormAction,parseConversion,parseInstallation,randomSuffix,workflowScopes,type InstallationInfo} from './github-app.ts';
+import {APP_PERMISSIONS,githubAppManifest,handoffHeaders,handoffPage,installationProblems,installationSettingsUrl,installUrl,manifestFormAction,parseConversion,parseInstallation,randomSuffix,readStoredCredentials,workflowScopes,type InstallationInfo} from './github-app.ts';
 
 const {privateKey:pem}=generateKeyPairSync('rsa',{modulusLength:1024,privateKeyEncoding:{type:'pkcs1',format:'pem'},publicKeyEncoding:{type:'spki',format:'pem'}});
 const conversion={id:123456,slug:'axon-fit-qwerty',node_id:'node',name:'Axon Fit qwerty',owner:{login:'coach',type:'User'},client_id:'Iv23liTestOnly',client_secret:'test-client-secret',webhook_secret:null,pem,html_url:'https://github.com/apps/axon-fit-qwerty'};
@@ -81,4 +81,10 @@ test('dönüş sayfası betiği kaçışlı: bilgideki </script> ya da satır ay
   const html=handoffPage({...parseConversion(conversion),owner:'coach',clientSecret:'</script><script>alert(1)</script> '},'n0nce');
   assert.equal(html.match(/<\/script>/g)?.length,1);
   assert.ok(!html.includes(' '));
+});
+test('sekmeye konan bilgiler geri okunurken doğrulanır; bozuk, eksik ya da fazla alanlı kayıt yok sayılır',()=>{
+  const credentials=parseConversion(conversion);
+  assert.deepEqual(readStoredCredentials(JSON.stringify(credentials)),credentials);
+  for(const text of [null,'','{',JSON.stringify({...credentials,privateKey:'x'}),JSON.stringify({...credentials,slug:'../x'}),JSON.stringify({...credentials,appId:''}),'null'])assert.equal(readStoredCredentials(text),null);
+  assert.equal('extra' in (readStoredCredentials(JSON.stringify({...credentials,extra:'x'}))??{}),false);
 });

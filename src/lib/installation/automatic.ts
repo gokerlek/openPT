@@ -1,4 +1,5 @@
 import * as v from 'valibot';
+import {installationProblems,workflowScopes,type InstallationInfo} from './github-app.ts';
 import {environmentValues,wizardSchema,type WizardValues} from './wizard.ts';
 export const automaticSchema=v.strictObject({
   values:wizardSchema,
@@ -11,12 +12,15 @@ export type EnvironmentItem={key:string;value:string;target:['production'];type:
 export type InstallGateway={
   project:(id:string)=>Promise<Project>;
   env:(id:string)=>Promise<Environment[]>;
-  githubOwner:(token:string)=>Promise<{login:string;scopes:string[]}>;
-  validateOAuth:(clientId:string,clientSecret:string)=>Promise<void>;
+  /** GitHub uygulamasının kurulumu (uygulama JWT'siyle): hesap, repo seçimi, izinler. */
+  installation:(appId:string,privateKey:string,installationId:string)=>Promise<InstallationInfo>;
+  installationToken:(appId:string,privateKey:string,installationId:string)=>Promise<string>;
   ensureWorkflow:(token:string,repo:string,branch:string,scopes:string[])=>Promise<void>;
   create:(id:string,items:EnvironmentItem[])=>Promise<void>;
   deploy:(project:Project)=>Promise<{id:string}>;
 };
+/** Vercel'de "sensitive" (bir daha okunamaz) saklanan anahtarlar. */
+const SENSITIVE=/TOKEN|SECRET|API_KEY|PRIVATE_KEY/;
 export class InstallationError extends Error {
   readonly canRetryDeploy:boolean;
   constructor(message:string,canRetryDeploy=false){super(message);this.canRetryDeploy=canRetryDeploy;}
@@ -29,21 +33,23 @@ export async function automaticInstall(projectId:string,values:WizardValues,resu
   if(project.link.productionBranch!==values.codeBranch.trim() || !Number.isSafeInteger(Number(project.link.repoId)) || Number(project.link.repoId)<1)throw new InstallationError('Vercel üretim dalı veya GitHub repo bağlantısı eşleşmiyor.');
   const existing=(await gateway.env(project.id)).filter(e=>e.target?.includes('production'));
   if(resumeOnly){
-    for(const key of ['GITHUB_OWNER','APP_REPO','AXON_CODE_REPO','AXON_CODE_BRANCH','GITHUB_CLIENT_ID']){
+    for(const key of ['GITHUB_OWNER','APP_REPO','AXON_CODE_REPO','AXON_CODE_BRANCH','GITHUB_CLIENT_ID','GITHUB_APP_ID','GITHUB_APP_INSTALLATION_ID']){
       const saved=existing.find(e=>e.key===key);
       if(saved && saved.value?.toLowerCase()!==entries[key]!.toLowerCase())throw new InstallationError('Kaydedilmiş ayarlar bu kurulumla eşleşmiyor. Mevcut değerler değiştirilmedi.');
     }
   }else{
     if(existing.some(e=>Object.keys(entries).includes(e.key)))throw new InstallationError('Bu projede kaydedilmiş kurulum ayarları var. Aynı bilgilerle Kurulumu tamamlamayı tekrar dene; mevcut değerler korunacak.',true);
   }
-  const user=await gateway.githubOwner(values.githubToken.trim());
-  if(user.login.toLowerCase()!==values.owner.trim().toLowerCase())throw new InstallationError('GitHub tokenı girilen PT hesabına ait değil.');
-  if(!['repo','delete_repo'].every(scope=>user.scopes.includes(scope)))throw new InstallationError('GitHub tokenında repo ve delete_repo izinleri olmalı.');
-  await gateway.validateOAuth(values.clientId.trim(),values.clientSecret.trim());
-  await gateway.ensureWorkflow(values.githubToken.trim(),`${project.link.org}/${project.link.repo}`,project.link.productionBranch,user.scopes);
+  // Kurulum her denemede (yeniden denemede de) PT hesabında, "All repositories" ve tam izinlerle mi: değilse hiçbir şey yazılmaz.
+  const app={appId:values.appId.trim(),privateKey:values.privateKey,installationId:values.installationId.trim()};
+  const installation=await gateway.installation(app.appId,app.privateKey,app.installationId);
+  const problems=installationProblems(installation,values.owner.trim());
+  if(problems.length)throw new InstallationError(problems.join(' '));
+  const token=await gateway.installationToken(app.appId,app.privateKey,app.installationId);
+  await gateway.ensureWorkflow(token,`${project.link.org}/${project.link.repo}`,project.link.productionBranch,workflowScopes(installation.permissions));
   const missing=Object.entries(entries).filter(([key])=>!existing.some(saved=>saved.key===key));
   if(missing.length){
-    const items:EnvironmentItem[]=missing.map(([key,value])=>({key,value,target:['production'],type:/TOKEN|SECRET|API_KEY/.test(key)?'sensitive':'plain',visibility:/TOKEN|SECRET|API_KEY/.test(key)?'secret':'config'}));
+    const items:EnvironmentItem[]=missing.map(([key,value])=>({key,value,target:['production'],type:SENSITIVE.test(key)?'sensitive':'plain',visibility:SENSITIVE.test(key)?'secret':'config'}));
     try{await gateway.create(project.id,items);}
     catch{throw new InstallationError('Ayarların aktarımı tamamlanamadı. Aynı bilgilerle tekrar dene; kaydedilmiş değerler korunacak, yalnız eksik olanlar tamamlanacak.',true);}
   }

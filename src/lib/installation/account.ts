@@ -1,20 +1,26 @@
+import {installationProblems,workflowScopes,type InstallationInfo} from './github-app.ts';
 import {WorkflowSetupError} from './update-workflow.ts';
-type GithubAccount={login:string;scopes:string[]};
+
+/**
+ * Sihirbazın GitHub adımının son işi (`/api/install/github-app/verify`): GitHub'dan dönen kurulum doğru
+ * hesapta mı (Vercel'in bağlı GitHub hesabı), "All repositories" mı, izinler tam mı. Hesap yazılan değerden
+ * değil kurulumdan okunur. Vercel kod repo bağlantısı varsa eksik güncelleme dosyası kurulum anahtarıyla eklenir.
+ */
+export type InstallationReader={
+  installation:(appId:string,privateKey:string,installationId:string)=>Promise<InstallationInfo>;
+  installationToken:(appId:string,privateKey:string,installationId:string)=>Promise<string>;
+};
 export class InstallationAccountError extends Error {}
-export async function identifyGithubAccount(token:string,expectedOwner:string|undefined,lookup:(token:string)=>Promise<GithubAccount>,requireWorkflow=false):Promise<string> {
-  const account=await lookup(token);
-  if(!/^[a-z\d](?:[a-z\d-]{0,37}[a-z\d])?$/i.test(account.login))throw new InstallationAccountError('GitHub hesabı doğrulanamadı.');
-  if(!['repo','delete_repo'].every(scope=>account.scopes.includes(scope)))throw new InstallationAccountError('GitHub’da repo ve delete_repo seçeneklerini işaretleyip yeniden anahtar oluştur.');
-  if(requireWorkflow&&!account.scopes.includes('workflow'))throw new InstallationAccountError('Otomatik kurulum için workflow izni de gerekiyor. GitHub anahtarını repo, delete_repo ve workflow seçenekleriyle oluştur.');
-  if(expectedOwner&&account.login.toLowerCase()!==expectedOwner.toLowerCase())throw new InstallationAccountError('Anahtarı bu uygulamayı kopyaladığın GitHub hesabında oluştur.');
-  return account.login;
-}
-export async function connectGithubAccount(token:string,expectedOwner:string|undefined,codeRepo:string|undefined,automatic:boolean,lookup:(token:string)=>Promise<GithubAccount>,prepare:(token:string,repo:string,branch:string,scopes:string[])=>Promise<void>):Promise<string> {
-  const account=await lookup(token);
-  const owner=await identifyGithubAccount(token,expectedOwner,async()=>account,automatic);
+const LOGIN=/^[a-z\d](?:[a-z\d-]{0,37}[a-z\d])?$/i;
+export async function connectGithubApp(app:{appId:string;privateKey:string;installationId:string},expectedOwner:string|undefined,codeRepo:string|undefined,github:InstallationReader,prepare:(token:string,repo:string,branch:string,scopes:string[])=>Promise<void>):Promise<{owner:string;installationId:number}> {
+  const info=await github.installation(app.appId,app.privateKey,app.installationId);
+  if(!LOGIN.test(info.account))throw new InstallationAccountError('GitHub hesabı doğrulanamadı.');
+  const problems=installationProblems(info,expectedOwner??info.account);
+  if(problems.length)throw new InstallationAccountError(problems.join(' '));
   if(expectedOwner&&codeRepo){
-    try{await prepare(token,`${expectedOwner}/${codeRepo}`,'main',account.scopes);}
+    const token=await github.installationToken(app.appId,app.privateKey,app.installationId);
+    try{await prepare(token,`${expectedOwner}/${codeRepo}`,'main',workflowScopes(info.permissions));}
     catch(error){if(error instanceof WorkflowSetupError)throw new InstallationAccountError(error.message);throw error;}
   }
-  return owner;
+  return {owner:info.account,installationId:info.id};
 }
