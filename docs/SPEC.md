@@ -31,6 +31,18 @@ npm'de boşta: `pulsecoach`, `create-pulsecoach`, `@pulsecoach/app` (ileride ger
 
 ## 2. Kurulum akışı (PT ne yapacak)
 
+**Güncel yol (2026-11-05, ayrıntı `docs/INSTALLER.md`):** PT anahtar kopyalamaz. Kendi hesabında tek tıkla bir **GitHub uygulaması**
+oluşur; hem PT girişini hem veri erişimini o sağlar. İki giriş kapısı aynı çekirdeği kullanır:
+- **Tek komut** (`kur/kur.mjs`, Node 20+): Vercel girişi, uygulama adı, son sürümün arşivini indirip `axon-release.json`'da
+  `github-app` yeteneğini denetleme, GitHub uygulaması (manifest akışı, yerel dönüş adresi), PT hesabında özel kod reposu (arşiv
+  Git Data API ile tek commit; şablon gerekmez) ve veri reposu, Vercel projesi, env, Production yayını.
+- **Tarayıcı** (Deploy düğmesi + `/install`): tek "GitHub'a bağla" adımı (manifest akışı), isteğe bağlı Gemini, Vercel anahtarıyla
+  ya da elle env aktarımı.
+
+Çalışma zamanında iki mod (`src/lib/env.ts`): `GITHUB_APP_ID` + `GITHUB_APP_PRIVATE_KEY` varsa **uygulama modu** (okuma/yazma
+kurulum anahtarıyla; repo açma/silme PT'nin GitHub girişinden gelen kullanıcı anahtarıyla, §5; kurulum "All repositories" olmalı),
+yoksa bugünkü **PAT modu** (`GITHUB_TOKEN`). Aşağıdaki liste PAT modunun ilk tarifidir; tarih için korunuyor.
+
 1. PulseCoach kod repo'sunu kendi hesabına **fork'lar**. Açık bir repo'nun fork'u GitHub'da gizli yapılamaz: fork herkese açık kalır, bu yüzden içine hiçbir veri yazılmaz.
 2. Fork'u Vercel'e bağlar. Ayarlar:
    - `GITHUB_TOKEN` — repo oluşturma/silme yetkisi olan token (§9.2'deki uyarı)
@@ -306,6 +318,11 @@ Ağrı, semptom, kırmızı bayrak, beden ölçüleri, kısıtlar ve tarama sağ
 
 **PT: GitHub ile giriş.** "GitHub ile devam et" → GitHub yetki ekranı → dönüşte sunucu, giren kullanıcının **`GITHUB_OWNER` ile aynı kişi olduğunu** doğrular; değilse oturum açılmaz. Kullanıcı tablosu yok, şifre yok.
 
+Uygulama modunda (§2) giriş, PT'nin GitHub uygulamasının kendi istemci kimliğiyle yapılır. Dönen kullanıcı anahtarı ve yenileme
+anahtarı AES-256-GCM ile şifrelenip httpOnly çerezde tutulur (anahtar `AUTH_SECRET`'tan HKDF), süresi dolunca yenilenir, çıkışta
+silinir; repo açma/silme yalnız bununla yapılır. Çerez yoksa (ör. e-posta koduyla giriş) bu işlemler "GitHub ile yeniden giriş yap" der.
+PAT modunda anahtar bugünkü gibi saklanmaz.
+
 Neden GitHub: PT zaten tanım gereği GitHub kullanıcısı (repoların sahibi o). Yeni hesap açması gereken hiçbir servis yok ve yetki kontrolü tam olarak doğru şeye bakıyor — "bu repoların sahibi mi".
 
 **Yedek yol (varsayılan kapalı):** PT isterse `RESEND_API_KEY` girip e-posta kodu yöntemini açabilir. Amacı tek: OAuth ayarı yanlış girilirse kendi uygulamasına giremez hale gelmemek. Anahtar yoksa bu yol hiç görünmez: kod isteme ve doğrulama uçları 404 döner, e-postayla açılmış oturumlar geçersiz sayılır, kod hiçbir yere (günlüğe de) yazılmaz. Açıkken kodun durumu sunucuda tutulur (`data/login-code.json`, §3): aynı anda tek etkin kod, 5 dk geçerli, 3 yanlış denemede kilit (deneme, davetteki gibi karşılaştırmadan önce `sha` kilidiyle sayılır), doğru kod dosyayı kullanıldı yapar; yeni kod en çok 60 sn'de bir ve saatte 5 kez üretilir. Kod isteme yanıtı adres ne olursa olsun aynıdır; "erken / sınır dolu / kilitli / kod yok" kararı önbellekten verilir, GitHub'a yalnız yazma gerekince gidilir. Veri repo'su henüz yoksa kod yazılmadan önce §2'deki denetimle açılır; repo açık ya da fork ise hiçbir şey yazılmaz ve gönderilmez.
@@ -355,6 +372,17 @@ Ne davet kodunun ne şifrenin kendisi hiçbir yerde saklanmaz: repo'larda yalnı
 
 Oluşturma işi (şablon kurmak, program atamak, birkaç danışanı yan yana görmek) büyük ekranda çok daha verimli; PT ekranları masaüstü için tasarlanır. Salondayken kullanılacak kısımlar telefonda öne çıkar.
 
+**Uygulama olarak yükleme (PWA, 2026-11-05).** Mağaza uygulaması yok; iki taraf da web uygulamasını telefona yükler (Android'de
+Chrome gerçek uygulama kurar, iPhone'da Safari → Paylaş → Ana Ekrana Ekle). Simge ve ad PT'nin markasından gelir.
+- Tek ortak yükleme yardımcısı (`src/components/install`, tespit `src/lib/install-guide.ts`): yüklüyse görünmez; `beforeinstallprompt`
+  varsa "Uygulamayı yükle"; iPhone/iPad Safari'de adımlar; uygulama içi tarayıcıda "Safari'de / Chrome'da aç" + bağlantıyı kopyala;
+  Mac Safari'de "Dosya → Dock'a Ekle". "Şimdi değil" o cihazda, kitleye göre ayrı anahtarla 14 gün gizler.
+- Yerler: danışanın Bugün ekranının üstü, katılımda şifreden sonra bir adım, PT genel bakışında kart, Ayarlar → Uygulama.
+- İki manifest: danışan `/manifest.webmanifest` (`id: '/'`; `?c=<kimlik>` verilirse `start_url` `/giris?c=<kimlik>`, ki iPhone ana
+  ekran uygulaması Safari'nin çerezini görmese de danışan yalnız şifresini yazsın), panel `/panel.webmanifest` (`id`/`start_url`
+  `/dashboard`, ad "<uygulama adı> Panel"). `apple-touch-icon` 180 px marka simgesi.
+- Service worker (`public/sw.js`, yalnız üretimde): yalnız sayfa gezinmeleri, ağ yoksa `/offline`; API, veri ve oturumlu sayfa önbelleğe girmez.
+
 **Arayüz kuralları:**
 - **Ortalı, sabit genişlikli sayfa.** Her PT sayfası aynı ortalı içerik sütununda durur (`max-w-5xl`). Bileşenler bu genişliğe göre yerleşir: masaüstünde yan yana (formlar iki sütun, ayarlarda sağda kaydırınca yerinde kalan önizleme), telefonda alt alta.
 - **Her şey shadcn bileşeni.** Yerleşim dahil: kartlar `Card`, arama `InputGroup`, boş durum `Empty`, uyarılar `Alert`, yükleniyor `Spinner`, sayfa yolu `Breadcrumb`. Elle yazılmış düğme/rol yok (istisnalar: React Bits'ten uyarlanan dock ve kas haritasının SVG'si).
@@ -400,6 +428,15 @@ Oluşturma işi (şablon kurmak, program atamak, birkaç danışanı yan yana g�
 - **PT canlı görür:** PT ekranında açık olan antrenman 10 sn'de bir tazelenir (sekme görünürken); genel görünüm (şu an kimler çalışıyor) 60 sn'de bir. Yalnız ekrandaki veri çekilir. Açık antrenman danışanın `sessions/` klasörüne dokunan son commit'ten bulunur (koşullu istek: değişmediyse 304, birincil kotadan düşmez; commit ve dosya kimlikleriyle bellekte); son yazımı 3 saatten eski etkin antrenman canlı değil, yarımdır (`src/lib/live-session.ts`, `live-store.ts`).
 
 **Sınır (GitHub):** içerik yazan istekler için dakikada 80, saatte 500 üst sınırı var. Set başına ~1 yazma (süperset turları tek yazmada birleşir) + bitişte 3 (tek commit: ağaç, commit, ref) ile bir antrenman ~20–22 yazmadır: **aynı saat içinde ~20 tam antrenman**. 10-30 danışanlı bir antrenörde aynı saatte 3-8 kişi çalışır; pay rahat ama izlenecek sayı budur. Seans yazımları ayrı bir GitHub istemcisiyle gider (`sessionWriter`): 409 ve 429'da yeniden denemez, sınırda Route Handler'ın içinde beklemez; uç 429 + `Retry-After` döner, telefon veriyi tutup üstel bekler. Kota 500'ün altına inince yanıt `slow: true` der.
+
+**Nabızla dinlenme (2026-11-05, `src/lib/heart-rate.ts`, `src/app/me/antrenman/use-heart-rate.ts`).** Danışan antrenmanda Bluetooth
+göğüs bandı ya da nabız yayınlayan saati Web Bluetooth ile bağlar (Android Chrome ve yüklü uygulama; iPhone'da yok ve ekran bunu
+söyler). Sınırlar: PT'nin danışana girdiği değerler (`client.heartRate`, danışan düzenleme ekranı) → yaş (kayıtta yok) → genel
+120 / 170 bpm. Temel dinlenme bitince nabız toparlanma sınırının üstündeyse dinlenme uzar ("Nabzın 120'ye inince devam"); nabız
+3 sn kesintisiz altında kalınca biter; tavan temel bitişten itibaren +120 sn ve hiçbir düğme sıfırlamaz (beklerken −15 beklemeyi
+bitirir); geç fark edilirse yine bekler ama ses çalmaz. Uyarı: 5 sn kesintisiz uyarı sınırının üstünde → bir kez şerit + titreşim
++ ses; sınırın 5 altına inmeden yeniden uyarmaz; bağlantı kopunca şerit kalkar. Tıbbi cihaz değildir; nabız kayda yazılmaz.
+Yerel geliştirmede bağlantı panelinde "Deneme nabzı" vardır (üretimde yok).
 
 ### 7.1 İlerleme ve öneriler (progressive overload)
 
