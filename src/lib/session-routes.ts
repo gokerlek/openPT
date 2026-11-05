@@ -115,8 +115,9 @@ function failure(deps: SessionRouteDeps, error: unknown, context: string): Sessi
   }
   if (error instanceof GithubError && error.status === 409) {
     const seconds = error.retryAfter ?? 5;
-    // i18n-followup(T2): `GithubError`'ın mesajı Türkçe ve dile göre değil; çakışma metni burada dile göre seçilir.
-    const message = (deps.locale ?? DEFAULT_LOCALE) === DEFAULT_LOCALE ? error.message : textOf(deps).conflict;
+    // Dile göre metni olan hata o dilde; düz (Türkçe) metinli eski hata Türkçede kendi metniyle, öteki dilde genel çakışma.
+    const locale = deps.locale ?? DEFAULT_LOCALE;
+    const message = error.text || locale === DEFAULT_LOCALE ? error.localized(locale) : textOf(deps).conflict;
     return { status: 503, body: { error: message, retryAfter: seconds }, headers: { 'Retry-After': String(seconds) } };
   }
   const status = error instanceof GithubError && error.status >= 400 && error.status < 600 ? error.status : 502;

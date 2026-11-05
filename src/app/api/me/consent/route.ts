@@ -35,8 +35,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true });
   } catch (error) {
     const failure = error instanceof GithubError ? error : null;
-    // i18n-followup(T2): `GithubError`'ın mesajı Türkçe; öteki dilde genel mesaj.
-    const message = failure && locale === DEFAULT_LOCALE ? failure.message : t.failed;
+    // Dile göre metni olan GitHub hatası o dilde; düz (Türkçe) metinli olan Türkçede kendi metniyle, öteki dilde genel mesaj.
+    const message = failure && (failure.text || locale === DEFAULT_LOCALE) ? failure.localized(locale) : t.failed;
     return NextResponse.json({ error: message }, { status: failure?.status ?? 502 });
   }
 }

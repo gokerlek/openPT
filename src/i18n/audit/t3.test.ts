@@ -1,6 +1,6 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readdirSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import { findHardcodedText } from '../audit.ts';
 
@@ -34,27 +34,16 @@ function ownedFiles(): string[] {
 
 /**
  * Arayüzde görünmeyen dizeler: her biri dosyasıyla (ya da dosya kalıbıyla) sınırlı, nedeni üstünde. Çevrilecek metin
- * buraya girmez, sözlüğe gider.
+ * buraya girmez, sözlüğe gider. Sunucu günlüğü (`deps.log`, `repo.log`, `console.error`) burada değil: çağrının içindeki
+ * metin ayrıca izinli (`insideLogCall`).
  */
 const ALLOWED: readonly { file: RegExp; text: RegExp }[] = [
   // Uygulamanın kendi rotaları ve sorgu dizeleri (`/me/programlar/…`, `/me/antrenman?bitir=1`): adres, çevrilmez.
-  { file: /^src\/(?:app\/me|lib)\//, text: /^\/me(?:[/?]|$)/ },
+  { file: /^src\/(?:app\/me\/|lib\/client-tabs\.ts$)/, text: /^\/me(?:[/?]|$)/ },
   // Antrenman odağının adres parametresi (`?hareket=`) ve İlerleme'nin bölüm kimlikleri (`#hareket-rekorlari`): kod.
   { file: /^src\/(?:lib\/workout-nav\.ts|components\/progress\/exercise-progress\.tsx)$/, text: /^(?:hareket|hareketler|hareket-rekorlari)$/ },
   // Web Bluetooth'un iç hatası: yakalanır, danışan sözlükteki "Bağlanılamadı…" metnini görür.
   { file: /^src\/app\/me\/antrenman\/use-heart-rate\.ts$/, text: /^GATT yok$/ },
-  // Sunucu günlüğü (`deps.log`, `repo.log`, `console.error`): yalnız işletmeci okur, danışana gitmez.
-  { file: /^src\/lib\/check-in-routes\.ts$/, text: /^(?:okunamadı\.|bozuk, yazılmadı\.|kaydedildi)$/ },
-  { file: /^src\/lib\/me-constraint-routes\.ts$/, text: /^(?:\[kısıt\]|bozuk, yazılmadı\.)$/ },
-  { file: /^src\/lib\/own-program-files\.ts$/, text: /^(?:satır okunamadı,|dosya okunamadı\.|\[kendi program\] oluşturuldu|danışan)$/ },
-  { file: /^src\/lib\/own-program-routes\.ts$/, text: /^silindi$/ },
-  { file: /^src\/lib\/pain-report-store\.ts$/, text: /^\[ağrı kısayolu\]$/ },
-  { file: /^src\/lib\/progress-load\.ts$/, text: /^(?:: sağlık kaydı okunamadı \(|antrenman dosyası okunamadı\.|: haftalık hedefler okunamadı veya sabitlenemedi\.)$/ },
-  { file: /^src\/lib\/workout-routes\.ts$/, text: /^(?:\[antrenman\]|okunamadı \(bozuk JSON\)\.|dokunuş okunamadı\.|dokunuş)$/ },
-  {
-    file: /^src\/lib\/session-files-core\.ts$/,
-    text: /^(?:okunamadı \(bozuk JSON\)\.|satır okunamadı,|dosya okunamadı\.|: health\.json okunamadı; sağlık ayrıntısı yazılmadı\.|: proposals\.json okunamadı; öneriler yazılmadı\.)$/,
-  },
   // Günlüğe düşen GitHub hataları: `session-routes` yanıtta durumuna göre sözlükteki metni verir (500 ve 422 → "Kayıt
   // gönderilemedi"), mesajları danışana gitmez.
   { file: /^src\/lib\/session-files-core\.ts$/, text: /^(?:beklenen biçimde değil\.|Kayıt sınırları aşıyor; gönderilen değişiklik kabul edilmedi\.)$/ },
@@ -63,9 +52,34 @@ const ALLOWED: readonly { file: RegExp; text: RegExp }[] = [
   { file: /^src\/lib\/session-merge\.ts$/, text: /^(?:Birleştirilecek belge yok\.|Farklı antrenmanlar birleştirilemez\.)$/ },
   // Okunamayan kendi programın tanısı: Programlar sayfası sözlükteki "okunamadı" metnini gösterir, bu dize gösterilmez.
   { file: /^src\/lib\/own-program-index\.ts$/, text: /^(?:Dosyadaki kimlik dosya adıyla uyuşmuyor\.|Dosya JSON olarak okunamadı\.)$/ },
-  // Haftalık hedeflerin sistem commit'i (danışanın ya da PT'nin eylemi değil) ve yalnız günlüğe düşen hatası.
+  // Haftalık hedeflerin sistem commit'i (danışanın ya da PT'nin eylemi değil; veri reposunun geçmişi) ve yalnız günlüğe
+  // düşen hatası (`progress-load.ts` yakalar).
   { file: /^src\/lib\/weekly-goals\.ts$/, text: /^(?:Haftalık antrenman hedefleri sabitlendi|Haftalık hedefler kaydedilemedi\.)$/ },
 ];
+
+/** Sunucu günlüğü çağrıları (`console.error`, `deps.log(…)`, `repo.log(…)`): işletmeciye yazılır, danışana gitmez. */
+const LOG_OPEN = /\b(?:console\.(?:error|warn|info|log)|log)\(/g;
+
+/** Metin, satırdaki bir günlük çağrısının parantezleri içinde mi (satırın başka yerinde olması yetmez). */
+function insideLogCall(source: string, text: string): boolean {
+  const at = source.indexOf(text);
+  if (at < 0) return false;
+  for (const match of source.matchAll(LOG_OPEN)) {
+    const from = match.index + match[0].length;
+    if (from > at) continue;
+    let depth = 1;
+    for (let index = from; index < at && depth > 0; index += 1) {
+      if (source[index] === '(') depth += 1;
+      else if (source[index] === ')') depth -= 1;
+    }
+    if (depth > 0) return true;
+  }
+  return false;
+}
+
+function sourceLine(file: string, line: number): string {
+  return readFileSync(join(ROOT, file), 'utf8').split('\n')[line - 1] ?? '';
+}
 
 describe('T3 dosyalarında gömülü metin yok', () => {
   const files = ownedFiles();
@@ -77,16 +91,31 @@ describe('T3 dosyalarında gömülü metin yok', () => {
     assert.ok(!files.some((file) => file.startsWith('src/app/me/(sekmeler)/programlar/ai/') || file === 'src/lib/progression.ts'));
   });
 
-  test('Türkçe dize, JSX metni, metin öznitelikleri ve bildirimler sözlükte', () => {
+  test('Türkçe dize, JSX metni, metin öznitelikleri ve bildirimler sözlükte; izin listesinde eskiyen kayıt yok', () => {
+    const used = new Set<number>();
     const found = findHardcodedText(files.map((file) => join(ROOT, file)))
       .map(({ file, line, text }) => ({ file: relative(ROOT, file).split(sep).join('/'), line, text }))
-      .filter(({ file, text }) => !ALLOWED.some((allowed) => allowed.file.test(file) && allowed.text.test(text)));
+      .filter(({ file, line, text }) => {
+        const index = ALLOWED.findIndex((allowed) => allowed.file.test(file) && allowed.text.test(text));
+        if (index >= 0) {
+          used.add(index);
+          return false;
+        }
+        return !insideLogCall(sourceLine(file, line), text);
+      });
     assert.deepEqual(found, []);
+    assert.deepEqual(
+      ALLOWED.filter((_, index) => !used.has(index)),
+      [],
+      'kullanılmayan izin kayıtları',
+    );
   });
 
-  test('izin listesinde kullanılmayan kayıt yok', () => {
-    const found = findHardcodedText(files.map((file) => join(ROOT, file))).map(({ file, text }) => ({ file: relative(ROOT, file).split(sep).join('/'), text }));
-    const unused = ALLOWED.filter((allowed) => !found.some(({ file, text }) => allowed.file.test(file) && allowed.text.test(text)));
-    assert.deepEqual(unused, []);
+  test('günlük çağrısı yalnız çağrının içindeki metni izinli kılar', () => {
+    const line = "deps.log(`[seans] okunamadı: ${x}`); const ekran = 'Kaydedilemedi';";
+    assert.equal(insideLogCall(line, 'okunamadı:'), true);
+    assert.equal(insideLogCall(line, 'Kaydedilemedi'), false);
+    assert.equal(insideLogCall("console.error('Kaydedilemedi', error);", 'Kaydedilemedi'), true);
+    assert.equal(insideLogCall("toast.error('Kaydedilemedi'); log('x');", 'Kaydedilemedi'), false);
   });
 });

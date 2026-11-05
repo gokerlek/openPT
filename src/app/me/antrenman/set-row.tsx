@@ -6,7 +6,7 @@ import { motion } from 'motion/react';
 import { ArrowUp } from '@phosphor-icons/react';
 import { Check, X } from '@/components/line-icons';
 import { SwipeRow, deleteAction } from '@/components/swipe/swipe-row';
-import { NUMBER_FORMAT, WHOLE_FORMAT } from '@/components/ui/stepper';
+import { commaAsDecimal, NUMBER_FORMAT, pasteDecimal, WHOLE_FORMAT } from '@/components/ui/stepper';
 import { useLocale } from '@/i18n/client';
 import { intlLocale } from '@/i18n/locale';
 import { clientWorkoutMessages } from '@/i18n/messages/client-workout';
@@ -112,6 +112,9 @@ function CellNumber({
         aria-label={label}
         aria-invalid={invalid || undefined}
         onFocus={onFocus}
+        // İngilizcede virgül de ondalık: Base UI `en-GB`'de "2,5"i 2 okurdu (`Stepper` ile aynı düzeltme).
+        onInput={locale === 'en' && decimal ? commaAsDecimal : undefined}
+        onPaste={locale === 'en' && decimal ? pasteDecimal : undefined}
         onKeyDown={(event) => {
           if (event.key === 'Enter') event.currentTarget.blur();
         }}
