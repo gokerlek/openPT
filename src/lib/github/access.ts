@@ -1,5 +1,5 @@
 import { LocalizedError } from '../../i18n/errors.ts';
-import { installMessages } from '../../i18n/messages/install/index.ts';
+import { githubAccessMessages } from '../../i18n/messages/github-access/index.ts';
 import { normalizePrivateKey, PrivateKeyError } from './private-key.ts';
 
 /**
@@ -26,25 +26,25 @@ export function githubAccessFrom(env: Record<string, string | undefined>): Githu
   const privateKey = env.GITHUB_APP_PRIVATE_KEY?.trim() || undefined;
   if (appId || privateKey) {
     if (!appId || !privateKey) {
-      throw new GithubAccessError((l) => installMessages(l).github.access.appIncomplete);
+      throw new GithubAccessError((l) => githubAccessMessages(l).appIncomplete);
     }
-    if (!NUMERIC_ID.test(appId)) throw new GithubAccessError((l) => installMessages(l).github.access.appIdNumber);
+    if (!NUMERIC_ID.test(appId)) throw new GithubAccessError((l) => githubAccessMessages(l).appIdNumber);
     const installation = env.GITHUB_APP_INSTALLATION_ID?.trim() || undefined;
     if (installation && !NUMERIC_ID.test(installation)) {
-      throw new GithubAccessError((l) => installMessages(l).github.access.installationNumber);
+      throw new GithubAccessError((l) => githubAccessMessages(l).installationNumber);
     }
     let key: string;
     try {
       key = normalizePrivateKey(privateKey);
     } catch (error) {
-      if (error instanceof PrivateKeyError) throw new GithubAccessError((l) => installMessages(l).github.access.privateKey(error.localized(l)));
+      if (error instanceof PrivateKeyError) throw new GithubAccessError((l) => githubAccessMessages(l).privateKeyProblem(error.localized(l)));
       throw error;
     }
     return { mode: 'app', appId, privateKey: key, installationId: installation ? Number(installation) : null };
   }
   const token = env.GITHUB_TOKEN;
   if (!token) {
-    throw new GithubAccessError((l) => installMessages(l).github.access.missing);
+    throw new GithubAccessError((l) => githubAccessMessages(l).missing);
   }
   return { mode: 'token', token };
 }

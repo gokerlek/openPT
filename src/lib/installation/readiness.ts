@@ -1,6 +1,6 @@
 import {messageOf} from '../../i18n/errors.ts';
 import {DEFAULT_LOCALE,type Locale} from '../../i18n/locale.ts';
-import {installMessages} from '../../i18n/messages/install/index.ts';
+import {githubAccessMessages} from '../../i18n/messages/github-access/index.ts';
 import {githubAccessFrom} from '../github/access.ts';
 
 /**
@@ -24,5 +24,5 @@ export function environmentStatus(env: Record<string,string|undefined>): 'missin
 export function githubSetupProblem(env: Record<string,string|undefined>, locale: Locale = DEFAULT_LOCALE): string|null {
   if(!env.GITHUB_APP_ID?.trim() && !env.GITHUB_APP_PRIVATE_KEY?.trim() && !env.GITHUB_APP_INSTALLATION_ID?.trim())return null;
   try{githubAccessFrom(env);return null;}
-  catch(error){return messageOf(error,locale)??installMessages(locale).github.access.setupUnreadable;}
+  catch(error){return messageOf(error,locale)??githubAccessMessages(locale).setupUnreadable;}
 }

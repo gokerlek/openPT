@@ -220,15 +220,6 @@ const tr = {
   },
   /** GitHub katmanı: erişim ayarı, kimlik, repo koruması ve istek hataları (`lib/github/*`). */
   github: {
-    access: {
-      appIncomplete: 'GITHUB_APP_ID ve GITHUB_APP_PRIVATE_KEY birlikte tanımlanmalı (GitHub uygulamasıyla kurulum).',
-      appIdNumber: 'GITHUB_APP_ID bir sayı olmalı (GitHub uygulamasının "App ID" değeri).',
-      installationNumber: 'GITHUB_APP_INSTALLATION_ID bir sayı olmalı; bilmiyorsan boş bırak, sahibin kurulumu bulunur.',
-      privateKey: (reason: string) => `GITHUB_APP_PRIVATE_KEY: ${reason}`,
-      missing: 'GitHub erişimi tanımlı değil: GITHUB_APP_ID + GITHUB_APP_PRIVATE_KEY (GitHub uygulaması) ya da GITHUB_TOKEN. Vercel → Settings → Environment Variables altına ekle (şablon: .env.example).',
-      setupUnreadable: 'GitHub uygulamasının ayarları okunamadı.',
-    },
-    privateKey: 'GitHub uygulamasının özel anahtarı PEM biçiminde değil. GitHub’dan indirdiğin .pem dosyasının tamamını kullan.',
     appMode: 'GitHub uygulaması modu kapalı.',
     installationGone:
       'GitHub uygulamasının kurulumuna erişilemiyor (kaldırılmış ya da kurulum kimliği eski olabilir). Uygulamayı GitHub’da yeniden kur; GITHUB_APP_INSTALLATION_ID’yi kontrol et.',
