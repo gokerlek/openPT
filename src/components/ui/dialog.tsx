@@ -6,6 +6,8 @@ import { cn } from "cn"
 
 import { X as XIcon } from "@/components/line-icons"
 import { Button } from "@/components/ui/button"
+import { useMessages } from "@/i18n/client"
+import { uiMessages } from "@/i18n/messages/ui"
 
 function Dialog({ ...props }: DialogPrimitive.Root.Props) {
   return <DialogPrimitive.Root data-slot="dialog" {...props} />
@@ -47,6 +49,7 @@ function DialogContent({
 }: DialogPrimitive.Popup.Props & {
   showCloseButton?: boolean
 }) {
+  const t = useMessages(uiMessages).kit
   return (
     <DialogPortal>
       <DialogOverlay />
@@ -72,7 +75,7 @@ function DialogContent({
           >
             <XIcon
             />
-            <span className="sr-only">Close</span>
+            <span className="sr-only">{t.dialogClose}</span>
           </DialogPrimitive.Close>
         )}
       </DialogPrimitive.Popup>
@@ -98,6 +101,7 @@ function DialogFooter({
 }: React.ComponentProps<"div"> & {
   showCloseButton?: boolean
 }) {
+  const t = useMessages(uiMessages).kit
   return (
     <div
       data-slot="dialog-footer"
@@ -111,7 +115,7 @@ function DialogFooter({
       {children}
       {showCloseButton && (
         <DialogPrimitive.Close render={<Button variant="outline" />}>
-          Close
+          {t.dialogClose}
         </DialogPrimitive.Close>
       )}
     </div>

@@ -4,7 +4,9 @@ import { Bar, BarChart, CartesianGrid, LabelList, ReferenceLine, XAxis, YAxis, t
 import { ChartContainer, ChartTooltip, type ChartConfig } from '@/components/ui/chart';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { niceScale } from '@/lib/chart-scale';
-import { formatDayShort, formatNumber, formatWithUnit } from '@/lib/format';
+import { useLocale, useMessages } from '@/i18n/client';
+import { uiMessages } from '@/i18n/messages/ui';
+import { getFormat } from '@/lib/format';
 import { cn } from '@/lib/utils';
 
 /**
@@ -25,7 +27,6 @@ export type ProgressBar = {
 };
 
 const COLOR = { light: 'var(--chart-3)', dark: 'var(--chart-2)' } as const;
-const config: ChartConfig = { value: { label: 'Değer', theme: COLOR } };
 
 type Row = ProgressBar & { label: string };
 
@@ -79,8 +80,12 @@ export function ProgressBars({
   yAxisWidth?: number;
   className?: string;
 }) {
+  const locale = useLocale();
+  const t = useMessages(uiMessages).charts;
+  const { number, dayShort, withUnit } = getFormat(locale);
+  const config: ChartConfig = { value: { label: t.value, theme: COLOR } };
   const rows: Row[] = bars.map((bar) => ({ ...bar, label: dateLabel(bar.date) }));
-  const format = valueLabel ?? ((value: number) => formatWithUnit(value, unit));
+  const format = valueLabel ?? ((value: number) => withUnit(value, unit));
   const values = rows.map((row) => row.value);
   const scale = niceScale(0, Math.max(1, ...values, target?.value ?? 0), { nonNegative: true });
   // Dönem yılbaşını geçiyorsa yıl yalnız ilk sütunda ve yeni yılın ilk sütununda: her etikette yıl telefona sığmaz.
@@ -91,9 +96,9 @@ export function ProgressBars({
   const last = rows.at(-1);
   const average = complete.length > 0 ? complete.reduce((sum, row) => sum + row.value, 0) / complete.length : null;
   const summary = [
-    `${title}: ${rows.length} ${pointNoun}.`,
-    last ? `Son: ${last.label} ${format(last.value)}${last.partial ? ' (sürüyor)' : ''}.` : '',
-    average !== null ? `Ortalama ${format(Math.round(average * 10) / 10)}.` : '',
+    t.countLine(title, number(rows.length), pointNoun),
+    last ? t.barLast(last.label, format(last.value), Boolean(last.partial)) : '',
+    average !== null ? t.barAverage(format(Math.round(average * 10) / 10)) : '',
     target ? `${target.label}.` : '',
   ]
     .filter(Boolean)
@@ -118,7 +123,7 @@ export function ProgressBars({
           <CartesianGrid vertical={false} />
           <XAxis
             dataKey="date"
-            tickFormatter={(date: string) => formatDayShort(date, withYear && yearDates.has(date))}
+            tickFormatter={(date: string) => dayShort(date, withYear && yearDates.has(date))}
             tickLine={false}
             axisLine={false}
             tickMargin={8}
@@ -129,7 +134,7 @@ export function ProgressBars({
           <YAxis
             domain={scale.domain}
             ticks={scale.ticks}
-            tickFormatter={(value: number) => formatNumber(value)}
+            tickFormatter={(value: number) => number(value)}
             tickLine={false}
             axisLine={false}
             tickMargin={4}
@@ -145,7 +150,7 @@ export function ProgressBars({
                 <div className="grid min-w-32 gap-1 rounded-lg border border-border/50 bg-background px-2.5 py-1.5 text-xs shadow-xl">
                   <div className="font-medium">{row.label}</div>
                   <div className="flex items-center justify-between gap-3">
-                    <span className="text-muted-foreground">{row.partial ? 'Sürüyor' : 'Toplam'}</span>
+                    <span className="text-muted-foreground">{row.partial ? t.inProgress : t.total}</span>
                     <span className="font-medium text-foreground tabular-nums">{format(row.value)}</span>
                   </div>
                   {target ? <div className="text-muted-foreground">{target.label}</div> : null}
@@ -158,7 +163,7 @@ export function ProgressBars({
           ) : null}
           <Bar dataKey="value" shape={BarShape} isAnimationActive={false}>
             {showValues ? (
-              <LabelList dataKey="value" position="top" offset={4} className="fill-muted-foreground" fontSize={11} formatter={(value) => (typeof value === 'number' ? formatNumber(value) : '')} />
+              <LabelList dataKey="value" position="top" offset={4} className="fill-muted-foreground" fontSize={11} formatter={(value) => (typeof value === 'number' ? number(value) : '')} />
             ) : null}
           </Bar>
         </BarChart>
@@ -166,14 +171,14 @@ export function ProgressBars({
 
       <details className="group text-sm">
         <summary className="w-fit cursor-pointer text-xs text-muted-foreground underline-offset-4 hover:underline touch:py-3.5">
-          Değerleri tablo olarak göster
+          {t.showTable}
         </summary>
         <Table className="mt-2">
           <caption className="sr-only">{title}</caption>
           <TableHeader>
             <TableRow>
-              <TableHead>Dönem</TableHead>
-              <TableHead className="text-right">Değer</TableHead>
+              <TableHead>{t.period}</TableHead>
+              <TableHead className="text-right">{t.value}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -181,11 +186,11 @@ export function ProgressBars({
               <TableRow key={row.date}>
                 <TableCell>
                   {row.label}
-                  {row.partial ? <span className="text-muted-foreground"> (sürüyor)</span> : null}
+                  {row.partial ? <span className="text-muted-foreground"> {t.inProgressShort}</span> : null}
                 </TableCell>
                 <TableCell className="text-right tabular-nums">
                   {format(row.value)}
-                  {target ? <span className="text-muted-foreground"> / {formatNumber(target.value)}</span> : null}
+                  {target ? <span className="text-muted-foreground"> / {number(target.value)}</span> : null}
                 </TableCell>
               </TableRow>
             ))}

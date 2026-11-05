@@ -1,6 +1,8 @@
 'use client';
 
 import { Field as FormField, Form, useForm } from '@formisch/react';
+import { useMessages } from '@/i18n/client';
+import { authMessages } from '@/i18n/messages/auth';
 import { Button } from '@/components/ui/button';
 import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/field';
 import { Spinner } from '@/components/ui/spinner';
@@ -17,6 +19,7 @@ import { PasswordInput } from './password-input';
  * ayrı ayrı açar. Hata alanın altında, bildirim çubuğunda değil.
  */
 export function SetPasswordForm({ submitLabel, onDone }: { submitLabel: string; onDone: () => void }) {
+  const t = useMessages(authMessages).passwordField;
   const form = useForm({ schema: setPasswordSchema, initialInput: { password: '', confirm: '' } });
   const save = useServiceMutation({
     fn: (input: SetPasswordInput) =>
@@ -34,7 +37,7 @@ export function SetPasswordForm({ submitLabel, onDone }: { submitLabel: string; 
       <FormField of={form} path={['password']}>
         {(field) => (
           <Field data-invalid={Boolean(field.errors) || undefined}>
-            <FieldLabel htmlFor="new-password">Şifre</FieldLabel>
+            <FieldLabel htmlFor="new-password">{t.label}</FieldLabel>
             <PasswordInput
               {...field.props}
               id="new-password"
@@ -42,10 +45,7 @@ export function SetPasswordForm({ submitLabel, onDone }: { submitLabel: string; 
               value={field.input ?? ''}
               aria-invalid={Boolean(field.errors) || undefined}
             />
-            <FieldDescription>
-              En az {PASSWORD_MIN_LENGTH} karakter; 12345678 gibi yaygın ya da sıralı şifre olmaz. Unutursan antrenörün yeni
-              kare kod verir.
-            </FieldDescription>
+            <FieldDescription>{t.hint(PASSWORD_MIN_LENGTH)}</FieldDescription>
             <FieldError>{field.errors?.[0]}</FieldError>
           </Field>
         )}
@@ -53,7 +53,7 @@ export function SetPasswordForm({ submitLabel, onDone }: { submitLabel: string; 
       <FormField of={form} path={['confirm']}>
         {(field) => (
           <Field data-invalid={Boolean(field.errors) || undefined}>
-            <FieldLabel htmlFor="confirm-password">Şifre (tekrar)</FieldLabel>
+            <FieldLabel htmlFor="confirm-password">{t.confirmLabel}</FieldLabel>
             <PasswordInput
               {...field.props}
               id="confirm-password"

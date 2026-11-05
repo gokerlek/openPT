@@ -1,5 +1,7 @@
 import 'server-only';
 import * as v from 'valibot';
+import { DEFAULT_LOCALE, type Locale } from '../i18n/locale';
+import { ptShellMessages } from '../i18n/messages/pt-shell';
 import { cachedClientIndex } from './clients';
 import { clientRepoName, GithubError, sessionWriter } from './github/client';
 import { commitChangedFiles, latestCommit, readBlobJson, readJsonConditional } from './github/files';
@@ -78,7 +80,10 @@ const OVERVIEW_CONCURRENCY = 6;
  * Genel bakış'ın "Şu an antrenmanda" listesi: aktif danışanların açık antrenmanları, son seti en yeni olan
  * önce. Ad bildirim özetinden (önbellekli). Okunamayan danışan listeyi durdurmaz, sayılır.
  */
-export async function readLiveOverview(now: Date = new Date()): Promise<{ items: LiveClient[]; failed: number }> {
+export async function readLiveOverview(
+  now: Date = new Date(),
+  locale: Locale = DEFAULT_LOCALE,
+): Promise<{ items: LiveClient[]; failed: number }> {
   const index = await cachedClientIndex();
   const results = await mapLimit(
     index.filter((entry) => entry.status === 'active'),
@@ -87,8 +92,8 @@ export async function readLiveOverview(now: Date = new Date()): Promise<{ items:
       try {
         const live = await readLiveSession(entry.id, now);
         if (!live) return null;
-        const digest = await readClientDigest(entry.id).catch(() => null);
-        return { ...live, clientId: entry.id, name: digest?.name ?? 'Danışan' };
+        const digest = await readClientDigest(entry.id, locale).catch(() => null);
+        return { ...live, clientId: entry.id, name: digest?.name ?? ptShellMessages(locale).live.defaultClient };
       } catch {
         return 'failed';
       }

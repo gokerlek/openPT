@@ -1,8 +1,11 @@
-import { DEFAULT_LOCALE, type Locale } from '../i18n/locale.ts';
 import * as v from 'valibot';
+import { DEFAULT_LOCALE, type Locale } from '../i18n/locale.ts';
+import { authMessages } from '../i18n/messages/auth/index.ts';
+import { langConfig } from '../i18n/valibot.ts';
 import { INVITE_CODE_LENGTH, normalizeInviteCode, PASSWORD_MAX_LENGTH } from './client-status.ts';
 import type { loginWithPassword, redeemInvite, setClientPassword } from './clients-core.ts';
 import { describeError } from './github/errors.ts';
+import { passwordProblem } from './password-rules.ts';
 import { setPasswordSchema } from './schemas/auth.ts';
 import { clientIdSchema } from './schemas/client.ts';
 import type { ClientSession } from './session-core.ts';
@@ -14,12 +17,12 @@ import type { ClientSession } from './session-core.ts';
  * edilir. Şifre ne yanıta ne günlüğe yazılır.
  */
 
+// i18n-followup(T3): `api/me/**` uçları (`/api/me/password`, oturum/antrenman/kısıt uçları) `originGuard`/`postGuard`'a ve
+// `setPasswordRoute`'un `deps.locale`'ine `localeFromRequest(request)`'i geçirmeli; şimdilik yanıtları Türkçe.
 export type RouteResult = { status: number; body: Record<string, unknown> };
 
 type Log = (message: string) => void;
 type CreateSession = (session: ClientSession) => Promise<void>;
-
-const UNAVAILABLE = 'Şu an giriş yapılamıyor. Biraz sonra tekrar dene.';
 
 function refererOrigin(referer: string | null): string | null {
   if (!referer) return null;
@@ -34,9 +37,9 @@ function refererOrigin(referer: string | null): string | null {
  * Yalnız bu siteden: köken başlığı yoksa Referer'ın kökeni; ikisi de yoksa ya da başka bir kökense 403.
  * Gövdesiz durum değiştiren istekler (DELETE) yalnız buna bakar.
  */
-export function originGuard(headers: Headers, expectedOrigin: string, _locale: Locale = DEFAULT_LOCALE): RouteResult | null {
+export function originGuard(headers: Headers, expectedOrigin: string, locale: Locale = DEFAULT_LOCALE): RouteResult | null {
   const source = headers.get('origin') ?? refererOrigin(headers.get('referer'));
-  return source === expectedOrigin ? null : { status: 403, body: { error: 'Bu istek bu siteden gelmedi.' } };
+  return source === expectedOrigin ? null : { status: 403, body: { error: authMessages(locale).routes.foreignOrigin } };
 }
 
 /**
@@ -44,26 +47,21 @@ export function originGuard(headers: Headers, expectedOrigin: string, _locale: L
  * SameSite=Lax'ı tek savunma kalmasın). Köken başlığı yoksa Referer'ın kökeni; ikisi de yoksa ya da
  * başka bir kökense 403. JSON değilse 415: `text/plain` form gönderimi de ayrıştırılmasın.
  */
-export function postGuard(headers: Headers, expectedOrigin: string, _locale: Locale = DEFAULT_LOCALE): RouteResult | null {
-  const blocked = originGuard(headers, expectedOrigin);
+export function postGuard(headers: Headers, expectedOrigin: string, locale: Locale = DEFAULT_LOCALE): RouteResult | null {
+  const blocked = originGuard(headers, expectedOrigin, locale);
   if (blocked) return blocked;
   const type = headers.get('content-type')?.trim().toLowerCase() ?? '';
   if (type !== 'application/json' && !type.startsWith('application/json;')) {
-    return { status: 415, body: { error: 'İstek JSON olmalı.' } };
+    return { status: 415, body: { error: authMessages(locale).routes.jsonRequired } };
   }
   return null;
 }
 
 /* --- /api/join --- */
 
-const JOIN_REASONS: Record<string, string> = {
-  invalid: 'Kod yanlış. Antrenörünün verdiği kodu kontrol et.',
-  locked: 'Çok fazla yanlış deneme oldu. Antrenöründen yeni bir kare kod iste.',
-  used: 'Bu kod daha önce kullanılmış. Şifren varsa şifreyle gir; yoksa antrenöründen yeni bir kare kod iste.',
-  expired: 'Kodun süresi dolmuş. Antrenöründen yeni bir kare kod iste.',
-  none: 'Geçerli bir davet bulunamadı. Antrenöründen yeni bir kare kod iste.',
-  archived: 'Bu hesap kapalı. Antrenörünle görüş.',
-};
+function joinReasons(locale: Locale): Record<string, string> {
+  return authMessages(locale).routes.join;
+}
 
 const joinBody = v.object({ clientId: v.string(), code: v.string() });
 
@@ -77,22 +75,27 @@ export async function joinRoute(
     redeem(id: string, code: string): ReturnType<typeof redeemInvite>;
     createSession: CreateSession;
     log: Log;
+    /** Yanıt mesajlarının dili (`localeFromRequest`); yoksa Türkçe. */
+    locale?: Locale;
   },
   input: unknown,
 ): Promise<RouteResult> {
+  const locale = deps.locale ?? DEFAULT_LOCALE;
+  const t = authMessages(locale).routes;
+  const reasons = joinReasons(locale);
   const body = v.safeParse(joinBody, input);
-  if (!body.success || !v.is(clientIdSchema, body.output.clientId)) return { status: 400, body: { error: JOIN_REASONS.none } };
+  if (!body.success || !v.is(clientIdSchema, body.output.clientId)) return { status: 400, body: { error: reasons.none } };
   const code = normalizeInviteCode(body.output.code);
   if (!new RegExp(`^\\d{${INVITE_CODE_LENGTH}}$`).test(code)) {
-    const message = `Kod ${INVITE_CODE_LENGTH} haneli olmalı.`;
+    const message = t.codeLength(INVITE_CODE_LENGTH);
     return { status: 400, body: { error: message, fields: { code: message } } };
   }
   const { clientId } = body.output;
   try {
     // Listede olmayan kimlik GitHub'a hiç gitmez; davetsiz danışanla aynı yanıtı alır.
-    if (!(await deps.isKnownClient(clientId))) return { status: 410, body: { error: JOIN_REASONS.none } };
+    if (!(await deps.isKnownClient(clientId))) return { status: 410, body: { error: reasons.none } };
     const result = await deps.redeem(clientId, code);
-    if (!result.ok) return { status: result.reason === 'invalid' ? 401 : 410, body: { error: JOIN_REASONS[result.reason] } };
+    if (!result.ok) return { status: result.reason === 'invalid' ? 401 : 410, body: { error: reasons[result.reason] } };
     await deps.createSession({
       role: 'client',
       clientId: result.client.id,
@@ -103,7 +106,7 @@ export async function joinRoute(
   } catch (error) {
     // GitHub'a ulaşılamadı ya da istek sınırı doldu: "kod yanlış" denmez. Kod günlüğe yazılmaz.
     deps.log(`[katil] ${clientId}: ${describeError(error)}`);
-    return { status: 502, body: { error: UNAVAILABLE } };
+    return { status: 502, body: { error: t.unavailable } };
   }
 }
 
@@ -113,7 +116,7 @@ export async function joinRoute(
  * Kilitli, yanlış, şifresiz, erişimi kapalı, arşivde ya da bilinmeyen kimlik: hepsi aynı yanıt
  * (durum ve metin). Yanıttan hesabın durumu anlaşılmasın.
  */
-export const LOGIN_DENIED = 'Şifre yanlış ya da hesap kısa süreliğine kilitli.';
+export const LOGIN_DENIED = authMessages('tr').routes.loginDenied;
 
 const loginBody = v.object({ clientId: v.string(), password: v.string() });
 
@@ -127,14 +130,17 @@ export async function passwordLoginRoute(
     login(id: string, password: string): ReturnType<typeof loginWithPassword>;
     createSession: CreateSession;
     log: Log;
+    /** Yanıt mesajlarının dili (`localeFromRequest`); yoksa Türkçe. */
+    locale?: Locale;
   },
   input: unknown,
 ): Promise<RouteResult> {
-  const denied = { status: 401, body: { error: LOGIN_DENIED } };
+  const t = authMessages(deps.locale ?? DEFAULT_LOCALE).routes;
+  const denied = { status: 401, body: { error: t.loginDenied } };
   const body = v.safeParse(loginBody, input);
-  if (!body.success) return { status: 400, body: { error: 'İstek geçersiz.' } };
+  if (!body.success) return { status: 400, body: { error: t.invalidRequest } };
   const { clientId, password } = body.output;
-  if (!password) return { status: 400, body: { error: 'Şifreni yaz.', fields: { password: 'Şifreni yaz.' } } };
+  if (!password) return { status: 400, body: { error: t.passwordRequired, fields: { password: t.passwordRequired } } };
   // Sınırı aşan şifre doğru olamaz (UTF-16'da karakter başına en çok 2 birim): deneme de sayılmaz.
   if (!v.is(clientIdSchema, clientId) || password.length > PASSWORD_MAX_LENGTH * 2) return denied;
   try {
@@ -146,7 +152,7 @@ export async function passwordLoginRoute(
   } catch (error) {
     // GitHub'a ulaşılamadı ya da aynı anda başka bir deneme sayacı yazdı: "şifre yanlış" denmez.
     deps.log(`[giris] ${clientId}: ${describeError(error)}`);
-    return { status: 502, body: { error: UNAVAILABLE } };
+    return { status: 502, body: { error: t.unavailable } };
   }
 }
 
@@ -167,30 +173,30 @@ export async function setPasswordRoute(
   input: unknown,
 ): Promise<RouteResult> {
   const { session } = deps;
-  if (!session) return { status: 401, body: { error: 'Oturumun kapanmış. Yeniden giriş yap.' } };
-  const body = v.safeParse(setPasswordSchema, input);
+  const locale = deps.locale ?? DEFAULT_LOCALE;
+  const t = authMessages(locale).routes;
+  if (!session) return { status: 401, body: { error: t.sessionClosed } };
+  const body = v.safeParse(setPasswordSchema, input, langConfig(locale));
   if (!body.success) {
     const fields: Record<string, string> = {};
     for (const issue of body.issues) {
       const key = issue.path?.map((segment) => String(segment.key as PropertyKey)).join('.');
       if (key && !fields[key]) fields[key] = issue.message;
     }
-    return { status: 400, body: { error: fields.password ?? fields.confirm ?? 'İstek geçersiz.', fields } };
+    return { status: 400, body: { error: fields.password ?? fields.confirm ?? t.invalidRequest, fields } };
   }
   try {
     const result = await deps.setPassword(session, body.output.password);
     if (result.ok) return { status: 200, body: { ok: true } };
-    if (result.reason === 'weak') return { status: 400, body: { error: result.problem, fields: { password: result.problem } } };
-    if (result.reason === 'session') {
-      return { status: 401, body: { error: 'Oturumun kapanmış. Antrenöründen yeni bir kare kod iste.' } };
+    if (result.reason === 'weak') {
+      const problem = passwordProblem(body.output.password, locale) ?? result.problem;
+      return { status: 400, body: { error: problem, fields: { password: problem } } };
     }
-    return {
-      status: 409,
-      body: { error: 'Bu oturumda şifre belirlenemez. Şifreni değiştirmek için antrenöründen yeni bir kare kod iste.' },
-    };
+    if (result.reason === 'session') return { status: 401, body: { error: t.sessionEnded } };
+    return { status: 409, body: { error: t.passwordNotAllowed } };
   } catch (error) {
     // GitHub'a ulaşılamadı ya da iki sekme aynı anda yazdı: danışan yeniden dener.
     deps.log(`[sifre] ${session.clientId}: ${describeError(error)}`);
-    return { status: 502, body: { error: 'Şifre kaydedilemedi. Biraz sonra tekrar dene.' } };
+    return { status: 502, body: { error: t.passwordNotSaved } };
   }
 }

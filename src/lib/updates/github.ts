@@ -1,4 +1,6 @@
 import 'server-only';
+import {LocalizedError} from '../../i18n/errors.ts';
+import {installMessages} from '../../i18n/messages/install/index.ts';
 import * as v from 'valibot';
 import {serverEnv} from '@/lib/env';
 import {githubAccessToken} from '@/lib/github/app-auth';
@@ -26,7 +28,7 @@ export async function availableRelease() {
 export function updateRepo() {const env=serverEnv();return codeRepository(process.env.AXON_CODE_REPO,env.owner,env.appRepo);}
 type Run={id:number;status:string;conclusion:string|null;display_title:string;head_branch:string;event:string};
 function checkProductionBranch(branch:string) {
-  if(process.env.AXON_CODE_BRANCH && process.env.AXON_CODE_BRANCH!==branch)throw new Error('Vercel üretim dalı kod reposunun varsayılan dalıyla aynı değil. Manuel güncelleme kullan.');
+  if(process.env.AXON_CODE_BRANCH && process.env.AXON_CODE_BRANCH!==branch)throw new LocalizedError(l=>installMessages(l).updates.branchMismatch);
 }
 export async function updateStatus() {
   const repo=updateRepo();
@@ -47,14 +49,14 @@ export async function updateStatus() {
 }
 export async function startUpdate(tag:string) {
   const release=await availableRelease();
-  if(!release?.automatic || release.tag!==tag)throw new Error('Bu sürüm otomatik güncelleme için uygun değil.');
+  if(!release?.automatic || release.tag!==tag)throw new LocalizedError(l=>installMessages(l).updates.notEligible);
   const repo=updateRepo();
   const pending=await updateStatus();
   // Aynı adım iki kez istenmez (çift dokunuş, iki sekme): süren ya da bitmiş hazırlık, aktarılmış kod.
   const step=updateStep(tag,pending);
-  if(step==='preparing')throw new Error('Bir güncelleme zaten hazırlanıyor.');
-  if(step==='publish')throw new Error('Bu sürüm hazır. Güncellemeyi yayınla ile tamamla.');
-  if(step==='published')throw new Error('Bu sürümün kodu aktarıldı. Vercel yayını bitince yeni sürüm görünür.');
+  if(step==='preparing')throw new LocalizedError(l=>installMessages(l).updates.alreadyPreparing);
+  if(step==='publish')throw new LocalizedError(l=>installMessages(l).updates.alreadyReady);
+  if(step==='published')throw new LocalizedError(l=>installMessages(l).updates.alreadyApplied);
   const metadata=await github<{default_branch:string}>(`/repos/${repo}`);
   const branch=metadata!.default_branch;
   const ref=await github<{object:{sha:string}}>(`/repos/${repo}/git/ref/heads/${encodeURIComponent(branch)}`);
@@ -71,19 +73,19 @@ async function latestRunId(repo:string) {
 export async function applyUpdate(runId:number) {
   const repo=updateRepo();
   const run=await updateStatus();
-  if(!run || run.id!==runId || run.status!=='completed' || run.conclusion!=='success')throw new Error('Başarılı bir güncelleme hazırlığı bulunamadı.');
+  if(!run || run.id!==runId || run.status!=='completed' || run.conclusion!=='success')throw new LocalizedError(l=>installMessages(l).updates.noPreparation);
   if(run.applied)return;
   const release=await availableRelease();
-  if(!release?.automatic || release.tag!==run.tag)throw new Error('Sürüm artık otomatik güncelleme için uygun değil.');
+  if(!release?.automatic || release.tag!==run.tag)throw new LocalizedError(l=>installMessages(l).updates.noLongerEligible);
   const metadata=await github<{default_branch:string}>(`/repos/${repo}`);
   const branch=metadata!.default_branch;
   const staged=await github<{object:{sha:string}}>(`/repos/${repo}/git/ref/heads/axon-update-${run.id}`);
   const head=await github<{object:{sha:string}}>(`/repos/${repo}/git/ref/heads/${encodeURIComponent(branch)}`);
   const commit=await github<{parents:{sha:string}[];message:string}>(`/repos/${repo}/git/commits/${staged!.object.sha}`);
-  if(!validUpdateCommit(commit!,head!.object.sha,run.tag))throw new Error('Kod bu sırada değişmiş. Güncellemeyi yeniden başlat.');
+  if(!validUpdateCommit(commit!,head!.object.sha,run.tag))throw new LocalizedError(l=>installMessages(l).updates.codeChanged);
   const backup=`tags/axon-backup-${run.id}`;
   const old=await github<{object:{sha:string}}>(`/repos/${repo}/git/ref/${backup}`,{},true);
-  if(old && old.object.sha!==head!.object.sha)throw new Error('Yedek etiketi eşleşmiyor.');
+  if(old && old.object.sha!==head!.object.sha)throw new LocalizedError(l=>installMessages(l).updates.backupMismatch);
   if(!old)await github(`/repos/${repo}/git/refs`,{method:'POST',body:JSON.stringify({ref:`refs/${backup}`,sha:head!.object.sha})});
   // PT's own credential (PAT or the GitHub App installation token) moves the production branch, so Vercel
   // receives a normal push. GitHub Actions' temporary token is only used to prepare the staging branch.

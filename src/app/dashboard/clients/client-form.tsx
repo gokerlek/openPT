@@ -13,6 +13,8 @@ import {
   type Icon as PhosphorIcon,
 } from '@phosphor-icons/react';
 import { LabeledSelect } from '@/components/labeled-select';
+import { useLocale, useMessages } from '@/i18n/client';
+import { ptClientsMessages } from '@/i18n/messages/pt-clients';
 import { Check, Plus } from '@/components/line-icons';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -31,11 +33,11 @@ import { useServiceMutation } from '@/lib/query/use-service';
 import { cn } from '@/lib/utils';
 import {
   CLIENT_NOTE_MAX,
-  CLIENT_STATUS_LABELS,
   clientFormSchema,
-  HEALTH_FIELD_INFO,
+  clientStatusLabels,
+  healthFieldInfo,
   HEALTH_FIELDS,
-  TRAINING_EXPERIENCE_LABELS,
+  trainingExperienceLabels,
   type Client,
   type ClientInput,
   type HealthField,
@@ -52,10 +54,10 @@ const HEALTH_FIELD_ICONS: Record<HealthField, PhosphorIcon> = {
   screening: PersonSimpleWalk,
 };
 
-/** Nabız sınırlarının kutuları: boşken otomatik değer soluk yazar. */
+/** Nabız sınırlarının kutuları: boşken otomatik değer soluk yazar. Adlar ve ipuçları `ptClientsMessages().form`'da. */
 const HEART_RATE_FIELDS = [
-  { path: 'heartRecovery', id: 'heart-recovery', label: 'Toparlanma', auto: DEFAULT_HEART_LIMITS.recovery, hint: 'Dinlenme, nabız buna inene kadar uzar.' },
-  { path: 'heartAlert', id: 'heart-alert', label: 'Uyarı', auto: DEFAULT_HEART_LIMITS.alert, hint: 'Nabız 5 sn bunun üstünde kalırsa danışan uyarılır.' },
+  { path: 'heartRecovery', id: 'heart-recovery', auto: DEFAULT_HEART_LIMITS.recovery },
+  { path: 'heartAlert', id: 'heart-alert', auto: DEFAULT_HEART_LIMITS.alert },
 ] as const;
 
 /**
@@ -65,6 +67,10 @@ const HEART_RATE_FIELDS = [
  * danışanın bir özelliği değil, yapılan iştir: danışanın sayfasından yönetilir.
  */
 export function ClientForm({ editing }: { editing: Client | null }) {
+  const locale = useLocale();
+  const t = useMessages(ptClientsMessages).form;
+  const statusLabels = clientStatusLabels(locale);
+  const fieldInfo = healthFieldInfo(locale);
   const router = useRouter();
   const form = useForm({
     schema: clientFormSchema,
@@ -90,7 +96,7 @@ export function ClientForm({ editing }: { editing: Client | null }) {
         body: JSON.stringify(editing ? { ...values, id: editing.id } : values),
       }),
     invalidate: [['clients']],
-    notify: { success: editing ? 'Danışan güncellendi.' : 'Danışan eklendi.' },
+    notify: { success: editing ? t.saved : t.created },
     onError: (error) => applyFieldErrors(form as never, error),
     onSuccess: ({ id }) => {
       // Yeni danışanın ilk işi davet: kod yalnız o ekranda üretilip gösterilir.
@@ -106,25 +112,25 @@ export function ClientForm({ editing }: { editing: Client | null }) {
       onSubmit={(values) => save.mutateAsync(values as ClientInput).catch(() => undefined)}>
       <Card>
         <CardHeader>
-          <CardTitle>Kişi</CardTitle>
-          <CardDescription>Ad ve not yalnız bu danışana ayrılmış gizli kayıtta durur.</CardDescription>
+          <CardTitle>{t.person}</CardTitle>
+          <CardDescription>{t.personHint}</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-x-8 gap-y-5 lg:grid-cols-2">
           <div className="flex flex-col gap-5">
             <FormField of={form} path={['name']}>
               {(field) => (
                 <Field data-invalid={Boolean(field.errors) || undefined}>
-                  <FieldLabel htmlFor="name">Ad soyad</FieldLabel>
+                  <FieldLabel htmlFor="name">{t.name}</FieldLabel>
                   <Input
                     {...field.props}
                     id="name"
                     autoComplete="off"
                     value={field.input ?? ''}
-                    placeholder="Ör. Ayşe Demir"
+                    placeholder={t.namePlaceholder}
                     aria-invalid={Boolean(field.errors) || undefined}
                     onChange={(event) => setInput(form, { path: ['name'], input: event.currentTarget.value })}
                   />
-                  <FieldDescription>Danışan kendi ekranında bu adla karşılanır.</FieldDescription>
+                  <FieldDescription>{t.nameHint}</FieldDescription>
                   <FieldError>{field.errors?.[0]}</FieldError>
                 </Field>
               )}
@@ -134,14 +140,14 @@ export function ClientForm({ editing }: { editing: Client | null }) {
               <FormField of={form} path={['status']}>
                 {(field) => (
                   <Field data-invalid={Boolean(field.errors) || undefined} className="max-w-sm">
-                    <FieldLabel htmlFor="status">Durum</FieldLabel>
+                    <FieldLabel htmlFor="status">{t.status}</FieldLabel>
                     <LabeledSelect
                       id="status"
                       value={field.input}
-                      labels={CLIENT_STATUS_LABELS}
+                      labels={statusLabels}
                       onChange={(value) => setInput(form, { path: ['status'], input: value })}
                     />
-                    <FieldDescription>Arşivdeki danışan giriş yapamaz, verisi yerinde kalır.</FieldDescription>
+                    <FieldDescription>{t.statusHint}</FieldDescription>
                     <FieldError>{field.errors?.[0]}</FieldError>
                   </Field>
                 )}
@@ -151,17 +157,14 @@ export function ClientForm({ editing }: { editing: Client | null }) {
             <FormField of={form} path={['trainingExperience']}>
               {(field) => (
                 <Field data-invalid={Boolean(field.errors) || undefined} className="max-w-sm">
-                  <FieldLabel htmlFor="training-experience">Antrenman geçmişi</FieldLabel>
+                  <FieldLabel htmlFor="training-experience">{t.experience}</FieldLabel>
                   <LabeledSelect
                     id="training-experience"
                     value={field.input}
-                    labels={TRAINING_EXPERIENCE_LABELS}
+                    labels={trainingExperienceLabels(locale)}
                     onChange={(value) => setInput(form, { path: ['trainingExperience'], input: value })}
                   />
-                  <FieldDescription>
-                    Ağırlık önerileri buna göre başlar: deneyimli danışan her yeni harekette tanışma adımlarını tek
-                    antrenmanda geçer.
-                  </FieldDescription>
+                  <FieldDescription>{t.experienceHint}</FieldDescription>
                   <FieldError>{field.errors?.[0]}</FieldError>
                 </Field>
               )}
@@ -171,18 +174,18 @@ export function ClientForm({ editing }: { editing: Client | null }) {
           <FormField of={form} path={['note']}>
             {(field) => (
               <Field data-invalid={Boolean(field.errors) || undefined}>
-                <FieldLabel htmlFor="note">Not</FieldLabel>
+                <FieldLabel htmlFor="note">{t.note}</FieldLabel>
                 <Textarea
                   {...field.props}
                   id="note"
                   rows={5}
                   value={field.input ?? ''}
                   maxLength={CLIENT_NOTE_MAX}
-                  placeholder="Hedefi, geçmişi, dikkat edilecekler…"
+                  placeholder={t.notePlaceholder}
                   aria-invalid={Boolean(field.errors) || undefined}
                   onChange={(event) => setInput(form, { path: ['note'], input: event.currentTarget.value })}
                 />
-                <FieldDescription>Senin için; danışan görmez.</FieldDescription>
+                <FieldDescription>{t.noteHint}</FieldDescription>
                 <FieldError>{field.errors?.[0]}</FieldError>
               </Field>
             )}
@@ -193,11 +196,11 @@ export function ClientForm({ editing }: { editing: Client | null }) {
       <FormField of={form} path={['aiEnabled']}>
         {(field) => <Card>
           <CardHeader>
-            <CardTitle>AI koç desteği</CardTitle>
-            <CardDescription>Danışan ve sen kayıtlar hakkında soru sorabilir, program taslağı isteyebilirsiniz. Taslaklar yalnız sen onaylayınca uygulanır. Danışanın ayrıca veri kullanımını onaylaması gerekir.</CardDescription>
+            <CardTitle>{t.ai}</CardTitle>
+            <CardDescription>{t.aiHint}</CardDescription>
             <CardAction>
               <label className="-m-2 flex min-h-11 min-w-11 cursor-pointer items-center justify-center">
-                <Switch aria-label="AI koç desteği" checked={Boolean(field.input)} onCheckedChange={checked => setInput(form, { path: ['aiEnabled'], input: checked })} />
+                <Switch aria-label={t.ai} checked={Boolean(field.input)} onCheckedChange={checked => setInput(form, { path: ['aiEnabled'], input: checked })} />
               </label>
             </CardAction>
           </CardHeader>
@@ -206,19 +209,15 @@ export function ClientForm({ editing }: { editing: Client | null }) {
 
       <Card>
         <CardHeader>
-          <CardTitle>Nabız sınırları</CardTitle>
-          <CardDescription>
-            Danışan antrenmanda nabız bandı bağlarsa kullanılır: dinlenme en çok 2 dakika uzayabilir, yüksek nabızda
-            uyarı çıkar. İkisi de boş bırakılırsa otomatik: toparlanma {DEFAULT_HEART_LIMITS.recovery}, uyarı{' '}
-            {DEFAULT_HEART_LIMITS.alert} bpm (genel değerler).
-          </CardDescription>
+          <CardTitle>{t.heartTitle}</CardTitle>
+          <CardDescription>{t.heartHint(DEFAULT_HEART_LIMITS.recovery, DEFAULT_HEART_LIMITS.alert)}</CardDescription>
         </CardHeader>
         <CardContent className="grid max-w-xl gap-x-6 gap-y-5 sm:grid-cols-2">
           {HEART_RATE_FIELDS.map((item) => (
             <FormField key={item.path} of={form} path={[item.path]}>
               {(field) => (
                 <Field data-invalid={Boolean(field.errors) || undefined}>
-                  <FieldLabel htmlFor={item.id}>{item.label}</FieldLabel>
+                  <FieldLabel htmlFor={item.id}>{item.path === 'heartRecovery' ? t.heartRecovery : t.heartAlert}</FieldLabel>
                   <InputGroup>
                     <InputGroupInput
                       {...field.props}
@@ -228,15 +227,15 @@ export function ClientForm({ editing }: { editing: Client | null }) {
                       autoComplete="off"
                       className="tabular-nums"
                       value={field.input ?? ''}
-                      placeholder={`Otomatik (${item.auto})`}
+                      placeholder={t.heartAuto(item.auto)}
                       aria-invalid={Boolean(field.errors) || undefined}
                       onChange={(event) => setInput(form, { path: [item.path], input: event.currentTarget.value })}
                     />
                     <InputGroupAddon align="inline-end">
-                      <InputGroupText>bpm</InputGroupText>
+                      <InputGroupText>{t.bpm}</InputGroupText>
                     </InputGroupAddon>
                   </InputGroup>
-                  <FieldDescription>{item.hint}</FieldDescription>
+                  <FieldDescription>{item.path === 'heartRecovery' ? t.heartRecoveryHint : t.heartAlertHint}</FieldDescription>
                   <FieldError>{field.errors?.[0]}</FieldError>
                 </Field>
               )}
@@ -249,16 +248,13 @@ export function ClientForm({ editing }: { editing: Client | null }) {
         {(enabledField) => (
           <Card>
             <CardHeader>
-              <CardTitle>Sağlık modülü</CardTitle>
-              <CardDescription>
-                Ağrı, ölçüm ve kısıtlar özel nitelikli veridir. Danışan ilk girişinde seçtiğin parçaları görür ve
-                onaylar; onay vermezse hiçbiri tutulmaz.
-              </CardDescription>
+              <CardTitle>{t.healthTitle}</CardTitle>
+              <CardDescription>{t.healthHint}</CardDescription>
               <CardAction>
                 {/* Anahtar küçük: dokunma alanı çevresindeki etiketle 44 px (etikete dokunmak anahtarı çevirir). */}
                 <label className="-m-2 flex min-h-11 min-w-11 cursor-pointer items-center justify-center">
                   <Switch
-                    aria-label="Sağlık modülü"
+                    aria-label={t.healthTitle}
                     checked={Boolean(enabledField.input)}
                     onCheckedChange={(checked) => {
                       setInput(form, { path: ['healthEnabled'], input: checked });
@@ -290,7 +286,7 @@ export function ClientForm({ editing }: { editing: Client | null }) {
                       });
                     return (
                       <Field data-invalid={Boolean(field.errors) || undefined}>
-                        <ul className="grid gap-2 sm:grid-cols-2" aria-label="Tutulacak parçalar">
+                        <ul className="grid gap-2 sm:grid-cols-2" aria-label={t.healthParts}>
                           {HEALTH_FIELDS.map((item) => {
                             const isOn = selected.has(item);
                             const Icon = HEALTH_FIELD_ICONS[item];
@@ -309,9 +305,9 @@ export function ClientForm({ editing }: { editing: Client | null }) {
                                     <Icon weight="fill" className="size-5 text-muted-foreground" />
                                   </span>
                                   <span className="flex flex-1 flex-col gap-0.5">
-                                    <span className="font-medium">{HEALTH_FIELD_INFO[item].label}</span>
+                                    <span className="font-medium">{fieldInfo[item].label}</span>
                                     <span className="text-xs font-normal text-muted-foreground">
-                                      {HEALTH_FIELD_INFO[item].description}
+                                      {fieldInfo[item].description}
                                     </span>
                                   </span>
                                   {isOn ? <Check className="text-primary-text" /> : <Plus className="text-muted-foreground" />}
@@ -324,10 +320,7 @@ export function ClientForm({ editing }: { editing: Client | null }) {
                         {needsReconsent ? (
                           <Alert>
                             <Info weight="fill" />
-                            <AlertDescription>
-                              Danışanın onayı bu kapsamdan önce verildi. Kaydedersen bir sonraki girişinde yeniden sorulur;
-                              o zamana kadar sağlık kaydı tutulmaz.
-                            </AlertDescription>
+                            <AlertDescription>{t.reconsent}</AlertDescription>
                           </Alert>
                         ) : null}
                       </Field>
@@ -336,10 +329,8 @@ export function ClientForm({ editing }: { editing: Client | null }) {
                 </FormField>
               ) : (
                 <p className="text-sm text-muted-foreground">
-                  Kapalı: sağlık ekranları danışana görünmez, hiçbir sağlık kaydı tutulmaz.
-                  {consentState === 'granted' || consentState === 'outdated'
-                    ? ' Daha önce tutulanlar danışanın kaydında kalır; silmek için danışanı silmen gerekir.'
-                    : null}
+                  {t.healthOff}
+                  {consentState === 'granted' || consentState === 'outdated' ? t.healthOffKept : null}
                 </p>
               )}
             </CardContent>
@@ -352,11 +343,11 @@ export function ClientForm({ editing }: { editing: Client | null }) {
           variant="outline"
           nativeButton={false}
           render={<Link href={editing ? `/dashboard/clients/${editing.id}` : '/dashboard/clients'} />}>
-          Vazgeç
+          {t.cancel}
         </Button>
         <Button type="submit" disabled={save.isPending}>
           {save.isPending ? <Spinner data-icon="inline-start" /> : null}
-          {save.isPending ? (editing ? 'Kaydediliyor…' : 'Ekleniyor…') : editing ? 'Kaydet' : 'Danışanı ekle'}
+          {save.isPending ? (editing ? t.saving : t.adding) : editing ? t.save : t.add}
         </Button>
       </div>
     </Form>

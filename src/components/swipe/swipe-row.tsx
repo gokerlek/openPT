@@ -22,6 +22,8 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { Trash } from '@phosphor-icons/react';
 import { animate, motion, useDragControls, useMotionValue, useReducedMotion, useTransform, type MotionValue, type PanInfo } from 'motion/react';
+import { useMessages } from '@/i18n/client';
+import { commonMessages } from '@/i18n/messages/common';
 import { vibrate } from '@/lib/haptics';
 import { tracksSwipe } from '@/lib/swipe-intent';
 import { INSTANT, SWIPE, tween } from '@/lib/motion';
@@ -50,7 +52,8 @@ export type SwipeAction = {
 export function deleteAction(onPress: () => void, options: { removes?: boolean; disabled?: boolean } = {}): SwipeAction {
   return {
     key: 'sil',
-    label: 'Sil',
+    // Türkçe varsayılan; `Panel` bu anahtardaki etiketi görüntüleyenin dilinde yazar.
+    label: commonMessages('tr').actions.delete,
     icon: <Trash weight="bold" />,
     tone: 'destructive',
     removes: options.removes ?? true,
@@ -261,6 +264,7 @@ function Panel({
   armed: boolean;
   onRun: (action: SwipeAction) => void;
 }) {
+  const deleteLabel = useMessages(commonMessages).actions.delete;
   const rest = actions.length * SWIPE.actionWidth;
   // Panel yüzün açtığı yeri doldurur: parmakla birlikte uzar.
   const width = useTransform(x, (value) => Math.max(rest, side === 'start' ? value : -value));
@@ -293,7 +297,7 @@ function Panel({
               single ? cn('w-18', toInner(side, armed) ? 'left-[calc(100%-4.5rem)]' : 'left-0') : 'inset-x-0',
             )}>
             {action.icon}
-            {action.label}
+            {action.key === 'sil' ? deleteLabel : action.label}
           </span>
         </button>
       ))}

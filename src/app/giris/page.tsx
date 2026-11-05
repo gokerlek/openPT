@@ -4,6 +4,8 @@ import { redirect } from 'next/navigation';
 import { PulseLine } from '@/components/pulse-line';
 import { Card, CardContent } from '@/components/ui/card';
 import { LocaleSwitch } from '@/i18n/locale-switch';
+import { authMessages } from '@/i18n/messages/auth';
+import { getMessages } from '@/i18n/server';
 import { clientManifestHref } from '@/lib/client-manifest';
 import { readAppConfig } from '@/lib/config';
 import { CLIENT_ID_PATTERN } from '@/lib/schemas/client';
@@ -13,8 +15,8 @@ import { signedInRedirect } from './login-screen';
 
 /** Manifest adresteki kimlikle (`lib/client-manifest.ts`): buradan eklenen uygulama da danışanı tanır. */
 export async function generateMetadata({ searchParams }: { searchParams: Promise<{ c?: string }> }): Promise<Metadata> {
-  const { c } = await searchParams;
-  return { title: 'Giriş', manifest: clientManifestHref(c) };
+  const [{ c }, t] = await Promise.all([searchParams, getMessages(authMessages)]);
+  return { title: t.login.title, manifest: clientManifestHref(c) };
 }
 
 /**
@@ -34,7 +36,7 @@ export default async function ClientLoginPage({
   const target = signedInRedirect({ signedIn: !loggedOut && (await readClientSession()) !== null, loggedOut });
   if (target) redirect(target);
 
-  const config = await readAppConfig();
+  const [config, t] = await Promise.all([readAppConfig(), getMessages(authMessages)]);
   const clientId = c && CLIENT_ID_PATTERN.test(c) ? c : null;
 
   return (
@@ -43,7 +45,7 @@ export default async function ClientLoginPage({
         <div className="flex flex-col items-center gap-2 text-center">
           <h1 className="font-heading text-3xl font-semibold tracking-tight">{config.appName}</h1>
           <PulseLine className="h-6 w-40" />
-          <p className="text-muted-foreground">Tekrar hoş geldin.</p>
+          <p className="text-muted-foreground">{t.login.welcomeBack}</p>
         </div>
         <Card>
           <CardContent>
@@ -53,9 +55,9 @@ export default async function ClientLoginPage({
       </div>
       <div className="flex flex-col items-center gap-1">
         <p className="text-center text-sm text-muted-foreground">
-          Antrenör müsün?{' '}
+          {t.login.trainerPrompt}{' '}
           <Link href="/login" className="inline-flex min-h-11 items-center underline underline-offset-4">
-            Buradan gir
+            {t.login.trainerLink}
           </Link>
         </p>
         <LocaleSwitch />

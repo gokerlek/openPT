@@ -4,8 +4,10 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { Item, ItemActions, ItemContent, ItemDescription, ItemMedia, ItemTitle } from '@/components/ui/item';
-import { formatNumber, formatRecent } from '@/lib/format';
-import { NOTICE_WINDOW_DAYS, noticeFeed, PT_NOTICE_LABELS } from '@/lib/notices';
+import { ptShellMessages } from '@/i18n/messages/pt-shell';
+import { getLocale } from '@/i18n/server';
+import { getFormat } from '@/lib/format';
+import { NOTICE_WINDOW_DAYS, noticeFeed } from '@/lib/notices';
 import { cn } from '@/lib/utils';
 import { clientOverviews } from './client-overviews';
 import { MarkSeenButton } from './mark-seen-button';
@@ -21,6 +23,9 @@ import { MarkSeenButton } from './mark-seen-button';
  * yalnız danışanın bildirim doğuran yazımından sonra (ya da 5 dk'da bir) o danışanın dosyaları yeniden okunur.
  */
 export async function NoticesCard({ timeZone }: { timeZone: string }) {
+  const locale = await getLocale();
+  const t = ptShellMessages(locale).notices;
+  const format = getFormat(locale);
   const { overviews, failed } = await clientOverviews();
   const feed = noticeFeed(overviews, { now: new Date() });
 
@@ -28,12 +33,12 @@ export async function NoticesCard({ timeZone }: { timeZone: string }) {
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          Bildirimler
-          {feed.unread > 0 ? <Badge className="tabular-nums">{formatNumber(feed.unread)} yeni</Badge> : null}
+          {t.title}
+          {feed.unread > 0 ? <Badge className="tabular-nums">{t.newBadge(format.number(feed.unread))}</Badge> : null}
         </CardTitle>
         <CardDescription>
-          Son {NOTICE_WINDOW_DAYS} gün ve bekleyen öneriler: danışanların antrenmanlarından ve program değişikliklerinden.
-          {failed > 0 ? ` ${formatNumber(failed)} danışanın kaydı okunamadı.` : ''}
+          {t.description(format.number(NOTICE_WINDOW_DAYS))}
+          {failed > 0 ? ` ${ptShellMessages(locale).attention.failedRecords(failed, format.number(failed))}` : ''}
         </CardDescription>
         {feed.unreadClients.length > 0 ? (
           <CardAction>
@@ -48,10 +53,8 @@ export async function NoticesCard({ timeZone }: { timeZone: string }) {
               <EmptyMedia variant="icon">
                 <BellSimple weight="fill" />
               </EmptyMedia>
-              <EmptyTitle>Bildirim yok</EmptyTitle>
-              <EmptyDescription>
-                Danışan bugünün programı yerine başka birini yaptığında ya da antrenmanı yarım bıraktığında burada görünür.
-              </EmptyDescription>
+              <EmptyTitle>{t.emptyTitle}</EmptyTitle>
+              <EmptyDescription>{t.emptyBody}</EmptyDescription>
             </EmptyHeader>
           </Empty>
         ) : (
@@ -75,14 +78,14 @@ export async function NoticesCard({ timeZone }: { timeZone: string }) {
                   <ItemContent>
                     <ItemTitle className={cn(item.unread && 'font-semibold')}>
                       {item.clientName}
-                      <Badge variant="outline">{PT_NOTICE_LABELS[item.kind]}</Badge>
-                      {item.unread ? <span className="sr-only">(okunmadı)</span> : null}
+                      <Badge variant="outline">{t.labels[item.kind]}</Badge>
+                      {item.unread ? <span className="sr-only">({t.unreadSr})</span> : null}
                     </ItemTitle>
                     <ItemDescription>{item.text}</ItemDescription>
                   </ItemContent>
                   <ItemActions>
                     <time dateTime={item.at} className="text-xs whitespace-nowrap text-muted-foreground">
-                      {formatRecent(item.at, timeZone)}
+                      {format.recent(item.at, timeZone)}
                     </time>
                   </ItemActions>
                 </Item>

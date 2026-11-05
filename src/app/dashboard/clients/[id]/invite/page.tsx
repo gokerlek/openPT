@@ -3,6 +3,8 @@ import { notFound } from 'next/navigation';
 import { SectionHeader } from '@/components/section-header';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { ptClientsMessages } from '@/i18n/messages/pt-clients';
+import { getLocale } from '@/i18n/server';
 import { readClient, readInvite } from '@/lib/clients';
 import { inviteStatus } from '@/lib/client-status';
 import { readAppConfig } from '@/lib/config';
@@ -11,7 +13,9 @@ import { AccessBadge, accessDetail, accessOf, passwordOf } from '../../invite-st
 import { InvitePanel } from './invite-panel';
 import { requirePt } from '@/lib/guards';
 
-export const metadata: Metadata = { title: 'Davet' };
+export async function generateMetadata(): Promise<Metadata> {
+  return { title: ptClientsMessages(await getLocale()).invite.title };
+}
 
 /**
  * Davet ekranı (SPEC §5): solda kare kod, sağda durum ve adımlar. Danışan ilk kez kare kodla
@@ -23,8 +27,9 @@ export default async function InvitePage({ params }: { params: Promise<{ id: str
   await requirePt();
   const { id } = await params;
   if (!CLIENT_ID_PATTERN.test(id)) notFound();
-  const [stored, invite, config] = await Promise.all([readClient(id), readInvite(id), readAppConfig()]);
+  const [stored, invite, config, locale] = await Promise.all([readClient(id), readInvite(id), readAppConfig(), getLocale()]);
   if (!stored) notFound();
+  const t = ptClientsMessages(locale).invite;
   const { client } = stored;
   const access = accessOf(client, invite?.invite ?? null);
   const archived = client.status === 'archived';
@@ -32,17 +37,17 @@ export default async function InvitePage({ params }: { params: Promise<{ id: str
   return (
     <div className="flex flex-col gap-6">
       <SectionHeader
-        back={{ href: `/dashboard/clients/${id}`, label: 'Genel' }}
-        title="Davet"
-        description={`${client.name} telefon kamerasıyla kare kodu okutur, şifresini belirler ve uygulamayı ana ekrana ekler; sonra ana ekrandaki simgeden şifresiyle girer. GitHub hesabı gerekmez.`}
+        back={{ href: `/dashboard/clients/${id}`, label: t.back }}
+        title={t.title}
+        description={t.description(client.name)}
       />
 
       <div className="grid gap-6 lg:grid-cols-2">
         {archived ? (
           <Card>
             <CardHeader>
-              <CardTitle>Danışan arşivde</CardTitle>
-              <CardDescription>Arşivdeki danışana davet üretilemez. Önce durumunu “Aktif” yap.</CardDescription>
+              <CardTitle>{t.archivedTitle}</CardTitle>
+              <CardDescription>{t.archivedBody}</CardDescription>
             </CardHeader>
           </Card>
         ) : (
@@ -58,37 +63,28 @@ export default async function InvitePage({ params }: { params: Promise<{ id: str
         <div className="flex flex-col gap-6">
           <Card>
             <CardHeader>
-              <CardTitle>Giriş durumu</CardTitle>
-              <CardDescription>{accessDetail(client, invite?.invite ?? null, config.timeZone)}</CardDescription>
+              <CardTitle>{t.stateTitle}</CardTitle>
+              <CardDescription>{accessDetail(client, invite?.invite ?? null, config.timeZone, new Date(), locale)}</CardDescription>
               <div>
-                <AccessBadge state={access} password={passwordOf(client)} />
+                <AccessBadge state={access} password={passwordOf(client)} locale={locale} />
               </div>
             </CardHeader>
           </Card>
 
           <Card>
             <CardHeader>
-              <CardTitle>Nasıl katılır</CardTitle>
-              <CardDescription>
-                Danışana söylenecek sıra: “Telefon kamerasıyla kodu okut → şifreni belirle → uygulamayı ana ekrana ekle.”
-              </CardDescription>
+              <CardTitle>{t.howTitle}</CardTitle>
+              <CardDescription>{t.howSummary}</CardDescription>
             </CardHeader>
             <CardContent>
               <ol className="flex list-decimal flex-col gap-2 pl-5 text-sm">
-                <li>Danışan telefonunun kamerasıyla kare kodu okutur ya da bağlantıyı açar; kod hazır gelir, “Devam”a dokunur.</li>
-                <li>Kendine şifre belirler.</li>
+                {t.steps.map((step) => (
+                  <li key={step}>{step}</li>
+                ))}
                 <li>
-                  Ekran uygulamayı ana ekrana eklemeyi adım adım gösterir: Android’de “Uygulamayı yükle”, iPhone’da Safari’de
-                  Paylaş → Ana Ekrana Ekle → Ekle. Atlarsa Bugün ekranının üstünde yeniden görür.
-                </li>
-                <li>Sonraki girişleri ana ekrandaki simgeden, şifreyle. Oturumu 30 gün açık kalır; kod bir kez kullanılır.</li>
-                <li>
-                  Şifresini unutursa PT’ye söyler, PT yeni kare kod üretir. Kod kullanılınca eski şifre geçersiz olur, danışan
-                  yeni şifre belirler.
-                </li>
-                <li>
-                  Telefonunu kaybederse danışan düzenlenip <Badge variant="outline">Erişimi kapat</Badge> denir (oturumları ve
-                  şifresi geçersiz olur), sonra yeni kare kod üretilir.
+                  {t.lastStep.before}
+                  <Badge variant="outline">{t.lastStep.badge}</Badge>
+                  {t.lastStep.after}
                 </li>
               </ol>
             </CardContent>

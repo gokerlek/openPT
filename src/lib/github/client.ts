@@ -1,5 +1,7 @@
 import 'server-only';
 import { Octokit } from 'octokit';
+import { DEFAULT_LOCALE, type Locale } from '../../i18n/locale';
+import { installMessages } from '../../i18n/messages/install';
 import { CLIENT_REPO_PREFIX, serverEnv } from '../env';
 import { installationProblems, installationSettingsUrl } from '../installation/github-app';
 import { CLIENT_ID_PATTERN } from '../schemas/client';
@@ -62,7 +64,7 @@ export function sessionWriter(): Octokit {
 
 export function clientRepoName(clientId: string): string {
   if (!CLIENT_ID_PATTERN.test(clientId)) {
-    throw new GithubError(`Geçersiz danışan kimliği: ${clientId}`, 400);
+    throw new GithubError((l) => installMessages(l).github.badClientId(clientId), 400);
   }
   return `${CLIENT_REPO_PREFIX}${clientId}`;
 }
@@ -75,10 +77,7 @@ export function isClientRepo(repo: string): boolean {
 export function assertRepoAllowed(repo: string): void {
   const { appRepo } = serverEnv();
   if (repo === appRepo || isClientRepo(repo)) return;
-  throw new GithubError(
-    `Bu uygulama "${repo}" repo'suna dokunamaz. Yalnız "${appRepo}" ve "${CLIENT_REPO_PREFIX}*" repolarına izin var.`,
-    403,
-  );
+  throw new GithubError((l) => installMessages(l).github.repoNotAllowed(repo, appRepo, CLIENT_REPO_PREFIX), 403);
 }
 
 export function owner(): string {
@@ -105,13 +104,13 @@ export type GithubConnection = {
  * (`GET /user`); uygulamada kurulumun hesabı ve sorunları ("All repositories", izinler, askı) — kurulum
  * anahtarı `GET /user`'ı çağıramaz.
  */
-export async function githubConnection(): Promise<GithubConnection> {
+export async function githubConnection(locale: Locale = DEFAULT_LOCALE): Promise<GithubConnection> {
   if (githubMode() === 'token') {
     const user = await gh().rest.users.getAuthenticated();
     return { mode: 'token', login: user.data.login, problems: [] };
   }
   const info = await installationInfo();
-  return { mode: 'app', login: info.account, problems: installationProblems(info, owner()), settingsUrl: installationSettingsUrl(info.id) };
+  return { mode: 'app', login: info.account, problems: installationProblems(info, owner(), locale), settingsUrl: installationSettingsUrl(info.id) };
 }
 
 export function appRepo(): string {
@@ -130,12 +129,12 @@ export function toGithubError(error: unknown, context: string): GithubError {
   const response = typeof error === 'object' && error && 'response' in error ? (error.response as { headers?: Record<string, unknown> }) : undefined;
   const message = error instanceof Error ? error.message : '';
   const rate = rateLimitOf(status, response?.headers, message);
-  if (rate.rateLimited) return new GithubError(`${context}: GitHub istek sınırı doldu; biraz sonra tekrar dene.`, 429, rate);
+  if (rate.rateLimited) return new GithubError((l) => installMessages(l).github.rateLimited(context), 429, rate);
   if (status === 409 || status === 422) {
-    return new GithubError(`${context}: kayıt sen çalışırken değişti.`, 409, rate);
+    return new GithubError((l) => installMessages(l).github.conflict(context), 409, rate);
   }
-  if (status === 404) return new GithubError(`${context}: bulunamadı.`, 404);
-  if (status === 403) return new GithubError(`${context}: GitHub izin vermedi (yetki ya da istek sınırı).`, 403, rate);
-  if (status === 401) return new GithubError(`${context}: GitHub anahtarı geçersiz.`, 401);
-  return new GithubError(`${context}: GitHub'a ulaşılamadı.`, 502, rate);
+  if (status === 404) return new GithubError((l) => installMessages(l).github.notFound(context), 404);
+  if (status === 403) return new GithubError((l) => installMessages(l).github.forbidden(context), 403, rate);
+  if (status === 401) return new GithubError((l) => installMessages(l).github.badToken(context), 401);
+  return new GithubError((l) => installMessages(l).github.unreachable(context), 502, rate);
 }

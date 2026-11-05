@@ -1,11 +1,11 @@
 import 'server-only';
 import { cookies } from 'next/headers';
 import { Octokit } from 'octokit';
+import { installMessages } from '../../i18n/messages/install';
 import { serverEnv } from '../env';
 import { GithubError } from './errors';
 import {
   openUserToken,
-  REAUTH_MESSAGE,
   refreshUserToken,
   sealUserToken,
   USER_TOKEN_COOKIE,
@@ -25,7 +25,7 @@ function cookieOptions(maxAge: number) {
 }
 
 export function reauthError(): GithubError {
-  return new GithubError(REAUTH_MESSAGE, 401);
+  return new GithubError((l) => installMessages(l).github.reauth, 401);
 }
 
 /** GitHub girişinden sonra (dönüş ucu): anahtar şifrelenip httpOnly çereze yazılır. */

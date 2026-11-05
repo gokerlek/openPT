@@ -3,6 +3,8 @@
 import { useRouter } from 'next/navigation';
 import { Checks } from '@/components/line-icons';
 import { Button } from '@/components/ui/button';
+import { useMessages } from '@/i18n/client';
+import { ptShellMessages } from '@/i18n/messages/pt-shell';
 import { Spinner } from '@/components/ui/spinner';
 import { fetchJson } from '@/lib/query/errors';
 import { useServiceMutation } from '@/lib/query/use-service';
@@ -13,6 +15,7 @@ import { useServiceMutation } from '@/lib/query/use-service';
  * kalır ve söylenir.
  */
 export function MarkSeenButton({ clientIds }: { clientIds: string[] }) {
+  const t = useMessages(ptShellMessages).notices;
   const router = useRouter();
   const seen = useServiceMutation({
     fn: () => fetchJson<{ ok: true; failed?: string[] }>('/api/notices/seen', { method: 'POST', body: JSON.stringify({ clientIds }) }),
@@ -24,9 +27,9 @@ export function MarkSeenButton({ clientIds }: { clientIds: string[] }) {
     <div className="flex flex-col items-end gap-1">
       <Button variant="outline" size="sm" className="touch:h-11" disabled={seen.isPending} onClick={() => seen.mutate()}>
         {seen.isPending ? <Spinner data-icon="inline-start" /> : <Checks data-icon="inline-start" />}
-        Tümünü okundu say
+        {t.markAllRead}
       </Button>
-      {failed > 0 ? <span className="text-xs text-muted-foreground">{failed} danışanda yazılamadı; biraz sonra tekrar dene.</span> : null}
+      {failed > 0 ? <span className="text-xs text-muted-foreground">{t.markFailed(failed)}</span> : null}
     </div>
   );
 }

@@ -1,5 +1,7 @@
-import { STAGES, STAGE_LABELS, type Stage } from './exposure.ts';
-import { formatKg, formatNumber } from './format.ts';
+import { DEFAULT_LOCALE, type Locale } from '../i18n/locale.ts';
+import { ptClientsMessages } from '../i18n/messages/pt-clients/index.ts';
+import { STAGES, stageLabels, type Stage } from './exposure.ts';
+import { getFormat } from './format.ts';
 import type { HealthCheckIn } from './schemas/health.ts';
 import type { SessionDoc } from './schemas/session.ts';
 import { sessionDetail, type DetailExercise, type DetailSet, type SessionDetail } from './session-history.ts';
@@ -19,13 +21,12 @@ import type { ChangeLine, ChangeState } from './workout-summary.ts';
  */
 
 /** Program değişikliklerinin durumu, PT'ye (danışanın metni "antrenörünün onayında" der). */
-export const PT_CHANGE_LABELS: Record<ChangeState, string> = {
-  applied: 'programa yazıldı',
-  pending: 'onay bekliyor',
-  approved: 'onaylandı',
-  declined: 'reddedildi',
-  stale: 'uygulanamadı',
-};
+export function ptChangeLabels(locale: Locale = DEFAULT_LOCALE): Record<ChangeState, string> {
+  return ptClientsMessages(locale).sessions.changeLabels;
+}
+
+/** Türkçe etiketler (eski çağrılar ve testler); arayüz `ptChangeLabels(locale)` kullanır. */
+export const PT_CHANGE_LABELS: Record<ChangeState, string> = ptChangeLabels('tr');
 
 export type PtDetailSet = DetailSet & { overload: boolean };
 export type PtDetailExercise = Omit<DetailExercise, 'sets'> & { sets: PtDetailSet[]; notes: string[] };
@@ -54,9 +55,14 @@ export function ptSessionDetail(
     painRows?: ReadonlySet<string>;
     /** Seansın günündeki kilo (yalnız ölçüm onayı sürdükçe): yürüyüş/koşu setinde kalori. */
     bodyMassKg?: number | undefined;
+    /** Metinlerin dili; yoksa Türkçe. */
+    locale?: Locale;
   },
 ): PtSessionDetail {
-  const base = sessionDetail(doc, input.timeZone, input.bodyMassKg);
+  const locale = input.locale ?? DEFAULT_LOCALE;
+  const t = ptClientsMessages(locale).sessions;
+  const format = getFormat(locale);
+  const base = sessionDetail(doc, input.timeZone, input.bodyMassKg, locale);
   const entries = new Map(doc.entries.map((entry) => [entry.id, entry]));
   const overloads = new Set(doc.entries.flatMap((entry) => entry.sets.filter((set) => set.overload).map((set) => set.id)));
 
@@ -65,38 +71,41 @@ export function ptSessionDetail(
     const notes: string[] = [];
     if (entry?.swappedFrom) {
       const from = input.rowTitle?.(entry.swappedFrom) ?? null;
-      notes.push(from ? `${from} yerine` : 'muadille değiştirildi');
+      notes.push(from ? t.notes.insteadOf(from) : t.notes.swapped);
     }
-    if (entry?.added) notes.push('plan dışı eklendi');
-    if (entry?.status === 'skipped' && entry.rowId && input.painRows?.has(entry.rowId)) notes.push('ağrı nedeniyle geçildi');
+    if (entry?.added) notes.push(t.notes.added);
+    if (entry?.status === 'skipped' && entry.rowId && input.painRows?.has(entry.rowId)) notes.push(t.notes.painSkipped);
     const plan = entry?.plan;
     const planParts = [
-      ...(plan?.topWeightKg !== undefined && plan.topWeightKg > 0 ? [formatKg(plan.topWeightKg)] : []),
-      ...(isStage(plan?.stage) ? [STAGE_LABELS[plan.stage]] : []),
+      ...(plan?.topWeightKg !== undefined && plan.topWeightKg > 0 ? [format.kg(plan.topWeightKg)] : []),
+      ...(isStage(plan?.stage) ? [stageLabels(locale)[plan.stage]] : []),
     ];
-    if (planParts.length > 0) notes.push(`plan: ${planParts.join(' · ')}`);
+    if (planParts.length > 0) notes.push(t.notes.plan(planParts.join(' · ')));
     return { ...exercise, notes, sets: exercise.sets.map((set) => ({ ...set, overload: overloads.has(set.id) })) };
   });
 
   const flags: string[] = [];
   // Danışanın kendi programından (kendi-program.md §4); adı başlıkta ("Evde · Gün A", anlık görüntü).
-  if (doc.program?.programId) flags.push('kendi programı');
-  if (base.otherDay) flags.push(doc.program?.plannedDayName ? `${doc.program.plannedDayName} yerine seçildi` : 'başka program seçildi');
+  if (doc.program?.programId) flags.push(t.flags.ownProgram);
+  if (base.otherDay) flags.push(doc.program?.plannedDayName ? t.flags.insteadOf(doc.program.plannedDayName) : t.flags.otherDay);
   const unfinished = doc.notices.find((notice) => notice.kind === 'unfinished');
   if (unfinished) {
     flags.push(
-      unfinished.done !== undefined && unfinished.planned !== undefined
-        ? `yarım bırakıldı (${formatNumber(unfinished.done)}/${formatNumber(unfinished.planned)} set)`
-        : 'yarım bırakıldı',
+      t.flags.unfinished(
+        unfinished.done !== undefined && unfinished.planned !== undefined
+          ? { done: format.number(unfinished.done), planned: format.number(unfinished.planned) }
+          : null,
+      ),
     );
   }
-  if (doc.adjust === 'lighter') flags.push('hafifletilmiş gün');
+  if (doc.adjust === 'lighter') flags.push(t.flags.lighter);
   if (base.effort) flags.push(base.effort);
 
   return { ...base, exercises, flags };
 }
 
 /** Program değişikliklerinin satırları, PT'nin etiketleriyle. */
-export function ptChangeLines(changes: readonly ChangeLine[]): { text: string; label: string; note?: string }[] {
-  return changes.map((change) => ({ text: change.text, label: PT_CHANGE_LABELS[change.state], ...(change.note ? { note: change.note } : {}) }));
+export function ptChangeLines(changes: readonly ChangeLine[], locale: Locale = DEFAULT_LOCALE): { text: string; label: string; note?: string }[] {
+  const labels = ptChangeLabels(locale);
+  return changes.map((change) => ({ text: change.text, label: labels[change.state], ...(change.note ? { note: change.note } : {}) }));
 }

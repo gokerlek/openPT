@@ -1,4 +1,7 @@
 // Göreli ve uzantılı içe aktarma: `node --test` ile de sınanır (`client-work.test.ts`).
+import { DEFAULT_LOCALE, type Locale } from '../../../i18n/locale.ts';
+import { ptClientsMessages } from '../../../i18n/messages/pt-clients/index.ts';
+import { getFormat } from '../../../lib/format.ts';
 import { accessState, healthConsentState, type AccessState, type HealthConsentState } from '../../../lib/client-status.ts';
 import type { Client, Invite } from '../../../lib/schemas/client.ts';
 
@@ -13,11 +16,14 @@ import type { Client, Invite } from '../../../lib/schemas/client.ts';
  */
 export type HealthWork = { label: string; tone: 'waiting' | 'info' };
 
-const HEALTH_WORK: Partial<Record<HealthConsentState, HealthWork>> = {
-  pending: { label: 'Sağlık onayı bekliyor', tone: 'waiting' },
-  outdated: { label: 'Sağlık onayı yenilenecek', tone: 'waiting' },
-  declined: { label: 'Sağlık onayı verilmedi', tone: 'info' },
-};
+function healthWorkOf(locale: Locale): Partial<Record<HealthConsentState, HealthWork>> {
+  const t = ptClientsMessages(locale).list.healthWork;
+  return {
+    pending: { label: t.pending, tone: 'waiting' },
+    outdated: { label: t.outdated, tone: 'waiting' },
+    declined: { label: t.declined, tone: 'info' },
+  };
+}
 
 /** Girişi henüz olmayan (davet edilmemiş ya da daveti kullanılmamış) danışan. */
 const INVITE_OPEN: readonly AccessState[] = ['none', 'pending', 'expired', 'locked'];
@@ -28,25 +34,31 @@ export function clientWork(
   client: Pick<Client, 'status' | 'access' | 'modules' | 'consents'>,
   invite: Invite | null,
   now: Date,
+  locale: Locale = DEFAULT_LOCALE,
 ): ClientWork {
   const access = accessState(client.access, invite, now);
   const health = healthConsentState(client);
-  return { access, health, healthWork: client.status === 'archived' ? null : (HEALTH_WORK[health] ?? null) };
+  return { access, health, healthWork: client.status === 'archived' ? null : (healthWorkOf(locale)[health] ?? null) };
 }
 
 /**
  * Başlıktaki özet: "3 danışan · 2 aktif · 1 henüz giriş yapmadı · 1 sağlık onayı bekliyor" (bekleyenler
  * yalnız aktiflerde). Giriş yapmamış: davet yok, bekliyor, süresi dolmuş ya da kilitli.
  */
-export function clientsSummary(rows: readonly { status: Client['status']; work: ClientWork | null }[]): string {
+export function clientsSummary(
+  rows: readonly { status: Client['status']; work: ClientWork | null }[],
+  locale: Locale = DEFAULT_LOCALE,
+): string {
+  const t = ptClientsMessages(locale).list.summary;
+  const { number } = getFormat(locale);
   const active = rows.filter((row) => row.status === 'active');
   const invites = active.filter((row) => row.work && INVITE_OPEN.includes(row.work.access)).length;
   const consents = active.filter((row) => row.work?.healthWork?.tone === 'waiting').length;
   return [
-    `${rows.length} danışan`,
-    `${active.length} aktif`,
-    invites > 0 ? `${invites} henüz giriş yapmadı` : null,
-    consents > 0 ? `${consents} sağlık onayı bekliyor` : null,
+    t.clients(rows.length, number(rows.length)),
+    t.active(number(active.length)),
+    invites > 0 ? t.notSignedIn(invites, number(invites)) : null,
+    consents > 0 ? t.consentWaiting(number(consents)) : null,
   ]
     .filter(Boolean)
     .join(' · ');

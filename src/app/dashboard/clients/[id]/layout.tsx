@@ -1,6 +1,8 @@
 import type { Metadata, ResolvingMetadata } from 'next';
 import { notFound } from 'next/navigation';
 import { PageHeader } from '@/components/page-header';
+import { ptClientsMessages } from '@/i18n/messages/pt-clients';
+import { getLocale } from '@/i18n/server';
 import { loadClient } from '@/lib/clients';
 import { requirePt } from '@/lib/guards';
 import { CLIENT_ID_PATTERN } from '@/lib/schemas/client';
@@ -22,8 +24,8 @@ export async function generateMetadata(
   const { id } = await params;
   if (!CLIENT_ID_PATTERN.test(id)) return {};
   // `loadClient` istek başına önbellekli: sayfa aynı kaydı yeniden okumaz.
-  const [loaded, resolved] = await Promise.all([loadClient(id).catch(() => null), parent]);
-  return { title: clientTitle(loaded?.ok ? loaded.client.name : 'Danışan', resolved.title?.template) };
+  const [loaded, resolved, locale] = await Promise.all([loadClient(id).catch(() => null), parent, getLocale()]);
+  return { title: clientTitle(loaded?.ok ? loaded.client.name : ptClientsMessages(locale).shell.fallbackName, resolved.title?.template) };
 }
 
 /**
@@ -37,6 +39,7 @@ export default async function ClientLayout({ children, params }: { children: Rea
   if (!CLIENT_ID_PATTERN.test(id)) notFound();
   const loaded = await loadClient(id);
   if (!loaded) notFound();
+  const t = ptClientsMessages(await getLocale()).shell;
 
   const name = loaded.ok ? loaded.client.name : id;
   // "Sağlık" sekmesinin bağlantısı: modülde seçili ilk parça (Kısıtlar → Ölçümler → Hareket); yoksa Kısıtlar.
@@ -57,9 +60,9 @@ export default async function ClientLayout({ children, params }: { children: Rea
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-4">
         <PageHeader
-          crumbs={[{ label: 'Danışanlar', href: '/dashboard/clients' }, { label: name }]}
+          crumbs={[{ label: t.breadcrumb, href: '/dashboard/clients' }, { label: name }]}
           title={title}
-          description={loaded.ok ? undefined : 'Kayıt okunamadı'}
+          description={loaded.ok ? undefined : t.unreadableDescription}
         />
         <ClientTabs clientId={id} healthHref={healthHref} />
       </div>

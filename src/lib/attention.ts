@@ -1,9 +1,12 @@
+import { DEFAULT_LOCALE, type Locale } from '../i18n/locale.ts';
+import { ptShellMessages } from '../i18n/messages/pt-shell/index.ts';
+import { compareText, lower } from '../i18n/text.ts';
 import { accessState, type AccessState } from './client-status.ts';
 import type { Conflict } from './constraint-filter.ts';
 import {
   constraintsOf,
   constraintTitle,
-  EMERGENCY_TEXT,
+  emergencyText,
   isActive,
   isEmergency,
   isPendingReport,
@@ -12,10 +15,10 @@ import {
   type Severity,
 } from './constraints.ts';
 import { cellTitle, constraintSuppress, majorAsymmetry, newestFirst, painHistory, SCREENING_ALERT_DAYS, testName } from './screening.ts';
-import { formatDayShort, formatNumber, formatSignedWithUnit, todayIn } from './format.ts';
-import { SIDE_LABELS } from './measurement-log.ts';
+import { getFormat, todayIn } from './format.ts';
+import { sideLabels } from './measurement-log.ts';
 import { measurementAlerts, type LineKey } from './measurement-trends.ts';
-import { MEASUREMENT_UNIT_LABELS, MEASUREMENTS, type MeasurementId } from './measurements.ts';
+import { measurementDef, measurementUnitLabels, type MeasurementId } from './measurements.ts';
 import { activeItem, type OwnIndex } from './own-program-index.ts';
 import { currentPhaseOf, phaseStatus } from './program-plan.ts';
 import { parseProposals, pendingProposals } from './proposals.ts';
@@ -67,16 +70,12 @@ export const ATTENTION_TUNING = {
 export const ATTENTION_KINDS = ['constraint', 'missed', 'screening', 'stalled', 'phase', 'proposals', 'measurement', 'invite'] as const;
 export type AttentionKind = (typeof ATTENTION_KINDS)[number];
 
-export const ATTENTION_LABELS: Record<AttentionKind, string> = {
-  constraint: 'Kısıt',
-  missed: 'Kaçan gün',
-  screening: 'Hareket testi',
-  stalled: 'İlerleme',
-  phase: 'Evre',
-  proposals: 'Öneri',
-  measurement: 'Ölçüm',
-  invite: 'Davet',
-};
+export function attentionLabels(locale: Locale = DEFAULT_LOCALE): Record<AttentionKind, string> {
+  return ptShellMessages(locale).attention.labels;
+}
+
+/** Türkçe etiketler (eski çağrılar ve testler); arayüz `attentionLabels(locale)` kullanır. */
+export const ATTENTION_LABELS: Record<AttentionKind, string> = attentionLabels('tr');
 
 /**
  * Aciliyet (büyük önce) **[sentez]**: birden çok kaçan antrenman günü danışanın koptuğunu gösterebilir; bekleyen
@@ -169,33 +168,37 @@ export type ScreeningFacts = {
   asymmetry: string | null;
 };
 
-const SEVERITY_TEXT: Record<Severity, string> = { mild: 'hafif', moderate: 'orta', severe: 'şiddetli' };
-
-/** Kayıttan kısıt özeti; çelişkiler çağırandan (program ve kütüphane gerekir). */
+/**
+ * Kayıttan kısıt özeti; çelişkiler çağırandan (program ve kütüphane gerekir). Özetteki bölge adları `locale`
+ * dilinde yazılır: özet önbelleği dile göre ayrı tutulur (`notices-store.ts`).
+ */
 export function constraintFactsOf(
   record: Pick<HealthRecord, 'constraints' | 'conditions' | 'surgeryDate'>,
   conflicts: readonly Conflict[],
+  locale: Locale = DEFAULT_LOCALE,
 ): ConstraintFacts {
   const list = constraintsOf(record);
   const active = list.filter(isActive);
   return {
-    urgent: active.filter((item) => isEmergency(item) && !item.referredAt).map((item) => ({ id: item.id, label: regionText(item) })),
+    urgent: active.filter((item) => isEmergency(item) && !item.referredAt).map((item) => ({ id: item.id, label: regionText(item, locale) })),
     refer: active
       .filter((item) => isRedFlag(item) && !isEmergency(item) && !item.referredAt && !item.clearance)
-      .map((item) => ({ id: item.id, title: constraintTitle(item) })),
+      .map((item) => ({ id: item.id, title: constraintTitle(item, locale) })),
     waiting: active
       .filter((item) => isRedFlag(item) && item.referredAt && !item.clearance)
-      .map((item) => ({ id: item.id, label: regionText(item), referredAt: item.referredAt as string })),
-    reports: list.filter(isPendingReport).map((item) => ({ id: item.id, label: regionText(item), ...(item.severity ? { severity: item.severity } : {}) })),
+      .map((item) => ({ id: item.id, label: regionText(item, locale), referredAt: item.referredAt as string })),
+    reports: list
+      .filter(isPendingReport)
+      .map((item) => ({ id: item.id, label: regionText(item, locale), ...(item.severity ? { severity: item.severity } : {}) })),
     changes: active.flatMap((item) => {
       const change = item.clientChange;
       if (!change) return [];
       return [
         change.resolved
-          ? { id: item.id, label: regionText(item), kind: 'better' as const, ...(change.severity === 'severe' ? { wasSevere: true as const } : {}) }
+          ? { id: item.id, label: regionText(item, locale), kind: 'better' as const, ...(change.severity === 'severe' ? { wasSevere: true as const } : {}) }
           : {
               id: item.id,
-              label: regionText(item),
+              label: regionText(item, locale),
               kind: 'worse' as const,
               ...(change.previousSeverity ? { from: change.previousSeverity } : {}),
               ...(change.severity ? { to: change.severity } : {}),
@@ -210,14 +213,17 @@ export function constraintFactsOf(
  * Taramanın özeti: açık ağrılar (`painHistory`: gözden geçirilmemiş ve sonradan ağrısız test edilmemiş; yeni tarama
  * o testi yapmadıysa eski taramanın ağrısı da) ve son taramada tek büyük asimetri (etkin kısıtlı taraf bastırılır).
  */
-export function screeningFactsOf(record: Pick<HealthRecord, 'screenings' | 'constraints' | 'conditions' | 'surgeryDate'>): ScreeningFacts | null {
+export function screeningFactsOf(
+  record: Pick<HealthRecord, 'screenings' | 'constraints' | 'conditions' | 'surgeryDate'>,
+  locale: Locale = DEFAULT_LOCALE,
+): ScreeningFacts | null {
   const latest = newestFirst(record.screenings ?? [])[0];
   if (!latest) return null;
   const asymmetry = majorAsymmetry(latest, constraintSuppress(constraintsOf(record)));
   return {
     date: latest.date,
-    pain: painHistory(record.screenings ?? []).open.map((cell) => cellTitle(cell.testId, cell.side)),
-    asymmetry: asymmetry ? testName(asymmetry.testId) : null,
+    pain: painHistory(record.screenings ?? []).open.map((cell) => cellTitle(cell.testId, cell.side, false, locale)),
+    asymmetry: asymmetry ? testName(asymmetry.testId, locale) : null,
   };
 }
 
@@ -440,20 +446,21 @@ function accessNow(facts: Pick<AttentionFacts, 'access' | 'inviteExpiresAt'>, no
   return facts.access;
 }
 
-function inviteItem(access: AccessState, expiresAt: string | undefined, timeZone: string): AttentionItem | null {
+function inviteItem(access: AccessState, expiresAt: string | undefined, timeZone: string, locale: Locale): AttentionItem | null {
+  const t = ptShellMessages(locale).attention.invite;
   const item = (urgency: number, text: string): AttentionItem => ({ key: `invite:${access}`, kind: 'invite', urgency, text, target: 'invite' });
   switch (access) {
     case 'none':
-      return item(ATTENTION_URGENCY.inviteNone, 'Henüz davet edilmedi: kare kod üretilmedi');
+      return item(ATTENTION_URGENCY.inviteNone, t.none);
     case 'pending':
       return item(
         ATTENTION_URGENCY.invitePending,
-        expiresAt ? `Davet kullanılmadı · son kullanma ${formatDayShort(todayIn(timeZone, new Date(expiresAt)))}` : 'Davet kullanılmadı',
+        t.pending(expiresAt ? getFormat(locale).dayShort(todayIn(timeZone, new Date(expiresAt))) : null),
       );
     case 'expired':
-      return item(ATTENTION_URGENCY.inviteBlocked, 'Davetin süresi doldu: yeni kare kod gerekli');
+      return item(ATTENTION_URGENCY.inviteBlocked, t.expired);
     case 'locked':
-      return item(ATTENTION_URGENCY.inviteBlocked, 'Davet kilitlendi (çok sayıda yanlış kod): yeni kare kod gerekli');
+      return item(ATTENTION_URGENCY.inviteBlocked, t.locked);
     default:
       return null;
   }
@@ -462,53 +469,70 @@ function inviteItem(access: AccessState, expiresAt: string | undefined, timeZone
 /** En çok bu kadar hareket adı yazılır, gerisi "+n hareket". */
 const STALL_NAMES = 3;
 
-function stallItem(stalls: readonly StallFact[], today: string, titleOf: (exerciseId: string) => string): AttentionItem | null {
+function stallItem(
+  stalls: readonly StallFact[],
+  today: string,
+  titleOf: (exerciseId: string) => string,
+  locale: Locale,
+): AttentionItem | null {
+  const t = ptShellMessages(locale).attention.stalled;
+  const { number } = getFormat(locale);
   const deloadFrom = addDays(today, -ATTENTION_TUNING.deloadDays);
   const recentFrom = addDays(today, -ATTENTION_TUNING.stallRecentDays);
   const phrases: { urgency: number; text: string }[] = [];
   for (const fact of stalls) {
     const title = titleOf(fact.exerciseId);
     if (fact.deloadDate && fact.deloadDate >= deloadFrom) {
-      phrases.push({ urgency: ATTENTION_URGENCY.deload, text: `${title} hafifletildi (üst üste tıkandı)` });
+      phrases.push({ urgency: ATTENTION_URGENCY.deload, text: t.deloaded(title) });
     } else if (fact.streak >= ATTENTION_TUNING.stallStreak && fact.lastDate >= recentFrom) {
       phrases.push(
         fact.declining
-          ? { urgency: ATTENTION_URGENCY.declining, text: `${title} geriliyor (${formatNumber(fact.streak)} antrenmandır hedefin altında)` }
-          : { urgency: ATTENTION_URGENCY.stalled, text: `${title} ${formatNumber(fact.streak)} antrenmandır aynı ağırlıkta` },
+          ? { urgency: ATTENTION_URGENCY.declining, text: t.declining(title, fact.streak, number(fact.streak)) }
+          : { urgency: ATTENTION_URGENCY.stalled, text: t.same(title, fact.streak, number(fact.streak)) },
       );
     }
   }
   if (phrases.length === 0) return null;
-  phrases.sort((a, b) => b.urgency - a.urgency || a.text.localeCompare(b.text, 'tr'));
+  const compare = compareText(locale);
+  phrases.sort((a, b) => b.urgency - a.urgency || compare(a.text, b.text));
   const more = phrases.length - STALL_NAMES;
-  const text = phrases.slice(0, STALL_NAMES).map((phrase) => phrase.text).join(' · ') + (more > 0 ? ` · +${formatNumber(more)} hareket` : '');
+  const text = phrases.slice(0, STALL_NAMES).map((phrase) => phrase.text).join(' · ') + (more > 0 ? ` · ${t.more(more, number(more))}` : '');
   return { key: 'stalled', kind: 'stalled', urgency: phrases[0]!.urgency, text, target: 'sessions' };
 }
 
-function measurementItem(declines: readonly MeasurementDecline[], today: string): AttentionItem | null {
+function measurementItem(declines: readonly MeasurementDecline[], today: string, locale: Locale): AttentionItem | null {
   const from = addDays(today, -ATTENTION_TUNING.measurementDays);
   const parts = declines
     .filter((decline) => decline.lastDate >= from)
     .map((decline) => {
-      const def = MEASUREMENTS[decline.id];
-      const side = decline.key === 'value' ? '' : ` (${SIDE_LABELS[decline.key].toLocaleLowerCase('tr')})`;
-      return `${def.label}${side} ${formatSignedWithUnit(Math.round(decline.change * 10) / 10, MEASUREMENT_UNIT_LABELS[def.unit])}`;
+      const def = measurementDef(decline.id, locale);
+      const side = decline.key === 'value' ? '' : ` (${lower(locale, sideLabels(locale)[decline.key])})`;
+      return `${def.label}${side} ${getFormat(locale).signedWithUnit(Math.round(decline.change * 10) / 10, measurementUnitLabels(locale)[def.unit])}`;
     });
   if (parts.length === 0) return null;
-  return { key: 'measurement', kind: 'measurement', urgency: ATTENTION_URGENCY.measurement, text: `4 haftalık eğilimde gerileme: ${parts.join(' · ')}`, target: 'measurements' };
+  return {
+    key: 'measurement',
+    kind: 'measurement',
+    urgency: ATTENTION_URGENCY.measurement,
+    text: ptShellMessages(locale).attention.measurement.decline(parts.join(' · ')),
+    target: 'measurements',
+  };
 }
 
 /** Danışanın maddeleri, şimdiye göre; aciliyet sırasıyla. `titleOf`: egzersizin kütüphanedeki adı. */
 export function attentionItems(
   facts: AttentionFacts,
-  ctx: { now: Date; timeZone: string; titleOf: (exerciseId: string) => string },
+  ctx: { now: Date; timeZone: string; titleOf: (exerciseId: string) => string; locale?: Locale },
 ): AttentionItem[] {
   if (!facts.active) return [];
+  const locale = ctx.locale ?? DEFAULT_LOCALE;
+  const t = ptShellMessages(locale).attention;
+  const { number } = getFormat(locale);
   const today = todayIn(ctx.timeZone, ctx.now);
   const items: AttentionItem[] = [];
 
   const access = accessNow(facts, ctx.now);
-  const invite = inviteItem(access, facts.inviteExpiresAt, ctx.timeZone);
+  const invite = inviteItem(access, facts.inviteExpiresAt, ctx.timeZone, locale);
   if (invite) items.push(invite);
   const joined = access === 'joined' || access === 'used';
 
@@ -520,21 +544,21 @@ export function attentionItems(
       since: todayIn(ctx.timeZone, new Date(facts.schedule.since)),
     });
     if (missed.length > 0) {
-      const days = missed.map((day) => shortDayText(day)).join(', ');
+      const days = missed.map((day) => shortDayText(day, locale)).join(', ');
       items.push({
         key: 'missed',
         kind: 'missed',
         urgency: missed.length > 1 ? ATTENTION_URGENCY.missedMany : ATTENTION_URGENCY.missedOne,
         text:
           missed.length > 1
-            ? `Son ${formatNumber(ATTENTION_TUNING.missedLookbackDays)} günde ${formatNumber(missed.length)} antrenman günü kaçtı: ${days}`
-            : `Antrenman günü kaçtı: ${days}`,
+            ? t.missed.many(number(ATTENTION_TUNING.missedLookbackDays), missed.length, number(missed.length), days)
+            : t.missed.one(days),
         target: 'sessions',
       });
     }
   }
 
-  const stalls = stallItem(facts.stalls, today, ctx.titleOf);
+  const stalls = stallItem(facts.stalls, today, ctx.titleOf, locale);
   if (stalls) items.push(stalls);
 
   if (facts.phase && Date.parse(facts.phase.endsAt) <= ctx.now.getTime()) {
@@ -542,9 +566,7 @@ export function attentionItems(
       key: 'phase',
       kind: 'phase',
       urgency: ATTENTION_URGENCY.phase,
-      text: facts.phase.own
-        ? `Danışan ${facts.phase.own} ile çalışıyor · '${facts.phase.name}' evresinin süresi doldu`
-        : `'${facts.phase.name}' evresinin süresi doldu; sıradaki evre '${facts.phase.next}'`,
+      text: facts.phase.own ? t.phase.own(facts.phase.own, facts.phase.name) : t.phase.due(facts.phase.name, facts.phase.next),
       target: 'program',
     });
   }
@@ -554,16 +576,16 @@ export function attentionItems(
       key: 'proposals',
       kind: 'proposals',
       urgency: ATTENTION_URGENCY.proposals,
-      text: facts.proposals.text ? `Öneri onay bekliyor: ${facts.proposals.text}` : `${formatNumber(facts.proposals.count)} öneri onay bekliyor`,
+      text: facts.proposals.text ? t.proposals.one(facts.proposals.text) : t.proposals.many(facts.proposals.count, number(facts.proposals.count)),
       target: 'program',
     });
   }
 
-  const measurement = measurementItem(facts.measurements, today);
+  const measurement = measurementItem(facts.measurements, today, locale);
   if (measurement) items.push(measurement);
 
-  if (facts.constraints) items.push(...constraintItems(facts.constraints, today));
-  if (facts.screening) items.push(...screeningItems(facts.screening, today));
+  if (facts.constraints) items.push(...constraintItems(facts.constraints, today, locale));
+  if (facts.screening) items.push(...screeningItems(facts.screening, today, locale));
 
   return items.sort((a, b) => b.urgency - a.urgency || ATTENTION_KINDS.indexOf(a.kind) - ATTENTION_KINDS.indexOf(b.kind));
 }
@@ -571,9 +593,9 @@ export function attentionItems(
 /** En çok bu kadar ad yazılır, gerisi "+n". */
 const LIST_NAMES = 2;
 
-function listText(parts: readonly string[]): string {
+function listText(parts: readonly string[], locale: Locale): string {
   const more = parts.length - LIST_NAMES;
-  return parts.slice(0, LIST_NAMES).join(' · ') + (more > 0 ? ` · +${formatNumber(more)}` : '');
+  return parts.slice(0, LIST_NAMES).join(' · ') + (more > 0 ? ` · ${ptShellMessages(locale).attention.listMore(getFormat(locale).number(more))}` : '');
 }
 
 function daysBetween(from: string, to: string): number {
@@ -585,7 +607,10 @@ function daysBetween(from: string, to: string): number {
  * danışanın PT'nin bakmadığı "şiddetli"si (onaylı kısıtta kötüleşme ya da şiddetli bildirim; 92). Şiddetli olmayan
  * kötüleşme ve "düzeldi dedi" 72'de, tonsuz kalır.
  */
-export function constraintItems(facts: ConstraintFacts, today: string): AttentionItem[] {
+export function constraintItems(facts: ConstraintFacts, today: string, locale: Locale = DEFAULT_LOCALE): AttentionItem[] {
+  const t = ptShellMessages(locale).attention;
+  const c = t.constraints;
+  const { number } = getFormat(locale);
   const items: AttentionItem[] = [];
   const item = (key: string, urgency: number, text: string, target: AttentionTarget = 'constraints', tone?: AttentionTone): AttentionItem => ({
     key: `constraint:${key}`,
@@ -596,17 +621,17 @@ export function constraintItems(facts: ConstraintFacts, today: string): Attentio
     ...(tone ? { tone } : {}),
   });
   for (const urgent of facts.urgent) {
-    items.push(item(`urgent:${urgent.id}`, ATTENTION_URGENCY.redFlag, `${EMERGENCY_TEXT.replace(/\.$/, '')} (${urgent.label})`, 'constraints', 'danger'));
+    items.push(item(`urgent:${urgent.id}`, ATTENTION_URGENCY.redFlag, c.urgent(emergencyText(locale), urgent.label), 'constraints', 'danger'));
   }
   if (facts.refer.length > 0) {
-    items.push(item('refer', ATTENTION_URGENCY.redFlag, `Sağlık profesyoneline yönlendir: ${listText(facts.refer.map((entry) => entry.title))}`, 'constraints', 'danger'));
+    items.push(item('refer', ATTENTION_URGENCY.redFlag, c.refer(listText(facts.refer.map((entry) => entry.title), locale)), 'constraints', 'danger'));
   }
   const severeChanges = facts.changes.filter((change) => change.kind === 'worse' ? change.to === 'severe' : change.wasSevere);
   if (severeChanges.length > 0) {
     const parts = severeChanges.map((change) => change.kind === 'better'
-      ? `${change.label} · önce şiddetli, şimdi düzeldi dedi (inceleme bekliyor)`
-      : `${change.label}${change.from ? ` ${SEVERITY_TEXT[change.from]} → şiddetli` : ' · şiddetli'}`);
-    items.push(item('severe', ATTENTION_URGENCY.constraintSevere, `Kısıt kötüleşti: ${listText(parts)}`, 'constraints', 'danger'));
+      ? c.betterAfterSevere(change.label)
+      : c.worseToSevere(change.label, change.from ? t.severity[change.from] : null));
+    items.push(item('severe', ATTENTION_URGENCY.constraintSevere, c.worse(listText(parts, locale)), 'constraints', 'danger'));
   }
   const severeReports = facts.reports.filter((report) => report.severity === 'severe');
   if (severeReports.length > 0) {
@@ -614,7 +639,7 @@ export function constraintItems(facts: ConstraintFacts, today: string): Attentio
       item(
         'report-severe',
         ATTENTION_URGENCY.constraintSevere,
-        `Danışan kısıt bildirdi: ${listText(severeReports.map((report) => `${report.label} (şiddetli)`))}`,
+        c.reported(listText(severeReports.map((report) => c.reportedSevere(report.label)), locale)),
         'constraints',
         'danger',
       ),
@@ -623,7 +648,7 @@ export function constraintItems(facts: ConstraintFacts, today: string): Attentio
   const next = facts.conflicts.filter((conflict) => conflict.next);
   if (next.length > 0) {
     items.push(
-      item('conflict', ATTENTION_URGENCY.conflictNext, `Sıradaki günde kısıtla çelişen hareket: ${listText(next.map((conflict) => `${conflict.dayName} · ${conflict.title}`))}`, 'program'),
+      item('conflict', ATTENTION_URGENCY.conflictNext, c.conflictNext(listText(next.map((conflict) => c.conflictRow(conflict.dayName, conflict.title)), locale)), 'program'),
     );
   } else if (facts.conflicts.length > 0) {
     items.push(
@@ -631,46 +656,52 @@ export function constraintItems(facts: ConstraintFacts, today: string): Attentio
         'conflict',
         ATTENTION_URGENCY.conflict,
         facts.conflicts.length === 1
-          ? `Programda kısıtla çelişen hareket: ${facts.conflicts[0]!.dayName} · ${facts.conflicts[0]!.title}`
-          : `Programda kısıtla çelişen ${formatNumber(facts.conflicts.length)} hareket`,
+          ? c.conflictOne(c.conflictRow(facts.conflicts[0]!.dayName, facts.conflicts[0]!.title))
+          : c.conflictMany(facts.conflicts.length, number(facts.conflicts.length)),
         'program',
       ),
     );
   }
   const reports = facts.reports.filter((report) => report.severity !== 'severe');
   if (reports.length > 0) {
-    const parts = reports.map((report) => (report.severity ? `${report.label} (${SEVERITY_TEXT[report.severity]})` : report.label));
-    items.push(item('report', ATTENTION_URGENCY.report, `Danışan kısıt bildirdi: ${listText(parts)}`));
+    const parts = reports.map((report) => (report.severity ? c.reportedWith(report.label, t.severity[report.severity]) : report.label));
+    items.push(item('report', ATTENTION_URGENCY.report, c.reported(listText(parts, locale))));
   }
   const changes = facts.changes.filter((change) => !severeChanges.includes(change));
   if (changes.length > 0) {
     const parts = changes.map((change) =>
       change.kind === 'better'
-        ? `${change.label} · düzeldi dedi${change.wasSevere ? ' (önce şiddetli demişti)' : ''}`
-        : `${change.label}${change.from && change.to ? ` ${SEVERITY_TEXT[change.from]} → ${SEVERITY_TEXT[change.to]}` : ' · kötüleşti'}`,
+        ? c.better(change.label, Boolean(change.wasSevere))
+        : change.from && change.to
+          ? c.changed(change.label, t.severity[change.from], t.severity[change.to])
+          : c.changedWorse(change.label),
     );
     const worse = changes.some((change) => change.kind === 'worse');
-    items.push(item('change', ATTENTION_URGENCY.constraintChange, `${worse ? 'Kısıt kötüleşti' : 'Kısıt güncellendi'}: ${listText(parts)}`));
+    items.push(item('change', ATTENTION_URGENCY.constraintChange, (worse ? c.changeWorse : c.changeUpdated)(listText(parts, locale))));
   }
   if (facts.waiting.length > 0) {
-    const parts = facts.waiting.map((entry) => `${entry.label} · ${formatNumber(daysBetween(entry.referredAt, today))} gün`);
-    items.push(item('waiting', ATTENTION_URGENCY.referralWaiting, `Profesyonel görüşü bekleniyor · ${listText(parts)}`));
+    const parts = facts.waiting.map((entry) => {
+      const days = daysBetween(entry.referredAt, today);
+      return c.waitingRow(entry.label, days, number(days));
+    });
+    items.push(item('waiting', ATTENTION_URGENCY.referralWaiting, c.waiting(listText(parts, locale))));
   }
   return items;
 }
 
 /** Tarama maddeleri: gözden geçirilmemiş ağrı; son 28 gündeki taramada tek büyük asimetri. */
-export function screeningItems(facts: ScreeningFacts, today: string): AttentionItem[] {
+export function screeningItems(facts: ScreeningFacts, today: string, locale: Locale = DEFAULT_LOCALE): AttentionItem[] {
+  const t = ptShellMessages(locale).attention.screening;
   const items: AttentionItem[] = [];
   if (facts.pain.length > 0) {
-    items.push({ key: 'screening:pain', kind: 'screening', urgency: ATTENTION_URGENCY.screeningPain, text: `Hareket testinde ağrı: ${listText(facts.pain)}`, target: 'screening' });
+    items.push({ key: 'screening:pain', kind: 'screening', urgency: ATTENTION_URGENCY.screeningPain, text: t.pain(listText(facts.pain, locale)), target: 'screening' });
   }
   if (facts.asymmetry && facts.date >= addDays(today, -SCREENING_ALERT_DAYS)) {
     items.push({
       key: 'screening:asymmetry',
       kind: 'screening',
       urgency: ATTENTION_URGENCY.asymmetry,
-      text: `Hareket testinde büyük asimetri: ${facts.asymmetry}`,
+      text: t.asymmetry(facts.asymmetry),
       target: 'screening',
     });
   }
@@ -697,7 +728,7 @@ export type AttentionGroup = {
  */
 export function attentionGroups(
   clients: readonly { id: string; name: string; facts: AttentionFacts | null | undefined }[],
-  ctx: { now: Date; timeZone: string; titleOf: (exerciseId: string) => string },
+  ctx: { now: Date; timeZone: string; titleOf: (exerciseId: string) => string; locale?: Locale },
   limit: { groups: number; perGroup: number } = ATTENTION_GROUP_LIMIT,
 ): { groups: AttentionGroup[]; total: number; hidden: number } {
   const all = clients.flatMap((client) => {

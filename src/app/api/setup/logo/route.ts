@@ -1,4 +1,8 @@
 import { NextResponse } from 'next/server';
+import { messageOf } from '@/i18n/errors';
+import { localeFromRequest } from '@/i18n/locale';
+import { commonMessages } from '@/i18n/messages/common';
+import { setupMessages } from '@/i18n/messages/setup';
 import { readPtSession } from '@/lib/session';
 import { appRepo, GithubError } from '@/lib/github/client';
 import { deleteFile, getFileSha, writeBinary } from '@/lib/github/files';
@@ -36,27 +40,29 @@ function logoFiles(): LogoFiles {
 }
 
 export async function POST(request: Request) {
+  const locale = localeFromRequest(request);
+  const t = setupMessages(locale).api;
   const session = await readPtSession();
   if (session?.role !== 'pt') {
-    return NextResponse.json({ error: 'Bu işlem için yetkin yok.' }, { status: 403 });
+    return NextResponse.json({ error: commonMessages(locale).errors.status[403] }, { status: 403 });
   }
 
   const form = await request.formData().catch(() => null);
   const file = form?.get('logo');
   if (!(file instanceof File)) {
-    return NextResponse.json({ error: 'Dosya seçilmedi.' }, { status: 400 });
+    return NextResponse.json({ error: t.noFile }, { status: 400 });
   }
 
   const extension = ALLOWED.get(file.type);
   if (!extension) {
     return NextResponse.json(
-      { error: 'Yalnız PNG, JPG ve WebP yüklenebilir.', fields: { logo: 'Desteklenmeyen dosya türü.' } },
+      { error: t.logoTypes, fields: { logo: t.logoTypeField } },
       { status: 400 },
     );
   }
   if (file.size > MAX_BYTES) {
     return NextResponse.json(
-      { error: 'Logo en fazla 512 KB olabilir.', fields: { logo: 'Dosya çok büyük.' } },
+      { error: t.logoSize, fields: { logo: t.logoSizeField } },
       { status: 400 },
     );
   }
@@ -68,14 +74,15 @@ export async function POST(request: Request) {
     return NextResponse.json({ logo: path });
   } catch (error) {
     const failure = error instanceof GithubError || error instanceof ConfigUnavailableError ? error : null;
-    return NextResponse.json({ error: failure?.message ?? 'Logo yüklenemedi.' }, { status: failure?.status ?? 502 });
+    return NextResponse.json({ error: messageOf(failure, locale) ?? t.logoUploadFailed }, { status: failure?.status ?? 502 });
   }
 }
 
-export async function DELETE() {
+export async function DELETE(request: Request) {
+  const locale = localeFromRequest(request);
   const session = await readPtSession();
   if (session?.role !== 'pt') {
-    return NextResponse.json({ error: 'Bu işlem için yetkin yok.' }, { status: 403 });
+    return NextResponse.json({ error: commonMessages(locale).errors.status[403] }, { status: 403 });
   }
 
   try {
@@ -83,6 +90,6 @@ export async function DELETE() {
     return NextResponse.json({ ok: true });
   } catch (error) {
     const failure = error instanceof GithubError || error instanceof ConfigUnavailableError ? error : null;
-    return NextResponse.json({ error: failure?.message ?? 'Logo kaldırılamadı.' }, { status: failure?.status ?? 502 });
+    return NextResponse.json({ error: messageOf(failure, locale) ?? setupMessages(locale).api.logoRemoveFailed }, { status: failure?.status ?? 502 });
   }
 }

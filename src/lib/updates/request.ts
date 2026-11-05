@@ -1,14 +1,17 @@
-function failure(path:string,status:number) {
+import {LocalizedError} from '../../i18n/errors.ts';
+import type {Locale} from '../../i18n/locale.ts';
+import {installMessages} from '../../i18n/messages/install/index.ts';
+function failure(path:string,status:number):(locale:Locale)=>string {
   const repo=path.match(/^\/repos\/([^/]+\/[^/?]+)/)?.[1]??'GitHub';
   if(status===404){
-    if(path.includes('/actions/workflows/'))return `${repo}: axon-update.yml workflow’una erişilemedi (404). Dosyanın varsayılan dalda bulunduğunu ve Actions’ın açık olduğunu kontrol et.`;
+    if(path.includes('/actions/workflows/'))return l=>installMessages(l).updates.request.workflow404(repo);
     const branch=path.match(/\/git\/ref\/heads\/(.+)$/)?.[1];
-    if(branch)return `${decodeURIComponent(branch)} dalına erişilemedi (404): ${repo}. Kod reposunun varsayılan dalını ve AXON_CODE_BRANCH ayarını kontrol et.`;
-    return `${repo} reposuna erişilemedi (404). AXON_CODE_REPO doğruysa Vercel’deki GITHUB_TOKEN anahtarının (GitHub uygulamasıyla kurulduysa uygulama kurulumunun) bu kod reposuna da erişebildiğini kontrol et. Veri reposuna erişim tek başına yeterli değil.`;
+    if(branch)return l=>installMessages(l).updates.request.branch404(decodeURIComponent(branch),repo);
+    return l=>installMessages(l).updates.request.repo404(repo);
   }
-  if(status===401)return 'GitHub anahtarı doğrulanamadı (401). Vercel’deki GITHUB_TOKEN anahtarının (ya da GitHub uygulaması ayarlarının) geçerliliğini kontrol et.';
-  if(status===403)return `${repo}: GitHub işlemi engellendi (403). Anahtar ya da GitHub uygulaması izinlerini, Actions ayarlarını ve GitHub API kullanım sınırını kontrol et.`;
-  return `${repo}: GitHub işlemi tamamlanamadı (${status}).`;
+  if(status===401)return l=>installMessages(l).updates.request.unauthorized;
+  if(status===403)return l=>installMessages(l).updates.request.forbidden(repo);
+  return l=>installMessages(l).updates.request.failed(repo,status);
 }
 
 export async function githubRequest<T>(token:string|undefined,path:string,init:RequestInit={},allowMissing=false,fetcher:typeof fetch=fetch):Promise<T|null> {
@@ -20,6 +23,6 @@ export async function githubRequest<T>(token:string|undefined,path:string,init:R
   else headers.delete('Authorization');
   const response=await fetcher(`https://api.github.com${path}`,{...init,headers,cache:'no-store',signal:AbortSignal.timeout(20000)});
   if(allowMissing && response.status===404)return null;
-  if(!response.ok)throw new Error(failure(path,response.status));
+  if(!response.ok)throw new LocalizedError(failure(path,response.status));
   return response.status===204?null:response.json();
 }

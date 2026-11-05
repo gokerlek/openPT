@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { SetPasswordForm } from '@/app/giris/set-password-form';
+import { useMessages } from '@/i18n/client';
+import { authMessages } from '@/i18n/messages/auth';
 import { InstallHelper } from '@/components/install/install-helper';
 import { useInstall } from '@/components/install/install-state';
 import { Button } from '@/components/ui/button';
@@ -18,6 +20,7 @@ import { JoinStepLabel } from './step-label';
  * odak yeni adımın başlığına geçer (sayfanın başına düşmez).
  */
 export function JoinPasswordStep({ clientId }: { clientId: string }) {
+  const t = useMessages(authMessages).join;
   const router = useRouter();
   const { state } = useInstall();
   const [saved, setSaved] = useState(false);
@@ -35,12 +38,12 @@ export function JoinPasswordStep({ clientId }: { clientId: string }) {
           <CardDescription>
             <JoinStepLabel step={2} />
           </CardDescription>
-          <CardTitle className="text-xl">Şifreni belirle</CardTitle>
-          <CardDescription>Bir dahaki sefere bu telefonda ya da başka bir telefonda şifrenle girersin.</CardDescription>
+          <CardTitle className="text-xl">{t.passwordStep.title}</CardTitle>
+          <CardDescription>{t.passwordStep.body}</CardDescription>
         </CardHeader>
         <CardContent>
           <SetPasswordForm
-            submitLabel="Şifreyi kaydet ve devam et"
+            submitLabel={t.passwordStep.submit}
             onDone={() => (state?.guide === 'installed' ? toProgram() : setSaved(true))}
           />
         </CardContent>
@@ -58,13 +61,9 @@ export function JoinPasswordStep({ clientId }: { clientId: string }) {
           <JoinStepLabel step={3} />
         </CardDescription>
         <CardTitle ref={titleRef} tabIndex={-1} className="text-xl outline-none">
-          Uygulamayı ana ekrana ekle
+          {t.passwordStep.installTitle}
         </CardTitle>
-        <CardDescription>
-          {installed
-            ? 'Uygulama yüklendi. Programın bundan sonra ana ekrandaki simgeden açılır.'
-            : 'Şifren kaydedildi. Programın ana ekrandaki simgeden, tarayıcı çubuğu olmadan tam ekran açılsın.'}
-        </CardDescription>
+        <CardDescription>{installed ? t.passwordStep.installedBody : t.passwordStep.savedBody}</CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-5">
         <InstallHelper variant="inline" audience="client" openPath={`/giris?c=${encodeURIComponent(clientId)}`} />
@@ -73,7 +72,7 @@ export function JoinPasswordStep({ clientId }: { clientId: string }) {
           variant={ownAction ? 'outline' : 'default'}
           className="h-12 w-full text-base"
           onClick={toProgram}>
-          Devam
+          {t.continue}
         </Button>
       </CardContent>
     </Card>

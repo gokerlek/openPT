@@ -9,22 +9,11 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useMessages } from '@/i18n/client';
+import { uiMessages } from '@/i18n/messages/ui';
 import { chromeIntentUrl, safariUrl, type InstallAudience, type InstallGuide } from '@/lib/install-guide';
 import { cn } from '@/lib/utils';
 import { useInstall } from './install-state';
-
-const TEXT: Record<InstallAudience, { title: string; description: string; installed: string }> = {
-  client: {
-    title: 'Uygulamayı ana ekrana ekle',
-    description: 'Antrenmanın tek dokunuşla, tarayıcı çubuğu olmadan tam ekran açılır.',
-    installed: 'Uygulama bu telefonda ana ekrandan açık.',
-  },
-  pt: {
-    title: 'Panel uygulaması',
-    description: 'Panel telefonda ya da bilgisayarda ayrı simgeyle, tarayıcı çubuğu olmadan açılır.',
-    installed: 'Panel bu cihazda uygulama olarak açık.',
-  },
-};
 
 /**
  * Yükleme yardımcısı (tasarım Paket A): danışan ve PT aynı bileşeni kullanır; hangi anlatımın çıkacağı
@@ -53,8 +42,9 @@ export function InstallHelper({
   className?: string;
 }) {
   const { state, promptInstall, snooze } = useInstall();
+  const t = useMessages(uiMessages).installHelper;
   const cardRef = useRef<HTMLDivElement>(null);
-  const text = TEXT[audience];
+  const text = t[audience];
 
   if (variant === 'inline') {
     if (!state || state.guide === 'installed') return null;
@@ -80,7 +70,7 @@ export function InstallHelper({
                 focusAfterRemoval(cardRef.current);
                 snooze(audience);
               }}>
-              Şimdi değil
+              {t.notNow}
             </Button>
           </CardAction>
         </CardHeader>
@@ -105,7 +95,7 @@ export function InstallHelper({
           <CardAction>
             <Badge>
               <CheckCircle weight="fill" data-icon="inline-start" />
-              Yüklü
+              {t.installedBadge}
             </Badge>
           </CardAction>
         ) : null}
@@ -139,12 +129,13 @@ function GuideBody({
   onInstall: () => Promise<unknown>;
   className?: string;
 }) {
+  const t = useMessages(uiMessages).installHelper;
   if (guide === 'prompt') {
     return (
       <div className={className}>
         <Button className="h-11 w-full" onClick={() => void onInstall()}>
           <DownloadSimple weight="fill" data-icon="inline-start" />
-          Uygulamayı yükle
+          {t.install}
         </Button>
       </div>
     );
@@ -152,17 +143,21 @@ function GuideBody({
 
   if (guide === 'ios-safari') {
     return (
-      <ol className={cn('flex flex-col gap-3', className)} aria-label="Ana ekrana ekleme adımları">
+      <ol className={cn('flex flex-col gap-3', className)} aria-label={t.stepsLabel}>
         <li className="flex items-center gap-3">
           <StepIcon>
             <Export weight="bold" />
           </StepIcon>
           <span className="flex min-w-0 flex-col">
             <span>
-              <span className="font-medium">Paylaş</span> simgesi (kare ve yukarı ok)
+              {t.iosShare.before}
+              <span className="font-medium">{t.iosShare.bold}</span>
+              {t.iosShare.after}
             </span>
             <span className="flex flex-wrap items-center gap-x-1 text-xs text-muted-foreground">
-              Görünmüyorsa önce <DotsThree role="img" aria-label="üç nokta" className="size-4" /> menüsü
+              {t.iosHidden.before}
+              <DotsThree role="img" aria-label={t.iosHidden.icon} className="size-4" />
+              {t.iosHidden.after}
             </span>
           </span>
         </li>
@@ -171,16 +166,17 @@ function GuideBody({
             <PlusSquare weight="bold" />
           </StepIcon>
           <span className="flex min-w-0 flex-col">
-            <span className="font-medium">Ana Ekrana Ekle</span>
-            <span className="text-xs text-muted-foreground">Listede yoksa aşağı kaydırınca çıkar</span>
+            <span className="font-medium">{t.iosAdd}</span>
+            <span className="text-xs text-muted-foreground">{t.iosAddHint}</span>
           </span>
         </li>
         <li className="flex items-center gap-3">
           <StepIcon>
-            <span className="text-xs font-semibold text-primary">Ekle</span>
+            <span className="text-xs font-semibold text-primary">{t.iosConfirm}</span>
           </StepIcon>
           <span>
-            Sağ üstte <span className="font-medium">Ekle</span>
+            {t.iosTopRight.before}
+            <span className="font-medium">{t.iosTopRight.bold}</span>
           </span>
         </li>
       </ol>
@@ -194,50 +190,56 @@ function GuideBody({
   if (guide === 'mac-safari') {
     return (
       <p className={cn('text-sm', className)}>
-        Safari’nin menü çubuğunda <span className="font-medium">Dosya</span> → <span className="font-medium">Dock’a Ekle</span>.
+        {t.macSafari.before}
+        <span className="font-medium">{t.macSafari.file}</span>
+        {t.macSafari.arrow}
+        <span className="font-medium">{t.macSafari.dock}</span>
+        {t.macSafari.after}
       </p>
     );
   }
 
   return (
     <p className={cn('text-sm', className)}>
-      Tarayıcının menüsünden <span className="font-medium">Ana ekrana ekle</span> ya da{' '}
-      <span className="font-medium">Uygulamayı yükle</span> seçilir.
+      {t.menu.before}
+      <span className="font-medium">{t.menu.add}</span>
+      {t.menu.or}
+      <span className="font-medium">{t.menu.install}</span>
+      {t.menu.after}
     </p>
   );
 }
 
 /** iPhone'da Safari dışı ya da Android'de uygulama içi tarayıcı: asıl tarayıcıda aç ya da bağlantıyı kopyala. */
 function OpenElsewhere({ ios, openPath, className }: { ios: boolean; openPath: string; className?: string }) {
+  const t = useMessages(uiMessages).installHelper;
   const href = new URL(openPath, window.location.origin).href;
   const open = ios ? safariUrl(href) : chromeIntentUrl(href);
 
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(href);
-      toast.success('Bağlantı kopyalandı.');
+      toast.success(t.copied);
     } catch {
-      toast.error('Kopyalanamadı. Aşağıdaki bağlantı elle seçilebilir.');
+      toast.error(t.copyFailed);
     }
   };
 
   return (
     <div className={cn('flex flex-col gap-3', className)}>
       <p className="text-sm">
-        {ios
-          ? "Ana ekrana ekleme Safari'den yapılır; bu sayfa Safari'de açılmalı."
-          : "Sayfa bir uygulamanın içinde açık; yükleme Chrome'dan yapılır."}
+        {ios ? t.needSafari : t.needChrome}
       </p>
       <div className="flex flex-wrap gap-2">
         {open ? (
           <Button className="h-11 grow" nativeButton={false} render={<a href={open} />}>
             {ios ? <Compass weight="fill" data-icon="inline-start" /> : <ArrowSquareOut weight="fill" data-icon="inline-start" />}
-            {ios ? "Safari'de aç" : "Chrome'da aç"}
+            {ios ? t.openSafari : t.openChrome}
           </Button>
         ) : null}
         <Button variant="outline" className="h-11 grow" onClick={copy}>
           <Copy weight="fill" data-icon="inline-start" />
-          Bağlantıyı kopyala
+          {t.copyLink}
         </Button>
       </div>
       <span className="text-xs break-all text-muted-foreground select-all">{href}</span>

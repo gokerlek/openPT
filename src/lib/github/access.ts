@@ -1,3 +1,5 @@
+import { LocalizedError } from '../../i18n/errors.ts';
+import { githubAccessMessages } from '../../i18n/messages/github-access/index.ts';
 import { normalizePrivateKey, PrivateKeyError } from './private-key.ts';
 
 /**
@@ -15,7 +17,7 @@ export type GithubAccess =
   | { mode: 'token'; token: string }
   | { mode: 'app'; appId: string; privateKey: string; installationId: number | null };
 
-export class GithubAccessError extends Error {}
+export class GithubAccessError extends LocalizedError {}
 
 const NUMERIC_ID = /^[1-9]\d{0,14}$/;
 
@@ -24,27 +26,25 @@ export function githubAccessFrom(env: Record<string, string | undefined>): Githu
   const privateKey = env.GITHUB_APP_PRIVATE_KEY?.trim() || undefined;
   if (appId || privateKey) {
     if (!appId || !privateKey) {
-      throw new GithubAccessError('GITHUB_APP_ID ve GITHUB_APP_PRIVATE_KEY birlikte tanımlanmalı (GitHub uygulamasıyla kurulum).');
+      throw new GithubAccessError((l) => githubAccessMessages(l).appIncomplete);
     }
-    if (!NUMERIC_ID.test(appId)) throw new GithubAccessError('GITHUB_APP_ID bir sayı olmalı (GitHub uygulamasının "App ID" değeri).');
+    if (!NUMERIC_ID.test(appId)) throw new GithubAccessError((l) => githubAccessMessages(l).appIdNumber);
     const installation = env.GITHUB_APP_INSTALLATION_ID?.trim() || undefined;
     if (installation && !NUMERIC_ID.test(installation)) {
-      throw new GithubAccessError('GITHUB_APP_INSTALLATION_ID bir sayı olmalı; bilmiyorsan boş bırak, sahibin kurulumu bulunur.');
+      throw new GithubAccessError((l) => githubAccessMessages(l).installationNumber);
     }
     let key: string;
     try {
       key = normalizePrivateKey(privateKey);
     } catch (error) {
-      if (error instanceof PrivateKeyError) throw new GithubAccessError(`GITHUB_APP_PRIVATE_KEY: ${error.message}`);
+      if (error instanceof PrivateKeyError) throw new GithubAccessError((l) => githubAccessMessages(l).privateKeyProblem(error.localized(l)));
       throw error;
     }
     return { mode: 'app', appId, privateKey: key, installationId: installation ? Number(installation) : null };
   }
   const token = env.GITHUB_TOKEN;
   if (!token) {
-    throw new GithubAccessError(
-      'GitHub erişimi tanımlı değil: GITHUB_APP_ID + GITHUB_APP_PRIVATE_KEY (GitHub uygulaması) ya da GITHUB_TOKEN. Vercel → Settings → Environment Variables altına ekle (şablon: .env.example).',
-    );
+    throw new GithubAccessError((l) => githubAccessMessages(l).missing);
   }
   return { mode: 'token', token };
 }

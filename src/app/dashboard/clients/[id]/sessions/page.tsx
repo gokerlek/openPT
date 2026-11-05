@@ -6,6 +6,8 @@ import { Barbell } from '@phosphor-icons/react/dist/ssr';
 import { SectionHeader } from '@/components/section-header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
+import { ptClientsMessages } from '@/i18n/messages/pt-clients';
+import { getLocale } from '@/i18n/server';
 import { loadClient } from '@/lib/clients';
 import { readAppConfig } from '@/lib/config';
 import { requirePt } from '@/lib/guards';
@@ -15,7 +17,9 @@ import { CLIENT_ID_PATTERN } from '@/lib/schemas/client';
 import { LiveSession } from '../live-session';
 import { SessionList } from './session-list';
 
-export const metadata: Metadata = { title: 'Antrenmanlar' };
+export async function generateMetadata(): Promise<Metadata> {
+  return { title: ptClientsMessages(await getLocale()).sessions.title };
+}
 
 /**
  * Danışanın antrenmanları (SPEC §6, tasarım §8 satır 12) — yalnız okuma: kayıtları danışan kendi telefonundan
@@ -32,14 +36,16 @@ export default async function SessionsPage({ params }: { params: Promise<{ id: s
   // Kaydı okunamayan danışan: sorunu detay sayfası anlatır.
   if (!loaded.ok) redirect(`/dashboard/clients/${id}`);
 
+  const locale = await getLocale();
+  const t = ptClientsMessages(locale).sessions;
   const config = await readAppConfig();
-  const [list, live] = await Promise.all([loadHistory(id, config.timeZone).catch(() => null), readLiveResponse(id)]);
+  const [list, live] = await Promise.all([loadHistory(id, config.timeZone, locale).catch(() => null), readLiveResponse(id)]);
 
   return (
     <div className="flex flex-col gap-6">
       <SectionHeader
-        title="Antrenmanlar"
-        description="Danışanın bitirdiği antrenmanlar, en yenisi üstte. Yalnız görüntüleme: kayıtlarını danışan kendi telefonundan siler."
+        title={t.title}
+        description={t.description}
       />
 
       <LiveSession clientId={id} initial={live} />
@@ -48,8 +54,8 @@ export default async function SessionsPage({ params }: { params: Promise<{ id: s
       {list === null ? (
         <Card>
           <CardHeader>
-            <CardTitle>Antrenmanlar şu an okunamadı</CardTitle>
-            <CardDescription>Danışanın kayıt deposuna ulaşılamadı. Biraz sonra sayfayı yenile.</CardDescription>
+            <CardTitle>{t.unreadableTitle}</CardTitle>
+            <CardDescription>{t.unreadableBody}</CardDescription>
           </CardHeader>
         </Card>
       ) : list.count === 0 ? (
@@ -60,10 +66,8 @@ export default async function SessionsPage({ params }: { params: Promise<{ id: s
                 <EmptyMedia variant="icon">
                   <Barbell weight="fill" />
                 </EmptyMedia>
-                <EmptyTitle>Henüz bitmiş antrenman yok</EmptyTitle>
-                <EmptyDescription>
-                  Danışan antrenmanı bitirince burada görünür: süresi, set sayısı, toplam ağırlık ve rekorları. Sürerken üstte canlı izlenir.
-                </EmptyDescription>
+                <EmptyTitle>{t.emptyTitle}</EmptyTitle>
+                <EmptyDescription>{t.emptyBody}</EmptyDescription>
               </EmptyHeader>
             </Empty>
           </CardContent>
@@ -71,7 +75,7 @@ export default async function SessionsPage({ params }: { params: Promise<{ id: s
       ) : (
         <Card>
           <CardHeader>
-            <CardTitle>Geçmiş</CardTitle>
+            <CardTitle>{t.history}</CardTitle>
             {list.recent ? <CardDescription className="tabular-nums">{list.recent}</CardDescription> : null}
           </CardHeader>
           <CardContent>

@@ -1,5 +1,9 @@
 import { NextResponse } from 'next/server';
 import * as v from 'valibot';
+import { localeFromRequest } from '@/i18n/locale';
+import { langConfig } from '@/i18n/valibot';
+import { commonMessages } from '@/i18n/messages/common';
+import { ptShellMessages } from '@/i18n/messages/pt-shell';
 import { markNoticesSeen } from '@/lib/clients';
 import { describeError } from '@/lib/github/errors';
 import { clientIdSchema } from '@/lib/schemas/client';
@@ -16,9 +20,11 @@ const bodySchema = v.object({ clientIds: v.pipe(v.array(clientIdSchema), v.minLe
  * danışan yanıtta `failed`: sayfa yenilenince bildirimleri yine okunmamış görünür.
  */
 export async function POST(request: Request) {
-  if ((await readPtSession())?.role !== 'pt') return NextResponse.json({ error: 'Bu işlem için yetkin yok.' }, { status: 403 });
-  const parsed = v.safeParse(bodySchema, await request.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: 'İstek geçersiz.' }, { status: 400 });
+  const locale = localeFromRequest(request);
+  const t = ptShellMessages(locale).api;
+  if ((await readPtSession())?.role !== 'pt') return NextResponse.json({ error: commonMessages(locale).errors.status[403] }, { status: 403 });
+  const parsed = v.safeParse(bodySchema, await request.json().catch(() => null), langConfig(locale));
+  if (!parsed.success) return NextResponse.json({ error: t.invalidRequest }, { status: 400 });
 
   const at = new Date();
   const ids = [...new Set(parsed.output.clientIds)];
@@ -30,6 +36,6 @@ export async function POST(request: Request) {
     failed.push(id);
     console.error(`[bildirim] ${id}: okundu yazılamadı: ${describeError(result.reason)}`);
   });
-  if (failed.length === ids.length) return NextResponse.json({ error: 'Okundu bilgisi yazılamadı. Biraz sonra tekrar dene.' }, { status: 502 });
+  if (failed.length === ids.length) return NextResponse.json({ error: t.seenFailed }, { status: 502 });
   return NextResponse.json({ ok: true, ...(failed.length > 0 ? { failed } : {}) });
 }
