@@ -18,44 +18,29 @@ import {
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Spinner } from '@/components/ui/spinner';
+import { useLocale } from '@/i18n/client';
+import { DEFAULT_LOCALE, type Locale } from '@/i18n/locale';
+import { clientHomeMessages } from '@/i18n/messages/client-home';
 import type { HealthConsentState } from '@/lib/client-status';
 import { fetchJson } from '@/lib/query/errors';
 import { useServiceMutation } from '@/lib/query/use-service';
-import { HEALTH_CONSENT_VERSION, HEALTH_FIELD_INFO, type HealthField } from '@/lib/schemas/client';
+import { HEALTH_CONSENT_VERSION, healthFieldInfo, type HealthField } from '@/lib/schemas/client';
 
 /** Onay kartının cümlesi için kısa adlar: "antrenörün ağrı ve ölçüm kayıtlarını görebilir". */
-const SHORT_NAMES: Record<HealthField, string> = {
-  conditions: 'kısıt',
-  readiness: 'hazır oluşluk',
-  check_in: 'ağrı',
-  measurements: 'ölçüm',
-  screening: 'hareket taraması',
-};
-
-function listTr(items: readonly string[]): string {
-  return items.length <= 1 ? (items[0] ?? '') : `${items.slice(0, -1).join(', ')} ve ${items[items.length - 1]}`;
-}
 
 /** Parça adları cümle içinde ("kısıtlar ve hareket taraması için yeni onay gerekiyor"). */
-const PART_NAMES: Record<HealthField, string> = {
-  conditions: 'kısıtlar',
-  readiness: 'hazır oluşluk',
-  check_in: 'ağrı takibi',
-  measurements: 'ölçümler',
-  screening: 'hareket taraması',
-};
-
-function capitalize(text: string): string {
-  return text ? text[0]!.toLocaleUpperCase('tr') + text.slice(1) : text;
-}
 
 /**
  * Sürümü değişen parçalar yeniden sorulurken ötekiler sürer (tasarım `kisit-tarama.md` §5.1): "Kısıtlar ve hareket
  * taraması için yeni onay gerekiyor; ağrı takibi ve ölçümler sürüyor."
  */
-export function outdatedText(outdated: readonly HealthField[], continuing: readonly HealthField[]): string | null {
+export function outdatedText(outdated: readonly HealthField[], continuing: readonly HealthField[], locale: Locale = DEFAULT_LOCALE): string | null {
   if (outdated.length === 0 || continuing.length === 0) return null;
-  return `${capitalize(listTr(outdated.map((field) => PART_NAMES[field])))} için yeni onay gerekiyor; ${listTr(continuing.map((field) => PART_NAMES[field]))} sürüyor.`;
+  const t = clientHomeMessages(locale).consent;
+  return t.outdated(
+    outdated.map((field) => t.parts[field]),
+    continuing.map((field) => t.parts[field]),
+  );
 }
 
 /**
@@ -81,6 +66,9 @@ export function ConsentCard({
   healthPage?: boolean;
 }) {
   const router = useRouter();
+  const locale = useLocale();
+  const t = clientHomeMessages(locale).consent;
+  const info = healthFieldInfo(locale);
   const decide = useServiceMutation({
     fn: (granted: boolean) =>
       fetchJson<{ ok: true }>('/api/me/consent', {
@@ -89,7 +77,7 @@ export function ConsentCard({
         body: JSON.stringify({ granted, fields, version: HEALTH_CONSENT_VERSION }),
       }),
     onSuccess: (_data, granted) => {
-      toast.success(granted ? 'Onayın kaydedildi.' : 'Tercihin kaydedildi.');
+      toast.success(granted ? t.granted : t.declinedSaved);
       router.refresh();
     },
     // Liste değiştiyse güncelini göster.
@@ -100,8 +88,8 @@ export function ConsentCard({
     <ul className="flex flex-col gap-3">
       {fields.map((field) => (
         <li key={field} className="flex flex-col gap-0.5">
-          <span className="text-sm font-medium">{HEALTH_FIELD_INFO[field].label}</span>
-          <span className="text-sm text-muted-foreground">{HEALTH_FIELD_INFO[field].description}</span>
+          <span className="text-sm font-medium">{info[field].label}</span>
+          <span className="text-sm text-muted-foreground">{info[field].description}</span>
         </li>
       ))}
     </ul>
@@ -111,38 +99,31 @@ export function ConsentCard({
     return (
       <Card size="sm">
         <CardHeader>
-          <CardTitle>Sağlık takibi</CardTitle>
-          <CardDescription>
-            Sağlık takibi açık: antrenörün {listTr(fields.map((field) => SHORT_NAMES[field]))} kayıtlarını görebilir.
-            İstediğin zaman kapatabilirsin.
-          </CardDescription>
+          <CardTitle>{t.title}</CardTitle>
+          <CardDescription>{t.on(fields.map((field) => t.short[field]))}</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
           {list}
           {healthPage ? (
             <Link href="/me/saglik" className="flex min-h-11 w-fit items-center gap-1 text-sm font-medium underline-offset-4 hover:underline">
-              Sağlık sayfan
+              {t.healthPage}
               <CaretRight className="size-4" />
             </Link>
           ) : null}
         </CardContent>
         <CardFooter>
           <AlertDialog>
-            <AlertDialogTrigger render={<Button variant="outline" className="h-11 w-full" />}>Onayı geri çek</AlertDialogTrigger>
+            <AlertDialogTrigger render={<Button variant="outline" className="h-11 w-full" />}>{t.withdraw}</AlertDialogTrigger>
             <AlertDialogContent>
               <AlertDialogHeader>
-                <AlertDialogTitle>Onayını geri çekmek istiyor musun?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  Bundan sonra ağrı, ölçüm ve kısıt bilgisi tutulmaz; antrenmanların kaydedilmeye devam eder.
-                  {fields.includes('conditions') ? ' Programın kısıtlarına göre süzülmez, hareket kartlarındaki notlar kalkar.' : ''} Daha önce
-                  tutulanların silinmesini antrenöründen isteyebilirsin.
-                </AlertDialogDescription>
+                <AlertDialogTitle>{t.withdrawQuestion}</AlertDialogTitle>
+                <AlertDialogDescription>{t.withdrawText(fields.includes('conditions'))}</AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
-                <AlertDialogCancel className="h-11">Vazgeç</AlertDialogCancel>
+                <AlertDialogCancel className="h-11">{t.cancel}</AlertDialogCancel>
                 <AlertDialogAction className="h-11" disabled={decide.isPending} onClick={() => decide.mutate(false)}>
                   {decide.isPending ? <Spinner data-icon="inline-start" /> : null}
-                  Geri çek
+                  {t.withdrawConfirm}
                 </AlertDialogAction>
               </AlertDialogFooter>
             </AlertDialogContent>
@@ -156,14 +137,14 @@ export function ConsentCard({
     return (
       <Card size="sm">
         <CardHeader>
-          <CardTitle>Sağlık takibi kapalı</CardTitle>
-          <CardDescription>Onay vermedin; sağlık bilgisi tutulmuyor. İstersen şimdi açabilirsin.</CardDescription>
+          <CardTitle>{t.off}</CardTitle>
+          <CardDescription>{t.offText}</CardDescription>
         </CardHeader>
         <CardContent>{list}</CardContent>
         <CardFooter>
           <Button className="h-11 w-full" disabled={decide.isPending} onClick={() => decide.mutate(true)}>
             {decide.isPending ? <Spinner data-icon="inline-start" /> : null}
-            Onaylıyorum
+            {t.agree}
           </Button>
         </CardFooter>
       </Card>
@@ -175,29 +156,21 @@ export function ConsentCard({
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <FirstAidKit weight="fill" className="size-5 text-primary" />
-          Sağlık bilgilerin
+          {t.askTitle}
         </CardTitle>
-        <CardDescription>
-          {state === 'outdated'
-            ? (outdatedText(outdated, continuing) ??
-              'Antrenörün sağlık takibini yeniden başlattı, yeni bir bilgi eklemek istiyor ya da metin güncellendi. Yeniden onaylayana kadar sağlık kaydı tutulmaz.')
-            : 'Antrenörün programını güvenle ayarlamak için şu bilgileri tutmak istiyor:'}
-        </CardDescription>
+        <CardDescription>{state === 'outdated' ? (outdatedText(outdated, continuing, locale) ?? t.restarted) : t.ask}</CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
         {list}
-        <p className="text-sm text-muted-foreground">
-          Bu bilgileri yalnız antrenörün görür. Onay vermezsen hiçbiri tutulmaz; antrenmanların yine kaydedilir. İstediğin
-          zaman kapatabilirsin.
-        </p>
+        <p className="text-sm text-muted-foreground">{t.privacy}</p>
       </CardContent>
       <CardFooter className="flex flex-col gap-2">
         <Button className="h-11 w-full" disabled={decide.isPending} onClick={() => decide.mutate(true)}>
           {decide.isPending && decide.variables ? <Spinner data-icon="inline-start" /> : null}
-          Onaylıyorum
+          {t.agree}
         </Button>
         <Button variant="outline" className="h-11 w-full" disabled={decide.isPending} onClick={() => decide.mutate(false)}>
-          Şimdi değil
+          {t.notNow}
         </Button>
       </CardFooter>
     </Card>
