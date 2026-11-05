@@ -246,11 +246,11 @@ describe('program taslağı İngilizce yazılır ve saklanır', () => {
 });
 
 describe('taslak uçları İngilizce: saklanan metin yazanın dilinde', () => {
-  function setup(locale: 'tr' | 'en') {
+  function setup(locale: 'tr' | 'en', role: 'pt' | 'client' = 'client') {
     const client: Client = { id: 'c_coachtest', name: 'Test', status: 'active', createdAt: NOW, modules: { health: { enabled: false, fields: [] }, ai: { enabled: true } }, consents: {}, access: { version: 1 }, visibleTo: [] };
     const gh = fakeSessionRepo();
     const deps: AssistantDeps = {
-      session: async () => ({ role: 'client', clientId: client.id }), client: async () => client, repo: () => gh.repo, connection: async () => null,
+      session: async () => ({ role, clientId: client.id }), client: async () => client, repo: () => gh.repo, connection: async () => null,
       context: async () => ({ context, hash: 'snapshot', baseRevision: null }), classify: async () => { throw new Error('no chat'); },
       publish: async () => {}, published: async () => false, hash: (value) => JSON.stringify(value), id: ids, ownId: () => 'op_12345678', now: () => new Date(NOW), locale,
       interpret: async () => ({ intent: 'fitness', goal: 'general_fitness', fullBody: true, muscles: [], weekdays: null, minutes: null, equipment: null }),
@@ -288,6 +288,43 @@ describe('taslak uçları İngilizce: saklanan metin yazanın dilinde', () => {
       assert.equal(missing.status, 404);
       assert.equal((missing.body as { error: string }).error, notFound);
     }
+  });
+
+  test('dil değişirse kaydedilen taslağın gerekçesi baştan sona kaydedenin dilinde (karışık dil yok)', async () => {
+    // Türkçe hazırlanan taslak, kullanıcı dili değiştirdikten sonra İngilizce kaydedilir (danışan: kendi programı).
+    const client = setup('tr');
+    const draft = (await generate(client)).drafts[0]!;
+    assert.match(draft.rationale[0]!, /^Daha fit olmak hedefi/);
+    client.deps.locale = 'en';
+    const body = { ...draft.body, name: draft.name, baseRevision: null };
+    assert.equal((await saveAssistantDraft(client.deps, headers, ORIGIN, client.client.id, draft.id, body, 'client')).status, 201);
+    const saved = ((await getAssistant(client.deps, client.client.id)).body as unknown as AssistantView).drafts[0]!;
+    const english = assistantProgram(context, selection, 'program', ids, 'client', 'en');
+    assert.ok('rationale' in english && english.rationale);
+    assert.deepEqual(saved.rationale, ['Own program reviewed in the builder and saved: 2 workouts.', ...english.rationale.slice(1)]);
+    saved.rationale.forEach(noTurkish);
+    saved.attention.forEach(noTurkish);
+    // PT: aynı davranış (gerekçe baştan, kaydedenin dilinde); dil aynıysa metin değişmez.
+    const pt = setup('tr', 'pt');
+    const ptDraft = (await generate(pt)).drafts[0]!;
+    pt.deps.locale = 'en';
+    assert.equal((await saveAssistantDraft(pt.deps, headers, ORIGIN, pt.client.id, ptDraft.id, null, 'pt')).status, 200);
+    const ptSaved = ((await getAssistant(pt.deps, pt.client.id)).body as unknown as AssistantView).drafts[0]!;
+    assert.deepEqual(ptSaved.rationale, english.rationale);
+    ptSaved.rationale.forEach(noTurkish);
+  });
+
+  test('dil aynıysa kaydetme gerekçeyi eskisi gibi bırakır (Türkçe: ilk satır değişir, kalanı aynı)', async () => {
+    const f = setup('tr');
+    const draft = (await generate(f)).drafts[0]!;
+    const body = { ...draft.body, name: draft.name, baseRevision: null };
+    await saveAssistantDraft(f.deps, headers, ORIGIN, f.client.id, draft.id, body, 'client');
+    const saved = ((await getAssistant(f.deps, f.client.id)).body as unknown as AssistantView).drafts[0]!;
+    assert.deepEqual(saved.rationale, ['Düzenleyicide incelenip kaydedilen kendi programı: 2 antrenman.', ...draft.rationale.slice(1)]);
+    const pt = setup('tr', 'pt');
+    const ptDraft = (await generate(pt)).drafts[0]!;
+    await saveAssistantDraft(pt.deps, headers, ORIGIN, pt.client.id, ptDraft.id, null, 'pt');
+    assert.deepEqual(((await getAssistant(pt.deps, pt.client.id)).body as unknown as AssistantView).drafts[0]!.rationale, ptDraft.rationale);
   });
 
   test('danışan taslağı kendi programı olarak kaydedince gerekçenin ilk satırı kaydedenin dilinde, bildirim İngilizce', async () => {

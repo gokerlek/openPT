@@ -10,6 +10,20 @@ import { nextDayName, type ProgramBody } from '../program-plan.ts';
 import { programFormSchema } from '../schemas/program.ts';
 
 /**
+ * Taslağın gerekçesi (taslakla birlikte saklanır): seçimden ve türden saf olarak üretilir, böylece taslağı kaydeden dil
+ * değiştirmiş olsa bile gerekçe baştan sona kaydedenin dilinde yeniden yazılabilir (karışık dil kalmaz).
+ */
+export function assistantRationale(selection: AssistantSelection, kind: 'workout' | 'program', locale: Locale = DEFAULT_LOCALE): string[] {
+  const t = coachMessages(locale);
+  const days = kind === 'workout' ? Math.min(1, selection.conditions.weekdays.length) : selection.conditions.weekdays.length;
+  return [
+    ...t.assistant.rationale(t.goals[selection.goal], days, selection.conditions.minutes),
+    ...(selection.goal === 'weight_management' ? [t.assistant.weightNote] : []),
+    ...(selection.goal === 'mobility' ? [t.assistant.mobilityNote] : []),
+  ];
+}
+
+/**
  * The provider interprets intent; the application owns catalog selection and numerical targets. `audience`: who asked
  * (errors tell the PT to extend the library, the client to ask the PT). Required: a new caller must not silently get
  * the client's copy. `locale`: the requester's language; the draft's phase name, rationale and attention notes are stored
@@ -61,11 +75,7 @@ export function assistantProgram(context: CoachContext, selection: AssistantSele
   const parsed = v.safeParse(programFormSchema, body);
   if (!parsed.success) return { error: t.assistant.rulesUnmet };
   const attention = assistantAttention(context, selection, parsed.output, locale);
-  return { body: parsed.output, attention, rationale: [
-    ...t.assistant.rationale(t.goals[selection.goal], days.length, selection.conditions.minutes),
-    ...(selection.goal === 'weight_management' ? [t.assistant.weightNote] : []),
-    ...(selection.goal === 'mobility' ? [t.assistant.mobilityNote] : []),
-  ] };
+  return { body: parsed.output, attention, rationale: assistantRationale(selection, kind, locale) };
 }
 
 /** Attention is derived again from the body actually saved, including user edits. */

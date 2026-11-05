@@ -9,7 +9,7 @@ import { coachSensitiveIntent, eligibleExercises } from './coach-engine.ts';
 import { coachAccess, type CoachProposal } from './coach-contract.ts';
 import type { CoachDeps } from './coach-routes.ts';
 import { programFormSchema } from '../schemas/program.ts';
-import { assistantAttention, assistantProgram } from './assistant-engine.ts';
+import { assistantAttention, assistantProgram, assistantRationale } from './assistant-engine.ts';
 import { ASSISTANT_PATH, assistantStoreSchema, assistantRequestSchema, emptyAssistant, type AssistantDraft, type AssistantStore, type InterpretedGoal } from './assistant-contract.ts';
 
 export type AssistantDeps = CoachDeps & {
@@ -126,7 +126,8 @@ export async function saveAssistantDraft(deps: AssistantDeps, headers: Headers, 
     const eligible = new Set(eligibleExercises(data.context).map(e => e.id));
     if ((body ?? effectiveBody).phases.some(p => p.days.some(d => d.blocks.some(b => b.rows.some(r => !eligible.has(r.exerciseId)))))) return fail(400, t.exerciseMismatch);
   }
-  if (by === 'pt') { draft.body = effectiveBody; draft.attention = assistantAttention(data.context, draft.selection, effectiveBody, locale); }
+  // Gerekçe ve dikkat notları taslakla saklanır: kaydeden dil değiştirmişse ikisi de onun dilinde yeniden yazılır (dil aynıysa metin aynı).
+  if (by === 'pt') { draft.body = effectiveBody; draft.attention = assistantAttention(data.context, draft.selection, effectiveBody, locale); draft.rationale = assistantRationale(draft.selection, draft.kind, locale); }
   draft.status = 'saving'; draft.savedHash = savedHash; draft.savedBy = by;
   await write(deps, id, loaded.store, loaded.sha);
   const freshWho = await auth(deps, id);
@@ -140,7 +141,7 @@ export async function saveAssistantDraft(deps: AssistantDeps, headers: Headers, 
   }
   const fresh = await readAssistant(deps, id), found = fresh.store.drafts.find(d => d.id === draft.id);
   if (found) {
-    if (result.status < 300) { found.status = 'saved'; found.savedAt = deps.now().toISOString(); if (body) { found.name = body.name!; found.body = v.parse(programFormSchema, { ...body, phased: false }); found.attention = assistantAttention(data.context, found.selection, found.body, locale); found.rationale = [t.savedOwnRationale(found.body.phases.flatMap(p => p.days).length), ...found.rationale.slice(1)]; }
+    if (result.status < 300) { found.status = 'saved'; found.savedAt = deps.now().toISOString(); if (body) { found.name = body.name!; found.body = v.parse(programFormSchema, { ...body, phased: false }); found.attention = assistantAttention(data.context, found.selection, found.body, locale); found.rationale = [t.savedOwnRationale(found.body.phases.flatMap(p => p.days).length), ...assistantRationale(found.selection, found.kind, locale).slice(1)]; }
       if ('revision' in (result.body as object) && typeof (result.body as { revision?: unknown }).revision === 'number') found.savedRevision = (result.body as { revision: number }).revision; }
     else { found.status = 'draft'; delete found.savedHash; delete found.savedBy; }
     await write(deps, id, fresh.store, fresh.sha);
