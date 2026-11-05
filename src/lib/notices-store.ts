@@ -194,5 +194,5 @@ async function buildDigest(id: string, locale: Locale): Promise<ClientOverview |
  * gelir (`getLocale()`); önbelleğin içinde okunamaz.
  */
 export function readClientDigest(id: string, locale: Locale = DEFAULT_LOCALE): Promise<ClientOverview | null> {
-  return unstable_cache(() => buildDigest(id, locale), ['client-overview', 'v3', id, locale], { tags: [noticesTag(id)], revalidate: 300 })();
+  return unstable_cache(() => buildDigest(id, locale), ['client-overview', 'v4', id, locale], { tags: [noticesTag(id)], revalidate: 300 })();
 }
