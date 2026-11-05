@@ -41,7 +41,7 @@ export function UnphaseDialog({
   const locale = useLocale();
   const common = useMessages(commonMessages);
   const check = mergePhasesCheck(phases);
-  const { phases: merged, renamed } = mergePhases(phases, currentPhaseId);
+  const { phases: merged, renamed } = mergePhases(phases, currentPhaseId, locale);
   const current = phases.find((phase) => phase.id === currentPhaseId) ?? phases[0];
   const names = displayDays(merged[0]?.days ?? []).map((day) => day.name).join(', ');
   const phaseOf = (dayId: string) => phases.find((phase) => phase.days.some((day) => day.id === dayId))?.name ?? '';

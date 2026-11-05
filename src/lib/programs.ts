@@ -149,7 +149,7 @@ export async function saveProgram(
   const locale = ctx.locale ?? DEFAULT_LOCALE;
   const body = bodyWithAssignments(input);
   for (let attempt = 0; ; attempt += 1) {
-    const stored = await readProgramFile(clientId);
+    const stored = await readProgramFile(clientId, locale);
     const now = new Date();
     try {
       if (base === null) {
@@ -188,7 +188,7 @@ export type SwitchPhaseResult =
 /** PT onaylı evre geçişi (program sayfasındaki öneri). */
 export async function switchPhase(clientId: string, phaseId: string, base: ProgramBase, locale: Locale = DEFAULT_LOCALE): Promise<SwitchPhaseResult> {
   for (let attempt = 0; ; attempt += 1) {
-    const stored = await readProgramFile(clientId);
+    const stored = await readProgramFile(clientId, locale);
     if (!stored) return { status: 'missing' };
     if (!stored.program || !sameProgramBase(stored.program, base)) return { status: 'stale' };
     const program = stored.program;

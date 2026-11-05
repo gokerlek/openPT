@@ -107,7 +107,7 @@ export default async function ProgramPage({ params }: { params: Promise<{ id: st
     coachAccess(client) === 'ready' ? <CoachButton label={p.draftLabel} detail={{ clientId: id, tab: 'program' }} /> : null;
 
   const [file, exercises, config, templates, proposals, sessions, own] = await Promise.all([
-    readProgramFile(id),
+    readProgramFile(id, locale),
     listExercises(),
     readAppConfig(),
     templateChoices().catch(() => []),

@@ -8,7 +8,8 @@ import { Field, FieldDescription, FieldLabel } from '@/components/ui/field';
 import type { TemplateOption } from '@/lib/program-plan';
 import type { PickerExercise } from '@/lib/template-edit';
 import { templateSummary } from '@/lib/template-plan';
-import { useMessages } from '@/i18n/client';
+import { useLocale, useMessages } from '@/i18n/client';
+import { intlLocale } from '@/i18n/locale';
 import { ptProgramMessages } from '@/i18n/messages/pt-program';
 import { commonMessages } from '@/i18n/messages/common';
 
@@ -35,7 +36,8 @@ export function AddDayDialog({
 }) {
   const t = useMessages(ptProgramMessages).addDayDialog;
   const common = useMessages(commonMessages);
-  const sorted = useMemo(() => [...templates].sort((a, b) => a.name.localeCompare(b.name, 'tr')), [templates]);
+  const locale = useLocale();
+  const sorted = useMemo(() => [...templates].sort((a, b) => a.name.localeCompare(b.name, intlLocale(locale))), [templates, locale]);
   const [templateId, setTemplateId] = useState(sorted[0]?.id ?? '');
   const template = sorted.find((item) => item.id === templateId);
   const summary = template ? templateSummary({ blocks: template.blocks }, exercises) : null;

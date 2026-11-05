@@ -357,7 +357,7 @@ function RowDetails({ blockIndex, rowIndex, row, exercise }: { blockIndex: numbe
   const deviceId = row.deviceId ?? exercise.deviceId;
   const device = deviceId ? devices.get(deviceId) : undefined;
   const spec = loadSpecFor(exercise, device);
-  const setRules = describeSetRules(row.sets, spec);
+  const setRules = describeSetRules(row.sets, spec, locale);
   const ownDevice = exercise.deviceId ? devices.get(exercise.deviceId) : undefined;
   const swapContext = useMemo(() => ({ exercises: exerciseList, devices, familyOf }), [exerciseList, devices]);
 
@@ -392,10 +392,10 @@ function RowDetails({ blockIndex, rowIndex, row, exercise }: { blockIndex: numbe
             device: name(value) ?? '',
             from: exercises.get(result.from)?.title ?? result.from,
             to: exercises.get(result.to)?.title ?? result.to,
-          })
+          }, locale)
         : result.kind === 'device'
-          ? deviceChangeMessage({ kind: 'device', device: name(value) ?? '', title })
-          : deviceChangeMessage({ kind: 'reset', device: name(exercise.deviceId), title });
+          ? deviceChangeMessage({ kind: 'device', device: name(value) ?? '', title }, locale)
+          : deviceChangeMessage({ kind: 'reset', device: name(exercise.deviceId), title }, locale);
     editor.updateWithUndo((before) => setRow(before, result.row), message, { highlight: row.id });
   };
 
@@ -456,7 +456,7 @@ function RowDetails({ blockIndex, rowIndex, row, exercise }: { blockIndex: numbe
               onChange={(rir) => writeRule({ targetRir: Number(rir) })}
             />
           </div>
-          <FieldDescription>{describeRule(rule, spec)}</FieldDescription>
+          <FieldDescription>{describeRule(rule, spec, locale)}</FieldDescription>
           {setRules ? <FieldDescription>{setRules}</FieldDescription> : null}
           {row.rule ? resetRule : null}
         </Field>

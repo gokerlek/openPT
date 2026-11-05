@@ -6,12 +6,12 @@ import { listAttachments } from '@/lib/attachments';
 import { listDevices } from '@/lib/devices';
 import { getExercise, listExercises } from '@/lib/exercises';
 import { exerciseAlternatives, summarizeMuscles } from '@/lib/muscles';
-import { EQUIPMENT_LABELS } from '@/lib/schemas/exercise';
+import { equipmentLabels } from '@/lib/schemas/exercise';
 import { ExerciseActions } from '../exercise-actions';
 import { ExerciseForm } from '../../exercise-form';
 import { TOUCH_TARGETS } from '../../touch-targets';
 import { requirePt } from '@/lib/guards';
-import { getMessages } from '@/i18n/server';
+import { getLocale, getMessages } from '@/i18n/server';
 import { ptLibraryMessages } from '@/i18n/messages/pt-library';
 import { commonMessages } from '@/i18n/messages/common';
 
@@ -27,8 +27,10 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 }
 
 export default async function EditExercisePage({ params }: { params: Promise<{ id: string }> }) {
-  const t = (await getMessages(ptLibraryMessages)).exerciseEdit;
-  const common = await getMessages(commonMessages);
+  const locale = await getLocale();
+  const t = ptLibraryMessages(locale).exerciseEdit;
+  const common = commonMessages(locale);
+  const equipment = equipmentLabels(locale);
   await requirePt();
   const { id } = await params;
   const [all, devices, attachments] = await Promise.all([loadAll(), listDevices(), listAttachments()]);
@@ -43,8 +45,8 @@ export default async function EditExercisePage({ params }: { params: Promise<{ i
     id: other.id,
     title: other.title,
     detail: [
-      other.deviceId ? (deviceById.get(other.deviceId)?.name ?? EQUIPMENT_LABELS[other.equipment]) : EQUIPMENT_LABELS[other.equipment],
-      summarizeMuscles(other.primaryMuscles).join(', '),
+      other.deviceId ? (deviceById.get(other.deviceId)?.name ?? equipment[other.equipment]) : equipment[other.equipment],
+      summarizeMuscles(other.primaryMuscles, locale).join(', '),
     ].join(' · '),
   }));
 

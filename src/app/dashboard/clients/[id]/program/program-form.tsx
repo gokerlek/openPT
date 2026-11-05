@@ -310,7 +310,7 @@ export function ProgramForm({
       toast.error(t.mergeTooMany(check.days));
       return;
     }
-    const merged = mergePhases(before.phases, getInput(form, { path: ['currentPhaseId'] }) ?? '');
+    const merged = mergePhases(before.phases, getInput(form, { path: ['currentPhaseId'] }) ?? '', locale);
     const mergedId = merged.phases[0]?.id;
     write(merged.phases);
     if (mergedId) setInput(form, { path: ['currentPhaseId'], input: mergedId });

@@ -164,7 +164,7 @@ export default async function ExerciseDetailPage({ params }: { params: Promise<{
               <MuscleMap
                 layout="split"
                 bodyClassName="h-72"
-                {...roleMapProps(exercise)}
+                {...roleMapProps(exercise, locale)}
                 deep={{ selected: (exercise.activationTargets ?? []).filter(isDeepMuscle) }}
               />
             </CardContent>

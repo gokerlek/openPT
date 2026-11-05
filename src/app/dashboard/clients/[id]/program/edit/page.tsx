@@ -39,7 +39,7 @@ export default async function EditProgramPage({ params }: { params: Promise<{ id
   const loaded = await loadClient(id);
   if (!loaded) notFound();
   if (!loaded.ok) redirect(`/dashboard/clients/${id}`);
-  const file = await readProgramFile(id);
+  const file = await readProgramFile(id, locale);
   if (!file) redirect(`/dashboard/clients/${id}/program/new`);
 
   if (!file.program) {

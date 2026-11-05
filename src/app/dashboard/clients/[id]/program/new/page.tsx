@@ -33,7 +33,7 @@ export default async function NewProgramPage({ params }: { params: Promise<{ id:
   if (!loaded) notFound();
   if (!loaded.ok) redirect(`/dashboard/clients/${id}`);
   // Program zaten var (okunamasa da): düzenleme sayfası.
-  if (await readProgramFile(id)) redirect(`/dashboard/clients/${id}/program/edit`);
+  if (await readProgramFile(id, locale)) redirect(`/dashboard/clients/${id}/program/edit`);
 
   const [templateFiles, exercises, devices, config] = await Promise.all([
     listTemplates(locale).catch(() => []),
@@ -60,7 +60,7 @@ export default async function NewProgramPage({ params }: { params: Promise<{ id:
         clientId={id}
         mode="create"
         // Kimlikler sunucuda üretilir: sunucu ve tarayıcı çizimi aynı olsun.
-        initial={blankProgramBody(programIdSource([]))}
+        initial={blankProgramBody(programIdSource([]), locale)}
         base={null}
         stored={null}
         templates={templates}

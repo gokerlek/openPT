@@ -1,6 +1,6 @@
 import 'server-only';
 import * as v from 'valibot';
-import { DEFAULT_LOCALE, type Locale } from '../i18n/locale.ts';
+import { DEFAULT_LOCALE, intlLocale, type Locale } from '../i18n/locale.ts';
 import { ptProgramMessages } from '../i18n/messages/pt-program/index.ts';
 import { messageOf } from '../i18n/errors.ts';
 import { langConfig } from '../i18n/valibot.ts';
@@ -129,8 +129,8 @@ export async function listTemplates(locale: Locale = DEFAULT_LOCALE): Promise<Te
     return file ? [file] : [];
   });
   return [
-    ...all.filter((file) => file.template).sort((a, b) => sortKey(a).localeCompare(sortKey(b), 'tr')),
-    ...all.filter((file) => !file.template).sort((a, b) => sortKey(a).localeCompare(sortKey(b), 'tr')),
+    ...all.filter((file) => file.template).sort((a, b) => sortKey(a).localeCompare(sortKey(b), intlLocale(locale))),
+    ...all.filter((file) => !file.template).sort((a, b) => sortKey(a).localeCompare(sortKey(b), intlLocale(locale))),
   ];
 }
 
