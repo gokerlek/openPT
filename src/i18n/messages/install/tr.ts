@@ -237,6 +237,8 @@ const tr = {
     forbidden: (context: string) => `${context}: GitHub izin vermedi (yetki ya da istek sınırı).`,
     badToken: (context: string) => `${context}: GitHub anahtarı geçersiz.`,
     unreachable: (context: string) => `${context}: GitHub'a ulaşılamadı.`,
+    /** Danışan repolarının listesi okunamadı (`listClientIds`): yukarıdaki hataların bağlamı. */
+    repoList: 'repo listesi',
     notAFile: (path: string) => `${path} bir dosya değil.`,
     listTruncated: (repo: string) => `${repo}: klasör listesi GitHub'da kesildi.`,
     brokenJson: (path: string) => `${path} bozuk JSON içeriyor.`,

@@ -224,6 +224,7 @@ const en: Shape<typeof tr> = {
     forbidden: (context: string) => `${context}: GitHub didn't allow it (permission or rate limit).`,
     badToken: (context: string) => `${context}: the GitHub key is invalid.`,
     unreachable: (context: string) => `${context}: couldn't reach GitHub.`,
+    repoList: 'repo list',
     notAFile: (path: string) => `${path} is not a file.`,
     listTruncated: (repo: string) => `${repo}: the folder listing was truncated by GitHub.`,
     brokenJson: (path: string) => `${path} contains broken JSON.`,

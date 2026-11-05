@@ -1,5 +1,6 @@
 import 'server-only';
 import { Octokit } from 'octokit';
+import type { LocalizedText } from '../../i18n/errors';
 import { DEFAULT_LOCALE, type Locale } from '../../i18n/locale';
 import { installMessages } from '../../i18n/messages/install';
 import { CLIENT_REPO_PREFIX, serverEnv } from '../env';
@@ -120,21 +121,23 @@ export function appRepo(): string {
 /**
  * Octokit hatalarını tek tipe indirger; 409/422 çakışma olarak işaretlenir. İstek sınırı (429 ya da
  * sınır kaynaklı 403) 429 olur ve `retryAfter`, `remaining` başlıklarını taşır (`rateLimitOf`): uç
- * telefona ne kadar bekleyeceğini söyleyebilsin. İzin 403'ü 403 kalır.
+ * telefona ne kadar bekleyeceğini söyleyebilsin. İzin 403'ü 403 kalır. `context` yol ya da kimlikse (iki dilde aynı)
+ * metin, söz öbeğiyse okuyanın dilinde verilir (`(l) => installMessages(l).github.repoList`).
  */
-export function toGithubError(error: unknown, context: string): GithubError {
+export function toGithubError(error: unknown, context: string | LocalizedText): GithubError {
   // GitHub uygulamasının kurulumuna erişilemiyor: mesajı zaten Türkçe ve ne yapılacağını söylüyor.
   if (error instanceof InstallationAccessError) return error;
   const status = typeof error === 'object' && error && 'status' in error ? Number(error.status) : 500;
   const response = typeof error === 'object' && error && 'response' in error ? (error.response as { headers?: Record<string, unknown> }) : undefined;
   const message = error instanceof Error ? error.message : '';
   const rate = rateLimitOf(status, response?.headers, message);
-  if (rate.rateLimited) return new GithubError((l) => installMessages(l).github.rateLimited(context), 429, rate);
+  const where = (l: Locale) => (typeof context === 'function' ? context(l) : context);
+  if (rate.rateLimited) return new GithubError((l) => installMessages(l).github.rateLimited(where(l)), 429, rate);
   if (status === 409 || status === 422) {
-    return new GithubError((l) => installMessages(l).github.conflict(context), 409, rate);
+    return new GithubError((l) => installMessages(l).github.conflict(where(l)), 409, rate);
   }
-  if (status === 404) return new GithubError((l) => installMessages(l).github.notFound(context), 404);
-  if (status === 403) return new GithubError((l) => installMessages(l).github.forbidden(context), 403, rate);
-  if (status === 401) return new GithubError((l) => installMessages(l).github.badToken(context), 401);
-  return new GithubError((l) => installMessages(l).github.unreachable(context), 502, rate);
+  if (status === 404) return new GithubError((l) => installMessages(l).github.notFound(where(l)), 404);
+  if (status === 403) return new GithubError((l) => installMessages(l).github.forbidden(where(l)), 403, rate);
+  if (status === 401) return new GithubError((l) => installMessages(l).github.badToken(where(l)), 401);
+  return new GithubError((l) => installMessages(l).github.unreachable(where(l)), 502, rate);
 }

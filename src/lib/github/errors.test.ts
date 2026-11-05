@@ -1,5 +1,7 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { githubErrorText, GithubError, writeToFreshRepo } from './errors.ts';
 import { installMessages } from '../../i18n/messages/install/index.ts';
 
@@ -67,5 +69,18 @@ describe('kullanıcıya giden GitHub hata metni', () => {
     assert.equal(githubErrorText(new TypeError('fetch failed'), 'en'), null);
     assert.equal(githubErrorText(Object.assign(new Error('Octokit: Bad credentials'), { status: 401 }), 'tr'), null);
     assert.equal(githubErrorText('metin', 'tr'), null);
+  });
+});
+
+describe('GitHub hata bağlamı okuyanın dilinde', () => {
+  test('`toGithubError` bağlamı ya kod (yol, kimlik, `commit`) ya da sözlükten; Türkçe söz öbeği İngilizce hataya girmez', () => {
+    const dir = join(import.meta.dirname);
+    const literals = readdirSync(dir)
+      .filter((name) => /\.ts$/.test(name) && !/\.test\.ts$/.test(name))
+      .flatMap((name) => [...readFileSync(join(dir, name), 'utf8').matchAll(/\b(?:toGithubError|adminError)\([^,()]+,\s*(['"`])([^'"`]*)\1/g)].map((match) => `${name}: ${match[2]}`));
+    assert.deepEqual(literals.filter((entry) => !/: [\w./-]+$/.test(entry)), []);
+    const en = installMessages('en').github;
+    assert.equal(en.unreachable(en.repoList), "repo list: couldn't reach GitHub.");
+    assert.equal(installMessages('tr').github.unreachable(installMessages('tr').github.repoList), "repo listesi: GitHub'a ulaşılamadı.");
   });
 });

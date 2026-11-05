@@ -157,7 +157,7 @@ export async function listClientIds(): Promise<string[]> {
         .filter(isClientRepo)
         .map((name) => name.slice(CLIENT_REPO_PREFIX.length));
     } catch (error) {
-      throw toGithubError(error, 'repo listesi');
+      throw toGithubError(error, (l) => installMessages(l).github.repoList);
     }
   }
   try {
@@ -171,6 +171,6 @@ export async function listClientIds(): Promise<string[]> {
       .filter(isClientRepo)
       .map((name) => name.slice(CLIENT_REPO_PREFIX.length));
   } catch (error) {
-    throw toGithubError(error, 'repo listesi');
+    throw toGithubError(error, (l) => installMessages(l).github.repoList);
   }
 }
