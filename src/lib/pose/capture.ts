@@ -1,3 +1,5 @@
+import { DEFAULT_LOCALE, type Locale } from '../../i18n/locale.ts';
+import { measurementsMessages } from '../../i18n/messages/measurements/index.ts';
 import type { Metric } from './geometry.ts';
 import {PROTOCOLS,type PoseTask} from './protocols.ts';
 export type MetricSummary={id:string;median:number;minimum:number;maximum:number;range:number;spread:number};
@@ -55,21 +57,22 @@ export class CaptureSession {
   }else this.cycle.push(metrics);
   if(this.excursion && change<=10 && this.cycle.length>=4){this.cycles.push(this.cycle);this.cycle=[];this.excursion=false;this.approach=[metrics];this.observed='start';}
  }
- finish(at:number):CaptureResult {
+ finish(at:number,locale:Locale=DEFAULT_LOCALE):CaptureResult {
+  const reasons=measurementsMessages(locale).camera.capture;
   const durationMs=at-this.startedAt;
   const fps=this.samples.length/(durationMs/1000);
-  if(this.changedSource)return {ok:false,reason:'Kamera yönü veya çözünürlüğü değişti. Telefonu aynı konumda sabitleyip yeniden başlat.'};
-  if(this.changedSide)return {ok:false,reason:'Ölçüm sırasında taraf değişti. Aynı taraf kameraya dönük kalmalı; yeniden dene.'};
-  if(durationMs<3000 || durationMs>120000 || this.samples.length<20 || fps<4 || this.samples.length/Math.max(1,this.count)<.7)return {ok:false,reason:'Yeterli net görüntü alınamadı. Kamerayı sabitle, ışığı ve kadrajı kontrol edip yeniden dene.'};
+  if(this.changedSource)return {ok:false,reason:reasons.sourceChanged};
+  if(this.changedSide)return {ok:false,reason:reasons.sideChanged};
+  if(durationMs<3000 || durationMs>120000 || this.samples.length<20 || fps<4 || this.samples.length/Math.max(1,this.count)<.7)return {ok:false,reason:reasons.tooFewFrames};
   const protocol=PROTOCOLS[this.task];
-  if(protocol.dynamic && this.cycles.length<3)return {ok:false,reason:'Üç tam tekrar algılanmadı. Başlangıç konumuna dönerek yavaşça üç tekrar yap; hareketi zorlamadan yeniden dene.'};
+  if(protocol.dynamic && this.cycles.length<3)return {ok:false,reason:reasons.tooFewReps};
   const ids=this.samples[0]!.map(m=>m.id);
   const metrics=ids.map(id=>{
    const all=this.samples.flatMap(row=>row.filter(m=>m.id===id).map(m=>m.degrees));
    const ranges=this.cycles.map(c=>{const a=c.flatMap(row=>row.filter(m=>m.id===id).map(m=>m.degrees));return Math.max(...a)-Math.min(...a);});
    return {id,median:median(all),minimum:Math.min(...all),maximum:Math.max(...all),range:protocol.dynamic?median(ranges):Math.max(...all)-Math.min(...all),spread:protocol.dynamic?Math.max(...ranges)-Math.min(...ranges):Math.max(...all)-Math.min(...all)};
   });
-  if(!protocol.dynamic && metrics.some(m=>m.spread>5))return {ok:false,reason:'Duruş örnekleri fazla değişti. Sabit ve rahat durarak yeniden dene.'};
+  if(!protocol.dynamic && metrics.some(m=>m.spread>5))return {ok:false,reason:reasons.unsteady};
   return {ok:true,metrics,validSamples:this.samples.length,totalSamples:this.count,durationMs,repetitions:this.repetitions,side:this.side??'both',fps};
  }
 }

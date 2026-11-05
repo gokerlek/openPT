@@ -1,5 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { measurementsMessages } from '@/i18n/messages/measurements';
+import { getLocale, getMessages } from '@/i18n/server';
 import { Plus } from '@/components/line-icons';
 import { SectionHeader } from '@/components/section-header';
 import { Button } from '@/components/ui/button';
@@ -12,7 +14,9 @@ import { MeasurementOverview } from './measurement-overview';
 import { parseRange, RangeFilter } from './range-filter';
 import { MeasurementLockAlert, MeasurementProblemAlert, measurementClient } from './measurement-page';
 
-export const metadata: Metadata = { title: 'Ölçümler' };
+export async function generateMetadata(): Promise<Metadata> {
+  return { title: (await getMessages(measurementsMessages)).page.title };
+}
 
 /**
  * Sağlık'ın Ölçümler parçası (`measurements` onayı): elle girilen ölçümler — vücut ağırlığı, boy ve çevreler,
@@ -30,20 +34,22 @@ export default async function MeasurementsPage({
 }) {
   await requirePt();
   const { id } = await params;
+  const locale = await getLocale();
+  const t = measurementsMessages(locale).page;
   const loaded = await measurementClient(id);
   const base = `/dashboard/clients/${id}/measurements`;
 
   if (!loaded.ok) {
     return (
       <div className="flex flex-col gap-6">
-        <SectionHeader title="Ölçümler" />
-        <MeasurementProblemAlert title="Danışan kaydı okunamadı" problem={loaded.problem} />
+        <SectionHeader title={t.title} />
+        <MeasurementProblemAlert title={t.clientUnreadable} problem={loaded.problem} />
       </div>
     );
   }
 
   const { client } = loaded;
-  const [view, config] = await Promise.all([loadMeasurements(client), readAppConfig()]);
+  const [view, config] = await Promise.all([loadMeasurements(client, locale), readAppConfig()]);
   const today = todayIn(config.timeZone);
   const range = parseRange(await searchParams, today);
 
@@ -51,26 +57,23 @@ export default async function MeasurementsPage({
     <div className="flex flex-col gap-6">
       <HealthStrip client={client} record={view.state === 'ok' ? view.record : null} />
       <SectionHeader
-        title="Ölçümler"
-        description="Elle girilen vücut ölçüleri, performans ve hareketlilik testleri, anket skorları; her birinin seyri ve son değişimi."
+        title={t.title}
+        description={t.description}
         actions={
           view.state === 'ok' ? (
             <Button nativeButton={false} render={<Link href={`${base}/new`} />}>
               <Plus data-icon="inline-start" />
-              Ölçüm gir
+              {t.add}
             </Button>
           ) : null
         }
       />
       {view.state === 'locked' ? <MeasurementLockAlert lock={view.lock} clientId={id} /> : null}
       {view.state === 'broken' ? (
-        <MeasurementProblemAlert
-          title="Sağlık kaydı okunamadı"
-          problem={`${view.problem} Kayıt uygulama dışında değiştirilmiş olabilir; düzeltilene kadar ölçüm yazılmaz.`}
-        />
+        <MeasurementProblemAlert title={t.recordUnreadable} problem={t.broken(view.problem)} />
       ) : null}
-      {view.state === 'ok' && view.record.measurements.length > 0 ? <RangeFilter base={base} range={range} /> : null}
-      {view.state === 'ok' ? <MeasurementOverview record={view.record} base={base} from={range.from} to={range.to} today={today} /> : null}
+      {view.state === 'ok' && view.record.measurements.length > 0 ? <RangeFilter base={base} range={range} locale={locale} /> : null}
+      {view.state === 'ok' ? <MeasurementOverview record={view.record} base={base} from={range.from} to={range.to} today={today} locale={locale} /> : null}
     </div>
   );
 }

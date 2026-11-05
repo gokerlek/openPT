@@ -1,5 +1,8 @@
 import {NextResponse} from 'next/server';
 import * as v from 'valibot';
+import {localeFromRequest} from '@/i18n/locale';
+import {coachMessages} from '@/i18n/messages/coach';
+import {langConfig} from '@/i18n/valibot';
 import {readPtSession} from '@/lib/session';
 import {sameOrigin} from '@/lib/updates/core';
 import {geminiKeySchema,geminiKeyError} from '@/lib/ai/gemini-key-input';
@@ -7,17 +10,19 @@ import {geminiKeyStatus,saveGeminiKey} from '@/lib/ai/gemini-key';
 
 export const dynamic='force-dynamic';
 const response=(body:unknown,status=200)=>NextResponse.json(body,{status,headers:{'Cache-Control':'no-store'}});
-export async function GET() {
-  if(!(await readPtSession()))return response({error:'Bu işlem yalnız PT’ye açık.'},403);
+export async function GET(request:Request) {
+  const locale=localeFromRequest(request),t=coachMessages(locale);
+  if(!(await readPtSession()))return response({error:t.api.ptOnly},403);
   try{return response(await geminiKeyStatus());}
-  catch{return response({error:'Anahtar durumu okunamadı. Özel veri alanına erişimini kontrol et.'},502);}
+  catch{return response({error:t.api.keyStatusUnreadable},502);}
 }
 export async function POST(request:Request) {
-  if(!sameOrigin(request)||!(await readPtSession()))return response({error:'Bu işlem yalnız PT’ye açık.'},403);
-  const body=await request.text();if(body.length>1000)return response({error:'Anahtarı kontrol et.'},400);
+  const locale=localeFromRequest(request),t=coachMessages(locale);
+  if(!sameOrigin(request)||!(await readPtSession()))return response({error:t.api.ptOnly},403);
+  const body=await request.text();if(body.length>1000)return response({error:t.api.checkKey},400);
   let json:unknown;try{json=JSON.parse(body);}catch{json=null;}
-  const parsed=v.safeParse(v.strictObject({key:v.nullable(geminiKeySchema)}),json);
-  if(!parsed.success)return response({error:json&&typeof json==='object'&&'key' in json ? geminiKeyError(json.key)||'Anahtar isteği geçersiz.' : 'Gemini API anahtarını kontrol et.'},400);
-  try{await saveGeminiKey(parsed.output.key);return response(await geminiKeyStatus());}
-  catch{return response({error:'Anahtar kaydedilemedi. Özel veri alanına erişimini kontrol edip tekrar dene.'},502);}
+  const parsed=v.safeParse(v.strictObject({key:v.nullable(geminiKeySchema)}),json,langConfig(locale));
+  if(!parsed.success)return response({error:json&&typeof json==='object'&&'key' in json ? geminiKeyError(json.key,locale)||t.api.invalidKeyRequest : t.keyErrors.fallback},400);
+  try{await saveGeminiKey(parsed.output.key,locale);return response(await geminiKeyStatus());}
+  catch{return response({error:t.api.keySaveFailed},502);}
 }

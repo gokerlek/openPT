@@ -1,4 +1,6 @@
-import { DEFAULT_LOCALE, type Locale } from '../i18n/locale.ts';
+import type { LocalizedText, Localizable } from '../i18n/errors.ts';
+import { DEFAULT_LOCALE, intlLocale, type Locale } from '../i18n/locale.ts';
+import { healthMessages } from '../i18n/messages/health/index.ts';
 import type { MovementPattern } from './alternatives.ts';
 import {
   CONDITION_IDS,
@@ -14,7 +16,7 @@ import {
   type ConditionRegion,
 } from './conditions.ts';
 import { and, has, isTagged, loaded, touches, type ExerciseTags } from './exercise-filter.ts';
-import { formatDay } from './format.ts';
+import { getFormat } from './format.ts';
 import type { Constraint, ConstraintLogEntry, HealthRecord, Override } from './schemas/health.ts';
 
 /**
@@ -47,18 +49,13 @@ export const CONSTRAINT_REGIONS = [
 ] as const;
 export type ConstraintRegion = (typeof CONSTRAINT_REGIONS)[number];
 
-export const REGION_LABELS: Record<ConstraintRegion, string> = {
-  neck: 'Boyun',
-  shoulder: 'Omuz',
-  elbow: 'Dirsek',
-  wrist_hand: 'El bileği',
-  upper_back: 'Sırt',
-  lower_back: 'Bel',
-  hip: 'Kalça',
-  knee: 'Diz',
-  ankle_foot: 'Ayak bileği',
-  other: 'Başka bir yer',
-};
+/** Kısıt metinleri okuyanın dilinde. */
+function text(locale: Locale) {
+  return healthMessages(locale).constraints;
+}
+
+/** Türkçe adlar (eski çağrılar); arayüz `regionLabels(locale)` kullanır. */
+export const REGION_LABELS: Record<ConstraintRegion, string> = text('tr').regions;
 
 /** Çift bölgeler: taraf zorunlu. */
 export const PAIRED_REGIONS: ReadonlySet<ConstraintRegion> = new Set(['shoulder', 'elbow', 'wrist_hand', 'hip', 'knee', 'ankle_foot']);
@@ -83,79 +80,48 @@ export const REGION_CONDITION_REGIONS: Record<ConstraintRegion, readonly Conditi
 
 export const CONSTRAINT_SIDES = ['left', 'right', 'both'] as const;
 export type ConstraintSide = (typeof CONSTRAINT_SIDES)[number];
-export const SIDE_LABELS: Record<ConstraintSide, string> = { left: 'Sol', right: 'Sağ', both: 'İki taraf' };
+export const SIDE_LABELS: Record<ConstraintSide, string> = text('tr').sides;
 
 export const CONSTRAINT_TYPES = ['injury', 'condition', 'post_op', 'limitation'] as const;
 export type ConstraintType = (typeof CONSTRAINT_TYPES)[number];
-export const TYPE_LABELS: Record<ConstraintType, string> = {
-  injury: 'Sakatlık',
-  condition: 'Rahatsızlık',
-  post_op: 'Ameliyat sonrası',
-  limitation: 'Hareket kısıtı',
-};
+export const TYPE_LABELS: Record<ConstraintType, string> = text('tr').types;
 /** Danışanın bildirim sheet'indeki cevaplar. */
-export const TYPE_CLIENT_LABELS: Record<ConstraintType, string> = {
-  injury: 'Yeni bir sakatlık',
-  condition: 'Eskiden beri süren bir sorun',
-  post_op: 'Ameliyat oldum',
-  limitation: 'Doktorum bir şeyden kaçınmamı söyledi',
-};
+export const TYPE_CLIENT_LABELS: Record<ConstraintType, string> = text('tr').typeClient;
 
 export const SEVERITIES = ['mild', 'moderate', 'severe'] as const;
 export type Severity = (typeof SEVERITIES)[number];
-export const SEVERITY_LABELS: Record<Severity, string> = { mild: 'Hafif', moderate: 'Orta', severe: 'Şiddetli' };
+export const SEVERITY_LABELS: Record<Severity, string> = text('tr').severities;
 /**
  * Tanımlar **[sentez]**: gösterim ve "kötüleşti" içindir. PT'nin seçtiği şiddet süzgeci değiştirmez; yalnız danışanın
  * PT'nin henüz bakmadığı "şiddetli"si (`severeUnreviewed`) bölgeyi çalıştıran harekete dikkat ekler.
  */
-export const SEVERITY_DESCRIPTIONS: Record<Severity, string> = {
-  mild: 'Antrenmanı etkilemiyor',
-  moderate: 'Bazı hareketlerde zorluyor',
-  severe: 'Günlük hayatı etkiliyor',
-};
+export const SEVERITY_DESCRIPTIONS: Record<Severity, string> = text('tr').severityDescriptions;
 
 export const DIAGNOSIS_SOURCES = ['clinician', 'client'] as const;
 export type DiagnosisSource = (typeof DIAGNOSIS_SOURCES)[number];
-export const DIAGNOSIS_SOURCE_LABELS: Record<DiagnosisSource, string> = {
-  clinician: 'Hekim ya da fizyoterapist',
-  client: 'Danışanın beyanı',
-};
+export const DIAGNOSIS_SOURCE_LABELS: Record<DiagnosisSource, string> = text('tr').diagnosisSources;
 
 export const CLEARANCE_BASES = ['client_report', 'written_report'] as const;
 export type ClearanceBasis = (typeof CLEARANCE_BASES)[number];
-export const CLEARANCE_BASIS_LABELS: Record<ClearanceBasis, string> = {
-  client_report: 'Danışanın beyanı',
-  written_report: 'Yazılı rapor',
-};
+export const CLEARANCE_BASIS_LABELS: Record<ClearanceBasis, string> = text('tr').clearanceBases;
 
 export const GRAFTS = ['hamstring', 'patellar_tendon', 'other'] as const;
 export type Graft = (typeof GRAFTS)[number];
-export const GRAFT_LABELS: Record<Graft, string> = { hamstring: 'Hamstring', patellar_tendon: 'Patellar tendon', other: 'Başka' };
+export const GRAFT_LABELS: Record<Graft, string> = text('tr').grafts;
 
 export const STAGES = [1, 2, 3, 4] as const;
 export type Stage = (typeof STAGES)[number];
-export const STAGE_LABELS: Record<Stage, string> = {
-  1: '1 · izometrik',
-  2: '2 · izotonik',
-  3: '3 · enerji depolama',
-  4: '4 · spora dönüş',
-};
+export const STAGE_LABELS: Record<Stage, string> = text('tr').stages;
 
 /** Danışanın "Neler zorluyor?" cevapları. */
 export const TRIGGERS = ['squat', 'overhead', 'bend', 'jump', 'lean_back'] as const;
 export type Trigger = (typeof TRIGGERS)[number];
-export const TRIGGER_LABELS: Record<Trigger, string> = {
-  squat: 'Çömelmek',
-  overhead: 'Kolu başın üstüne kaldırmak',
-  bend: 'Öne eğilmek',
-  jump: 'Zıplamak',
-  lean_back: 'Geriye eğilmek',
-};
+export const TRIGGER_LABELS: Record<Trigger, string> = text('tr').triggers;
 
 /** Bildirimin "Ne zamandan beri?" cevabı → başlangıç (yaklaşık). */
 export const ONSET_CHOICES = ['week', 'month', 'months', 'longer'] as const;
 export type OnsetChoice = (typeof ONSET_CHOICES)[number];
-export const ONSET_CHOICE_LABELS: Record<OnsetChoice, string> = { week: 'Bu hafta', month: 'Bu ay', months: '1–6 ay', longer: 'Daha uzun' };
+export const ONSET_CHOICE_LABELS: Record<OnsetChoice, string> = text('tr').onsetChoices;
 
 /* --- kaçınılacak hareketler --- */
 
@@ -185,7 +151,7 @@ export type AvoidReads = keyof ExerciseTags | 'pattern';
 export type CareTags = ExerciseTags & { pattern?: MovementPattern | undefined; stabilizerMuscles?: readonly string[] | undefined };
 
 export type AvoidTag = {
-  /** PT'ye ("Kaçın: derin diz bükme"). */
+  /** PT'ye ("Kaçın: derin diz bükme"); Türkçe. Okuyanın dilinde `avoidLabels(locale)`. */
   label: string;
   /** PT'nin açık talimatı yasaktır; öne eğilme yalnız dikkat (Saraceni 2020). */
   decision: 'block' | 'warn';
@@ -198,51 +164,53 @@ export type AvoidTag = {
 const alignment = (tags: CareTags, values: readonly string[]) =>
   tags.spinalAlignment === undefined ? null : values.includes(tags.spinalAlignment);
 
+const AVOID_TR = text('tr').avoid;
+
 export const AVOID_TAGS: Record<AvoidTagId, AvoidTag> = {
   deep_knee_flexion: {
-    label: 'Derin diz bükme (90° üstü)',
+    label: AVOID_TR.deep_knee_flexion,
     decision: 'block',
     families: ['squat', 'lunge'],
     reads: ['jointWindows'],
     match: (tags) => has(tags.jointWindows, 'knee_flexion_over_90'),
   },
   knee_end_extension_open: {
-    label: 'Açık zincirde son aralık diz açma',
+    label: AVOID_TR.knee_end_extension_open,
     decision: 'block',
     families: ['knee_extension'],
     reads: ['kineticChain', 'jointWindows'],
     match: (tags) => and(tags.kineticChain === undefined ? null : tags.kineticChain === 'open', has(tags.jointWindows, 'knee_terminal_extension_0_30')),
   },
   deep_hip_flexion: {
-    label: 'Derin kalça bükme (90° üstü)',
+    label: AVOID_TR.deep_hip_flexion,
     decision: 'block',
     families: ['squat', 'lunge'],
     reads: ['jointWindows'],
     match: (tags) => has(tags.jointWindows, 'hip_flexion_over_90'),
   },
   overhead: {
-    label: 'Kol baş üstünde (90° üstü)',
+    label: AVOID_TR.overhead,
     decision: 'block',
     families: ['vertical_push', 'vertical_pull'],
     reads: ['jointWindows'],
     match: (tags) => has(tags.jointWindows, 'shoulder_elevation_over_90'),
   },
   abduction_external_rotation: {
-    label: '90° kol açma + son aralık dış rotasyon',
+    label: AVOID_TR.abduction_external_rotation,
     decision: 'block',
     families: ['vertical_push', 'vertical_pull'],
     reads: ['jointWindows'],
     match: (tags) => has(tags.jointWindows, 'shoulder_abduction_90_end_range_er'),
   },
   behind_body: {
-    label: 'Dirsek gövdenin arkasında',
+    label: AVOID_TR.behind_body,
     decision: 'block',
     families: ['vertical_push', 'horizontal_push'],
     reads: ['jointWindows'],
     match: (tags) => has(tags.jointWindows, 'glenohumeral_extension_beyond_neutral'),
   },
   ir_under_load: {
-    label: 'Yük altında iç rotasyon',
+    label: AVOID_TR.ir_under_load,
     decision: 'block',
     families: [],
     reads: ['internalRotationUnderLoad'],
@@ -250,7 +218,7 @@ export const AVOID_TAGS: Record<AvoidTagId, AvoidTag> = {
     match: (tags) => (tags.internalRotationUnderLoad === true ? true : isTagged(tags) ? false : null),
   },
   loaded_horizontal_adduction: {
-    label: 'Dirençle göğüste kapanma',
+    label: AVOID_TR.loaded_horizontal_adduction,
     decision: 'block',
     families: ['horizontal_push', 'chest_fly'],
     reads: ['loadVector', 'resistanceProfile'],
@@ -261,49 +229,49 @@ export const AVOID_TAGS: Record<AvoidTagId, AvoidTag> = {
       ),
   },
   loaded_spinal_flexion: {
-    label: 'Yüklü öne bükülme',
+    label: AVOID_TR.loaded_spinal_flexion,
     decision: 'block',
     families: ['hinge'],
     reads: ['spinalAlignment', 'axialLoading'],
     match: (tags) => and(alignment(tags, ['flexion']), loaded(tags)),
   },
   spinal_flexion_rotation: {
-    label: 'Öne bükülme + dönme',
+    label: AVOID_TR.spinal_flexion_rotation,
     decision: 'block',
     families: ['core_rotation'],
     reads: ['spinalAlignment'],
     match: (tags) => alignment(tags, ['flexion_with_rotation']),
   },
   loaded_spinal_extension: {
-    label: 'Yüklü geriye bükülme',
+    label: AVOID_TR.loaded_spinal_extension,
     decision: 'block',
     families: ['hinge'],
     reads: ['spinalAlignment', 'axialLoading'],
     match: (tags) => and(alignment(tags, ['extension', 'extension_with_rotation']), loaded(tags)),
   },
   high_axial_load: {
-    label: 'Yüksek eksenel yük (bar sırtta)',
+    label: AVOID_TR.high_axial_load,
     decision: 'block',
     families: ['squat', 'hinge', 'lunge', 'vertical_push'],
     reads: ['axialLoading'],
     match: (tags) => (tags.axialLoading === undefined ? null : tags.axialLoading === 'high'),
   },
   high_shear: {
-    label: 'Yüksek kesme kuvveti',
+    label: AVOID_TR.high_shear,
     decision: 'block',
     families: ['hinge'],
     reads: ['shearForce'],
     match: (tags) => (tags.shearForce === undefined ? null : tags.shearForce === 'high'),
   },
   ballistic: {
-    label: 'Sıçrama / balistik',
+    label: AVOID_TR.ballistic,
     decision: 'block',
     families: ['squat', 'lunge', 'hinge'],
     reads: ['contractionType'],
     match: (tags) => (tags.contractionType === undefined ? null : tags.contractionType === 'energy_storage_ballistic'),
   },
   forward_bend: {
-    label: 'Öne eğilme / yerden kaldırma',
+    label: AVOID_TR.forward_bend,
     decision: 'warn',
     families: [],
     reads: ['pattern'],
@@ -425,12 +393,30 @@ export const CONSTRAINT_LIMITS = {
 
 /* --- durum --- */
 
-export class ConstraintError extends Error {
+/**
+ * Kural ihlali, durum koduyla. `.message` Türkçe (kayıtlar ve testler); kullanıcıya giden metin
+ * `messageOf(error, locale)` / `error.localized(locale)` ile okuyanın dilinde.
+ */
+export class ConstraintError extends Error implements Localizable {
   readonly status: number;
-  constructor(message: string, status: number) {
-    super(message);
+  readonly text: LocalizedText;
+  constructor(message: string | LocalizedText, status: number) {
+    const localized: LocalizedText = typeof message === 'string' ? () => message : message;
+    super(localized(DEFAULT_LOCALE));
     this.status = status;
+    this.text = localized;
   }
+
+  localized(locale: Locale): string {
+    return this.text(locale);
+  }
+}
+
+type ErrorTexts = ReturnType<typeof text>['errors'];
+
+/** Sözlükteki hata: `failure((e) => e.notFound, 404)`. */
+function failure(pick: (errors: ErrorTexts) => string, status: number): ConstraintError {
+  return new ConstraintError((locale) => pick(text(locale).errors), status);
 }
 
 /** Kısıtın sözlükteki tanısı ve gözlemi (niteleyicisiyle). */
@@ -487,81 +473,65 @@ export function hasFilterEffect(constraint: Pick<Constraint, 'avoid' | 'conditio
 
 /* --- metinler --- */
 
+/** Taraf yalnız çift bölgede okunur. */
+function placeOf(constraint: Pick<Constraint, 'region' | 'side'>): { region: ConstraintRegion; side?: ConstraintSide } {
+  return constraint.side && isPaired(constraint.region) ? { region: constraint.region, side: constraint.side } : { region: constraint.region };
+}
+
 /** "Sol diz", "Bel", "İki omuz". */
-export function regionText(constraint: Pick<Constraint, 'region' | 'side'>, _locale: Locale = DEFAULT_LOCALE): string {
-  const label = REGION_LABELS[constraint.region];
-  if (!constraint.side || !isPaired(constraint.region)) return label;
-  const prefix = constraint.side === 'left' ? 'Sol' : constraint.side === 'right' ? 'Sağ' : 'İki';
-  return `${prefix} ${label.toLocaleLowerCase('tr')}`;
+export function regionText(constraint: Pick<Constraint, 'region' | 'side'>, locale: Locale = DEFAULT_LOCALE): string {
+  const t = text(locale);
+  const { region, side } = placeOf(constraint);
+  return side ? t.regionWithSide(side, region) : t.regions[region];
 }
 
 /** Danışana ikinci tekil: "sol dizin" (için), "sol dizini" (düşünerek), "sol dizine" (uygun). */
-const REGION_FORMS: Record<ConstraintRegion, { gen: string; acc: string; dat: string }> = {
-  neck: { gen: 'boynun', acc: 'boynunu', dat: 'boynuna' },
-  shoulder: { gen: 'omzun', acc: 'omzunu', dat: 'omzuna' },
-  elbow: { gen: 'dirseğin', acc: 'dirseğini', dat: 'dirseğine' },
-  wrist_hand: { gen: 'el bileğin', acc: 'el bileğini', dat: 'el bileğine' },
-  upper_back: { gen: 'sırtın', acc: 'sırtını', dat: 'sırtına' },
-  lower_back: { gen: 'belin', acc: 'belini', dat: 'beline' },
-  hip: { gen: 'kalçan', acc: 'kalçanı', dat: 'kalçana' },
-  knee: { gen: 'dizin', acc: 'dizini', dat: 'dizine' },
-  ankle_foot: { gen: 'ayak bileğin', acc: 'ayak bileğini', dat: 'ayak bileğine' },
-  other: { gen: 'bu bölgen', acc: 'bu bölgeni', dat: 'bu bölgene' },
-};
-
-export function yourRegion(constraint: Pick<Constraint, 'region' | 'side'>, form: 'gen' | 'acc' | 'dat'): string {
-  const word = REGION_FORMS[constraint.region][form];
-  if (!constraint.side || !isPaired(constraint.region)) return word;
-  const prefix = constraint.side === 'left' ? 'sol' : constraint.side === 'right' ? 'sağ' : 'iki';
-  return `${prefix} ${word}`;
+export function yourRegion(constraint: Pick<Constraint, 'region' | 'side'>, form: 'gen' | 'acc' | 'dat', locale: Locale = DEFAULT_LOCALE): string {
+  return text(locale).yourRegion(placeOf(constraint), form);
 }
 
 /** PT'nin başlığı: "Sol diz · Patellofemoral ağrı (şiddetli)"; tanı yoksa gözlem, o da yoksa tür. */
-export function constraintTitle(constraint: Constraint, _locale: Locale = DEFAULT_LOCALE): string {
+export function constraintTitle(constraint: Constraint, locale: Locale = DEFAULT_LOCALE): string {
   const [first] = conditionsOf(constraint);
-  return `${regionText(constraint)} · ${first ? conditionLabel(first) : TYPE_LABELS[constraint.type]}`;
+  return `${regionText(constraint, locale)} · ${first ? conditionLabel(first, locale) : text(locale).types[constraint.type]}`;
 }
 
 /** Başlangıç: "2024", "Ağu 2026", "12 Eylül 2026"; yaklaşıksa önünde "yaklaşık". */
-export function onsetText(onset: string | undefined, approx?: boolean): string | null {
+export function onsetText(onset: string | undefined, approx?: boolean, locale: Locale = DEFAULT_LOCALE): string | null {
   if (!onset) return null;
-  const text =
+  const date =
     onset.length === 4
       ? onset
       : onset.length === 7
-        ? new Intl.DateTimeFormat('tr-TR', { month: 'short', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${onset}-01T00:00:00Z`))
-        : formatDay(onset);
-  return approx ? `yaklaşık ${text}` : text;
+        ? new Intl.DateTimeFormat(intlLocale(locale), { month: 'short', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${onset}-01T00:00:00Z`))
+        : getFormat(locale).day(onset);
+  return approx ? text(locale).approxOnset(date) : date;
 }
 
 /** Kartın ikinci satırı: "Rahatsızlık · orta · başlangıç Ağu 2026". */
-export function constraintMeta(constraint: Pick<Constraint, 'type' | 'severity' | 'onset' | 'onsetApprox'>): string {
-  const onset = onsetText(constraint.onset, constraint.onsetApprox);
-  return [
-    TYPE_LABELS[constraint.type],
-    constraint.severity ? SEVERITY_LABELS[constraint.severity].toLocaleLowerCase('tr') : null,
-    onset ? `başlangıç ${onset}` : null,
-  ]
-    .filter(Boolean)
-    .join(' · ');
+export function constraintMeta(constraint: Pick<Constraint, 'type' | 'severity' | 'onset' | 'onsetApprox'>, locale: Locale = DEFAULT_LOCALE): string {
+  const t = text(locale);
+  return t.meta(t.types[constraint.type], constraint.severity ? t.severities[constraint.severity] : null, onsetText(constraint.onset, constraint.onsetApprox, locale));
 }
 
-export function avoidText(avoid: readonly AvoidTagId[]): string {
-  return avoid.map((tag) => AVOID_TAGS[tag].label.toLocaleLowerCase('tr')).join(', ');
+export function avoidText(avoid: readonly AvoidTagId[], locale: Locale = DEFAULT_LOCALE): string {
+  const t = text(locale);
+  return t.inlineList(avoid.map((tag) => t.avoid[tag]));
 }
 
-export function triggersText(triggers: readonly Trigger[] | undefined): string {
-  return (triggers ?? []).map((trigger) => TRIGGER_LABELS[trigger].toLocaleLowerCase('tr')).join(', ');
+export function triggersText(triggers: readonly Trigger[] | undefined, locale: Locale = DEFAULT_LOCALE): string {
+  const t = text(locale);
+  return t.inlineList((triggers ?? []).map((trigger) => t.triggers[trigger]));
 }
 
 /**
  * Danışanın göreceği tanı adı (§5.2): yalnız hekim/fizyoterapist kaynaklı, tanı türünde, niteleyicisiz temel ad.
  * Gözlem hiç görünmez.
  */
-export function clientDiagnosis(constraint: Pick<Constraint, 'conditionId' | 'diagnosisSource'>): string | null {
+export function clientDiagnosis(constraint: Pick<Constraint, 'conditionId' | 'diagnosisSource'>, locale: Locale = DEFAULT_LOCALE): string | null {
   if (!constraint.conditionId || constraint.diagnosisSource !== 'clinician') return null;
   const parsed = parseCondition(constraint.conditionId);
-  return parsed ? clientSafeLabel(parsed.id) : null;
+  return parsed ? clientSafeLabel(parsed.id, locale) : null;
 }
 
 /* --- tanı seçicisi --- */
@@ -706,13 +676,13 @@ function findConstraint(record: HealthRecord, id: string): { list: Constraint[];
   const list = constraintsOf(record);
   const index = list.findIndex((item) => item.id === id);
   const constraint = list[index];
-  if (!constraint) throw new ConstraintError('Kısıt bulunamadı; silinmiş olabilir.', 404);
+  if (!constraint) throw failure((e) => e.notFound, 404);
   return { list, index, constraint };
 }
 
 function checkBase(constraint: Constraint, baseUpdatedAt: string | undefined): void {
   if (baseUpdatedAt !== undefined && baseUpdatedAt !== constraint.updatedAt) {
-    throw new ConstraintError('Bu kısıt o arada değişti. Sayfayı yenileyip yeniden bak.', 412);
+    throw failure((e) => e.changed, 412);
   }
 }
 
@@ -720,8 +690,13 @@ function replaceAt(record: HealthRecord, list: Constraint[], index: number, next
   return { ...record, constraints: list.map((item, position) => (position === index ? next : item)) };
 }
 
-function log(record: HealthRecord, at: string, by: Actor, id: string, kind: LogKind, text: string): HealthRecord {
-  return appendConstraintLog(record, { at, by, id, kind, text });
+function log(record: HealthRecord, at: string, by: Actor, id: string, kind: LogKind, line: string): HealthRecord {
+  return appendConstraintLog(record, { at, by, id, kind, text: line });
+}
+
+/** Kayıt satırlarının metni: satır saklanır, yazanın dilinde (`ctx.locale`; yoksa Türkçe). */
+function logText(locale: Locale | undefined) {
+  return text(locale ?? DEFAULT_LOCALE).log;
 }
 
 function withoutEmpty<T extends Record<string, unknown>>(value: T): T {
@@ -733,12 +708,12 @@ function withoutEmpty<T extends Record<string, unknown>>(value: T): T {
  * yalnız ilgili tanıda. Tutarlılık hatası 400.
  */
 function applyInput(base: Omit<Constraint, keyof ConstraintInput>, input: ConstraintInput): Constraint {
-  if (isPaired(input.region) && !input.side) throw new ConstraintError('Taraf seç.', 400);
+  if (isPaired(input.region) && !input.side) throw failure((e) => e.side, 400);
   const condition = input.conditionId ? parseCondition(input.conditionId) : null;
-  if (input.conditionId && (!condition || conditionKind(condition.id) !== 'diagnosis')) throw new ConstraintError('Tanı sözlükte yok.', 400);
-  if (condition && !input.diagnosisSource) throw new ConstraintError('Tanının kaynağını seç.', 400);
+  if (input.conditionId && (!condition || conditionKind(condition.id) !== 'diagnosis')) throw failure((e) => e.diagnosisUnknown, 400);
+  if (condition && !input.diagnosisSource) throw failure((e) => e.diagnosisSource, 400);
   const finding = input.findingId ? parseCondition(input.findingId) : null;
-  if (input.findingId && (!finding || conditionKind(finding.id) !== 'finding')) throw new ConstraintError('Gözlem sözlükte yok.', 400);
+  if (input.findingId && (!finding || conditionKind(finding.id) !== 'finding')) throw failure((e) => e.findingUnknown, 400);
   const wanted = detailFields(input.conditionId);
   const details = withoutEmpty({
     surgeryDate: wanted.surgery ? input.details?.surgeryDate : undefined,
@@ -764,9 +739,9 @@ function applyInput(base: Omit<Constraint, keyof ConstraintInput>, input: Constr
 }
 
 function checkLimits(list: readonly Constraint[]): void {
-  if (list.length > CONSTRAINT_LIMITS.total) throw new ConstraintError(`En fazla ${CONSTRAINT_LIMITS.total} kısıt tutulur; kapananlardan silebilirsin.`, 409);
+  if (list.length > CONSTRAINT_LIMITS.total) throw failure((e) => e.tooMany(CONSTRAINT_LIMITS.total), 409);
   if (list.filter((item) => item.status === 'active' && !item.declined).length > CONSTRAINT_LIMITS.active) {
-    throw new ConstraintError(`En fazla ${CONSTRAINT_LIMITS.active} etkin kısıt olabilir; birini kapat.`, 409);
+    throw failure((e) => e.tooManyActive(CONSTRAINT_LIMITS.active), 409);
   }
 }
 
@@ -777,35 +752,38 @@ export const CONSTRAINT_ID_PATTERN = /^k_[a-z0-9]{6}$/;
 export function addConstraint(
   record: HealthRecord,
   input: ConstraintInput & { origin?: 'screening' | undefined },
-  ctx: { id: string; now: string },
+  ctx: { id: string; now: string; /** Kayıt satırının dili; yoksa Türkçe. */ locale?: Locale },
 ): HealthRecord {
   const list = constraintsOf(record);
-  if (list.some((item) => item.id === ctx.id)) throw new ConstraintError('Kimlik çakıştı; yeniden dene.', 409);
+  if (list.some((item) => item.id === ctx.id)) throw failure((e) => e.idConflict, 409);
   const constraint = applyInput(
     withoutEmpty({ id: ctx.id, status: 'active' as const, source: 'pt' as const, confirmedAt: ctx.now, origin: input.origin, createdAt: ctx.now, updatedAt: ctx.now }),
     input,
   );
   const next = [...list, constraint];
   checkLimits(next);
-  const avoid = constraint.avoid.length > 0 ? ` · kaçın: ${avoidText(constraint.avoid)}` : '';
-  return log({ ...record, constraints: next }, ctx.now, 'pt', ctx.id, 'added', `${regionText(constraint)} eklendi${avoid}`);
+  const t = logText(ctx.locale);
+  const avoid = constraint.avoid.length > 0 ? t.avoidSuffix(avoidText(constraint.avoid, ctx.locale)) : '';
+  return log({ ...record, constraints: next }, ctx.now, 'pt', ctx.id, 'added', t.added(regionText(constraint, ctx.locale), avoid));
 }
 
 /** Alan alan ne değişti (kayıt satırı için); değişiklik yoksa boş. */
-function changeText(before: Constraint, after: Constraint): string[] {
+function changeText(before: Constraint, after: Constraint, locale: Locale = DEFAULT_LOCALE): string[] {
+  const t = text(locale);
+  const c = t.log.changes;
   const parts: string[] = [];
-  if (before.region !== after.region || before.side !== after.side) parts.push(`bölge ${regionText(after).toLocaleLowerCase('tr')}`);
-  if (before.type !== after.type) parts.push(`tür ${TYPE_LABELS[after.type].toLocaleLowerCase('tr')}`);
+  if (before.region !== after.region || before.side !== after.side) parts.push(c.region(regionText(after, locale)));
+  if (before.type !== after.type) parts.push(c.type(t.types[after.type]));
   if (before.severity !== after.severity) {
-    parts.push(`${before.severity ? SEVERITY_LABELS[before.severity].toLocaleLowerCase('tr') : 'şiddet yok'} → ${after.severity ? SEVERITY_LABELS[after.severity].toLocaleLowerCase('tr') : 'şiddet yok'}`);
+    parts.push(c.severity(before.severity ? t.severities[before.severity] : null, after.severity ? t.severities[after.severity] : null));
   }
-  if (before.conditionId !== after.conditionId) parts.push(after.conditionId ? 'tanı değişti' : 'tanı kaldırıldı');
-  if (before.findingId !== after.findingId) parts.push(after.findingId ? 'gözlem değişti' : 'gözlem kaldırıldı');
-  if (before.avoid.join() !== after.avoid.join()) parts.push(after.avoid.length > 0 ? `kaçın: ${avoidText(after.avoid)}` : 'kaçınma yok');
-  if (before.clientNote !== after.clientNote) parts.push('danışana not');
-  if (before.note !== after.note) parts.push('not');
-  if (JSON.stringify(before.details ?? {}) !== JSON.stringify(after.details ?? {})) parts.push('ayrıntılar');
-  if (before.onset !== after.onset) parts.push('başlangıç');
+  if (before.conditionId !== after.conditionId) parts.push(after.conditionId ? c.diagnosisChanged : c.diagnosisRemoved);
+  if (before.findingId !== after.findingId) parts.push(after.findingId ? c.findingChanged : c.findingRemoved);
+  if (before.avoid.join() !== after.avoid.join()) parts.push(after.avoid.length > 0 ? c.avoid(avoidText(after.avoid, locale)) : c.noAvoid);
+  if (before.clientNote !== after.clientNote) parts.push(c.clientNote);
+  if (before.note !== after.note) parts.push(c.note);
+  if (JSON.stringify(before.details ?? {}) !== JSON.stringify(after.details ?? {})) parts.push(c.details);
+  if (before.onset !== after.onset) parts.push(c.onset);
   return parts;
 }
 
@@ -814,65 +792,81 @@ export function editConstraint(
   record: HealthRecord,
   id: string,
   input: ConstraintInput,
-  ctx: { now: string; baseUpdatedAt?: string | undefined },
+  ctx: { now: string; baseUpdatedAt?: string | undefined; locale?: Locale },
 ): HealthRecord {
   const { list, index, constraint } = findConstraint(record, id);
   checkBase(constraint, ctx.baseUpdatedAt);
   const confirming = isPendingReport(constraint);
   const { region: _r, side: _s, type: _t, conditionId: _c, diagnosisSource: _d, findingId: _f, details: _dt, severity: _sv, onset: _o, onsetApprox: _oa, avoid: _a, note: _n, clientNote: _cn, ...base } = constraint;
   const next = applyInput({ ...base, ...(confirming ? { confirmedAt: ctx.now } : {}), updatedAt: ctx.now }, input);
-  const changes = changeText(constraint, next);
+  const changes = changeText(constraint, next, ctx.locale);
   if (!confirming && changes.length === 0) return record;
   const updated = replaceAt(record, list, index, next);
   checkLimits(constraintsOf(updated));
-  const text = confirming
-    ? `${regionText(next)} onaylandı${next.avoid.length > 0 ? ` · kaçın: ${avoidText(next.avoid)}` : ''}`
-    : `${regionText(next)}: ${changes.join(', ')}`;
-  return log(updated, ctx.now, 'pt', id, confirming ? 'confirmed' : 'edited', text);
+  const t = logText(ctx.locale);
+  const region = regionText(next, ctx.locale);
+  const line = confirming
+    ? t.confirmed(region, next.avoid.length > 0 ? t.avoidSuffix(avoidText(next.avoid, ctx.locale)) : '')
+    : t.edited(region, changes);
+  return log(updated, ctx.now, 'pt', id, confirming ? 'confirmed' : 'edited', line);
 }
 
 /**
  * "Olduğu gibi onayla": danışanın zorlayanları eşlenen kaçınmalara çevrilir (öncekilerle birleşir). Zorlayan
  * yoksa kısıt süzgeçsiz kaydedilir ("Kaydet (süzgeçsiz)"; danışan "Antrenörün gördü" okur).
  */
-export function confirmAsIs(record: HealthRecord, id: string, ctx: { now: string; baseUpdatedAt?: string | undefined }): HealthRecord {
+export function confirmAsIs(
+  record: HealthRecord,
+  id: string,
+  ctx: { now: string; baseUpdatedAt?: string | undefined; locale?: Locale },
+): HealthRecord {
   const { list, index, constraint } = findConstraint(record, id);
   checkBase(constraint, ctx.baseUpdatedAt);
-  if (!isPendingReport(constraint)) throw new ConstraintError('Bu bildirim zaten karara bağlanmış.', 409);
+  if (!isPendingReport(constraint)) throw failure((e) => e.decided, 409);
   const avoid = [...new Set([...constraint.avoid, ...avoidFromTriggers(constraint.triggers)])].sort(
     (a, b) => AVOID_TAG_IDS.indexOf(a) - AVOID_TAG_IDS.indexOf(b),
   );
   const next: Constraint = { ...constraint, avoid, confirmedAt: ctx.now, updatedAt: ctx.now };
   const updated = replaceAt(record, list, index, next);
   checkLimits(constraintsOf(updated));
-  const text = avoid.length > 0 ? `${regionText(next)} onaylandı · kaçın: ${avoidText(avoid)}` : `${regionText(next)} görüldü (süzgeçsiz)`;
-  return log(updated, ctx.now, 'pt', id, 'confirmed', text);
+  const t = logText(ctx.locale);
+  const region = regionText(next, ctx.locale);
+  const line = avoid.length > 0 ? t.confirmed(region, t.avoidSuffix(avoidText(avoid, ctx.locale))) : t.seenUnfiltered(region);
+  return log(updated, ctx.now, 'pt', id, 'confirmed', line);
 }
 
 /** "Kaydetmeden kapat": bildirim kısıt olmadan kapanır; danışan notu görür. */
 export function declineReport(
   record: HealthRecord,
   id: string,
-  ctx: { now: string; note?: string | undefined; baseUpdatedAt?: string | undefined },
+  ctx: { now: string; note?: string | undefined; baseUpdatedAt?: string | undefined; locale?: Locale },
 ): HealthRecord {
   const { list, index, constraint } = findConstraint(record, id);
   checkBase(constraint, ctx.baseUpdatedAt);
-  if (!isPendingReport(constraint)) throw new ConstraintError('Bu bildirim zaten karara bağlanmış.', 409);
+  if (!isPendingReport(constraint)) throw failure((e) => e.decided, 409);
   const note = ctx.note?.trim();
   const next: Constraint = { ...constraint, declined: { at: ctx.now, ...(note ? { note } : {}) }, updatedAt: ctx.now };
-  return log(replaceAt(record, list, index, next), ctx.now, 'pt', id, 'declined', `${regionText(next)} bildirimi kısıt olarak alınmadı`);
+  return log(replaceAt(record, list, index, next), ctx.now, 'pt', id, 'declined', logText(ctx.locale).declined(regionText(next, ctx.locale)));
 }
 
-export function resolveConstraint(record: HealthRecord, id: string, ctx: { now: string; baseUpdatedAt?: string | undefined }): HealthRecord {
+export function resolveConstraint(
+  record: HealthRecord,
+  id: string,
+  ctx: { now: string; baseUpdatedAt?: string | undefined; locale?: Locale },
+): HealthRecord {
   const { list, index, constraint } = findConstraint(record, id);
   checkBase(constraint, ctx.baseUpdatedAt);
   if (constraint.status === 'resolved') return record;
   const { clientChange: _change, ...rest } = constraint;
   const next: Constraint = { ...rest, status: 'resolved', resolvedAt: ctx.now, updatedAt: ctx.now };
-  return log(replaceAt(record, list, index, next), ctx.now, 'pt', id, 'resolved', `${regionText(next)} kapandı`);
+  return log(replaceAt(record, list, index, next), ctx.now, 'pt', id, 'resolved', logText(ctx.locale).resolved(regionText(next, ctx.locale)));
 }
 
-export function reopenConstraint(record: HealthRecord, id: string, ctx: { now: string; baseUpdatedAt?: string | undefined }): HealthRecord {
+export function reopenConstraint(
+  record: HealthRecord,
+  id: string,
+  ctx: { now: string; baseUpdatedAt?: string | undefined; locale?: Locale },
+): HealthRecord {
   const { list, index, constraint } = findConstraint(record, id);
   checkBase(constraint, ctx.baseUpdatedAt);
   if (constraint.status === 'active' && !constraint.declined) return record;
@@ -881,14 +875,14 @@ export function reopenConstraint(record: HealthRecord, id: string, ctx: { now: s
   const next: Constraint = { ...rest, status: 'active', ...(constraint.declined ? { confirmedAt: ctx.now } : {}), updatedAt: ctx.now };
   const updated = replaceAt(record, list, index, next);
   checkLimits(constraintsOf(updated));
-  return log(updated, ctx.now, 'pt', id, 'reopened', `${regionText(next)} yeniden açıldı`);
+  return log(updated, ctx.now, 'pt', id, 'reopened', logText(ctx.locale).reopened(regionText(next, ctx.locale)));
 }
 
 /** Danışanın güncellemesini gördü; `close` ile "düzeldi" diyen kısıtı kapatır. */
 export function ackClientChange(
   record: HealthRecord,
   id: string,
-  ctx: { now: string; close?: boolean | undefined; baseUpdatedAt?: string | undefined },
+  ctx: { now: string; close?: boolean | undefined; baseUpdatedAt?: string | undefined; locale?: Locale },
 ): HealthRecord {
   const { list, index, constraint } = findConstraint(record, id);
   checkBase(constraint, ctx.baseUpdatedAt);
@@ -896,7 +890,7 @@ export function ackClientChange(
   const { clientChange: _change, ...rest } = constraint;
   if (ctx.close) {
     const next: Constraint = { ...rest, status: 'resolved', resolvedAt: ctx.now, updatedAt: ctx.now };
-    return log(replaceAt(record, list, index, next), ctx.now, 'pt', id, 'resolved', `${regionText(next)} kapandı (danışan düzeldi dedi)`);
+    return log(replaceAt(record, list, index, next), ctx.now, 'pt', id, 'resolved', logText(ctx.locale).resolvedByClient(regionText(next, ctx.locale)));
   }
   const next: Constraint = { ...rest, updatedAt: ctx.now };
   return replaceAt(record, list, index, next);
@@ -906,24 +900,24 @@ export function ackClientChange(
 export function referConstraint(
   record: HealthRecord,
   id: string,
-  ctx: { now: string; date: string; baseUpdatedAt?: string | undefined },
+  ctx: { now: string; date: string; baseUpdatedAt?: string | undefined; locale?: Locale },
 ): HealthRecord {
   const { list, index, constraint } = findConstraint(record, id);
   checkBase(constraint, ctx.baseUpdatedAt);
-  if (!isRedFlag(constraint)) throw new ConstraintError('Yönlendirme yalnız kırmızı bayraklı tanıda kaydedilir.', 409);
+  if (!isRedFlag(constraint)) throw failure((e) => e.referRedFlagOnly, 409);
   const next: Constraint = { ...constraint, referredAt: ctx.date, updatedAt: ctx.now };
-  return log(replaceAt(record, list, index, next), ctx.now, 'pt', id, 'referred', `${regionText(next)}: sağlık profesyoneline yönlendirildi`);
+  return log(replaceAt(record, list, index, next), ctx.now, 'pt', id, 'referred', logText(ctx.locale).referred(regionText(next, ctx.locale)));
 }
 
 /** "Görüş alındı": tarih, dayanak, kısa kapsam. Kauda ekinada görüş yasağı kaldırmaz ama kaydedilir. */
 export function clearConstraint(
   record: HealthRecord,
   id: string,
-  ctx: { now: string; date: string; basis: ClearanceBasis; scope?: string | undefined; baseUpdatedAt?: string | undefined },
+  ctx: { now: string; date: string; basis: ClearanceBasis; scope?: string | undefined; baseUpdatedAt?: string | undefined; locale?: Locale },
 ): HealthRecord {
   const { list, index, constraint } = findConstraint(record, id);
   checkBase(constraint, ctx.baseUpdatedAt);
-  if (!isRedFlag(constraint)) throw new ConstraintError('Görüş yalnız kırmızı bayraklı tanıda kaydedilir.', 409);
+  if (!isRedFlag(constraint)) throw failure((e) => e.clearRedFlagOnly, 409);
   const scope = ctx.scope?.trim();
   const next: Constraint = {
     ...constraint,
@@ -931,52 +925,50 @@ export function clearConstraint(
     clearance: { at: ctx.date, basis: ctx.basis, ...(scope ? { scope } : {}) },
     updatedAt: ctx.now,
   };
-  return log(replaceAt(record, list, index, next), ctx.now, 'pt', id, 'cleared', `${regionText(next)}: görüş alındı (${CLEARANCE_BASIS_LABELS[ctx.basis].toLocaleLowerCase('tr')})`);
+  const t = text(ctx.locale ?? DEFAULT_LOCALE);
+  return log(replaceAt(record, list, index, next), ctx.now, 'pt', id, 'cleared', t.log.cleared(regionText(next, ctx.locale), t.clearanceBases[ctx.basis]));
 }
 
 /** Yanlış kaydı çıkarır; izinleri de. */
-export function removeConstraint(record: HealthRecord, id: string, ctx: { now: string; by?: Actor }): HealthRecord {
+export function removeConstraint(record: HealthRecord, id: string, ctx: { now: string; by?: Actor; locale?: Locale }): HealthRecord {
   const { constraint } = findConstraint(record, id);
   const next: HealthRecord = {
     ...record,
     constraints: constraintsOf(record).filter((item) => item.id !== id),
     overrides: overridesOf(record).filter((item) => item.source !== id),
   };
-  return log(next, ctx.now, ctx.by ?? 'pt', id, 'removed', `${regionText(constraint)} silindi`);
+  return log(next, ctx.now, ctx.by ?? 'pt', id, 'removed', logText(ctx.locale).removed(regionText(constraint, ctx.locale)));
 }
 
 /** Danışana özel izin ("Yine de ekle", "İzin ver"). */
 export function addOverride(
   record: HealthRecord,
   input: { exerciseId: string; source: string; note?: string | undefined },
-  ctx: { now: string; title: string },
+  ctx: { now: string; title: string; locale?: Locale },
 ): HealthRecord {
   const { constraint } = findConstraint(record, input.source);
-  if (!isActive(constraint)) throw new ConstraintError('İzin yalnız etkin kısıta verilir.', 409);
+  if (!isActive(constraint)) throw failure((e) => e.overrideInactive, 409);
   if (!overridable(constraint)) {
-    throw new ConstraintError(
-      isEmergency(constraint) ? 'Bu kısıtta izin verilemez.' : 'Sağlık profesyonelinin görüşü kaydedilene kadar izin verilemez.',
-      409,
-    );
+    throw failure((e) => (isEmergency(constraint) ? e.overrideEmergency : e.overrideAwaiting), 409);
   }
   const list = overridesOf(record).filter((item) => !(item.exerciseId === input.exerciseId && item.source === input.source));
   const note = input.note?.trim();
   const next = [...list, { exerciseId: input.exerciseId, source: input.source, at: ctx.now, ...(note ? { note } : {}) }];
-  if (next.length > CONSTRAINT_LIMITS.overrides) throw new ConstraintError(`En fazla ${CONSTRAINT_LIMITS.overrides} izin tutulur.`, 409);
-  return log({ ...record, overrides: next }, ctx.now, 'pt', input.source, 'override_added', `${regionText(constraint)}: izin verildi · ${ctx.title}`);
+  if (next.length > CONSTRAINT_LIMITS.overrides) throw failure((e) => e.tooManyOverrides(CONSTRAINT_LIMITS.overrides), 409);
+  return log({ ...record, overrides: next }, ctx.now, 'pt', input.source, 'override_added', logText(ctx.locale).overrideAdded(regionText(constraint, ctx.locale), ctx.title));
 }
 
 export function removeOverride(
   record: HealthRecord,
   input: { exerciseId: string; source: string },
-  ctx: { now: string; title: string },
+  ctx: { now: string; title: string; locale?: Locale },
 ): HealthRecord {
   const list = overridesOf(record);
   const kept = list.filter((item) => !(item.exerciseId === input.exerciseId && item.source === input.source));
-  if (kept.length === list.length) throw new ConstraintError('İzin bulunamadı; kaldırılmış olabilir.', 404);
+  if (kept.length === list.length) throw failure((e) => e.overrideNotFound, 404);
   const constraint = constraintsOf(record).find((item) => item.id === input.source);
-  const where = constraint ? regionText(constraint) : 'Kısıt';
-  return log({ ...record, overrides: kept }, ctx.now, 'pt', input.source, 'override_removed', `${where}: izin kaldırıldı · ${ctx.title}`);
+  const where = constraint ? regionText(constraint, ctx.locale) : text(ctx.locale ?? DEFAULT_LOCALE).fallbackName;
+  return log({ ...record, overrides: kept }, ctx.now, 'pt', input.source, 'override_removed', logText(ctx.locale).overrideRemoved(where, ctx.title));
 }
 
 /* --- danışanın eylemleri --- */
@@ -997,7 +989,7 @@ export function onsetFromChoice(choice: OnsetChoice | undefined, today: string):
 }
 
 function reportFields(input: ReportInput, today: string) {
-  if (isPaired(input.region) && !input.side) throw new ConstraintError('Hangi taraf olduğunu seç.', 400);
+  if (isPaired(input.region) && !input.side) throw failure((e) => e.reportSide, 400);
   const note = input.note?.trim();
   const triggers = [...new Set(input.triggers)].sort((a, b) => TRIGGERS.indexOf(a) - TRIGGERS.indexOf(b));
   return withoutEmpty({
@@ -1018,18 +1010,19 @@ export function reportConstraint(
   ctx: { id: string; now: string; today: string; /** Geçmiş cümlesinin dili; yoksa Türkçe. */ locale?: Locale },
 ): HealthRecord {
   const list = constraintsOf(record);
-  if (list.some((item) => item.id === ctx.id)) throw new ConstraintError('Kimlik çakıştı; yeniden dene.', 409);
-  if (list.filter(isPendingReport).length >= 5) throw new ConstraintError('Antrenörünün bakmadığı 5 bildirimin var; önce onları beklemelisin.', 409);
+  if (list.some((item) => item.id === ctx.id)) throw failure((e) => e.idConflict, 409);
+  if (list.filter(isPendingReport).length >= 5) throw failure((e) => e.tooManyReports(5), 409);
   const constraint = { id: ctx.id, ...reportFields(input, ctx.today), avoid: [], status: 'active', source: 'client', createdAt: ctx.now, updatedAt: ctx.now } as Constraint;
   const next = [...list, constraint];
   checkLimits(next);
-  const severity = constraint.severity ? ` (${SEVERITY_LABELS[constraint.severity].toLocaleLowerCase('tr')})` : '';
-  return log({ ...record, constraints: next }, ctx.now, 'client', ctx.id, 'reported', `${regionText(constraint)} bildirildi${severity}`);
+  const t = text(ctx.locale ?? DEFAULT_LOCALE);
+  const severity = constraint.severity ? t.severities[constraint.severity] : null;
+  return log({ ...record, constraints: next }, ctx.now, 'client', ctx.id, 'reported', t.log.reported(regionText(constraint, ctx.locale), severity));
 }
 
 function ownPending(record: HealthRecord, id: string) {
   const found = findConstraint(record, id);
-  if (!isPendingReport(found.constraint)) throw new ConstraintError('Antrenörün bu bildirime baktı; artık "Kötüleşti" ya da "Düzeldi" diyebilirsin.', 409);
+  if (!isPendingReport(found.constraint)) throw failure((e) => e.reviewed, 409);
   return found;
 }
 
@@ -1038,14 +1031,14 @@ export function editReport(record: HealthRecord, id: string, input: ReportInput,
   const { list, index, constraint } = ownPending(record, id);
   const { region: _r, side: _s, type: _t, severity: _sv, onset: _o, onsetApprox: _oa, triggers: _tr, reportNote: _rn, ...base } = constraint;
   const next = { ...base, ...reportFields(input, ctx.today), updatedAt: ctx.now } as Constraint;
-  return log(replaceAt(record, list, index, next), ctx.now, 'client', id, 'edited', `${regionText(next)} bildirimi düzeltildi`);
+  return log(replaceAt(record, list, index, next), ctx.now, 'client', id, 'edited', logText(ctx.locale).reportEdited(regionText(next, ctx.locale)));
 }
 
 /** Danışan bekleyen bildirimini geri çeker (kayıttan çıkar; satır kalır). */
 export function withdrawReport(record: HealthRecord, id: string, ctx: { now: string; locale?: Locale }): HealthRecord {
   const { constraint } = ownPending(record, id);
   const next: HealthRecord = { ...record, constraints: constraintsOf(record).filter((item) => item.id !== id) };
-  return log(next, ctx.now, 'client', id, 'withdrawn', `Bildirim geri çekildi: ${regionText(constraint)}`);
+  return log(next, ctx.now, 'client', id, 'withdrawn', logText(ctx.locale).withdrawn(regionText(constraint, ctx.locale)));
 }
 
 const SEVERITY_RANK: Record<Severity, number> = { mild: 1, moderate: 2, severe: 3 };
@@ -1056,9 +1049,9 @@ const SEVERITY_RANK: Record<Severity, number> = { mild: 1, moderate: 2, severe: 
  */
 export function reportWorse(record: HealthRecord, id: string, severity: Severity, ctx: { now: string; locale?: Locale }): HealthRecord {
   const { list, index, constraint } = findConstraint(record, id);
-  if (!isActive(constraint)) throw new ConstraintError('Bu kısıt artık etkin değil.', 409);
+  if (!isActive(constraint)) throw failure((e) => e.inactive, 409);
   const before = constraint.severity;
-  if (before && SEVERITY_RANK[severity] <= SEVERITY_RANK[before]) throw new ConstraintError('Şiddet şimdikinden yüksek olmalı.', 400);
+  if (before && SEVERITY_RANK[severity] <= SEVERITY_RANK[before]) throw failure((e) => e.severityNotHigher, 400);
   const pending = constraint.clientChange && !constraint.clientChange.resolved ? constraint.clientChange : null;
   const origin = pending ? pending.previousSeverity : before;
   const next: Constraint = {
@@ -1067,8 +1060,9 @@ export function reportWorse(record: HealthRecord, id: string, severity: Severity
     clientChange: { at: ctx.now, severity, ...(origin ? { previousSeverity: origin } : {}) },
     updatedAt: ctx.now,
   };
-  const from = before ? `${SEVERITY_LABELS[before].toLocaleLowerCase('tr')} → ` : '';
-  return log(replaceAt(record, list, index, next), ctx.now, 'client', id, 'worsened', `${regionText(next)}: ${from}${SEVERITY_LABELS[severity].toLocaleLowerCase('tr')} (danışan)`);
+  const t = text(ctx.locale ?? DEFAULT_LOCALE);
+  const line = t.log.worsened(regionText(next, ctx.locale), before ? t.severities[before] : null, t.severities[severity]);
+  return log(replaceAt(record, list, index, next), ctx.now, 'client', id, 'worsened', line);
 }
 
 /**
@@ -1077,11 +1071,11 @@ export function reportWorse(record: HealthRecord, id: string, severity: Severity
  */
 export function reportBetter(record: HealthRecord, id: string, ctx: { now: string; locale?: Locale }): HealthRecord {
   const { list, index, constraint } = findConstraint(record, id);
-  if (!isActive(constraint)) throw new ConstraintError('Bu kısıt artık etkin değil.', 409);
+  if (!isActive(constraint)) throw failure((e) => e.inactive, 409);
   const worse = constraint.clientChange?.severity ? constraint.clientChange : null;
   const carried = worse ? { severity: worse.severity, ...(worse.previousSeverity ? { previousSeverity: worse.previousSeverity } : {}) } : {};
   const next: Constraint = { ...constraint, clientChange: { at: ctx.now, resolved: true, ...carried }, updatedAt: ctx.now };
-  return log(replaceAt(record, list, index, next), ctx.now, 'client', id, 'improved', `${regionText(next)}: düzeldi dedi (danışan)`);
+  return log(replaceAt(record, list, index, next), ctx.now, 'client', id, 'improved', logText(ctx.locale).improved(regionText(next, ctx.locale)));
 }
 
 /* --- danışanın görünümü --- */
@@ -1114,7 +1108,7 @@ export type ClientConstraintView = {
  * Danışanın Sağlık sayfasındaki kısıtları (§5.2): bölge · taraf · tür · şiddet · antrenörün notu; tanı adı yalnız
  * hekim kaynaklı ve niteleyicisiz; gözlem ve PT'nin notu hiç yok.
  */
-export function clientConstraintView(constraint: Constraint, _locale: Locale = DEFAULT_LOCALE): ClientConstraintView {
+export function clientConstraintView(constraint: Constraint, locale: Locale = DEFAULT_LOCALE): ClientConstraintView {
   const state: ClientConstraintState = constraint.declined
     ? 'declined'
     : constraint.status === 'resolved'
@@ -1129,11 +1123,11 @@ export function clientConstraintView(constraint: Constraint, _locale: Locale = D
     id: constraint.id,
     region: constraint.region,
     side: constraint.side,
-    title: regionText(constraint),
-    type: TYPE_LABELS[constraint.type],
+    title: regionText(constraint, locale),
+    type: text(locale).types[constraint.type],
     typeId: constraint.type,
     severity: constraint.severity,
-    diagnosis: clientDiagnosis(constraint),
+    diagnosis: clientDiagnosis(constraint, locale),
     clientNote: constraint.clientNote,
     reportNote: state === 'pending' ? constraint.reportNote : undefined,
     state,
@@ -1148,22 +1142,17 @@ export function clientConstraintView(constraint: Constraint, _locale: Locale = D
  * Bildirimden sonraki metin (§2.4): şiddetli ya da bu hafta başlayan yeni sakatlıkta bölgeyi zorlayan hareketleri
  * yapmaması ve gerekirse görünmesi söylenir; öteki durumlarda dikkatli olması.
  */
-export function afterReportText(input: Pick<ReportInput, 'severity' | 'type' | 'since'>, _locale: Locale = DEFAULT_LOCALE): string {
+export function afterReportText(input: Pick<ReportInput, 'severity' | 'type' | 'since'>, locale: Locale = DEFAULT_LOCALE): string {
   const serious = input.severity === 'severe' || (input.type === 'injury' && input.since === 'week');
-  return serious
-    ? "Antrenörüne iletildi. Antrenörün bakana kadar bu bölgeyi zorlayan hareketleri yapma; ağrı günlük hayatını etkiliyorsa bir sağlık profesyoneline görün."
-    : 'Antrenörüne iletildi. Antrenörün bakana kadar zorlayan hareketlerde dikkatli ol; ağrı yaparsa antrenmanda ⋯ menüsünden hareketi atla ya da muadil seç.';
+  const t = text(locale).afterReport;
+  return serious ? t.serious : t.other;
 }
 
 /** Bildirim sheet'inin iki kademeli güvenlik metni (§2.4; Finucane 2020, Stiell 1992, Stiell 1995; seçim [sentez]). */
-export const REPORT_SAFETY = {
-  urgent: 'İdrar ya da dışkılamada yeni değişiklik, kasıkta uyuşma ya da yeni güç kaybı varsa beklemeden acil servise başvur.',
-  other:
-    'Geceleri uyandıran ağrı, düşme ya da darbeden sonra üstüne basamama, hızla şişen ya da kilitlenen eklem varsa antrenmandan önce bir sağlık profesyoneline görün.',
-} as const;
+export const REPORT_SAFETY: { readonly urgent: string; readonly other: string } = text('tr').reportSafety;
 
 /** Kauda ekina seçilince ve Dikkat maddesinde (yoklamanın "Bugün yük yok" diliyle aynı). */
-export const EMERGENCY_TEXT = 'Acil: danışanı bugün acil servise yönlendir.';
+export const EMERGENCY_TEXT: string = text('tr').emergency;
 
 /* --- PT'nin kartları için özet --- */
 
@@ -1193,36 +1182,66 @@ export function redFlagStep(constraint: Constraint): 'refer' | 'opinion' | 'clea
   return constraint.referredAt ? 'opinion' : 'refer';
 }
 
-/* --- dil: imza dondurma (i18n planı §7 F). Sahibi görev çevirir; şimdilik Türkçe döner. --- */
+/* --- dil: adlar okuyanın dilinde (Türkçe takma adlar yukarıda) --- */
 
-export function regionLabels(_locale: Locale = DEFAULT_LOCALE): Record<ConstraintRegion, string> {
-  return REGION_LABELS;
+export function regionLabels(locale: Locale = DEFAULT_LOCALE): Record<ConstraintRegion, string> {
+  return text(locale).regions;
 }
 
-export function typeClientLabels(_locale: Locale = DEFAULT_LOCALE): Record<ConstraintType, string> {
-  return TYPE_CLIENT_LABELS;
+export function constraintSideLabels(locale: Locale = DEFAULT_LOCALE): Record<ConstraintSide, string> {
+  return text(locale).sides;
 }
 
-export function severityLabels(_locale: Locale = DEFAULT_LOCALE): Record<Severity, string> {
-  return SEVERITY_LABELS;
+export function typeLabels(locale: Locale = DEFAULT_LOCALE): Record<ConstraintType, string> {
+  return text(locale).types;
 }
 
-export function severityDescriptions(_locale: Locale = DEFAULT_LOCALE): Record<Severity, string> {
-  return SEVERITY_DESCRIPTIONS;
+export function typeClientLabels(locale: Locale = DEFAULT_LOCALE): Record<ConstraintType, string> {
+  return text(locale).typeClient;
 }
 
-export function triggerLabels(_locale: Locale = DEFAULT_LOCALE): Record<Trigger, string> {
-  return TRIGGER_LABELS;
+export function severityLabels(locale: Locale = DEFAULT_LOCALE): Record<Severity, string> {
+  return text(locale).severities;
 }
 
-export function onsetChoiceLabels(_locale: Locale = DEFAULT_LOCALE): Record<OnsetChoice, string> {
-  return ONSET_CHOICE_LABELS;
+export function severityDescriptions(locale: Locale = DEFAULT_LOCALE): Record<Severity, string> {
+  return text(locale).severityDescriptions;
 }
 
-export function reportSafety(_locale: Locale = DEFAULT_LOCALE): typeof REPORT_SAFETY {
-  return REPORT_SAFETY;
+export function diagnosisSourceLabels(locale: Locale = DEFAULT_LOCALE): Record<DiagnosisSource, string> {
+  return text(locale).diagnosisSources;
 }
 
-export function emergencyText(_locale: Locale = DEFAULT_LOCALE): string {
-  return EMERGENCY_TEXT;
+export function clearanceBasisLabels(locale: Locale = DEFAULT_LOCALE): Record<ClearanceBasis, string> {
+  return text(locale).clearanceBases;
+}
+
+export function graftLabels(locale: Locale = DEFAULT_LOCALE): Record<Graft, string> {
+  return text(locale).grafts;
+}
+
+/** Tendinopati evreleri ("1 · izometrik"). */
+export function tendinopathyStageLabels(locale: Locale = DEFAULT_LOCALE): Record<Stage, string> {
+  return text(locale).stages;
+}
+
+export function triggerLabels(locale: Locale = DEFAULT_LOCALE): Record<Trigger, string> {
+  return text(locale).triggers;
+}
+
+export function onsetChoiceLabels(locale: Locale = DEFAULT_LOCALE): Record<OnsetChoice, string> {
+  return text(locale).onsetChoices;
+}
+
+/** Kaçınılacak hareketlerin adları ("Derin diz bükme (90° üstü)"). */
+export function avoidLabels(locale: Locale = DEFAULT_LOCALE): Record<AvoidTagId, string> {
+  return text(locale).avoid;
+}
+
+export function reportSafety(locale: Locale = DEFAULT_LOCALE): typeof REPORT_SAFETY {
+  return text(locale).reportSafety;
+}
+
+export function emergencyText(locale: Locale = DEFAULT_LOCALE): string {
+  return text(locale).emergency;
 }

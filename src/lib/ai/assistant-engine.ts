@@ -1,27 +1,45 @@
 import * as v from 'valibot';
+import { DEFAULT_LOCALE, type Locale } from '../../i18n/locale.ts';
+import { coachMessages } from '../../i18n/messages/coach/index.ts';
 import { eligibleExercises, type CoachContext } from './coach-engine.ts';
-import { GOAL_LABELS, type AssistantSelection } from './assistant-contract.ts';
-import { MUSCLE_LABELS } from '../schemas/exercise.ts';
+import { type AssistantSelection } from './assistant-contract.ts';
+import { muscleLabels } from '../schemas/exercise.ts';
 import { defaultSets, DEFAULT_REST_SECONDS } from '../template-plan.ts';
 import { hasAssignments, phaseWeekdays } from '../day-assignments.ts';
 import { nextDayName, type ProgramBody } from '../program-plan.ts';
 import { programFormSchema } from '../schemas/program.ts';
 
 /**
+ * Taslağın gerekçesi (taslakla birlikte saklanır): seçimden ve türden saf olarak üretilir, böylece taslağı kaydeden dil
+ * değiştirmiş olsa bile gerekçe baştan sona kaydedenin dilinde yeniden yazılabilir (karışık dil kalmaz).
+ */
+export function assistantRationale(selection: AssistantSelection, kind: 'workout' | 'program', locale: Locale = DEFAULT_LOCALE): string[] {
+  const t = coachMessages(locale);
+  const days = kind === 'workout' ? Math.min(1, selection.conditions.weekdays.length) : selection.conditions.weekdays.length;
+  return [
+    ...t.assistant.rationale(t.goals[selection.goal], days, selection.conditions.minutes),
+    ...(selection.goal === 'weight_management' ? [t.assistant.weightNote] : []),
+    ...(selection.goal === 'mobility' ? [t.assistant.mobilityNote] : []),
+  ];
+}
+
+/**
  * The provider interprets intent; the application owns catalog selection and numerical targets. `audience`: who asked
  * (errors tell the PT to extend the library, the client to ask the PT). Required: a new caller must not silently get
- * the client's copy.
+ * the client's copy. `locale`: the requester's language; the draft's phase name, rationale and attention notes are stored
+ * with the draft, so they are written in it.
  */
-export function assistantProgram(context: CoachContext, selection: AssistantSelection, kind: 'workout' | 'program', id: (prefix: string) => string, audience: 'pt' | 'client') {
-  if (context.global) return { error: 'Program için bir danışanın sayfasını aç.' };
-  if (context.healthUnavailable) return { error: 'İzinli kısıt kayıtları okunamadı. Kayıtlar okunmadan program hazırlanmıyor.' };
+export function assistantProgram(context: CoachContext, selection: AssistantSelection, kind: 'workout' | 'program', id: (prefix: string) => string, audience: 'pt' | 'client', locale: Locale = DEFAULT_LOCALE) {
+  const t = coachMessages(locale);
+  if (context.global) return { error: t.assistant.openClientPage };
+  if (context.healthUnavailable) return { error: t.assistant.healthUnavailable };
   const eligible = eligibleExercises(context, selection.conditions);
   const moves = eligible.filter(e => selection.goal === 'mobility' ? ['warmup', 'cooldown'].includes(e.category) : !['warmup', 'cooldown'].includes(e.category));
   const wanted = new Set<string>(selection.muscles);
   const pool = selection.fullBody ? moves : moves.filter(e => e.primaryMuscles.some(m => wanted.has(m)));
   if (!pool.length) {
-    if (selection.goal === 'mobility') return { error: audience === 'pt' ? 'Bu koşullarda uygun ısınma/soğuma hareketi yok. Hareketlilik için kütüphaneye uygun ısınma/soğuma hareketleri ekle.' : 'Bu koşullarda uygun ısınma/soğuma hareketi yok. Hareketlilik için PT uygun hareketleri kütüphaneye eklemeli.' };
-    return { error: audience === 'pt' ? 'Seçilen kaslar, ekipman ve kısıtlar için uygun katalog hareketi yok. Seçimleri değiştir ya da kütüphaneye uygun hareket ekle.' : 'Seçtiğin kaslar, ekipman ve kısıtlar için uygun katalog hareketi yok. Seçimleri değiştir veya PT’den alternatif iste.' };
+    if (selection.goal === 'mobility') return { error: t.assistant.noMobility[audience] };
+    return { error: t.assistant.noMoves[audience] };
   }
   const practiced = new Set(context.existingExerciseIds);
   const ordered = [...pool].sort((a, b) => Number(practiced.has(b.id)) - Number(practiced.has(a.id)) || a.id.localeCompare(b.id));
@@ -36,7 +54,7 @@ export function assistantProgram(context: CoachContext, selection: AssistantSele
   // atanmış gün sayısı). Program düzeyindeki `weekdays` eski gövdeyi bekleyen okuyucularla uyum için kalır.
   const body = {
     phased: false, currentPhaseId: phaseId, weekdays: days,
-    phases: [{ id: phaseId, name: GOAL_LABELS[selection.goal], days: days.map((weekday) => {
+    phases: [{ id: phaseId, name: t.goals[selection.goal], days: days.map((weekday) => {
       const selected: typeof pool = [], patterns = new Set<string>();
       // Cover primary regions first; across days prefer movements not selected yet, then practiced ones.
       const candidates = [...ordered].sort((a, b) => Number(used.has(a.id)) - Number(used.has(b.id)));
@@ -49,25 +67,20 @@ export function assistantProgram(context: CoachContext, selection: AssistantSele
         const next = remaining[0]; if (!next) break;
         selected.push(next); used.add(next.id); patterns.add(next.pattern ?? next.primaryMuscles[0] ?? next.id); next.primaryMuscles.forEach(m => chosenMuscles.add(m));
       }
-      const name = nextDayName(named);
+      const name = nextDayName(named, locale);
       named.push({ name });
       return { id: id('d'), name, weekdays: [weekday], blocks: selected.map(e => ({ id: id('b'), kind: 'single' as const, restSeconds: DEFAULT_REST_SECONDS[e.category], rows: [{ id: id('r'), exerciseId: e.id, sets: defaultSets(e, e.category === 'warmup' || e.category === 'cooldown' ? 1 : 2) }] })) };
     }) }],
   };
   const parsed = v.safeParse(programFormSchema, body);
-  if (!parsed.success) return { error: 'Taslak program kurallarını karşılamadı. Mevcut program değişmedi.' };
-  const attention = assistantAttention(context, selection, parsed.output);
-  return { body: parsed.output, attention, rationale: [
-    `${GOAL_LABELS[selection.goal]} hedefi; ${days.length} gün, seans başına ${selection.conditions.minutes} dakikalık planlama bütçesi. Gerçek süre dinlenmeye ve tempoya bağlıdır.`,
-    'Ekipman ve izinli kısıtlara uygun hareketler; hareket geçmişi ve farklı örüntüler esas alındı.',
-    'İki set başlangıç taslağı; yükler seanstaki mevcut öneri motorundan gelir. Oluşturucuda setleri ve bileşik blokları düzenleyebilirsin.',
-    ...(selection.goal === 'weight_management' ? ['Egzersiz kilo değişimini garanti etmez; program bir kalori telafisi veya görünüş puanı değildir.'] : []),
-    ...(selection.goal === 'mobility' ? ['Bu bir katalogdaki ısınma/soğuma taslağıdır; tanı veya düzeltici tedavi programı değildir.'] : []),
-  ] };
+  if (!parsed.success) return { error: t.assistant.rulesUnmet };
+  const attention = assistantAttention(context, selection, parsed.output, locale);
+  return { body: parsed.output, attention, rationale: assistantRationale(selection, kind, locale) };
 }
 
 /** Attention is derived again from the body actually saved, including user edits. */
-export function assistantAttention(context: CoachContext, selection: AssistantSelection, body: ProgramBody): string[] {
+export function assistantAttention(context: CoachContext, selection: AssistantSelection, body: ProgramBody, locale: Locale = DEFAULT_LOCALE): string[] {
+  const t = coachMessages(locale).assistant.attention;
   const ids = new Set(body.phases.flatMap(p => p.days.flatMap(d => d.blocks.flatMap(b => b.rows.map(r => r.exerciseId)))));
   const covered = new Set(context.exercises.filter(e => ids.has(e.id)).flatMap(e => e.primaryMuscles));
   const missing = selection.muscles.filter(m => !covered.has(m));
@@ -77,9 +90,9 @@ export function assistantAttention(context: CoachContext, selection: AssistantSe
   const days = hasAssignments(current) ? phaseWeekdays(current) : (body.weekdays ?? []);
   const short = body.phases.some(p => p.days.some(d => d.blocks.flatMap(b => b.rows).length < 4));
   return [
-    ...(!context.existingExerciseIds.length ? ['Önceki hareket geçmişi yok; başlangıç yükünü ve tekniği birlikte belirleyin.'] : []),
-    ...(missing.length ? [`Seçilen kaslardan programda karşılanamayanlar: ${missing.map(m => MUSCLE_LABELS[m]).join(', ')}.`] : []),
-    ...(days.some(d => days.includes(d % 7 + 1)) ? ['Ardışık antrenman günleri var; ortak kasların yükünü ve toparlanmayı gözden geçirin.'] : []),
-    ...(selection.fullBody && short ? ['Bazı programlarda tüm beden kapsamı sınırlı; programları ve hareketleri düzenleyicide kontrol et.'] : []),
+    ...(!context.existingExerciseIds.length ? [t.noHistory] : []),
+    ...(missing.length ? [t.missingMuscles(missing.map(m => muscleLabels(locale)[m]))] : []),
+    ...(days.some(d => days.includes(d % 7 + 1)) ? [t.consecutive] : []),
+    ...(selection.fullBody && short ? [t.limitedCoverage] : []),
   ];
 }

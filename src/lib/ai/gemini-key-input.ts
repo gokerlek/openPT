@@ -1,25 +1,22 @@
 import * as v from 'valibot';
+import { DEFAULT_LOCALE, type Locale } from '../../i18n/locale.ts';
+import { coachMessages } from '../../i18n/messages/coach/index.ts';
+import { langConfig, msg } from '../../i18n/valibot.ts';
 
-/** Client/server validation without importing encryption or exposing the supplied value in errors. */
-export const GEMINI_KEY_ERRORS = {
-  incomplete: 'Girilen değer çok kısa. Google AI Studio’dan API anahtarının tamamını kopyala; anahtar adını değil.',
-  long: 'Girilen değer API anahtarı için çok uzun. Yalnız anahtarın kendisini yapıştır.',
-  masked: 'Bu kısaltılmış veya gizlenmiş bir anahtar. Google AI Studio’daki kopyalama düğmesiyle tam anahtarı al.',
-  spaces: 'Anahtarın içinde boşluk veya satır sonu var. Google AI Studio’daki kopyalama düğmesiyle tam anahtarı al.',
-  characters: 'Girilen değer API anahtarı biçiminde değil. Yalnız anahtarı yapıştır; adres, kod veya anahtar adı kullanma.',
-};
+/** Client/server validation without importing encryption or exposing the supplied value in errors. Türkçe metinler (eski çağrılar); mesajlar `msg` ile okuyanın dilinde. */
+export const GEMINI_KEY_ERRORS = coachMessages(DEFAULT_LOCALE).keyErrors;
 export const geminiKeySchema = v.pipe(
   v.string(), v.trim(),
-  v.check(value => !/[•●*…]|\.{2,}/.test(value), GEMINI_KEY_ERRORS.masked),
-  v.minLength(20, GEMINI_KEY_ERRORS.incomplete),
-  v.maxLength(200, GEMINI_KEY_ERRORS.long),
-  v.check(value => !/\s/.test(value), GEMINI_KEY_ERRORS.spaces),
+  v.check(value => !/[•●*…]|\.{2,}/.test(value), msg(l => coachMessages(l).keyErrors.masked)),
+  v.minLength(20, msg(l => coachMessages(l).keyErrors.incomplete)),
+  v.maxLength(200, msg(l => coachMessages(l).keyErrors.long)),
+  v.check(value => !/\s/.test(value), msg(l => coachMessages(l).keyErrors.spaces)),
   // Google AI Studio issues authorization keys with an AQ. prefix as well as standard keys.
-  v.regex(/^[A-Za-z0-9_.-]+$/, GEMINI_KEY_ERRORS.characters),
+  v.regex(/^[A-Za-z0-9_.-]+$/, msg(l => coachMessages(l).keyErrors.characters)),
 );
-export function geminiKeyError(input: unknown): string {
-  const parsed = v.safeParse(geminiKeySchema, input);
+export function geminiKeyError(input: unknown, locale: Locale = DEFAULT_LOCALE): string {
+  const parsed = v.safeParse(geminiKeySchema, input, langConfig(locale));
   if (parsed.success) return '';
-  return parsed.issues.map(issue => issue.message).find(message => Object.values(GEMINI_KEY_ERRORS).some(known => known === message))
-    ?? 'Gemini API anahtarını kontrol et.';
+  const known: string[] = Object.values(coachMessages(locale).keyErrors);
+  return parsed.issues.map(issue => issue.message).find(message => known.includes(message)) ?? coachMessages(locale).keyErrors.fallback;
 }

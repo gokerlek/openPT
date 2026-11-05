@@ -1,5 +1,6 @@
-import type { Locale } from '../i18n/locale.ts';
-import { formatNumber } from './format.ts';
+import { DEFAULT_LOCALE, type Locale } from '../i18n/locale.ts';
+import { healthMessages } from '../i18n/messages/health/index.ts';
+import { getFormat } from './format.ts';
 import { deloadWeight, LIGHTEN_FACTOR, type LoadSpec, type Plan, type Suggestion } from './progression.ts';
 
 /**
@@ -30,25 +31,29 @@ export type Irritability = (typeof IRRITABILITY_LEVELS)[number];
 export const RED_FLAG_CHECKS = ['none', 'new_neuro_deficit', 'bladder_bowel_change', 'night_pain', 'new_trauma'] as const;
 export type RedFlagCheck = (typeof RED_FLAG_CHECKS)[number];
 
-export const SYMPTOM_DIRECTION_LABELS: Record<SymptomDirection, string> = {
-  centralizing: 'Merkeze çekiliyor',
-  stable: 'Değişmedi',
-  peripheralizing: 'Aşağı yayılıyor',
-};
+/** Yoklamanın metinleri okuyanın dilinde. */
+function text(locale: Locale) {
+  return healthMessages(locale).checkIn;
+}
 
-export const IRRITABILITY_LABELS: Record<Irritability, string> = {
-  low: 'Düşük (ara ara, kolay tetiklenmiyor)',
-  moderate: 'Orta',
-  high: 'Yüksek (sürekli, kolay tetikleniyor)',
-};
+/** Türkçe adlar (eski çağrılar); arayüz `symptomDirectionLabels(locale)` vb. kullanır. */
+export const SYMPTOM_DIRECTION_LABELS: Record<SymptomDirection, string> = text('tr').symptomDirections;
 
-export const RED_FLAG_LABELS: Record<RedFlagCheck, string> = {
-  none: 'Yok',
-  new_neuro_deficit: 'Yeni uyuşma / güç kaybı',
-  bladder_bowel_change: 'İdrar ya da dışkılama değişikliği',
-  night_pain: 'Geceleri uyandıran ağrı',
-  new_trauma: 'Yeni düşme ya da darbe',
-};
+export const IRRITABILITY_LABELS: Record<Irritability, string> = text('tr').irritability;
+
+export const RED_FLAG_LABELS: Record<RedFlagCheck, string> = text('tr').redFlags;
+
+export function symptomDirectionLabels(locale: Locale = DEFAULT_LOCALE): Record<SymptomDirection, string> {
+  return text(locale).symptomDirections;
+}
+
+export function irritabilityLabels(locale: Locale = DEFAULT_LOCALE): Record<Irritability, string> {
+  return text(locale).irritability;
+}
+
+export function redFlagLabels(locale: Locale = DEFAULT_LOCALE): Record<RedFlagCheck, string> {
+  return text(locale).redFlags;
+}
 
 /**
  * Seans yoklaması. Ağrı alanları sağlık verisidir (onaylı `health.json`); RPE ve süre
@@ -85,10 +90,11 @@ export type ToleranceMode = (typeof TOLERANCE_MODES)[number];
 
 export const PAIN_CEILING: Record<ToleranceMode, number> = { pain_free: 3, pain_monitoring: 5 };
 
-export const TOLERANCE_MODE_LABELS: Record<ToleranceMode, string> = {
-  pain_free: 'Ağrısız (en fazla 3/10)',
-  pain_monitoring: 'Ağrı izleme (en fazla 5/10, tendinopati)',
-};
+export const TOLERANCE_MODE_LABELS: Record<ToleranceMode, string> = text('tr').toleranceModes;
+
+export function toleranceModeLabels(locale: Locale = DEFAULT_LOCALE): Record<ToleranceMode, string> {
+  return text(locale).toleranceModes;
+}
 
 /** Ağrıda en küçük anlamlı değişim (NPRS): altındaki fark gürültüdür. */
 export const PAIN_MCID = 2;
@@ -133,6 +139,7 @@ export function assessTolerance({
   current,
   history = [],
   mode = 'pain_free',
+  locale = DEFAULT_LOCALE,
 }: {
   current: CheckIn;
   history?: readonly CheckIn[];
@@ -141,26 +148,27 @@ export function assessTolerance({
   locale?: Locale;
 }): ToleranceResult {
   const reasons: ToleranceReason[] = [];
+  const t = text(locale);
 
   if (current.redFlag && current.redFlag !== 'none') {
     reasons.push({
       code: 'red_flag',
       action: 'stop',
-      message: `Yeni kırmızı bayrak (${RED_FLAG_LABELS[current.redFlag].toLocaleLowerCase('tr')}): tıbbi değerlendirme olmadan yük verilmez.`,
+      message: t.reasons.redFlag(t.redFlags[current.redFlag]),
     });
   }
   if (current.symptomDirection === 'peripheralizing') {
     reasons.push({
       code: 'peripheralizing',
       action: 'stop',
-      message: 'Semptom aşağı yayılıyor: yükleme durur, önce merkezileşme sağlanır.',
+      message: t.reasons.peripheralizing,
     });
   }
   if (current.returnedToBaseline === false) {
     reasons.push({
       code: 'not_back_to_baseline',
       action: 'reduce',
-      message: 'Önceki seansın ağrısı ertesi sabah başlangıç düzeyine dönmedi: yük %15 azaltılır.',
+      message: t.reasons.notBackToBaseline,
     });
   }
   const ceiling = PAIN_CEILING[mode];
@@ -168,7 +176,7 @@ export function assessTolerance({
     reasons.push({
       code: 'peak_over_ceiling',
       action: 'reduce',
-      message: `Seans içi ağrı ${current.painPeak}/10, tavan ${ceiling}/10: yük azaltılır.`,
+      message: t.reasons.peakOverCeiling(current.painPeak, ceiling),
     });
   }
 
@@ -188,7 +196,7 @@ export function assessTolerance({
     reasons.push({
       code: 'pain_rising_weekly',
       action: 'hold',
-      message: `Ağrı haftadan haftaya arttı (${formatNumber(Math.round(lastWeek * 10) / 10)} → ${formatNumber(Math.round(thisWeek * 10) / 10)}): artırma yok.`,
+      message: t.reasons.painRisingWeekly(getFormat(locale).number(Math.round(lastWeek * 10) / 10), getFormat(locale).number(Math.round(thisWeek * 10) / 10)),
     });
   }
 
@@ -196,7 +204,7 @@ export function assessTolerance({
     reasons.push({
       code: 'high_irritability',
       action: 'hold',
-      message: 'İrritabilite yüksek: yükü artırma; izometrik ve ağrısız aralıkta çalış.',
+      message: t.reasons.highIrritability,
     });
   }
 

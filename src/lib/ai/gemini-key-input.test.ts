@@ -28,3 +28,26 @@ test('errors never include supplied credentials, even with unexpected input type
     assert.ok(!geminiKeyError(input).includes(key));
   }
 });
+
+/** Türkçe metinler dil desteğinden önceki koddan (openpt 98f852e) harfi harfine; sözlük sabitlerine karşı değil, düz metne karşı. */
+const GOLDEN = {
+  incomplete: 'Girilen değer çok kısa. Google AI Studio’dan API anahtarının tamamını kopyala; anahtar adını değil.',
+  long: 'Girilen değer API anahtarı için çok uzun. Yalnız anahtarın kendisini yapıştır.',
+  masked: 'Bu kısaltılmış veya gizlenmiş bir anahtar. Google AI Studio’daki kopyalama düğmesiyle tam anahtarı al.',
+  spaces: 'Anahtarın içinde boşluk veya satır sonu var. Google AI Studio’daki kopyalama düğmesiyle tam anahtarı al.',
+  characters: 'Girilen değer API anahtarı biçiminde değil. Yalnız anahtarı yapıştır; adres, kod veya anahtar adı kullanma.',
+};
+test('Türkçe anahtar hata metinleri harfi harfine eski metinler', () => {
+  assert.deepEqual({ ...GEMINI_KEY_ERRORS }, { ...GOLDEN, fallback: 'Gemini API anahtarını kontrol et.' });
+  assert.equal(geminiKeyError('test@short'), GOLDEN.incomplete);
+  assert.equal(geminiKeyError('AIza…1234'), GOLDEN.masked);
+  assert.equal(geminiKeyError(key.slice(0, 10) + '\n' + key.slice(10)), GOLDEN.spaces);
+  assert.equal(geminiKeyError(key + '@'), GOLDEN.characters);
+  assert.equal(geminiKeyError('x'.repeat(201)), GOLDEN.long);
+  assert.equal(geminiKeyError(null), 'Gemini API anahtarını kontrol et.');
+  assert.equal(geminiKeyError(123), 'Gemini API anahtarını kontrol et.');
+});
+test('geçerli anahtarda hata yok, her dilde', () => {
+  assert.equal(geminiKeyError(key, 'tr'), '');
+  assert.equal(geminiKeyError(key, 'en'), '');
+});

@@ -1,4 +1,5 @@
 import { DEFAULT_LOCALE, type Locale } from '../i18n/locale.ts';
+import { measurementsMessages } from '../i18n/messages/measurements/index.ts';
 
 /**
  * Periyodik ölçümler — PT'nin danışan başına tuttuğu ikinci katman.
@@ -27,63 +28,52 @@ export type MeasurementDef = {
   note?: string;
 };
 
-export const MEASUREMENTS = {
+/** Ölçümlerin metin dışı kuralları (birim, grup, öncelik, taraf); ad, sıklık ve not sözlükte. */
+const MEASUREMENT_RULES = {
   // --- Antropometri (ISAK Seviye 1'in çevre ölçümleri) ---
-  body_mass: { label: 'Vücut ağırlığı', unit: 'kg', group: 'anthropometry', tier: 'recommended', frequency: 'Ayda bir, sabah aç karnına' },
-  stature: { label: 'Boy', unit: 'cm', group: 'anthropometry', tier: 'recommended', frequency: 'İlk görüşmede' },
-  waist_girth: { label: 'Bel çevresi', unit: 'cm', group: 'anthropometry', tier: 'recommended', frequency: 'Ayda bir', note: 'En dar yer; normal soluk verişin sonunda.' },
-  hip_girth: { label: 'Kalça çevresi', unit: 'cm', group: 'anthropometry', tier: 'recommended', frequency: 'Ayda bir', note: 'Kalçanın en geniş yeri.' },
-  arm_relaxed_girth: { label: 'Kol çevresi (gevşek)', unit: 'cm', group: 'anthropometry', tier: 'optional', frequency: 'Ayda bir', sided: true },
-  arm_flexed_girth: { label: 'Kol çevresi (kasılı)', unit: 'cm', group: 'anthropometry', tier: 'optional', frequency: 'Ayda bir', sided: true },
-  mid_thigh_girth: { label: 'Uyluk çevresi (orta)', unit: 'cm', group: 'anthropometry', tier: 'optional', frequency: 'Ayda bir', sided: true },
-  calf_girth: { label: 'Baldır çevresi', unit: 'cm', group: 'anthropometry', tier: 'optional', frequency: 'Ayda bir', sided: true },
+  body_mass: { unit: 'kg', group: 'anthropometry', tier: 'recommended' },
+  stature: { unit: 'cm', group: 'anthropometry', tier: 'recommended' },
+  waist_girth: { unit: 'cm', group: 'anthropometry', tier: 'recommended' },
+  hip_girth: { unit: 'cm', group: 'anthropometry', tier: 'recommended' },
+  arm_relaxed_girth: { unit: 'cm', group: 'anthropometry', tier: 'optional', sided: true },
+  arm_flexed_girth: { unit: 'cm', group: 'anthropometry', tier: 'optional', sided: true },
+  mid_thigh_girth: { unit: 'cm', group: 'anthropometry', tier: 'optional', sided: true },
+  calf_girth: { unit: 'cm', group: 'anthropometry', tier: 'optional', sided: true },
 
   // --- Performans ---
-  sit_to_stand_5x: {
-    label: '5 tekrar otur-kalk',
-    unit: 's',
-    group: 'performance',
-    tier: 'recommended',
-    frequency: 'Üç ayda bir',
-    note: 'Kollar göğüste çapraz. 2,3 sn altındaki değişim ölçüm hatasıdır.',
-  },
-  trunk_flexor_endurance: { label: 'Gövde fleksör dayanıklılığı', unit: 's', group: 'performance', tier: 'optional', frequency: 'Üç ayda bir' },
-  trunk_extensor_endurance: {
-    label: 'Gövde ekstansör dayanıklılığı (Biering-Sørensen)',
-    unit: 's',
-    group: 'performance',
-    tier: 'optional',
-    frequency: 'Üç ayda bir',
-    note: 'Önce bir alıştırma seansı: güvenilirlik 0,82 → 0,96.',
-  },
-  side_bridge_endurance: { label: 'Yan köprü dayanıklılığı', unit: 's', group: 'performance', tier: 'optional', frequency: 'Üç ayda bir', sided: true },
+  sit_to_stand_5x: { unit: 's', group: 'performance', tier: 'recommended' },
+  trunk_flexor_endurance: { unit: 's', group: 'performance', tier: 'optional' },
+  trunk_extensor_endurance: { unit: 's', group: 'performance', tier: 'optional' },
+  side_bridge_endurance: { unit: 's', group: 'performance', tier: 'optional', sided: true },
 
   // --- Hareketlilik ---
-  weight_bearing_lunge: {
-    label: 'Ayak bileği dorsifleksiyonu (duvar lunge testi)',
-    unit: 'cm',
-    group: 'mobility',
-    tier: 'recommended',
-    frequency: 'Üç ayda bir',
-    sided: true,
-    note: 'Topuk yerde, diz duvara değerken ayak başparmağının duvara uzaklığı.',
-  },
+  weight_bearing_lunge: { unit: 'cm', group: 'mobility', tier: 'recommended', sided: true },
 
   // --- Anketler (skoru PT girer; anket metni lisanslı olabilir, burada yok) ---
-  odi: { label: 'Oswestry (bel)', unit: '%', group: 'questionnaire', tier: 'recommended', frequency: 'Dört haftada bir' },
-  spadi: { label: 'SPADI (omuz)', unit: '%', group: 'questionnaire', tier: 'recommended', frequency: 'Dört haftada bir' },
-  visa_p: { label: 'VISA-P (patellar tendon)', unit: 'puan', group: 'questionnaire', tier: 'recommended', frequency: 'Dört haftada bir' },
-} as const satisfies Record<string, MeasurementDef>;
+  odi: { unit: '%', group: 'questionnaire', tier: 'recommended' },
+  spadi: { unit: '%', group: 'questionnaire', tier: 'recommended' },
+  visa_p: { unit: 'puan', group: 'questionnaire', tier: 'recommended' },
+} as const satisfies Record<string, Omit<MeasurementDef, 'label' | 'frequency' | 'note'>>;
 
-export type MeasurementId = keyof typeof MEASUREMENTS;
-export const MEASUREMENT_IDS = Object.keys(MEASUREMENTS) as MeasurementId[];
+export type MeasurementId = keyof typeof MEASUREMENT_RULES;
+export const MEASUREMENT_IDS = Object.keys(MEASUREMENT_RULES) as MeasurementId[];
 
-export function measurementDef(id: MeasurementId, _locale: Locale = DEFAULT_LOCALE): MeasurementDef {
-  return MEASUREMENTS[id];
+/** Ölçüm tanımı, adı, sıklığı ve notu okuyanın dilinde. */
+export function measurementDef(id: MeasurementId, locale: Locale = DEFAULT_LOCALE): MeasurementDef {
+  const text: { label: string; frequency: string; note?: string } = measurementsMessages(locale).defs[id];
+  return { label: text.label, ...MEASUREMENT_RULES[id], frequency: text.frequency, ...(text.note !== undefined ? { note: text.note } : {}) };
 }
 
+/** Bütün ölçüm tanımları okuyanın dilinde, katalog sırasıyla. */
+export function measurementDefs(locale: Locale = DEFAULT_LOCALE): Record<MeasurementId, MeasurementDef> {
+  return Object.fromEntries(MEASUREMENT_IDS.map((id) => [id, measurementDef(id, locale)])) as Record<MeasurementId, MeasurementDef>;
+}
+
+/** Türkçe tanımlar (eski çağrılar); arayüz `measurementDefs(locale)` kullanır. */
+export const MEASUREMENTS: Record<MeasurementId, MeasurementDef> = measurementDefs('tr');
+
 /** Katalog birimi → ekranda görünen ("s" Türkçede "sn"): ölçüm ekranları ve Genel bakış ortak. */
-export const MEASUREMENT_UNIT_LABELS: Record<MeasurementDef['unit'], string> = { kg: 'kg', cm: 'cm', s: 'sn', '%': '%', puan: 'puan' };
+export const MEASUREMENT_UNIT_LABELS: Record<MeasurementDef['unit'], string> = measurementsMessages('tr').units;
 
 export type Sex = 'female' | 'male';
 
@@ -175,13 +165,9 @@ export function enduranceRatios(
   };
 }
 
-/* --- dil: imza dondurma (i18n planı §7 F). Sahibi görev çevirir; şimdilik Türkçe döner. --- */
+/* --- dil --- */
 
-/** Ölçüm tanımları okuyanın dilinde (`MEASUREMENTS`). */
-export function measurementDefs(_locale: Locale = DEFAULT_LOCALE): typeof MEASUREMENTS {
-  return MEASUREMENTS;
-}
-
-export function measurementUnitLabels(_locale: Locale = DEFAULT_LOCALE): Record<MeasurementDef['unit'], string> {
-  return MEASUREMENT_UNIT_LABELS;
+/** Birimlerin ekrandaki adı okuyanın dilinde (`puan` kayıtta koddur). */
+export function measurementUnitLabels(locale: Locale = DEFAULT_LOCALE): Record<MeasurementDef['unit'], string> {
+  return measurementsMessages(locale).units;
 }

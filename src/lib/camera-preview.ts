@@ -1,3 +1,6 @@
+import { DEFAULT_LOCALE, type Locale } from '../i18n/locale.ts';
+import { measurementsMessages } from '../i18n/messages/measurements/index.ts';
+
 /** Local preview only: no recording, frame extraction, upload or persistence. */
 export type PreviewStream = { getTracks(): { stop(): void }[] };
 
@@ -33,11 +36,11 @@ export class CameraPreviewSession<T extends PreviewStream> {
   }
 }
 
-export function cameraErrorMessage(error: unknown): string {
+export function cameraErrorMessage(error: unknown, locale: Locale = DEFAULT_LOCALE): string {
+  const t = measurementsMessages(locale).camera.errors;
   const name = error && typeof error === 'object' && 'name' in error ? error.name : '';
-  if (name === 'NotAllowedError' || name === 'SecurityError')
-    return 'Kamera izni verilmedi. Tarayıcının site izinlerinden kamerayı açabilir veya manuel yolla devam edebilirsin.';
-  if (name === 'NotFoundError') return 'Kamera bulunamadı. Başka bir cihaz veya manuel ölçüm kullanabilirsin.';
-  if (name === 'NotReadableError') return 'Kamera açılamadı. Kamerayı kullanan diğer uygulamayı kapatıp tekrar deneyebilirsin.';
-  return 'Kamera açılamadı. Tekrar deneyebilir veya manuel yolla devam edebilirsin.';
+  if (name === 'NotAllowedError' || name === 'SecurityError') return t.denied;
+  if (name === 'NotFoundError') return t.notFound;
+  if (name === 'NotReadableError') return t.busy;
+  return t.other;
 }

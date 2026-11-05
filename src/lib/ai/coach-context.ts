@@ -1,3 +1,5 @@
+import { DEFAULT_LOCALE, type Locale } from '../../i18n/locale.ts';
+import { coachMessages } from '../../i18n/messages/coach/index.ts';
 import type { COACH_PAGES } from './coach-contract.ts';
 export function coachPage(pathname: string): typeof COACH_PAGES[number] {
   // Hareket (`screening`) ve kamera ölçümü (PT `measurements/camera`, danışan `/me/olcum`) Sağlık'ın parçası;
@@ -14,7 +16,12 @@ export function coachPage(pathname: string): typeof COACH_PAGES[number] {
   return 'overview';
 }
 export function coachClientOf(pathname: string) { return /^\/dashboard\/clients\/(c_[a-z0-9]{6,24})(?:\/|$)/.exec(pathname)?.[1] ?? null; }
-export const COACH_PAGE_LABELS = { overview: 'Genel bakış', program: 'Program', measurements: 'Ölçümler', workout: 'Antrenman', progress: 'İlerleme', settings: 'Ayarlar', library: 'Kütüphane', health: 'Sağlık' };
+/** Panelin başlığındaki sayfa adı okuyanın dilinde. */
+export function coachPageLabels(locale: Locale = DEFAULT_LOCALE): Record<(typeof COACH_PAGES)[number], string> {
+  return coachMessages(locale).pages;
+}
+/** Türkçe adlar (eski çağrılar); arayüz `coachPageLabels(locale)` kullanır. */
+export const COACH_PAGE_LABELS = coachPageLabels(DEFAULT_LOCALE);
 
 /** Paneli açarken bağlam: PT'de hangi danışan, hangi sekme, açılınca hemen değerlendirilsin mi. */
 export type CoachOpen = { clientId?: string; tab?: 'review' | 'program'; autoReview?: boolean };

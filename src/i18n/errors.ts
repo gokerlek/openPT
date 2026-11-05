@@ -18,7 +18,6 @@ export class LocalizedError extends Error implements Localizable {
 
   constructor(text: LocalizedText, options?: ErrorOptions) {
     super(text(DEFAULT_LOCALE), options);
-    this.name = 'LocalizedError';
     this.text = text;
   }
 

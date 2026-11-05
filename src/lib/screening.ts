@@ -1,4 +1,5 @@
 import { DEFAULT_LOCALE, type Locale } from '../i18n/locale.ts';
+import { screeningMessages } from '../i18n/messages/screening/index.ts';
 import type { MovementPattern } from './alternatives.ts';
 import { awaitsOpinion, ConstraintError, isActive, isPaired, type AvoidTagId, type ConstraintRegion } from './constraints.ts';
 import type { Constraint, HealthRecord, Screening, ScreeningSide, ScreeningTests } from './schemas/health.ts';
@@ -70,21 +71,16 @@ export type ScreeningTest = {
   source: string;
 };
 
-export const SCREENING_TESTS: Record<ScreeningTestId, ScreeningTest> = {
+/** Testin metin dışı kuralları; metinler (`title`, `setup`, noktaların adı, ipucu ve odağı) sözlükte. */
+type TestRules = Omit<ScreeningTest, 'id' | 'title' | 'short' | 'sideNote' | 'setup' | 'points' | 'easier' | 'source'> & {
+  /** Noktaların sırası (giriş ekranı ve danışanın odağı bu sırayla). */
+  points: readonly string[];
+};
+
+const TEST_RULES: Record<ScreeningTestId, TestRules> = {
   squat: {
-    id: 'squat',
-    title: 'Squat, kollar önde',
-    short: 'Squat',
     sided: false,
-    setup: 'Ayaklar kalça-omuz genişliğinde, kollar öne uzanık; 3 tekrar.',
-    points: [
-      { id: 'heels', label: 'Topuk kalktı', hint: 'topuklar yerde; düzelmiyorsa topuk desteği', focus: 'topukların yerde kalsın' },
-      { id: 'knees', label: 'Diz içe kaçtı', hint: 'dizler ayak yönünde', focus: 'dizlerin ayak uçlarının yönünde' },
-      { id: 'depth', label: 'Derinlik yetmedi', hint: 'derinliği kutuyla ayarla', focus: 'rahat indiğin derinlikte kal' },
-      { id: 'torso', label: 'Gövde öne düştü', hint: 'göğüs yukarı, ağırlık önde (goblet)', focus: 'göğsün yukarıda kalsın' },
-      { id: 'spine', label: 'Altta bel yuvarlandı', hint: 'derinliği belin nötr kaldığı yerde kes', focus: 'belinin düz kaldığı yere kadar in' },
-    ],
-    easier: 'Diz hizasındaki kutuya otur-kalk, kollar önde.',
+    points: ['heels', 'knees', 'depth', 'torso', 'spine'],
     patterns: ['squat'],
     painPatterns: ['squat'],
     regions: ['knee', 'hip', 'ankle_foot'],
@@ -92,21 +88,10 @@ export const SCREENING_TESTS: Record<ScreeningTestId, ScreeningTest> = {
     avoid: 'deep_knee_flexion',
     regress: ['destekli-sandalye-squat', 'goblet-box-squat'],
     progress: ['goblet-squat', 'halter-back-squat'],
-    source: 'Kritz 2009 (vücut ağırlığıyla squat taraması)',
   },
   hinge: {
-    id: 'hinge',
-    title: 'Kalça menteşesi, çubukla',
-    short: 'Menteşe',
     sided: false,
-    setup: 'Çubuk sırtta baş, sırt ve sağrıya değer; dizler hafif bükük; kalçadan öne eğil; 3 tekrar.',
-    points: [
-      { id: 'contact', label: 'Çubuk ayrıldı', hint: 'sırt nötr, çubuk üç noktada', focus: 'sırtın düz kalsın' },
-      { id: 'hips', label: 'Kalçadan başlamadı', hint: 'önce kalça geri', focus: 'hareketi kalçanı geri iterek başlat' },
-      { id: 'range', label: 'Aralık yetmedi', hint: 'kısa aralıkla başla, arka bacak esnekliği', focus: 'rahat eğildiğin kadar in' },
-      { id: 'return', label: 'Dönüşte bel açıldı', hint: 'tepede kalçayı sık, bel geri açılmasın', focus: 'yukarıda kalçanı sık, belini geriye bükme' },
-    ],
-    easier: 'Kalçayla arkadaki duvara dokunma (duvar 15–20 cm geride).',
+    points: ['contact', 'hips', 'range', 'return'],
     patterns: ['hinge', 'hip_extension'],
     painPatterns: ['hinge'],
     regions: ['lower_back'],
@@ -114,23 +99,10 @@ export const SCREENING_TESTS: Record<ScreeningTestId, ScreeningTest> = {
     avoid: 'forward_bend',
     regress: ['glute-bridge', 'halter-hip-thrust'],
     progress: ['romanian-deadlift', 'deadlift'],
-    source: 'sentez; noktalar "hareket kalçadan gelsin" diye yazıldı (Saraceni 2020)',
   },
   split_squat: {
-    id: 'split_squat',
-    title: 'Split squat',
-    short: 'Split squat',
     sided: true,
-    sideNote: 'Öndeki bacak test edilen taraftır.',
-    setup: 'Bir adım boyu açıklık, arka topuk kalkık, eller belde; arka diz yere yaklaşana dek in; 3 tekrar.',
-    points: [
-      { id: 'knee', label: 'Ön diz içe kaçtı', hint: 'ön diz ayak yönünde', focus: 'ön dizin ayağının yönünde' },
-      { id: 'pelvis', label: 'Kalça düştü ya da döndü', hint: 'kalça yatay; yan kalça çalış', focus: 'kalçan düz kalsın' },
-      { id: 'torso', label: 'Gövde öne düştü', hint: 'gövde dik', focus: 'gövden dik kalsın' },
-      { id: 'depth', label: 'Kontrollü inemedi', hint: 'aralığı kısalt, yavaş in', focus: 'yavaş ve kontrollü in' },
-      { id: 'balance', label: 'Denge kaybı', hint: 'destekle başla', focus: 'gerekirse bir yere tutun' },
-    ],
-    easier: 'Bir elle duvara ya da çubuğa tutunarak.',
+    points: ['knee', 'pelvis', 'torso', 'depth', 'balance'],
     patterns: ['lunge'],
     painPatterns: ['lunge'],
     regions: ['knee', 'hip', 'ankle_foot'],
@@ -138,43 +110,20 @@ export const SCREENING_TESTS: Record<ScreeningTestId, ScreeningTest> = {
     avoid: 'deep_knee_flexion',
     regress: ['goblet-box-squat', 'glute-bridge'],
     progress: ['dambil-lunge', 'bulgarian-split-squat'],
-    source: 'sentez; squat noktalarının tek bacağa uyarlanması (Kritz 2009)',
   },
   single_leg_balance: {
-    id: 'single_leg_balance',
-    title: 'Tek ayak denge',
-    short: 'Denge',
     sided: true,
-    sideNote: 'Duran bacak test edilen taraftır.',
-    setup: 'Göz açık, eller belde, öbür ayak yerden ~5 cm; en çok 30 sn; süre 3 denemenin en iyisi.',
-    points: [
-      { id: 'time', label: '30 sn dolmadı', hint: 'kısa sürelerle sık tekrar', focus: 'biraz daha uzun durmayı dene' },
-      { id: 'hip', label: 'Kalça düştü ya da kaydı', hint: 'yan kalça (kalça açma) çalış', focus: 'kalçan düz kalsın' },
-      { id: 'foot', label: 'Destek ayağı kaydı', hint: 'ayak tabanı yere tam bassın', focus: 'ayağın yere sağlam bassın' },
-      { id: 'arms', label: 'Eller belden ayrıldı', hint: 'gerekirse parmak ucuyla destek', focus: 'ellerin belinde kalsın' },
-    ],
-    easier: 'Parmak ucuyla duvara hafifçe dokunarak.',
+    points: ['time', 'hip', 'foot', 'arms'],
     patterns: ['lunge'],
     painPatterns: ['lunge'],
     regions: ['knee', 'hip', 'ankle_foot'],
     constraintRegion: 'knee',
     regress: ['makine-kalca-acma', 'glute-bridge'],
     progress: ['dambil-lunge', 'bulgarian-split-squat'],
-    source: 'Springer 2007 (tek ayak duruş süresi); 30 sn sentez',
   },
   push: {
-    id: 'push',
-    title: 'Şınav, 5 tekrar',
-    short: 'Şınav',
     sided: false,
-    setup: 'Eller omuz genişliğinde, vücut düz; göğüs yere bir avuç kalana dek.',
-    points: [
-      { id: 'plank', label: 'Gövde bozuldu', hint: 'gövdeyi sık; gerekirse eğimli', focus: 'vücudun tek parça kalsın' },
-      { id: 'scapula', label: 'Kürek kanatlandı', hint: 'tepede kürekleri ayır (serratus)', focus: 'kürek kemiklerin sırtına yapışık kalsın' },
-      { id: 'elbows', label: 'Dirsekler açıldı', hint: 'dirsekler gövdeye 45°', focus: 'dirseklerin gövdene yakın' },
-      { id: 'depth', label: 'Aralık eksik', hint: 'eğimle tam aralık', focus: 'göğsünü yere yaklaştır' },
-    ],
-    easier: 'Eller sehpada (kalça hizasında).',
+    points: ['plank', 'scapula', 'elbows', 'depth'],
     patterns: ['horizontal_push'],
     painPatterns: ['horizontal_push'],
     regions: ['shoulder'],
@@ -182,65 +131,30 @@ export const SCREENING_TESTS: Record<ScreeningTestId, ScreeningTest> = {
     avoid: 'behind_body',
     regress: ['notr-tutus-floor-press', 'makine-chest-press'],
     progress: ['sinav', 'halter-bench-press'],
-    source: 'sentez',
   },
   pull: {
-    id: 'pull',
-    title: 'Ters kürek, 5 tekrar',
-    short: 'Kürek',
     sided: false,
-    setup: 'Halka ya da askı bandı; gövde yere ~45°, topuklar yerde, kollar düz.',
-    points: [
-      { id: 'plank', label: 'Gövde bozuldu', hint: 'gövde tek parça', focus: 'vücudun tek parça kalsın' },
-      { id: 'shoulders', label: 'Omuz kulağa kalktı', hint: 'omuzlar aşağıda', focus: 'omuzların kulaklarından uzak' },
-      { id: 'range', label: 'Dirsek gövdeyi geçmedi', hint: 'daha dik açıyla tam aralık', focus: 'dirseklerini gövdenin arkasına kadar çek' },
-      { id: 'control', label: 'İniş kontrolsüz', hint: 'inişi 2–3 sn', focus: 'yavaş in' },
-    ],
-    easier: 'Daha dik açı (gövde ~70°).',
+    points: ['plank', 'shoulders', 'range', 'control'],
     patterns: ['horizontal_pull', 'vertical_pull'],
     painPatterns: ['horizontal_pull'],
     regions: ['shoulder'],
     constraintRegion: 'shoulder',
     regress: ['gogus-destekli-row', 'oturarak-kablo-row'],
     progress: ['tek-kol-dambil-row', 'barfiks'],
-    source: 'sentez',
   },
   anti_rotation: {
-    id: 'anti_rotation',
-    title: 'Dönmeye direnç, tutuş',
-    short: 'Dönme',
     sided: true,
-    sideNote: 'Taraf: direncin geldiği yan.',
-    setup: 'Yarım diz çökme, bant ya da kablo yandan, kollar göğüsten ileri uzanık; 10 sn.',
-    points: [
-      { id: 'trunk', label: 'Gövde döndü', hint: 'direnci azalt, gövdeyi sabitle', focus: 'gövden dönmesin' },
-      { id: 'pelvis', label: 'Kalça kaydı', hint: 'kalçayı sık', focus: 'kalçan sabit kalsın' },
-      { id: 'arms', label: 'Kollar kaydı', hint: 'kollar orta hatta', focus: 'kolların göğsünün ortasında kalsın' },
-      { id: 'breath', label: 'Nefes tuttu', hint: 'nefes vererek tut', focus: 'nefesini tutma' },
-    ],
-    easier: 'Ayakta geniş duruş, daha hafif direnç.',
+    points: ['trunk', 'pelvis', 'arms', 'breath'],
     patterns: ['anti_rotation', 'core_stability'],
     painPatterns: ['anti_rotation'],
     regions: [],
     constraintRegion: 'lower_back',
     regress: ['dead-bug', 'bird-dog'],
     progress: ['pallof-press', 'tek-el-tasima'],
-    source: 'sentez',
   },
   shoulder_flexion: {
-    id: 'shoulder_flexion',
-    title: 'Kol kaldırma, sırt duvarda',
-    short: 'Kol kaldırma',
     sided: true,
-    sideNote: 'Kaldırılan kol test edilen taraftır.',
-    setup: 'Topuk, kalça, sırt ve baş duvarda, dizler hafif bükük; dirsek düz, başparmak yukarı, kolu önden yukarı kaldır.',
-    points: [
-      { id: 'wall', label: 'Duvara ulaşmadı', hint: 'açılı itişle başla (landmine)', focus: 'kolunu rahat kaldırabildiğin kadar kaldır' },
-      { id: 'ribs', label: 'Bel duvardan ayrıldı', hint: 'kaburgayı aşağıda tut', focus: 'belin duvara yakın kalsın' },
-      { id: 'elbow', label: 'Dirsek büküldü', hint: 'dirsek düz', focus: 'dirseğin düz kalsın' },
-      { id: 'shrug', label: 'Omuz kulağa kalktı', hint: 'omuz aşağıda', focus: 'omzun kulağından uzak' },
-    ],
-    easier: 'Sırtüstü yatarak (bel yerde).',
+    points: ['wall', 'ribs', 'elbow', 'shrug'],
     patterns: ['vertical_push'],
     painPatterns: ['vertical_push', 'vertical_pull'],
     regions: ['shoulder'],
@@ -248,9 +162,44 @@ export const SCREENING_TESTS: Record<ScreeningTestId, ScreeningTest> = {
     avoid: 'overhead',
     regress: ['landmine-press', 'band-pull-apart'],
     progress: ['oturarak-dambil-omuz-press', 'lat-pulldown'],
-    source: 'sentez',
   },
 };
+
+/** Sözlükteki test metni (noktalar kimlikle). */
+type TestCopy = { title: string; short: string; sideNote?: string; setup: string; points: Record<string, Omit<ScreeningPoint, 'id'>>; easier: string; source: string };
+
+/** Tarama metinleri okuyanın dilinde. */
+function text(locale: Locale) {
+  return screeningMessages(locale);
+}
+
+/** Bir test, metinleri okuyanın dilinde. */
+export function screeningTest(testId: ScreeningTestId, locale: Locale = DEFAULT_LOCALE): ScreeningTest {
+  const { points, ...rules } = TEST_RULES[testId];
+  const copy = text(locale).tests[testId] as TestCopy;
+  return {
+    id: testId,
+    title: copy.title,
+    short: copy.short,
+    ...rules,
+    ...(copy.sideNote !== undefined ? { sideNote: copy.sideNote } : {}),
+    setup: copy.setup,
+    points: points.map((id) => {
+      const point = copy.points[id]!;
+      return { id, label: point.label, hint: point.hint, focus: point.focus };
+    }),
+    easier: copy.easier,
+    source: copy.source,
+  };
+}
+
+/** Bütün testler okuyanın dilinde. */
+export function screeningTests(locale: Locale = DEFAULT_LOCALE): Record<ScreeningTestId, ScreeningTest> {
+  return Object.fromEntries(SCREENING_TEST_IDS.map((testId) => [testId, screeningTest(testId, locale)])) as Record<ScreeningTestId, ScreeningTest>;
+}
+
+/** Türkçe testler (eski çağrılar ve metin dışı kurallar); arayüz `screeningTests(locale)` kullanır. */
+export const SCREENING_TESTS: Record<ScreeningTestId, ScreeningTest> = screeningTests('tr');
 
 /** Tek ayak dengede `time` noktası süreden hesaplanır (< 30 sn → kaçtı) **[sentez]**. */
 export const BALANCE_SECONDS = 30;
@@ -267,36 +216,36 @@ export const SCREENING_LIMIT = 60;
 
 export type Outcome = 'clean' | 'compensated' | 'easier' | 'unable' | 'pain' | 'not_tested';
 
-export const OUTCOME_LABELS: Record<Outcome, string> = {
-  clean: 'Temiz',
-  compensated: 'Telafiyle',
-  easier: 'Kolaylaştırılmış',
-  unable: 'Yapılamadı',
-  pain: 'Ağrılı',
-  not_tested: 'Bu hareket testinde yapılmadı',
-};
+/** Türkçe sözcükler (eski çağrılar); arayüz `outcomeLabels(locale)` kullanır. */
+export const OUTCOME_LABELS: Record<Outcome, string> = text('tr').outcomes;
 
-export const OUTCOME_CLIENT_LABELS: Record<Outcome, string> = {
-  clean: 'Temiz',
-  compensated: 'Telafiyle',
-  easier: 'Kolaylaştırılmış sürümle',
-  unable: 'Henüz yapılamıyor',
-  pain: 'Ağrı not edildi. Antrenörün seninle konuşacak.',
-  not_tested: 'Bu hareket testinde yapılmadı',
-};
+export const OUTCOME_CLIENT_LABELS: Record<Outcome, string> = text('tr').outcomesClient;
+
+/** PT'nin sözcükleri ("Telafiyle") okuyanın dilinde. */
+export function outcomeLabels(locale: Locale = DEFAULT_LOCALE): Record<Outcome, string> {
+  return text(locale).outcomes;
+}
+
+/** Danışanın sözcükleri ("Kolaylaştırılmış sürümle") okuyanın dilinde. */
+export function outcomeClientLabels(locale: Locale = DEFAULT_LOCALE): Record<Outcome, string> {
+  return text(locale).outcomesClient;
+}
 
 export const RESULT_CHOICES = ['standard', 'easier', 'unable', 'not_tested'] as const;
 export type ResultChoice = (typeof RESULT_CHOICES)[number];
-export const RESULT_CHOICE_LABELS: Record<ResultChoice, string> = {
-  standard: 'Standart',
-  easier: 'Kolaylaştırılmış',
-  unable: 'Yapılamadı',
-  not_tested: 'Yapılmadı',
-};
+export const RESULT_CHOICE_LABELS: Record<ResultChoice, string> = text('tr').resultChoices;
+
+export function resultChoiceLabels(locale: Locale = DEFAULT_LOCALE): Record<ResultChoice, string> {
+  return text(locale).resultChoices;
+}
 
 export const NOT_TESTED_REASONS = ['constraint', 'other'] as const;
 export type NotTestedReason = (typeof NOT_TESTED_REASONS)[number];
-export const NOT_TESTED_REASON_LABELS: Record<NotTestedReason, string> = { constraint: 'kısıt', other: 'başka neden' };
+export const NOT_TESTED_REASON_LABELS: Record<NotTestedReason, string> = text('tr').notTestedReasons;
+
+export function notTestedReasonLabels(locale: Locale = DEFAULT_LOCALE): Record<NotTestedReason, string> {
+  return text(locale).notTestedReasons;
+}
 
 const RANK: Partial<Record<Outcome, number>> = { clean: 3, compensated: 2, easier: 1, unable: 0 };
 
@@ -340,7 +289,11 @@ export function outcomeOf(testId: ScreeningTestId, entry: ScreeningSide | undefi
 /* --- kayıt anahtarları --- */
 
 export type SideKey = 'center' | 'left' | 'right';
-export const SIDE_KEY_LABELS: Record<SideKey, string> = { center: '', left: 'Sol', right: 'Sağ' };
+export const SIDE_KEY_LABELS: Record<SideKey, string> = text('tr').sides;
+
+export function sideKeyLabels(locale: Locale = DEFAULT_LOCALE): Record<SideKey, string> {
+  return text(locale).sides;
+}
 
 export function sidesOf(testId: ScreeningTestId): SideKey[] {
   return SCREENING_TESTS[testId].sided ? ['left', 'right'] : ['center'];
@@ -455,6 +408,11 @@ export function newestFirst(list: readonly Screening[]): Screening[] {
 
 /* --- kayıt eylemleri --- */
 
+/** Sözlükteki hata, durum koduyla (kısıt uçlarıyla aynı `ConstraintError`). */
+function failure(pick: (errors: ReturnType<typeof text>['errors']) => string, status: number): ConstraintError {
+  return new ConstraintError((locale) => pick(text(locale).errors), status);
+}
+
 /**
  * Günü yazar (aynı gün varsa yerine geçer). Hâlâ ağrılı olan hücrelerin gözden geçirme anı korunur; ağrısı
  * geçen hücrenin anı düşer. `replace`: yalnız var olan gün (düzenleme; yoksa 404). Boş tarama 400.
@@ -466,9 +424,9 @@ export function withScreening(
 ): HealthRecord {
   const list = record.screenings ?? [];
   const existing = list.find((item) => item.date === input.date);
-  if (options.replace && !existing) throw new ConstraintError('Bu tarihte hareket testi yok; silinmiş olabilir.', 404);
+  if (options.replace && !existing) throw failure((e) => e.missing, 404);
   const tests = normalizeTests(input.tests);
-  if (Object.keys(tests).length === 0) throw new ConstraintError('En az bir test gir; boş testler kaydedilmez.', 400);
+  if (Object.keys(tests).length === 0) throw failure((e) => e.empty, 400);
   const next: Screening = { date: input.date, protocol: SCREENING_PROTOCOL, tests };
   const painful = new Set(painCells(next).map((cell) => cell.key));
   const reviewed = Object.entries(existing?.painReviewedAt ?? {}).filter(([key]) => painful.has(key));
@@ -480,7 +438,7 @@ export function withScreening(
 
 export function withoutScreening(record: HealthRecord, date: string): HealthRecord {
   const list = record.screenings ?? [];
-  if (!list.some((item) => item.date === date)) throw new ConstraintError('Bu tarihte hareket testi yok; zaten silinmiş olabilir.', 404);
+  if (!list.some((item) => item.date === date)) throw failure((e) => e.alreadyDeleted, 404);
   return { ...record, screenings: list.filter((item) => item.date !== date) };
 }
 
@@ -488,8 +446,8 @@ export function withoutScreening(record: HealthRecord, date: string): HealthReco
 export function withPainReviewed(record: HealthRecord, date: string, key: string, now: string): HealthRecord {
   const list = record.screenings ?? [];
   const day = list.find((item) => item.date === date);
-  if (!day) throw new ConstraintError('Bu tarihte hareket testi yok; silinmiş olabilir.', 404);
-  if (!painCells(day).some((cell) => cell.key === key)) throw new ConstraintError('Bu testte ağrı kaydı yok.', 409);
+  if (!day) throw failure((e) => e.missing, 404);
+  if (!painCells(day).some((cell) => cell.key === key)) throw failure((e) => e.noPain, 409);
   if (day.painReviewedAt?.[key]) return record;
   const next: Screening = { ...day, painReviewedAt: { ...day.painReviewedAt, [key]: now } };
   return { ...record, screenings: list.map((item) => (item.date === date ? next : item)) };
@@ -667,14 +625,15 @@ export function painHistory(screenings: readonly Screening[]): { rows: PainRow[]
 }
 
 /** Testin yalın adı ("Kalça menteşesi"; kurulum ekinin öncesi). */
-export function testName(testId: ScreeningTestId, _locale: Locale = DEFAULT_LOCALE): string {
-  return SCREENING_TESTS[testId].title.split(',')[0] ?? SCREENING_TESTS[testId].title;
+export function testName(testId: ScreeningTestId, locale: Locale = DEFAULT_LOCALE): string {
+  const t = text(locale);
+  return t.plainName(t.tests[testId].title);
 }
 
 /** "Kol kaldırma (sağ)". */
-export function cellTitle(testId: ScreeningTestId, side: SideKey, short = false, _locale: Locale = DEFAULT_LOCALE): string {
-  const name = short ? SCREENING_TESTS[testId].short : testName(testId);
-  return side === 'center' ? name : `${name} (${SIDE_KEY_LABELS[side].toLocaleLowerCase('tr')})`;
+export function cellTitle(testId: ScreeningTestId, side: SideKey, short = false, locale: Locale = DEFAULT_LOCALE): string {
+  const t = text(locale);
+  return t.cellTitle(short ? t.tests[testId].short : testName(testId, locale), side);
 }
 
 export type Change = 'up' | 'down' | 'same' | 'new' | 'pain_new' | 'pain_gone';
@@ -705,12 +664,12 @@ export function previousOutcome(previous: Screening | null | undefined, testId: 
 
 export type Hint = { key: string; testId: ScreeningTestId; text: string; outcome: Outcome; ids: string[] };
 
-function listTitles(ids: readonly string[], titleOf: (id: string) => string | undefined): { text: string; ids: string[] } {
+function listTitles(ids: readonly string[], titleOf: (id: string) => string | undefined): { titles: string[]; ids: string[] } {
   const found = ids.flatMap((id) => {
     const title = titleOf(id);
     return title ? [{ id, title }] : [];
   });
-  return { text: found.map((item) => item.title).join(', '), ids: found.map((item) => item.id) };
+  return { titles: found.map((item) => item.title), ids: found.map((item) => item.id) };
 }
 
 /**
@@ -722,64 +681,68 @@ export function screeningHints(
   screening: Pick<Screening, 'tests'>,
   titleOf: (id: string) => string | undefined,
   suppress?: SideSuppress,
+  locale: Locale = DEFAULT_LOCALE,
 ): Hint[] {
   const major = new Map(asymmetries(screening, suppress).filter((item) => item.kind === 'major').map((item) => [item.testId, item]));
+  const t = text(locale).hints;
   type Draft = Hint & { order: [number, number, number, number] };
   const drafts: Draft[] = [];
   for (const testId of SCREENING_TEST_IDS) {
-    const test = SCREENING_TESTS[testId];
+    const test = screeningTest(testId, locale);
     const cells = cellsOf(screening).filter((cell) => cell.testId === testId && cell.outcome !== 'not_tested');
     // İki taraf aynı sonuç ve aynı noktalarla: tek satır.
     const same =
       cells.length === 2 &&
       cells[0]!.outcome === cells[1]!.outcome &&
       effectiveMissed(testId, cells[0]!.entry).join() === effectiveMissed(testId, cells[1]!.entry).join();
-    const groups = same ? [{ cells, label: test.sided ? ' (iki taraf)' : '' }] : cells.map((cell) => ({ cells: [cell], label: cell.side === 'center' ? '' : `, ${SIDE_KEY_LABELS[cell.side].toLocaleLowerCase('tr')}` }));
+    const groups = same
+      ? [{ cells, side: test.sided ? ('both' as const) : ('center' as const) }]
+      : cells.map((cell) => ({ cells: [cell], side: cell.side }));
     for (const group of groups) {
       const cell = group.cells[0]!;
-      const name = `${testName(testId)}${group.label}`;
+      const name = t.name(testName(testId, locale), group.side);
       const asym = major.get(testId);
       const weakSide = asym && group.cells.some((item) => item.side === asym.weaker);
       const missed = effectiveMissed(testId, cell.entry);
-      const missedText = missed.map((id) => test.points.find((point) => point.id === id)?.label.toLocaleLowerCase('tr') ?? id).join(', ');
-      let text: string;
+      const missedLabels = missed.map((id) => test.points.find((point) => point.id === id)?.label ?? id);
+      let line: string;
       let ids: string[] = [];
       switch (cell.outcome) {
         case 'pain':
-          text = `${name}: ağrılı; öneri yok. Değerlendirmeden sonra yeniden tara.`;
+          line = t.pain(name);
           break;
         case 'unable': {
           const list = listTitles(test.regress, titleOf);
           ids = list.ids;
-          text = `${name} (Yapılamadı): kalıbı yükleme; destekli ve kısa aralıkla başla${list.text ? ` — ${list.text}` : ''}.`;
+          line = t.unable(name, t.list(list.titles));
           break;
         }
         case 'easier': {
           const list = listTitles(test.regress, titleOf);
           ids = list.ids;
-          text = `${name} (Kolaylaştırılmış): kolaylaştırılmış sürümle çalış${list.text ? ` — ${list.text}` : ''}.`;
+          line = t.easier(name, t.list(list.titles));
           break;
         }
         case 'compensated': {
           const first = test.points.find((point) => point.id === missed[0]);
-          text = `${name} (Telafiyle · ${missedText}): yüklenebilir; ipucu: ${first?.hint ?? 'kaçan noktaya dikkat'}.`;
+          line = t.compensated(name, missedLabels, first?.hint ?? null);
           break;
         }
         default: {
           const list = listTitles(test.progress, titleOf);
           ids = list.ids;
-          text = `${name} (Temiz): ilerlet${list.text ? ` — ${list.text}` : ''}.`;
+          line = t.clean(name, t.list(list.titles));
         }
       }
       if (testId === 'squat' && (screening.tests.squat as { heelSupportHelps?: boolean } | undefined)?.heelSupportHelps && cell.outcome !== 'pain') {
-        text += " Topuk desteğiyle düzeldi → ayak bileği: Ölçümler'de duvar lunge testini gir.";
+        line += t.heelSupport;
       }
-      if (weakSide && cell.outcome !== 'pain') text += ' Zayıf taraftan başla, iki tarafa eşit iş.';
+      if (weakSide && cell.outcome !== 'pain') line += t.weakSide;
       const rank = rankOf(cell.outcome) ?? 4;
       drafts.push({
         key: group.cells.map((item) => item.key).join('+'),
         testId,
-        text,
+        text: line,
         outcome: cell.outcome,
         ids,
         order: [cell.outcome === 'pain' ? 0 : 1, rank, weakSide ? 0 : 1, SCREENING_TEST_IDS.indexOf(testId)],
@@ -808,23 +771,24 @@ export function clientScreeningRows(
   screening: Pick<Screening, 'tests'>,
   previous: Screening | null,
   labels: Record<Outcome, string> = OUTCOME_CLIENT_LABELS,
-  _locale: Locale = DEFAULT_LOCALE,
+  locale: Locale = DEFAULT_LOCALE,
 ): ClientScreeningRow[] {
   const rows: ClientScreeningRow[] = [];
+  const sides = sideKeyLabels(locale);
   for (const testId of SCREENING_TEST_IDS) {
-    const test = SCREENING_TESTS[testId];
+    const test = screeningTest(testId, locale);
     const cells = cellsOf(screening).filter((cell) => cell.testId === testId);
     if (cells.length === 0) continue;
-    const sides = cells.map((cell) => {
+    const sideRows = cells.map((cell) => {
       const compared = compareCell(cell.outcome, previousOutcome(previous, testId, cell.side));
       const change: 'up' | 'down' | null =
         compared?.change === 'up' || compared?.change === 'pain_gone' ? 'up' : compared?.change === 'down' ? 'down' : null;
-      return { side: cell.side, label: SIDE_KEY_LABELS[cell.side], text: labels[cell.outcome], outcome: cell.outcome, change };
+      return { side: cell.side, label: sides[cell.side], text: labels[cell.outcome], outcome: cell.outcome, change };
     });
     const focusCell = cells.find((cell) => cell.outcome === 'compensated' || cell.outcome === 'easier');
     const focusId = focusCell ? effectiveMissed(testId, focusCell.entry)[0] : undefined;
     const focus = focusId ? test.points.find((point) => point.id === focusId)?.focus : undefined;
-    rows.push({ testId, title: testName(testId), sides, ...(focus ? { focus } : {}) });
+    rows.push({ testId, title: testName(testId, locale), sides: sideRows, ...(focus ? { focus } : {}) });
   }
   return rows;
 }
@@ -846,11 +810,12 @@ export type ProgressScreening = {
 export function progressScreening(
   screenings: readonly Screening[] | undefined,
   viewer: 'client' | 'pt',
-  _locale: Locale = DEFAULT_LOCALE,
+  locale: Locale = DEFAULT_LOCALE,
 ): ProgressScreening | null {
   const list = newestFirst(screenings ?? []).filter((item) => item.protocol === SCREENING_PROTOCOL);
   const latest = list[0];
   if (!latest) return null;
   const previous = list[1] ?? null;
-  return { date: latest.date, previousDate: previous?.date ?? null, rows: clientScreeningRows(latest, previous, viewer === 'pt' ? OUTCOME_LABELS : OUTCOME_CLIENT_LABELS) };
+  const labels = viewer === 'pt' ? outcomeLabels(locale) : outcomeClientLabels(locale);
+  return { date: latest.date, previousDate: previous?.date ?? null, rows: clientScreeningRows(latest, previous, labels, locale) };
 }
