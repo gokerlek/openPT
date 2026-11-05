@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { GearSix, SignOut, Sparkle, User } from '@phosphor-icons/react';
-import { discardAllDrafts } from '@/components/block-editor/editor-draft';
+import { discardAllDrafts } from '@/lib/draft-store';
 import { openCoach } from '@/components/coach/coach-launcher';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {

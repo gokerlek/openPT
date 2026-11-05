@@ -53,7 +53,7 @@ import { cn } from '@/lib/utils';
 import { ownProgramDraftKey, PROGRAM_DRAFT_BASE } from '@/lib/unsaved-changes';
 import { useLocale, useMessages } from '@/i18n/client';
 import { catalogMessages } from '@/i18n/messages/catalog';
-import { ptProgramMessages } from '@/i18n/messages/pt-program';
+import { programEditorMessages } from '@/i18n/messages/program-editor';
 import { commonMessages } from '@/i18n/messages/common';
 
 /** Formun girdisi: notlar düzenleyicide boş metin (PT'nin program formuyla aynı). */
@@ -113,7 +113,7 @@ export type OwnProgramFormProps = {
  * düzenleyicisiyle aynı desen.
  */
 export function OwnProgramForm(props: OwnProgramFormProps) {
-  const t = useMessages(ptProgramMessages).ownProgramForm;
+  const t = useMessages(programEditorMessages).ownProgramForm;
   const common = useMessages(commonMessages);
   const locale = useLocale();
   const frequencyLabels: Record<string, string> = {
@@ -641,7 +641,7 @@ type OwnFormStore = ReturnType<typeof useForm<typeof ownProgramFormSchema>>;
 
 /** Seçili programın adı (listede benzersiz). */
 function DayName({ form, dayIndex, dayId }: { form: OwnFormStore; dayIndex: number; dayId: string }) {
-  const t = useMessages(ptProgramMessages).ownProgramForm;
+  const t = useMessages(programEditorMessages).ownProgramForm;
   const field = useField(form, { path: ['phases', 0, 'days', dayIndex, 'name'] });
   return (
     <Field data-invalid={Boolean(field.errors) || undefined}>
@@ -685,7 +685,7 @@ function DayWeekdays({
   /** Programın formdaki başlangıç değerinde gün alanı var mı (`weekdaysInput`). */
   startedWithDays: boolean;
 }) {
-  const t = useMessages(ptProgramMessages).ownProgramForm;
+  const t = useMessages(programEditorMessages).ownProgramForm;
   const locale = useLocale();
   const taken = takenWeekdays(days, day.id);
   const takenText = [...taken].map(([weekday, name]) => `${weekdayShortLabels(locale)[weekday as Weekday]} · ${name}`).join(', ');
@@ -712,7 +712,7 @@ function DayWeekdays({
 
 /** Kaydın reddi: o arada değişti (412), paylaşım kapandı (403, PT), program silindi (404). */
 function SaveProblem({ problem, own, onReload }: { problem: 'stale' | 'unshared' | 'missing'; own: boolean; onReload: () => void }) {
-  const t = useMessages(ptProgramMessages).ownProgramForm;
+  const t = useMessages(programEditorMessages).ownProgramForm;
   const text =
     problem === 'stale'
       ? own

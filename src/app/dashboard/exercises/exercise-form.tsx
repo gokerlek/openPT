@@ -76,6 +76,7 @@ import { parseVideoUrl, videoUrl } from "@/lib/video";
 import { useLocale, useMessages } from '@/i18n/client';
 import { lower } from '@/i18n/text';
 import { ptLibraryMessages } from '@/i18n/messages/pt-library';
+import { libraryValidationMessages } from '@/i18n/messages/library-validation';
 import { commonMessages } from '@/i18n/messages/common';
 
 /** Zorunlu alan işareti: görünen yıldız, ekran okuyucuya "zorunlu". */
@@ -392,7 +393,7 @@ export function ExerciseForm({
               const link = field.input?.trim() ?? "";
               const video = link ? parseVideoUrl(link) : null;
               // Tanınmayan bağlantı yazarken de hata olarak görünür; gönderimde şema aynı cümleyi söyler.
-              const error = field.errors?.[0] ?? (link && !video ? ptLibraryMessages(locale).exerciseSchema.videoLink : null);
+              const error = field.errors?.[0] ?? (link && !video ? libraryValidationMessages(locale).exerciseSchema.videoLink : null);
               return (
                 <Field data-invalid={Boolean(error) || undefined}>
                   <FieldLabel htmlFor="videoUrl">{t.videoLabel}</FieldLabel>
@@ -501,7 +502,7 @@ export function ExerciseForm({
                           id="attachmentId"
                           value={field.input ?? ""}
                           groups={[{ label: t.attachmentsGroup, options }]}
-                          empty={common.states.notSpecified}
+                          empty={t.notSpecified}
                           onChange={(value) =>
                             setInput(form, {
                               path: ["attachmentId"],
@@ -532,7 +533,7 @@ export function ExerciseForm({
                         options: Object.entries(gripLabels(locale)).map(([value, label]) => ({ value, label })),
                       },
                     ]}
-                    empty={common.states.notSpecified}
+                    empty={t.notSpecified}
                     onChange={(value) =>
                       setInput(form, { path: ["grip"], input: (value || undefined) as ExerciseInput["grip"] })
                     }
@@ -553,7 +554,7 @@ export function ExerciseForm({
                         options: Object.entries(gripWidthLabels(locale)).map(([value, label]) => ({ value, label })),
                       },
                     ]}
-                    empty={common.states.notSpecified}
+                    empty={t.notSpecified}
                     onChange={(value) =>
                       setInput(form, { path: ["gripWidth"], input: (value || undefined) as ExerciseInput["gripWidth"] })
                     }

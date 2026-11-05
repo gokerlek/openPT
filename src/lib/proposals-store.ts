@@ -2,6 +2,7 @@ import 'server-only';
 import * as v from 'valibot';
 import { DEFAULT_LOCALE, type Locale } from '../i18n/locale.ts';
 import { ptProgramMessages } from '../i18n/messages/pt-program/index.ts';
+import { programLogMessages } from '../i18n/messages/program-log/index.ts';
 import { langConfig } from '../i18n/valibot.ts';
 import { listDevices } from './devices';
 import { listExercises } from './exercises';
@@ -48,7 +49,7 @@ export type ApproveResult =
   | { status: 'missing' | 'decided' | 'changed' | 'no_program' | 'invalid_program' };
 
 export async function approveProposal(clientId: string, id: string, sessionId: string, locale: Locale = DEFAULT_LOCALE): Promise<ApproveResult> {
-  const t = ptProgramMessages(locale).proposals;
+  const t = programLogMessages(locale).proposals;
   const repo = clientRepoName(clientId);
   // Kütüphane yalnız bekleyen bir öneri uygulanacaksa okunur (bir kez).
   let catalog: { library: Parameters<typeof planApproval>[0]['library']; ctx: Parameters<typeof planApproval>[0]['ctx'] } | null = null;
@@ -126,7 +127,7 @@ export async function declineProposal(
     const next = decideProposal(file, id, { status: 'declined', at: new Date(), note });
     if (!next) return { status: 'decided' };
     try {
-      await writeJson(repo, PROPOSALS_PATH, serializeProposals(next), { sha: stored.sha, message: ptProgramMessages(locale).proposals.commitDeclined(item.text).slice(0, 120) });
+      await writeJson(repo, PROPOSALS_PATH, serializeProposals(next), { sha: stored.sha, message: programLogMessages(locale).proposals.commitDeclined(item.text).slice(0, 120) });
     } catch (error) {
       if (attempt === 0 && isConflict(error)) continue;
       throw error;

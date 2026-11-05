@@ -16,7 +16,7 @@ import { vibrate } from '@/lib/haptics';
 import { LIST_ACCESSIBILITY, autoScrollEdge, listAutoScroll, setReordering, useListSensors } from '@/components/list/dnd-base';
 import type { TemplateBlock } from '@/lib/template-plan';
 import { useLocale } from '@/i18n/client';
-import { ptProgramMessages } from '@/i18n/messages/pt-program';
+import { programEditorMessages } from '@/i18n/messages/program-editor';
 import { useEditor } from '../editor-context';
 import type { DropData } from './drag-node';
 import { DragStoreContext, IDLE, createDragStore } from './drag-store';
@@ -208,7 +208,7 @@ export function EditorDnd({
 
     if (resolution.refusal !== current.refusal) {
       current.refusal = resolution.refusal;
-      if (resolution.refusal) latest.current.announce(resolution.refusal === 'limit' ? ptProgramMessages(locale).edit.templateFull : ptProgramMessages(locale).edit.groupFull);
+      if (resolution.refusal) latest.current.announce(resolution.refusal === 'limit' ? programEditorMessages(locale).edit.templateFull : programEditorMessages(locale).edit.groupFull);
     }
     publish();
   };

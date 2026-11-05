@@ -1,6 +1,6 @@
 import * as v from 'valibot';
 import { DEFAULT_LOCALE, isLocale, type Locale } from '../../i18n/locale.ts';
-import { ptProgramMessages } from '../../i18n/messages/pt-program/index.ts';
+import { programValidationMessages } from '../../i18n/messages/program-validation/index.ts';
 import { msg } from '../../i18n/valibot.ts';
 import { CARDIO_LIMITS, CARDIO_SPEED_MAX_KMH, cardioSpeedIssue } from '../cardio.ts';
 import { PROGRESSION_SCHEMES } from '../progression.ts';
@@ -35,7 +35,7 @@ export { BLOCK_KINDS, BLOCK_KIND_LABELS, TEMPLATE_ID_PATTERN, type BlockKind } f
 const SLUG = /^[a-z0-9-]{2,60}$/;
 
 /** Doğrulama mesajları (`msg`: şemayı ayrıştıran isteğin diliyle). */
-const text = (locale: Locale) => ptProgramMessages(locale).templateSchema;
+const text = (locale: Locale) => programValidationMessages(locale).templateSchema;
 
 const int = (min: number, max: number, unit?: 'm' | 's') =>
   v.pipe(

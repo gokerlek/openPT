@@ -1,6 +1,6 @@
 import * as v from 'valibot';
 import { type Locale } from '../../i18n/locale.ts';
-import { ptProgramMessages } from '../../i18n/messages/pt-program/index.ts';
+import { programValidationMessages } from '../../i18n/messages/program-validation/index.ts';
 import { msg } from '../../i18n/valibot.ts';
 import { weekdayConflicts } from '../day-assignments.ts';
 import {
@@ -37,7 +37,7 @@ import {
  */
 
 /** Doğrulama mesajları (`msg`: şemayı ayrıştıran isteğin diliyle). */
-const text = (locale: Locale) => ptProgramMessages(locale).ownProgramSchema;
+const text = (locale: Locale) => programValidationMessages(locale).ownProgramSchema;
 
 const timestamp = v.pipe(v.string(), v.isoTimestamp());
 const positive = v.pipe(v.number(), v.integer(), v.minValue(1));

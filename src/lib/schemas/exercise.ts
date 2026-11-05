@@ -1,7 +1,7 @@
 import * as v from 'valibot';
 import { DEFAULT_LOCALE, type Locale } from '../../i18n/locale.ts';
 import { catalogMessages } from '../../i18n/messages/catalog/index.ts';
-import { ptLibraryMessages } from '../../i18n/messages/pt-library/index.ts';
+import { libraryValidationMessages } from '../../i18n/messages/library-validation/index.ts';
 import { msg } from '../../i18n/valibot.ts';
 import { MOVEMENT_PATTERNS } from '../alternatives.ts';
 import { DEEP_MUSCLE_MAX, DEEP_MUSCLES } from '../deep-muscles.ts';
@@ -91,7 +91,7 @@ export const CATEGORIES = ['compound', 'isolation', 'conditioning', 'warmup', 'c
 export type Category = (typeof CATEGORIES)[number];
 
 /** Doğrulama mesajları (`msg`: şemayı ayrıştıran isteğin diliyle). */
-const text = (locale: Locale) => ptLibraryMessages(locale).exerciseSchema;
+const text = (locale: Locale) => libraryValidationMessages(locale).exerciseSchema;
 
 const count = (max: number) =>
   v.pipe(

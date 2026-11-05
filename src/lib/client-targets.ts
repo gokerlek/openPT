@@ -1,6 +1,6 @@
 import { DEFAULT_LOCALE, type Locale } from '../i18n/locale.ts';
 import { catalogMessages } from '../i18n/messages/catalog/index.ts';
-import { ptProgramMessages } from '../i18n/messages/pt-program/index.ts';
+import { programLogMessages } from '../i18n/messages/program-log/index.ts';
 import { getFormat } from './format.ts';
 import type { ClientTarget, ClientTargets, ProgramChange, ProgramPhase } from './program-plan.ts';
 import type { TrackingType } from './progression.ts';
@@ -123,7 +123,7 @@ export function clientTargetNotes(
       const found = rows.get(rowId);
       if (!found) return [];
       const label = targetLabel(target.sets, trackingOf(found.row.exerciseId), locale);
-      return [[rowId, { text: ptProgramMessages(locale).targets.note(label), sets: target.sets, baseSets: target.baseSets, at: target.at }]];
+      return [[rowId, { text: programLogMessages(locale).targets.note(label), sets: target.sets, baseSets: target.baseSets, at: target.at }]];
     }),
   );
 }
@@ -161,7 +161,7 @@ export function ptTargetsEdit(
   ctx: { titleOf: (exerciseId: string) => string; trackingOf: (exerciseId: string) => TrackingType; multiPhase: boolean; locale?: Locale },
 ): { clientTargets: ClientTargets | undefined; changes: ProgramChange[] } {
   const locale = ctx.locale ?? DEFAULT_LOCALE;
-  const t = ptProgramMessages(locale).targets;
+  const t = programLogMessages(locale).targets;
   const live = liveClientTargets(storedPhases, targets);
   if (!live) return { clientTargets: undefined, changes: [] };
   const before = rowsOf(storedPhases);

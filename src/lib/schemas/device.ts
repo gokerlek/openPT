@@ -1,6 +1,6 @@
 import * as v from 'valibot';
 import { DEFAULT_LOCALE, type Locale } from '../../i18n/locale.ts';
-import { ptLibraryMessages } from '../../i18n/messages/pt-library/index.ts';
+import { libraryValidationMessages } from '../../i18n/messages/library-validation/index.ts';
 import { msg } from '../../i18n/valibot.ts';
 import { DEVICE_KINDS, PULLEY_RATIOS, type DeviceKind } from '../device-loads.ts';
 import { IMAGE_MAX_BYTES, IMAGE_TYPES } from '../image.ts';
@@ -37,7 +37,7 @@ export const DEVICE_IMAGE_MAX_BYTES = IMAGE_MAX_BYTES;
 export const ADD_ON_OPTIONS = [0.5, 1, 1.25, 1.75, 2, 2.5, 5] as const;
 
 /** Doğrulama mesajları (`msg`: şemayı ayrıştıran isteğin diliyle). */
-const text = (locale: Locale) => ptLibraryMessages(locale).deviceSchema;
+const text = (locale: Locale) => libraryValidationMessages(locale).deviceSchema;
 
 const kg = (max: number) =>
   v.pipe(

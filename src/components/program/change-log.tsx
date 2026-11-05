@@ -8,7 +8,7 @@ import { ownLogLabel } from '@/lib/own-program-text';
 import { groupChanges } from '@/lib/program-diff';
 import { logKindLabels, type ProgramLogEntry } from '@/lib/program-plan';
 import { useLocale, useMessages } from '@/i18n/client';
-import { ptProgramMessages } from '@/i18n/messages/pt-program';
+import { programEditorMessages } from '@/i18n/messages/program-editor';
 
 /**
  * Program geçmişi: her kayıtta otomatik yazılan özet, en yenisi üstte. Aynı günün
@@ -29,7 +29,7 @@ export function ChangeLog({
   step?: number;
   viewer?: 'client' | 'pt';
 }) {
-  const t = useMessages(ptProgramMessages).changeLog;
+  const t = useMessages(programEditorMessages).changeLog;
   const locale = useLocale();
   const format = getFormat(locale);
   const [shown, setShown] = useState(initial);

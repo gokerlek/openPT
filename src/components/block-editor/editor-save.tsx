@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
 import { useMessages } from '@/i18n/client';
 import { commonMessages } from '@/i18n/messages/common';
-import { ptProgramMessages } from '@/i18n/messages/pt-program';
+import { programEditorMessages } from '@/i18n/messages/program-editor';
 import { DURATION, EASE, tween } from '@/lib/motion';
 import { floatingSaveShown } from './editor-signals';
 
@@ -59,7 +59,7 @@ function saveVisible(save: EditorSaveState | null): save is EditorSaveState {
 }
 
 function useSaveLabel(save: EditorSaveState | null): string {
-  const t = useMessages(ptProgramMessages).editorSave;
+  const t = useMessages(programEditorMessages).editorSave;
   const common = useMessages(commonMessages);
   if (!save) return '';
   return save.pending ? (save.creating ? t.creating : common.actions.saving) : save.submitLabel;

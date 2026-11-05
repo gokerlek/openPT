@@ -52,7 +52,7 @@ import { blockField, bodyId, faceId, groupTitle, rowTitle, useEditor, type Edito
 import { keepLineEnter } from './enter-key';
 import { BlockSecondsField, RoundsField, SetCountField, SetsSection, SetsSummary, TargetField } from './set-table';
 import { useLocale, useMessages } from '@/i18n/client';
-import { ptProgramMessages } from '@/i18n/messages/pt-program';
+import { programEditorMessages } from '@/i18n/messages/program-editor';
 import { commonMessages } from '@/i18n/messages/common';
 
 export { EditorContext, blockField, rowTitle, useEditor, type BlocksFormStore, type BlocksPath } from './editor-context';
@@ -116,7 +116,7 @@ function useBodyEscape(itemId: string): React.KeyboardEventHandler<HTMLDivElemen
  * klavye ve ekran okuyucu yolu (kısayolları da var: Alt + ok).
  */
 function MoveStrip({ itemId, kind, title }: { itemId: string; kind: 'single' | 'member' | 'group'; title: string }) {
-  const t = useMessages(ptProgramMessages).editorItems;
+  const t = useMessages(programEditorMessages).editorItems;
   const editor = useEditor();
   const button = 'h-9 touch:h-11';
   return (
@@ -136,7 +136,7 @@ function MoveStrip({ itemId, kind, title }: { itemId: string; kind: 'single' | '
 
 /** Kütüphanede olmayan harekette yüzün sağında 🗑 "Sil". */
 function FaceRemoveButton({ itemId }: { itemId: string }) {
-  const t = useMessages(ptProgramMessages).editorItems;
+  const t = useMessages(programEditorMessages).editorItems;
   const common = useMessages(commonMessages);
   const editor = useEditor();
   return (
@@ -191,7 +191,7 @@ function DeviceLabel({ name }: { name: string }) {
  * içinde düğme olmaz). Dokunma alanı 44 px'e uzar. Kartı ve Ayrıntılar'ı açar, cihaz seçicisini açar.
  */
 function DeviceShortcut({ rowId, name }: { rowId: string; name: string }) {
-  const t = useMessages(ptProgramMessages).editorItems;
+  const t = useMessages(programEditorMessages).editorItems;
   const editor = useEditor();
   return (
     <button
@@ -226,7 +226,7 @@ function RowMeta({
   invalid: boolean;
   shortcut?: boolean;
 }) {
-  const t = useMessages(ptProgramMessages).editorItems;
+  const t = useMessages(programEditorMessages).editorItems;
   const locale = useLocale();
   const { devices, clientTargets, care } = useEditor();
   const device = exercise ? rowDevice(row, exercise, devices) : undefined;
@@ -348,7 +348,7 @@ function DeviceSelect({
 
 /** Satırın ayrıntıları: cihaz (başlıktaki sırayla önce: salonda en sık değişen), ilerleme kuralı ve not. */
 function RowDetails({ blockIndex, rowIndex, row, exercise }: { blockIndex: number; rowIndex: number; row: TemplateRow; exercise: PickerExercise }) {
-  const t = useMessages(ptProgramMessages).editorItems;
+  const t = useMessages(programEditorMessages).editorItems;
   const locale = useLocale();
   const editor = useEditor();
   const { form, path, devices, deviceList, exerciseList, exercises } = editor;
@@ -534,7 +534,7 @@ function RowBody({
   exercise: PickerExercise | undefined;
   title: string;
 }) {
-  const t = useMessages(ptProgramMessages).editorItems;
+  const t = useMessages(programEditorMessages).editorItems;
   const editor = useEditor();
   const { form, path } = editor;
   const single = block.kind === 'single';
@@ -627,7 +627,7 @@ function RowBody({
  * hedefi kalkar: PT kazanır, program geçmişine yazılır.
  */
 function ClientTargetNote({ row, target }: { row: TemplateRow; target: RowClientTarget }) {
-  const t = useMessages(ptProgramMessages).editorItems;
+  const t = useMessages(programEditorMessages).editorItems;
   const editor = useEditor();
   const state = clientTargetState(row.sets, target);
   const adopt = () =>
@@ -666,7 +666,7 @@ function ClientTargetNote({ row, target }: { row: TemplateRow; target: RowClient
  * kabına dokunmak seçer; üye tek başına seçilmez (grubu seçilir).
  */
 function RowCard({ block, blockIndex, row, rowIndex }: { block: TemplateBlock; blockIndex: number; row: TemplateRow; rowIndex: number }) {
-  const t = useMessages(ptProgramMessages).editorItems;
+  const t = useMessages(programEditorMessages).editorItems;
   const locale = useLocale();
   const common = useMessages(commonMessages);
   const editor = useEditor();
@@ -787,7 +787,7 @@ function RowCard({ block, blockIndex, row, rowIndex }: { block: TemplateBlock; b
 
 /** Grubun açık yüzü: tür, tur, tur sonu dinlenme, (devrede) istasyon arası, açıklama, alt satır. */
 function GroupSettings({ block, blockIndex }: { block: TemplateBlock; blockIndex: number }) {
-  const t = useMessages(ptProgramMessages).editorItems;
+  const t = useMessages(programEditorMessages).editorItems;
   const locale = useLocale();
   const editor = useEditor();
   const options = kindOptions(block.rows.length);
@@ -850,8 +850,8 @@ function GroupSettings({ block, blockIndex }: { block: TemplateBlock; blockIndex
           variant="outline"
           className="h-9 touch:h-11"
           aria-disabled={tooMany || undefined}
-          title={tooMany ? ptProgramMessages(locale).edit.templateFull : undefined}
-          onClick={() => (tooMany ? editor.announce(ptProgramMessages(locale).edit.templateFull) : editor.actions.dissolve(block.id))}>
+          title={tooMany ? programEditorMessages(locale).edit.templateFull : undefined}
+          onClick={() => (tooMany ? editor.announce(programEditorMessages(locale).edit.templateFull) : editor.actions.dissolve(block.id))}>
           <LinkBreak data-icon="inline-start" />
           {t.dissolve}
         </Button>
@@ -868,7 +868,7 @@ function GroupSettings({ block, blockIndex }: { block: TemplateBlock; blockIndex
  * modunda grubun her yeri grubu seçer; üyeler soluk ve etkileşimsizdir.
  */
 function GroupCard({ block, blockIndex }: { block: TemplateBlock; blockIndex: number }) {
-  const t = useMessages(ptProgramMessages).editorItems;
+  const t = useMessages(programEditorMessages).editorItems;
   const locale = useLocale();
   const common = useMessages(commonMessages);
   const editor = useEditor();
@@ -894,7 +894,7 @@ function GroupCard({ block, blockIndex }: { block: TemplateBlock; blockIndex: nu
       icon: <ArrowsSplit />,
       tone: 'neutral',
       disabled: tooMany,
-      onPress: () => (tooMany ? editor.announce(ptProgramMessages(locale).edit.templateFull) : editor.actions.dissolve(block.id)),
+      onPress: () => (tooMany ? editor.announce(programEditorMessages(locale).edit.templateFull) : editor.actions.dissolve(block.id)),
     },
     removeAction(editor, block.id, common.actions.delete),
   ];
@@ -1025,7 +1025,7 @@ export function ItemPreview({ itemId }: { itemId: string }) {
   const group = block.id === itemId && block.kind !== 'single';
   const row = block.rows.find((item) => item.id === itemId);
   const exercise = row ? exercises.get(row.exerciseId) : undefined;
-  const titleOf = (exerciseId: string) => exercises.get(exerciseId)?.title ?? ptProgramMessages(locale).editorContext.deletedExercise;
+  const titleOf = (exerciseId: string) => exercises.get(exerciseId)?.title ?? programEditorMessages(locale).editorContext.deletedExercise;
   const outcome = armed ? dropTargetLabel(blocks, armed.targetId, armed.outcome, titleOf, locale) : null;
   const full = armed?.outcome === 'full';
   return (

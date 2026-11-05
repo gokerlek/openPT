@@ -13,7 +13,7 @@ import { DRAG } from '@/lib/motion';
 import type { EditorDevice, PickerExercise } from '@/lib/template-edit';
 import { ExercisePicker } from './exercise-picker';
 import { useMessages } from '@/i18n/client';
-import { ptProgramMessages } from '@/i18n/messages/pt-program';
+import { programEditorMessages } from '@/i18n/messages/program-editor';
 
 /**
  * Sheet'in kipi: sona ekleme ya da bir grubun sonuna ekleme ("+ Gruba hareket ekle";
@@ -85,7 +85,7 @@ export function ExerciseSheet(props: SheetProps) {
  * bekleyen bildirimi ve taramanın açık ağrısı; kısıt onayı yoksa yalnız durum (veri değil).
  */
 function CareLines({ care }: { care: EditorCare }) {
-  const t = useMessages(ptProgramMessages).exerciseSheet;
+  const t = useMessages(programEditorMessages).exerciseSheet;
   const severe = care.severe ?? [];
   const pain = care.screeningPain ?? [];
   if (care.unavailable && pain.length === 0) return <p className="text-sm text-muted-foreground">{care.unavailable}</p>;
@@ -145,7 +145,7 @@ function SheetBody({
   care = null,
   onAllowed,
 }: SheetProps & { searchRef: React.RefObject<HTMLInputElement | null> }) {
-  const t = useMessages(ptProgramMessages).exerciseSheet;
+  const t = useMessages(programEditorMessages).exerciseSheet;
   const [status, setStatus] = useState('');
   const [justAdded, setJustAdded] = useState<string | null>(null);
 

@@ -1,5 +1,5 @@
 import { DEFAULT_LOCALE, type Locale } from '../i18n/locale.ts';
-import { ptProgramMessages } from '../i18n/messages/pt-program/index.ts';
+import { programLogMessages } from '../i18n/messages/program-log/index.ts';
 import { lower } from '../i18n/text.ts';
 import { getFormat } from './format.ts';
 import {
@@ -65,7 +65,7 @@ function count(value: number, locale: Locale): string {
 /** "8–12", "8", "30–60 sn", "45 sn". */
 function targetShort(target: TemplateTarget, trackingType: TrackingType, locale: Locale): string {
   const range = target.min === target.max ? count(target.min, locale) : `${count(target.min, locale)}–${count(target.max, locale)}`;
-  return trackingType === 'duration' ? ptProgramMessages(locale).diff.seconds(range) : range;
+  return trackingType === 'duration' ? programLogMessages(locale).diff.seconds(range) : range;
 }
 
 /** Reçete: "3×8–12", "5×5", "3×30–60 sn" (düz setler; set başına biçim `setsText`). */
@@ -74,11 +74,11 @@ export function prescriptionText(sets: number, target: TemplateTarget, trackingT
 }
 
 function restText(seconds: number, locale: Locale): string {
-  return seconds <= 0 ? ptProgramMessages(locale).diff.none : formatRest(seconds, locale);
+  return seconds <= 0 ? programLogMessages(locale).diff.none : formatRest(seconds, locale);
 }
 
 function weeksText(weeks: number | undefined, locale: Locale): string {
-  const t = ptProgramMessages(locale).diff;
+  const t = programLogMessages(locale).diff;
   return weeks === undefined ? t.openEnded : t.weeks(weeks, count(weeks, locale));
 }
 
@@ -127,7 +127,7 @@ function amrapOnly(a: readonly SetSpec[], b: readonly SetSpec[]): boolean {
 
 /** AMRAP değişiminin cümlesi: "son set AMRAP", "AMRAP 2., 3. set", "AMRAP kaldırıldı"… */
 function amrapChange(a: readonly SetSpec[], b: readonly SetSpec[], locale: Locale): string {
-  const t = ptProgramMessages(locale).diff;
+  const t = programLogMessages(locale).diff;
   const before = setShape(a).amrap;
   const after = setShape(b).amrap;
   const single = b.length === 1;
@@ -140,7 +140,7 @@ function amrapChange(a: readonly SetSpec[], b: readonly SetSpec[], locale: Local
 /** Bir günün değişiklikleri (kapsamsız cümleler). */
 export function diffDay(before: Pick<ProgramDay, 'blocks'>, after: Pick<ProgramDay, 'blocks'>, ctx: DiffContext): string[] {
   const locale = ctx.locale ?? DEFAULT_LOCALE;
-  const t = ptProgramMessages(locale).diff;
+  const t = programLogMessages(locale).diff;
   const kindLabels = blockKindLabels(locale);
   const title = (row: TemplateRow) => ctx.exercises.get(row.exerciseId)?.title ?? row.exerciseId;
   const tt = (row: TemplateRow): TrackingType => ctx.exercises.get(row.exerciseId)?.trackingType ?? 'weight_reps';
@@ -263,7 +263,7 @@ export function diffDay(before: Pick<ProgramDay, 'blocks'>, after: Pick<ProgramD
 
 /** "haftada 3 gün". */
 function perWeek(daysPerWeek: number, locale: Locale): string {
-  return ptProgramMessages(locale).diff.perWeek(daysPerWeek, count(daysPerWeek, locale));
+  return programLogMessages(locale).diff.perWeek(daysPerWeek, count(daysPerWeek, locale));
 }
 
 /** Evre özetinin parçaları: süre, sıklık, günler ("2 hafta · haftada 3 gün · Gün A, Gün B"). */
@@ -280,7 +280,7 @@ function phaseParts(phase: ProgramPhase, withDays: boolean, locale: Locale): str
 /** Sıklık değişimi: evresizde programın, evreli programda evrenin. */
 function frequencyChange(before: number | undefined, after: number | undefined, phaseName: string | null, locale: Locale): string | null {
   if (before === after) return null;
-  const t = ptProgramMessages(locale).diff;
+  const t = programLogMessages(locale).diff;
   if (phaseName === null) {
     if (before === undefined) return t.frequency(perWeek(after as number, locale));
     if (after === undefined) return t.frequencyRemoved(perWeek(before, locale));
@@ -300,7 +300,7 @@ function frequencyChange(before: number | undefined, after: number | undefined, 
  */
 export function diffProgram(before: ProgramBody, after: ProgramBody, ctx: DiffContext): ProgramChange[] {
   const locale = ctx.locale ?? DEFAULT_LOCALE;
-  const t = ptProgramMessages(locale).diff;
+  const t = programLogMessages(locale).diff;
   const changes: ProgramChange[] = [];
   const push = (text: string, scope?: string) => changes.push({ ...(scope ? { scope } : {}), text });
 
@@ -444,7 +444,7 @@ export function formatChangeSummary(changes: readonly ProgramChange[]): string {
  * da konu kırpıldıysa gövdede her değişiklik bir satır (kırpılmadan). Git geçmişi tam kayıttır.
  */
 export function commitMessage(kind: LogKind, changes: readonly ProgramChange[], locale: Locale = DEFAULT_LOCALE): string {
-  const t = ptProgramMessages(locale).diff;
+  const t = programLogMessages(locale).diff;
   const summary = formatChangeSummary(changes);
   const full = summary ? (kind === 'create' ? summary : t.commitProgram(summary)) : kind === 'create' ? t.commitCreated : t.commitUpdated;
   const subject = clip(full, SUBJECT_MAX);

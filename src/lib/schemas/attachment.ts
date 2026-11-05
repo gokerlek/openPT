@@ -1,6 +1,6 @@
 import * as v from 'valibot';
 import { type Locale } from '../../i18n/locale.ts';
-import { ptLibraryMessages } from '../../i18n/messages/pt-library/index.ts';
+import { libraryValidationMessages } from '../../i18n/messages/library-validation/index.ts';
 import { msg } from '../../i18n/valibot.ts';
 
 /**
@@ -17,7 +17,7 @@ export const ATTACHMENT_NAME_MAX = 40;
 export const ATTACHMENTS_MAX = 12;
 
 /** Doğrulama mesajları (`msg`: şemayı ayrıştıran isteğin diliyle). */
-const text = (locale: Locale) => ptLibraryMessages(locale).attachmentSchema;
+const text = (locale: Locale) => libraryValidationMessages(locale).attachmentSchema;
 
 /** Aparat fotoğrafı: PNG, JPG, WebP; en fazla 1 MB (cihaz görseliyle aynı kural). */
 export const ATTACHMENT_IMAGE_MAX_BYTES = 1024 * 1024;

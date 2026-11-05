@@ -23,7 +23,7 @@ import { cn } from '@/lib/utils';
 import { blockField, setInputId, useEditor, type SetColumn } from './editor-context';
 import { enterAction, keepLineEnter } from './enter-key';
 import { useLocale, useMessages } from '@/i18n/client';
-import { ptProgramMessages } from '@/i18n/messages/pt-program';
+import { programEditorMessages } from '@/i18n/messages/program-editor';
 
 /**
  * Satırın setleri (SPEC §7.4): set sayısı ve dinlenme stepper'ı, düz setlerde tek "Hedef"
@@ -114,7 +114,7 @@ function useCountDraft<T>(snapshot: () => T, applyFrom: (base: T, count: number)
 
 /** Satırın set sayısı: "−" son seti siler, "+" son seti kopyalar. */
 export function SetCountField({ row, exercise }: Pick<RowProps, 'row' | 'exercise'>) {
-  const t = useMessages(ptProgramMessages).setTable;
+  const t = useMessages(programEditorMessages).setTable;
   const editor = useEditor();
   const id = `setcount-${row.id}`;
   const count = useCountDraft(
@@ -150,7 +150,7 @@ export function SetCountField({ row, exercise }: Pick<RowProps, 'row' | 'exercis
 
 /** Grubun turu: turu dolduran hareketler yeni tura geçer, daha az setliler kendi sayısında kalır. */
 export function RoundsField({ block, rounds }: { block: TemplateBlock; rounds: number }) {
-  const t = useMessages(ptProgramMessages).setTable;
+  const t = useMessages(programEditorMessages).setTable;
   const editor = useEditor();
   const id = `rounds-${block.id}`;
   const count = useCountDraft(
@@ -208,7 +208,7 @@ export function BlockSecondsField({
   step: number;
   disabled?: boolean;
 }) {
-  const t = useMessages(ptProgramMessages).setTable;
+  const t = useMessages(programEditorMessages).setTable;
   const locale = useLocale();
   const { form, path } = useEditor();
   const field = useField(form, { path: blockField(path, blockIndex, name) });
@@ -248,7 +248,7 @@ export function BlockSecondsField({
  * mesafe, yürüyüş/koşuda eğim de (`cardio.ts`); yürüyüş/koşuda süre dakikayla yazılır.
  */
 export function TargetField({ blockIndex, rowIndex, row, exercise }: RowProps) {
-  const t = useMessages(ptProgramMessages).setTable;
+  const t = useMessages(programEditorMessages).setTable;
   const locale = useLocale();
   const format = getFormat(locale);
   const editor = useEditor();
@@ -395,7 +395,7 @@ export function TargetField({ blockIndex, rowIndex, row, exercise }: RowProps) {
 
 /** Düz olmayan setlerin özeti ("12 / 10 / 8 · piramit"): dokununca "Setleri ayrı düzenle" açılır. */
 export function SetsSummary({ row, exercise }: Pick<RowProps, 'row' | 'exercise'>) {
-  const t = useMessages(ptProgramMessages).setTable;
+  const t = useMessages(programEditorMessages).setTable;
   const locale = useLocale();
   const format = getFormat(locale);
   const editor = useEditor();
@@ -499,7 +499,7 @@ function SetNumberInput({
 
 /** Bir set: n · min–max · % (ağırlıklı harekette) · AMRAP. 360 px'in altında % ve AMRAP alt satıra iner. */
 function EditorSetRow({ blockIndex, rowIndex, row, exercise, index }: RowProps & { index: number }) {
-  const t = useMessages(ptProgramMessages).setTable;
+  const t = useMessages(programEditorMessages).setTable;
   const { form, path } = useEditor();
   const at = (name: 'min' | 'max' | 'loadPct' | 'amrap') => blockField(path, blockIndex, 'rows', rowIndex, 'sets', index, name);
   const minField = useField(form, { path: at('min') });
@@ -593,7 +593,7 @@ function EditorSetRow({ blockIndex, rowIndex, row, exercise, index }: RowProps &
  * değilse ya da bir sette hata varsa kendiliğinden açıktır (hatada kapanmaz).
  */
 export function SetsSection({ blockIndex, rowIndex, row, exercise, title, open, forced }: RowProps & { title: string; open: boolean; forced: boolean }) {
-  const t = useMessages(ptProgramMessages).setTable;
+  const t = useMessages(programEditorMessages).setTable;
   const locale = useLocale();
   const editor = useEditor();
   const setsArray = useFieldArray(editor.form, { path: blockField(editor.path, blockIndex, 'rows', rowIndex, 'sets') });

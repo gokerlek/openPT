@@ -1,31 +1,28 @@
 import 'server-only';
-import * as v from 'valibot';
-import { DEFAULT_LOCALE, intlLocale, type Locale } from '../i18n/locale.ts';
+import { DEFAULT_LOCALE, type Locale } from '../i18n/locale.ts';
 import { ptProgramMessages } from '../i18n/messages/pt-program/index.ts';
-import { messageOf } from '../i18n/errors.ts';
-import { langConfig } from '../i18n/valibot.ts';
 import type { DeviceWithSource } from './devices';
 import type { ExerciseWithSource } from './exercises';
 import { appRepo, GithubError } from './github/client';
 import { deleteFile, getFileSha, listDir, readJson, writeJson } from './github/files';
 import { LocalizedGithubError } from './localized-github-error';
 import type { TemplateOption } from './program-plan';
-import { TEMPLATE_ID_PATTERN, templateSchema, type Template } from './schemas/template';
+import { TEMPLATE_ID_PATTERN, type Template } from './schemas/template';
 import type { EditorDevice, PickerExercise } from './template-edit';
+import { createTemplateCache, renderTemplate, resolveTemplates, type RawTemplate, type TemplateFile } from './template-files';
 
 /**
  * Antrenman şablonları: her biri uygulama repo'sunda ayrı dosya (`data/templates/<id>.json`,
  * SPEC §3). Ayrı dosya: iki şablona aynı anda yazmak çakışmaz, geçmiş şablon başına okunur.
  *
- * Liste, dosyaların içerik özetine (blob sha) göre bellekte tutulur: sha içeriğin
- * kendisinden çıktığı için önbellek hiç eskimez — dosya değişince sha da değişir.
- * Tek dosya okuması her zaman tazedir (düzenleme ve kayıt sha'yı buradan alır).
+ * Liste, dosyaların içerik özetine (blob sha) göre bellekte tutulur (`template-files.ts`): sha içeriğin
+ * kendisinden çıktığı için önbellek hiç eskimez — dosya değişince sha da değişir. Okunamayan dosya yapı olarak
+ * tutulur, sorunu her istekte okuyanın dilinde üretilir. Tek dosya okuması her zaman tazedir (düzenleme ve kayıt
+ * sha'yı buradan alır).
  */
 
 export const TEMPLATES_DIR = 'data/templates';
 const FILE_PATTERN = /^t_[a-z0-9]{8}\.json$/;
-const CACHE_LIMIT = 300;
-const READ_CHUNK = 8;
 
 /** Dosya yolu; kimlik kalıba uymuyorsa (ör. `../clients`) istek hiç çıkmaz. */
 export function templatePath(id: string): string {
@@ -33,28 +30,10 @@ export function templatePath(id: string): string {
   return `${TEMPLATES_DIR}/${id}.json`;
 }
 
-export type TemplateFile =
-  | { sha: string; template: Template; name: string; problem: null }
-  /** Okunamayan dosya (bozuk JSON, şemaya uymuyor, kimlik dosya adıyla uyuşmuyor). */
-  | { sha: string; template: null; name: string | null; problem: string; id: string };
+export type { TemplateFile };
 
-function parseTemplateFile(id: string, content: unknown, sha: string, locale: Locale): TemplateFile {
-  const t = ptProgramMessages(locale).templatesLib;
-  const raw = content && typeof content === 'object' ? (content as Record<string, unknown>) : {};
-  const name = typeof raw.name === 'string' ? raw.name : null;
-  const parsed = v.safeParse(templateSchema, content, langConfig(locale));
-  if (!parsed.success) {
-    const issue = parsed.issues[0];
-    return { sha, template: null, name, id, problem: `${v.getDotPath(issue) ?? t.fileFallback}: ${issue.message}` };
-  }
-  if (parsed.output.id !== id) {
-    return { sha, template: null, name, id, problem: t.idMismatch };
-  }
-  return { sha, template: parsed.output, name: parsed.output.name, problem: null };
-}
-
-/** Taze okuma. `null`: yok ya da kimlik geçersiz. Bozuk dosya hata değil, sorunuyla döner (sorun okuyanın dilinde). */
-export async function readTemplateFile(id: string, locale: Locale = DEFAULT_LOCALE): Promise<TemplateFile | null> {
+/** Depodan ham okuma (dil yok). `null`: yok ya da kimlik geçersiz; bozuk JSON `unreadable` olarak döner. */
+async function loadTemplateRaw(id: string): Promise<RawTemplate | null> {
   if (!TEMPLATE_ID_PATTERN.test(id)) return null;
   const path = templatePath(id);
   let stored: Awaited<ReturnType<typeof readJson<unknown>>>;
@@ -64,74 +43,28 @@ export async function readTemplateFile(id: string, locale: Locale = DEFAULT_LOCA
     // Bozuk JSON: silinebilsin ya da üzerine yazılabilsin diye sha ayrıca alınır.
     if (error instanceof GithubError && error.status === 500) {
       const sha = await getFileSha(appRepo(), path);
-      return sha ? { sha, template: null, name: null, id, problem: ptProgramMessages(locale).templatesLib.unreadable } : null;
+      return sha ? { id, sha, unreadable: true } : null;
     }
     throw error;
   }
-  return stored ? parseTemplateFile(id, stored.content, stored.sha, locale) : null;
+  return stored ? { id, sha: stored.sha, content: stored.content } : null;
 }
+
+/** Taze okuma. `null`: yok ya da kimlik geçersiz. Bozuk dosya hata değil, sorunuyla döner (sorun okuyanın dilinde). */
+export async function readTemplateFile(id: string, locale: Locale = DEFAULT_LOCALE): Promise<TemplateFile | null> {
+  const raw = await loadTemplateRaw(id);
+  return raw ? renderTemplate(raw, locale) : null;
+}
+
+const cache = createTemplateCache();
 
 /**
- * İçerik özeti → okunmuş dosya. Ekleme sırasıyla en eskisi düşer. Yalnız okunabilen şablonlar tutulur: okunamayanın
- * sorun metni okuyanın dilindedir, önbellekte dil karışmasın.
- */
-const cache = new Map<string, TemplateFile>();
-
-function remember(file: TemplateFile) {
-  if (!file.template) return;
-  cache.delete(file.sha);
-  cache.set(file.sha, file);
-  while (cache.size > CACHE_LIMIT) {
-    const oldest = cache.keys().next().value;
-    if (oldest === undefined) break;
-    cache.delete(oldest);
-  }
-}
-
-function sortKey(file: TemplateFile): string {
-  return file.template ? file.template.name : (file.name ?? file.id);
-}
-
-/**
- * Bütün şablonlar: geçerliler ada göre, okunamayanlar sonda. Önbellekte olmayanlar
- * 8'erli okunur. Tek dosyanın hatası listeyi düşürmez (okunamayan olarak görünür);
- * klasör okunamazsa hata fırlar.
+ * Bütün şablonlar: geçerliler ada göre, okunamayanlar sonda; okunamayanın sorunu okuyanın dilinde, dosya önbellekte
+ * yapı olarak durur (bkz. `template-files.ts`). Klasör okunamazsa hata fırlar.
  */
 export async function listTemplates(locale: Locale = DEFAULT_LOCALE): Promise<TemplateFile[]> {
   const entries = (await listDir(appRepo(), TEMPLATES_DIR)).filter((entry) => entry.type === 'file' && FILE_PATTERN.test(entry.name));
-  const files = new Map<string, TemplateFile>();
-  const misses = entries.filter((entry) => {
-    const cached = cache.get(entry.sha);
-    if (cached) files.set(entry.name, cached);
-    return !cached;
-  });
-
-  for (let start = 0; start < misses.length; start += READ_CHUNK) {
-    await Promise.all(
-      misses.slice(start, start + READ_CHUNK).map(async (entry) => {
-        const id = entry.name.replace(/\.json$/, '');
-        try {
-          const file = await readTemplateFile(id, locale);
-          if (!file) return;
-          // Okunan sürümün sha'sıyla saklanır: liste ile okuma arasında değiştiyse bir sonraki liste yeniden okur.
-          remember(file);
-          files.set(entry.name, file);
-        } catch (error) {
-          const message = messageOf(error, locale) ?? ptProgramMessages(locale).templatesLib.readFailed;
-          files.set(entry.name, { sha: entry.sha, template: null, name: null, id, problem: message });
-        }
-      }),
-    );
-  }
-
-  const all = entries.flatMap((entry) => {
-    const file = files.get(entry.name);
-    return file ? [file] : [];
-  });
-  return [
-    ...all.filter((file) => file.template).sort((a, b) => sortKey(a).localeCompare(sortKey(b), intlLocale(locale))),
-    ...all.filter((file) => !file.template).sort((a, b) => sortKey(a).localeCompare(sortKey(b), intlLocale(locale))),
-  ];
+  return resolveTemplates(entries, cache, loadTemplateRaw, locale);
 }
 
 /** Seçiciler için geçerli şablonların kimliği ve adı (ör. danışanın başlangıç şablonu). */

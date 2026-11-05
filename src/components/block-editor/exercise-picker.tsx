@@ -34,7 +34,7 @@ import { equipmentLabels, muscleGroups } from '@/lib/schemas/exercise';
 import type { EditorDevice, PickerExercise } from '@/lib/template-edit';
 import { cn } from '@/lib/utils';
 import { useLocale, useMessages } from '@/i18n/client';
-import { ptProgramMessages } from '@/i18n/messages/pt-program';
+import { programEditorMessages } from '@/i18n/messages/program-editor';
 import { commonMessages } from '@/i18n/messages/common';
 
 /** Ekranda en çok bu kadar sonuç; gerisi için arama daraltılır. */
@@ -80,7 +80,7 @@ export function ExercisePicker({
   /** "Yine de ekle" izni kaydedildi. */
   onAllowed?: (exerciseId: string) => void;
 }) {
-  const t = useMessages(ptProgramMessages).exercisePicker;
+  const t = useMessages(programEditorMessages).exercisePicker;
   const locale = useLocale();
   const [query, setQuery] = useState('');
   const [group, setGroup] = useState<string | null>(null);
@@ -296,7 +296,7 @@ function AllowButton({
   disabled: boolean;
   onAllowed: (exercise: PickerExercise) => void;
 }) {
-  const t = useMessages(ptProgramMessages).exercisePicker;
+  const t = useMessages(programEditorMessages).exercisePicker;
   const common = useMessages(commonMessages);
   const [note, setNote] = useState('');
   const allow = useServiceMutation({

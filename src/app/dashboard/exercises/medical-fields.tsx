@@ -28,7 +28,6 @@ import type { exerciseFormSchema } from '@/lib/schemas/exercise';
 import { ConditionPicker } from '@/components/condition-picker';
 import { useLocale, useMessages } from '@/i18n/client';
 import { ptLibraryMessages } from '@/i18n/messages/pt-library';
-import { commonMessages } from '@/i18n/messages/common';
 
 /**
  * Medikal etiketler: sakatlık süzgeci bunlara bakar (`src/lib/exercise-filter.ts`).
@@ -55,7 +54,7 @@ function TagSelect<Value extends string>({
   labels: Record<Value, string>;
   description?: string;
 }) {
-  const common = useMessages(commonMessages);
+  const t = useMessages(ptLibraryMessages).medicalFields;
   return (
     <FormField of={form} path={[path as never]}>
       {(field) => (
@@ -65,7 +64,7 @@ function TagSelect<Value extends string>({
             id={path}
             value={(field.input as string | undefined) ?? ''}
             groups={[{ label, options: values.map((value) => ({ value, label: labels[value] })) }]}
-            empty={common.states.notSpecified}
+            empty={t.notSpecified}
             onChange={(value) => setInput(form, { path: [path as never], input: (value || undefined) as never })}
           />
           {description ? <FieldDescription>{description}</FieldDescription> : null}

@@ -1,6 +1,6 @@
 import type { DropAction } from '@/lib/drop-target';
 import { DEFAULT_LOCALE, type Locale } from '../../../i18n/locale.ts';
-import { ptProgramMessages } from '../../../i18n/messages/pt-program/index.ts';
+import { programEditorMessages } from '../../../i18n/messages/program-editor/index.ts';
 import { combineMessage, moveMessage } from '../../../lib/edit-messages.ts';
 import { combineInto, moveItem, moveRegroups } from '../../../lib/template-edit.ts';
 import type { Editor } from '../editor-context';
@@ -17,7 +17,7 @@ export type DropEditor = Pick<Editor, 'current' | 'update' | 'updateWithUndo' | 
  * Saf modül (çalışma zamanı içe aktarmaları göreli): testler Node'un kendi test aracıyla çalışır.
  */
 export function commitDrop(ed: DropEditor, itemId: string, action: NonNullable<DropAction>, locale: Locale = DEFAULT_LOCALE): void {
-  const titleOf = (exerciseId: string) => ed.exercises.get(exerciseId)?.title ?? ptProgramMessages(locale).editorContext.deletedExercise;
+  const titleOf = (exerciseId: string) => ed.exercises.get(exerciseId)?.title ?? programEditorMessages(locale).editorContext.deletedExercise;
   const before = ed.current();
   if (action.type === 'move') {
     const next = moveItem(before, itemId, action.destination, ed.exercises, ed.newIds(before));

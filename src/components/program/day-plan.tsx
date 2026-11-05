@@ -1,5 +1,5 @@
 import { DEFAULT_LOCALE, type Locale } from '@/i18n/locale';
-import { ptProgramMessages } from '@/i18n/messages/pt-program';
+import { programEditorMessages } from '@/i18n/messages/program-editor';
 import { Badge } from '@/components/ui/badge';
 import { cardioKind } from '@/lib/cardio';
 import { groupWorkText, rowWorkText } from '@/lib/edit-messages';
@@ -45,7 +45,7 @@ export function DayPlan({
   /** Metinlerin dili (sunucu ve istemci ortak; kancasız); yoksa Türkçe. */
   locale?: Locale;
 }) {
-  const t = ptProgramMessages(locale).dayPlan;
+  const t = programEditorMessages(locale).dayPlan;
   const labels = rowLabels({ blocks });
   return (
     <ol className={cn('flex flex-col gap-3', className)}>
@@ -107,6 +107,6 @@ export function DayPlan({
 }
 
 function skipNote(block: TemplateBlock, exercises: ReadonlyMap<string, Pick<PlanExercise, 'title'>>, locale: Locale) {
-  const note = groupSkipNote(block, (row) => exercises.get(row.exerciseId)?.title ?? ptProgramMessages(locale).dayPlan.deletedExercise, locale);
+  const note = groupSkipNote(block, (row) => exercises.get(row.exerciseId)?.title ?? programEditorMessages(locale).dayPlan.deletedExercise, locale);
   return note ? <span className="text-xs text-muted-foreground">{note}</span> : null;
 }

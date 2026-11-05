@@ -1,5 +1,5 @@
 import { DEFAULT_LOCALE, type Locale } from '../i18n/locale.ts';
-import { ptProgramMessages } from '../i18n/messages/pt-program/index.ts';
+import { programEditorMessages } from '../i18n/messages/program-editor/index.ts';
 import { lower } from '../i18n/text.ts';
 import type { JoiningOutcome } from './drop-target.ts';
 import type { AddToGroupOutcome, CombineOutcome, GroupCheck } from './template-edit.ts';
@@ -8,7 +8,7 @@ import { blockKindLabels, type TemplateBlock } from './template-plan.ts';
 import type { CardioKind } from './cardio.ts';
 import type { TrackingType } from './progression.ts';
 
-export { dativeOf } from '../i18n/messages/pt-program/dative.ts';
+export { dativeOf } from '../i18n/messages/program-editor/dative.ts';
 
 /**
  * Düzenleyicinin duyuru ve toast cümleleri (canlı bölge, "Geri al" bildirimleri): taşıma,
@@ -68,7 +68,7 @@ export function moveMessage(
   titleOf: TitleOf,
   locale: Locale = DEFAULT_LOCALE,
 ): string {
-  const t = ptProgramMessages(locale).edit;
+  const t = programEditorMessages(locale).edit;
   const group = after.find((block) => block.id === itemId && block.kind !== 'single');
   const title = group ? groupDescription(group, titleOf, locale) : titleOfItem(after, itemId, titleOf, locale);
   const from = placeOf(before, itemId);
@@ -99,7 +99,7 @@ export function combineMessage(
   titleOf: TitleOf,
   locale: Locale = DEFAULT_LOCALE,
 ): string {
-  const t = ptProgramMessages(locale).edit;
+  const t = programEditorMessages(locale).edit;
   const source = titleOfItem(before, sourceId, titleOf, locale);
   if (outcome === 'superset') return t.madeSuperset(`${titleOfItem(before, targetId, titleOf, locale)} + ${source}`);
   const holdsTarget = (block: TemplateBlock) => block.id === targetId || block.rows.some((row) => row.id === targetId);
@@ -119,7 +119,7 @@ export function edgeMessage(
   titleOf: TitleOf,
   locale: Locale = DEFAULT_LOCALE,
 ): string {
-  const t = ptProgramMessages(locale).edit;
+  const t = programEditorMessages(locale).edit;
   const title = titleOfItem(blocks, itemId, titleOf, locale);
   const inGroup = placeOf(blocks, itemId)?.level === 'group';
   if (towardsStart) return inGroup ? t.firstAlreadyInGroup(title) : t.firstAlready(title);
@@ -142,7 +142,7 @@ export function selectionStatus(
   pointer: 'touch' | 'mouse' = 'touch',
   locale: Locale = DEFAULT_LOCALE,
 ): string {
-  const t = ptProgramMessages(locale).edit;
+  const t = programEditorMessages(locale).edit;
   if (count === 0) return pointer === 'touch' ? t.selectHintTouch : t.selectHintMouse;
   return check === 'superset'
     ? t.selectedSuperset(count)
@@ -163,20 +163,20 @@ export function groupedMessage(
   titleOf: TitleOf,
   locale: Locale = DEFAULT_LOCALE,
 ): string {
-  const t = ptProgramMessages(locale).edit;
+  const t = programEditorMessages(locale).edit;
   const titles = blocks.filter((block) => blockIds.has(block.id)).flatMap((block) => block.rows.map((row) => titleOf(row.exerciseId)));
   return kind === 'superset' ? t.madeSuperset(titles.join(' + ')) : t.madeCircuit(titles.length);
 }
 
 /** Toplu kopya ve silmenin cümlesi: "3 hareket kopyalandı", "1 hareket silindi". */
 export function bulkMessage(rows: number, action: 'copied' | 'removed', locale: Locale = DEFAULT_LOCALE): string {
-  const t = ptProgramMessages(locale).edit;
+  const t = programEditorMessages(locale).edit;
   return action === 'copied' ? t.bulkCopied(rows) : t.bulkRemoved(rows);
 }
 
 /** "Gruba hareket ekle" sheet'inin başlığı: "Süperset 2'ye ekle". */
 export function addToGroupTitle(kind: TemplateBlock['kind'], blockIndex: number, locale: Locale = DEFAULT_LOCALE): string {
-  return ptProgramMessages(locale).edit.addToGroupTitle(blockKindLabels(locale)[kind], blockIndex + 1);
+  return programEditorMessages(locale).edit.addToGroupTitle(blockKindLabels(locale)[kind], blockIndex + 1);
 }
 
 /**
@@ -192,7 +192,7 @@ export type DeviceChange =
   | { kind: 'reset'; device: string | null; title: string };
 
 export function deviceChangeMessage(change: DeviceChange, locale: Locale = DEFAULT_LOCALE): string {
-  const t = ptProgramMessages(locale).edit;
+  const t = programEditorMessages(locale).edit;
   switch (change.kind) {
     case 'swapped':
       return t.deviceSwapped(change.device, change.to, change.from);
@@ -205,7 +205,7 @@ export function deviceChangeMessage(change: DeviceChange, locale: Locale = DEFAU
 
 /** "Üstüne bırak"ın sonuç hapı (hedefte ve sürüklenen kartın üstünde). */
 export function dropOutcomeLabels(locale: Locale = DEFAULT_LOCALE): Record<Exclude<CombineOutcome, 'not_allowed'>, string> {
-  return ptProgramMessages(locale).edit.dropOutcomes;
+  return programEditorMessages(locale).edit.dropOutcomes;
 }
 
 /** Türkçe adlar (eski çağrılar ve testler); arayüz `dropOutcomeLabels(locale)` kullanır. */
@@ -239,7 +239,7 @@ export function dropTargetLabel(
 
 /** Dinlenme: saniyeyle (stepper'daki gibi), yoksa "dinlenme yok"; bozuk girdide "? sn". */
 function restText(seconds: number, locale: Locale): string {
-  const t = ptProgramMessages(locale).edit;
+  const t = programEditorMessages(locale).edit;
   if (!Number.isFinite(seconds)) return t.restUnknown;
   return seconds > 0 ? t.restSeconds(seconds) : t.restNone;
 }
@@ -269,7 +269,7 @@ export function groupWorkText(
   rounds: number,
   locale: Locale = DEFAULT_LOCALE,
 ): string {
-  const t = ptProgramMessages(locale).edit;
+  const t = programEditorMessages(locale).edit;
   const rest =
     Number.isFinite(block.restSeconds) && block.restSeconds <= 0 ? t.groupRestNone : t.groupRestAfter(restText(block.restSeconds, locale));
   const station =
@@ -281,7 +281,7 @@ export function groupWorkText(
 
 /** Kütüphane sheet'i sona eklerken şablon dolu: liste pasif, neden durum satırında (`sheetStatus`). */
 export function sheetFullMessage(locale: Locale = DEFAULT_LOCALE): string {
-  return ptProgramMessages(locale).edit.sheetFull;
+  return programEditorMessages(locale).edit.sheetFull;
 }
 
 /** Türkçe metin (eski çağrılar ve testler); arayüz `sheetFullMessage(locale)` kullanır. */
@@ -292,7 +292,7 @@ export const SHEET_FULL_MESSAGE = sheetFullMessage('tr');
  * şablonda liste pasif, süpersette ya da 6'lı komplekste "Eklenirse devre olur".
  */
 export function addToGroupHint(outcome: AddToGroupOutcome, locale: Locale = DEFAULT_LOCALE): { blocked: string | null; hint: string } {
-  const t = ptProgramMessages(locale).edit;
+  const t = programEditorMessages(locale).edit;
   if (outcome === 'full') return { blocked: t.groupFull, hint: '' };
   if (outcome === 'limit') return { blocked: t.templateFull, hint: '' };
   if (outcome === 'not_allowed') return { blocked: t.groupGone, hint: '' };
@@ -306,7 +306,7 @@ export function addedToGroupMessage(
   after: TemplateBlock['kind'],
   locale: Locale = DEFAULT_LOCALE,
 ): string {
-  const t = ptProgramMessages(locale).edit;
+  const t = programEditorMessages(locale).edit;
   return before === after ? t.addedToGroup(title) : t.addedToGroupBecame(title, lower(locale, blockKindLabels(locale)[after]));
 }
 

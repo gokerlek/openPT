@@ -10,8 +10,8 @@ import { Button } from '@/components/ui/button';
 import { showUndoToast } from '@/components/undo-toast';
 import { getFormat } from '@/lib/format';
 import { focusEditorStart } from './editor-context';
+import { readRaw, removeRaw, stoppers, writeRaw } from '@/lib/draft-store';
 import {
-  DRAFT_PREFIX,
   DRAFT_VERSION,
   draftConflict,
   draftDiffers,
@@ -22,7 +22,7 @@ import {
   type EditorDraft,
 } from '@/lib/unsaved-changes';
 import { useLocale, useMessages } from '@/i18n/client';
-import { ptProgramMessages } from '@/i18n/messages/pt-program';
+import { programEditorMessages } from '@/i18n/messages/program-editor';
 
 /**
  * Düzenleyicinin yerel taslağı (tasarım PT kararı 16). Kaydedilmemiş değişiklik varken formun
@@ -37,56 +37,6 @@ import { ptProgramMessages } from '@/i18n/messages/pt-program';
 
 /** Her tuşta değil, duraklayınca yazılır. */
 const WRITE_DELAY = 500;
-
-function readRaw(key: string): string | null {
-  try {
-    return window.localStorage.getItem(key);
-  } catch {
-    return null;
-  }
-}
-
-function writeRaw(key: string, value: string): void {
-  try {
-    window.localStorage.setItem(key, value);
-  } catch {
-    // Depo kapalı ya da dolu: taslaksız devam (çıkış uyarısı yine tutar).
-  }
-}
-
-function removeRaw(key: string): void {
-  try {
-    window.localStorage.removeItem(key);
-  } catch {
-    // Depo kapalı: silinecek taslak da yok.
-  }
-}
-
-/** Açık düzenleyicilerin durdurucuları: dışarıdan atılan taslağı düzenleyici yeniden yazmasın. */
-const stoppers = new Map<string, Set<() => void>>();
-
-/** Taslağı atar, o anahtardaki açık düzenleyici de yazmayı bırakır (ör. program silinince). */
-export function discardDraft(key: string): void {
-  for (const stop of stoppers.get(key) ?? []) stop();
-  removeRaw(key);
-}
-
-/** Bütün taslakları atar: PT çıkış yapınca (aynı tarayıcıyı başkası kullanabilir). */
-export function discardAllDrafts(): void {
-  discardDrafts(DRAFT_PREFIX);
-}
-
-/** Öneki tutan taslakları atar: danışan çıkış yapınca yalnız kendi programlarının taslakları (`ownDraftPrefix`). */
-export function discardDrafts(prefix: string): void {
-  for (const [key, set] of stoppers) if (key.startsWith(prefix)) for (const stop of set) stop();
-  try {
-    const store = window.localStorage;
-    const keys = Array.from({ length: store.length }, (_, index) => store.key(index)).filter((key) => key?.startsWith(prefix));
-    for (const key of keys) if (key) store.removeItem(key);
-  } catch {
-    // Depo kapalı: taslak da yok.
-  }
-}
 
 export type DraftOffer = {
   savedAt: string;
@@ -139,7 +89,7 @@ export function useEditorDraft<TSchema extends v.GenericSchema<Record<string, un
    */
   prepare?: (input: v.InferInput<TSchema>) => v.InferInput<TSchema>;
 }): EditorDraftController<TBase, v.InferInput<TSchema>> {
-  const t = useMessages(ptProgramMessages).editorDraft;
+  const t = useMessages(programEditorMessages).editorDraft;
   const [offer, setOffer] = useState<EditorDraft<TBase> | null>(null);
   const [continued, setContinued] = useState<{ base: TBase; input: v.InferInput<TSchema> } | null>(null);
   const [generation, setGeneration] = useState(0);
@@ -317,7 +267,7 @@ export function DraftNotice({
   onRestore: () => void;
   onDismiss: () => void;
 }) {
-  const t = useMessages(ptProgramMessages).editorDraft;
+  const t = useMessages(programEditorMessages).editorDraft;
   const format = getFormat(useLocale());
   return (
     <Alert>

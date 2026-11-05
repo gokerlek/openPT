@@ -12,8 +12,9 @@ import { programSchema } from '../lib/schemas/program.ts';
 import { templateSchema } from '../lib/schemas/template.ts';
 import { resizeSets, uniformSets } from '../lib/set-plan.ts';
 import type { TemplateBlock, TemplateRow } from '../lib/template-plan.ts';
-import { ptLibraryMessages } from './messages/pt-library/index.ts';
-import { ptProgramMessages } from './messages/pt-program/index.ts';
+import { exerciseFilterMessages } from './messages/exercise-filter/index.ts';
+import { programValidationMessages } from './messages/program-validation/index.ts';
+import { programLogMessages } from './messages/program-log/index.ts';
 import { langConfig } from './valibot.ts';
 
 /** T1 (kütüphane ve program düzenleyici) metinlerinin İngilizcesi: saf işlevlerin çıktısı, saklanan geçmiş cümleleri. */
@@ -181,7 +182,7 @@ describe('danışanın hedefi ve öneriler İngilizce', () => {
 describe('kısıt süzgeci İngilizce', () => {
   test('her kuralın gerekçesi iki dilde var', () => {
     for (const locale of ['tr', 'en'] as const) {
-      const rules: Record<string, string> = ptLibraryMessages(locale).exerciseFilter.rules;
+      const rules: Record<string, string> = exerciseFilterMessages(locale).exerciseFilter.rules;
       for (const rule of RULES) assert.ok((rules[rule.id] ?? '').length > 10, `${locale}: ${rule.id}`);
     }
   });
@@ -193,7 +194,7 @@ describe('kısıt süzgeci İngilizce', () => {
       { locale: 'en' },
     );
     assert.equal(result.decision, 'block');
-    assert.match(result.findings[0]!.message, /^Marked for .+: don't have the client do this exercise\.$/);
+    assert.match(result.findings[0]!.message, /^Marked for .+: blocked for this exercise\.$/);
     assert.deepEqual(filterGroupLabels('en'), { blocked: 'blocked', warned: 'warning', clear: 'suitable', untagged: 'not checked', unassessed: 'missing info' });
   });
 });
@@ -222,11 +223,11 @@ describe('şema mesajları isteğin dilinde', () => {
   });
 
   test('sözlükler: sayıya bağlı çoğul ve süre birimi', () => {
-    const t = ptProgramMessages('en').diff;
+    const t = programLogMessages('en').diff;
     assert.equal(t.weeks(1, '1'), '1 week');
     assert.equal(t.weeks(6, '6'), '6 weeks');
     assert.equal(t.perWeek(1, '1'), '1 day a week');
-    assert.equal(ptProgramMessages('en').programSchema.units.weeks(1), ' week');
-    assert.equal(ptProgramMessages('tr').programSchema.units.weeks(1), ' hafta');
+    assert.equal(programValidationMessages('en').programSchema.units.weeks(1), ' week');
+    assert.equal(programValidationMessages('tr').programSchema.units.weeks(1), ' hafta');
   });
 });

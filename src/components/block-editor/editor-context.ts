@@ -8,7 +8,7 @@ import type { blocksHostSchema } from '@/lib/schemas/template';
 import type { SetSpec } from '@/lib/set-plan';
 import type { EditorDevice, IdSource, PickerExercise } from '@/lib/template-edit';
 import { DEFAULT_LOCALE, type Locale } from '@/i18n/locale';
-import { ptProgramMessages } from '@/i18n/messages/pt-program';
+import { programEditorMessages } from '@/i18n/messages/program-editor';
 import { blockKindLabels, type TemplateBlock, type TemplateRow } from '@/lib/template-plan';
 
 /** Blokları kökte tutan form tipi. Gerçek form başka şekilde olabilir (program); yol öneki `path`'tedir. */
@@ -175,7 +175,7 @@ export function useEditor(): Editor {
 
 /** Satırın başlığı: egzersizin adı; kütüphanede yoksa "Silinmiş egzersiz". */
 export function rowTitle(row: TemplateRow, exercises: ReadonlyMap<string, PickerExercise>, locale: Locale = DEFAULT_LOCALE): string {
-  return exercises.get(row.exerciseId)?.title ?? ptProgramMessages(locale).editorContext.deletedExercise;
+  return exercises.get(row.exerciseId)?.title ?? programEditorMessages(locale).editorContext.deletedExercise;
 }
 
 /** Grubun adı: türü ve sırası ("Süperset 2"). */

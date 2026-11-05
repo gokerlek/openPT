@@ -1,5 +1,5 @@
 import { DEFAULT_LOCALE, type Locale } from '../i18n/locale.ts';
-import { ptProgramMessages } from '../i18n/messages/pt-program/index.ts';
+import { programLogMessages } from '../i18n/messages/program-log/index.ts';
 import { msg } from '../i18n/valibot.ts';
 import * as v from 'valibot';
 import { effectiveSets, sameSets } from './client-targets.ts';
@@ -55,13 +55,13 @@ export const proposalActionSchema = v.variant('action', [
   v.object({
     action: v.literal('decline'),
     sessionId: v.pipe(v.string(), v.regex(SESSION_ID_PATTERN)),
-    note: v.optional(v.pipe(v.string(), v.trim(), v.maxLength(300, msg((l) => ptProgramMessages(l).proposals.noteMax)))),
+    note: v.optional(v.pipe(v.string(), v.trim(), v.maxLength(300, msg((l) => programLogMessages(l).proposals.noteMax)))),
   }),
 ]);
 
 /** `algo_sets`: öneri katmanının adayı (§5.6): danışanın bitişinde "Antrenörüne öner" ile gelir, gerekçesi `why`'da. */
 export function proposalKindLabels(locale: Locale = DEFAULT_LOCALE): Record<ProposalKind, string> {
-  return ptProgramMessages(locale).proposals.kinds;
+  return programLogMessages(locale).proposals.kinds;
 }
 
 /** Türkçe adlar (eski çağrılar); arayüz `proposalKindLabels(locale)` kullanır. */
@@ -245,7 +245,7 @@ export function clientOutcomes(file: ProposalsFile, now: Date, days: number = PR
 
 /** Karar etiketleri danışanın dilinde (Bugün'de görünür). */
 export function outcomeLabels(locale: Locale = DEFAULT_LOCALE): Record<Exclude<ProposalStatus, 'pending'>, string> {
-  return ptProgramMessages(locale).proposals.outcomes;
+  return programLogMessages(locale).proposals.outcomes;
 }
 
 /** Türkçe etiketler (eski çağrılar); arayüz `outcomeLabels(locale)` kullanır. */
@@ -309,7 +309,7 @@ function removeRow(phases: readonly ProgramPhase[], rowId: string): ProgramPhase
  * - `add`: günün sonuna tek hareketlik blok (yeni kimliklerle); gün doluysa uygulanmaz.
  */
 export function applyProposal(program: Program, proposal: Proposal, ids: ProgramIdSource, locale: Locale = DEFAULT_LOCALE): ApplyProposalResult {
-  const STALE = ptProgramMessages(locale).proposals.stale;
+  const STALE = programLogMessages(locale).proposals.stale;
   const phases = program.phases;
   if (proposal.kind === 'add') {
     const day = phases.flatMap((phase) => phase.days).find((item) => item.id === proposal.dayId);
@@ -368,7 +368,7 @@ export function applyProposal(program: Program, proposal: Proposal, ids: Program
 
 /** Onaylanan önerinin program geçmişindeki notu (farkın yanında): "Danışanın önerisi: Leg Press 3 → 4 set". */
 export function approvalNote(proposal: Pick<Proposal, 'text'>, locale: Locale = DEFAULT_LOCALE): string {
-  return ptProgramMessages(locale).proposals.approvalNote(proposal.text);
+  return programLogMessages(locale).proposals.approvalNote(proposal.text);
 }
 
 export type ApprovalPlan =
@@ -405,7 +405,7 @@ export function planApproval(input: {
   const applied = applyProposal(program, proposal, programIdSource(program.phases, input.random), locale);
   if (applied.status === 'stale') return stale(applied.reason);
   const normalized = normalizeProgram({ phased: program.phased, phases: applied.phases }, input.library, program);
-  if (Object.keys(normalized.errors).length > 0) return stale(ptProgramMessages(locale).proposals.stale.libraryMissing);
+  if (Object.keys(normalized.errors).length > 0) return stale(programLogMessages(locale).proposals.stale.libraryMissing);
   const result = applyProgramEdit(
     program,
     { phased: program.phased, currentPhaseId: program.current.phaseId, phases: normalized.phases },

@@ -4,7 +4,7 @@ import { MuscleMap } from '@/components/muscle-map/muscle-map';
 import { Progress, ProgressLabel } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useLocale, useMessages } from '@/i18n/client';
-import { ptProgramMessages } from '@/i18n/messages/pt-program';
+import { programEditorMessages } from '@/i18n/messages/program-editor';
 import { getFormat } from '@/lib/format';
 import { loadMapProps } from '@/lib/muscle-tiers';
 import type { LoadRow } from '@/lib/program-insights';
@@ -29,14 +29,14 @@ export type DoneLoad = { load: Record<string, number>; sessions: number; sets: n
  */
 function LoadVersus({ rows }: { rows: readonly LoadRow[] }) {
   const locale = useLocale();
-  const t = useMessages(ptProgramMessages).phaseLoad;
+  const t = useMessages(programEditorMessages).phaseLoad;
   const format = getFormat(locale);
   if (rows.length === 0) return null;
   return (
     <ul className="grid gap-x-6 gap-y-3 sm:grid-cols-2" aria-label={t.versusAria}>
       {rows.map((row) => {
         const label = muscleLabels(locale)[row.muscle as Muscle] ?? row.muscle;
-        const text = row.planned > 0 ? t.versusPlanned(format.number(row.done), format.number(row.planned)) : t.versusUnplanned(format.number(row.done));
+        const text = row.planned > 0 ? t.versusPlanned(format.number(row.done), format.number(row.planned), row.planned) : t.versusUnplanned(format.number(row.done), row.done);
         return (
           <li key={row.muscle}>
             <Progress value={row.planned > 0 ? Math.min(100, (row.done / row.planned) * 100) : 100} getAriaValueText={() => text} className="gap-1.5">
@@ -77,14 +77,14 @@ export function PhaseLoad({
   done?: DoneLoad | null;
 }) {
   const locale = useLocale();
-  const t = useMessages(ptProgramMessages).phaseLoad;
+  const t = useMessages(programEditorMessages).phaseLoad;
   const format = getFormat(locale);
   const cycleCaption = t.cycleCaption(dayCount);
   const byAssignment = assigned.length > 0;
   const hasWeekly = Boolean(weekly && (byAssignment || (factor !== null && daysPerWeek !== undefined)));
   const weeklyCaption = byAssignment
     ? t.weeklyByAssignment(weekdaysText(assigned, locale))
-    : t.weeklyByFrequency(daysPerWeek ?? 0, dayCount, format.number(factor ?? 0));
+    : t.weeklyByFrequency(daysPerWeek ?? 0, dayCount, format.number(factor ?? 0), factor ?? 0);
   // Haftalık görünümün yolu: programlara gün atamak ya da (atamasız evrede) haftalık sıklık. PT sayfalarında; PT metni
   // kişisiz (ürün beyaz etiket).
   const weeklyHint = t.weeklyHint;

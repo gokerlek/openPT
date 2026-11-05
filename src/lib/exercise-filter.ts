@@ -1,5 +1,5 @@
 import { DEFAULT_LOCALE, type Locale } from '../i18n/locale.ts';
-import { ptLibraryMessages } from '../i18n/messages/pt-library/index.ts';
+import { exerciseFilterMessages } from '../i18n/messages/exercise-filter/index.ts';
 import {
   conditionInfo,
   type ClientCondition,
@@ -141,7 +141,7 @@ export type FilterContext = {
 export type TimedContext = 'weeksPostOp' | 'symptomDirection' | 'tendinopathyStage' | 'plannedReps' | 'hoursSinceWaking';
 
 export function contextLabels(locale: Locale = DEFAULT_LOCALE): Record<TimedContext, string> {
-  return ptLibraryMessages(locale).exerciseFilter.contextLabels;
+  return exerciseFilterMessages(locale).exerciseFilter.contextLabels;
 }
 
 /** Türkçe adlar (eski çağrılar); arayüz `contextLabels(locale)` kullanır. */
@@ -558,7 +558,7 @@ export function evaluateExercise(
   context: FilterContext = {},
 ): FilterResult {
   const locale = context.locale ?? DEFAULT_LOCALE;
-  const t = ptLibraryMessages(locale).exerciseFilter;
+  const t = exerciseFilterMessages(locale).exerciseFilter;
   const ruleMessages: Record<string, string> = t.rules;
   const findings: Finding[] = [];
   const pending: FilterResult['pending'] = [];
@@ -632,7 +632,7 @@ export const FILTER_GROUPS = ['blocked', 'warned', 'clear', 'untagged', 'unasses
 export type FilterGroup = (typeof FILTER_GROUPS)[number];
 
 export function filterGroupLabels(locale: Locale = DEFAULT_LOCALE): Record<FilterGroup, string> {
-  return ptLibraryMessages(locale).exerciseFilter.groups;
+  return exerciseFilterMessages(locale).exerciseFilter.groups;
 }
 
 /** Türkçe adlar (eski çağrılar); arayüz `filterGroupLabels(locale)` kullanır. */
@@ -719,31 +719,31 @@ export function requiresClearance(conditions: readonly ClientCondition[]): Clien
 /* --- Ekranda görünen adlar --- */
 
 export function kineticChainLabels(locale: Locale = DEFAULT_LOCALE): Record<KineticChain, string> {
-  return ptLibraryMessages(locale).exerciseFilter.kineticChains;
+  return exerciseFilterMessages(locale).exerciseFilter.kineticChains;
 }
 export function axialLoadLabels(locale: Locale = DEFAULT_LOCALE): Record<AxialLoad, string> {
-  return ptLibraryMessages(locale).exerciseFilter.axialLoads;
+  return exerciseFilterMessages(locale).exerciseFilter.axialLoads;
 }
 export function shearLevelLabels(locale: Locale = DEFAULT_LOCALE): Record<ShearLevel, string> {
-  return ptLibraryMessages(locale).exerciseFilter.shearLevels;
+  return exerciseFilterMessages(locale).exerciseFilter.shearLevels;
 }
 export function spinalAlignmentLabels(locale: Locale = DEFAULT_LOCALE): Record<SpinalAlignment, string> {
-  return ptLibraryMessages(locale).exerciseFilter.spinalAlignments;
+  return exerciseFilterMessages(locale).exerciseFilter.spinalAlignments;
 }
 export function jointWindowLabels(locale: Locale = DEFAULT_LOCALE): Record<JointWindow, string> {
-  return ptLibraryMessages(locale).exerciseFilter.jointWindows;
+  return exerciseFilterMessages(locale).exerciseFilter.jointWindows;
 }
 export function loadVectorLabels(locale: Locale = DEFAULT_LOCALE): Record<LoadVector, string> {
-  return ptLibraryMessages(locale).exerciseFilter.loadVectors;
+  return exerciseFilterMessages(locale).exerciseFilter.loadVectors;
 }
 export function contractionTypeLabels(locale: Locale = DEFAULT_LOCALE): Record<ContractionType, string> {
-  return ptLibraryMessages(locale).exerciseFilter.contractionTypes;
+  return exerciseFilterMessages(locale).exerciseFilter.contractionTypes;
 }
 export function resistanceProfileLabels(locale: Locale = DEFAULT_LOCALE): Record<ResistanceProfile, string> {
-  return ptLibraryMessages(locale).exerciseFilter.resistanceProfiles;
+  return exerciseFilterMessages(locale).exerciseFilter.resistanceProfiles;
 }
 export function decisionLabels(locale: Locale = DEFAULT_LOCALE): Record<Decision, string> {
-  return ptLibraryMessages(locale).exerciseFilter.decisions;
+  return exerciseFilterMessages(locale).exerciseFilter.decisions;
 }
 
 /** Türkçe adlar (eski çağrılar ve testler); arayüz yukarıdaki `…Labels(locale)` işlevlerini kullanır. */

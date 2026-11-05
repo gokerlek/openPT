@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Trash } from '@phosphor-icons/react';
-import { discardDraft } from '@/components/block-editor/editor-draft';
+import { discardDraft } from '@/lib/draft-store';
 import { ConfirmDeleteDialog } from '@/components/confirm-delete-dialog';
 import { Button } from '@/components/ui/button';
 import { fetchJson } from '@/lib/query/errors';

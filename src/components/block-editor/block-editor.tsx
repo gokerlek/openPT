@@ -73,12 +73,12 @@ const NO_TARGETS: Readonly<Record<string, RowClientTarget>> = {};
 import { SaveButton } from './editor-save';
 import { ExerciseSheet, type PickerState } from './exercise-sheet';
 import { useLocale, useMessages } from '@/i18n/client';
-import { ptProgramMessages } from '@/i18n/messages/pt-program';
+import { programEditorMessages } from '@/i18n/messages/program-editor';
 import { commonMessages } from '@/i18n/messages/common';
 
 /** Açıklama (SPEC §6, tasarım §2): dokunmatikte ve masaüstünde ayrı. */
 function DefaultDescription() {
-  const t = useMessages(ptProgramMessages).blockEditor;
+  const t = useMessages(programEditorMessages).blockEditor;
   return (
     <>
       <span className="hidden touch:inline">{t.hintTouch}</span>
@@ -267,7 +267,7 @@ export function BlockEditor({
   /** Programda danışanın kısıtları (`kisit-tarama.md` §3.2, §3.3): sheet'te işaret, kartta rozet. Şablonda yok. */
   care?: EditorCare | null;
 }) {
-  const t = useMessages(ptProgramMessages).blockEditor;
+  const t = useMessages(programEditorMessages).blockEditor;
   const common = useMessages(commonMessages);
   const locale = useLocale();
   // Sheet'in "dolu" nedeni (`edit-messages.test.ts` kaynakta bu adı arar): isteğin dilinde.
@@ -453,7 +453,7 @@ export function BlockEditor({
     requestAnimationFrame(() => requestAnimationFrame(() => document.getElementById(setInputId(rowId, index, column))?.focus()));
   }, []);
 
-  const titleOf = useCallback((exerciseId: string) => exerciseById.get(exerciseId)?.title ?? ptProgramMessages(locale).editorContext.deletedExercise, [exerciseById, locale]);
+  const titleOf = useCallback((exerciseId: string) => exerciseById.get(exerciseId)?.title ?? programEditorMessages(locale).editorContext.deletedExercise, [exerciseById, locale]);
 
   const actions = useMemo<ItemActions>(() => {
     const titleFor = (blocksNow: readonly TemplateBlock[], itemId: string) => itemTitle(blocksNow, itemId, exerciseById, locale);
@@ -465,7 +465,7 @@ export function BlockEditor({
     const ungroup = (rowId: string) => {
       const before = current();
       if (!memberOf(before, rowId)) return;
-      if (before.length >= TEMPLATE_LIMITS.blocks) return announce(ptProgramMessages(locale).edit.templateFull);
+      if (before.length >= TEMPLATE_LIMITS.blocks) return announce(programEditorMessages(locale).edit.templateFull);
       const title = titleFor(before, rowId);
       updateWithUndo((now) => ungroupRow(now, rowId, exerciseById, newIds(now)), t.leftGroup(title), { focus: rowId, highlight: rowId });
       close(rowId);
@@ -475,7 +475,7 @@ export function BlockEditor({
       const before = current();
       const group = before.find((block) => block.id === blockId && block.kind !== 'single');
       if (!group) return;
-      if (before.length - 1 + group.rows.length > TEMPLATE_LIMITS.blocks) return announce(ptProgramMessages(locale).edit.templateFull);
+      if (before.length - 1 + group.rows.length > TEMPLATE_LIMITS.blocks) return announce(programEditorMessages(locale).edit.templateFull);
       const title = titleFor(before, blockId);
       updateWithUndo((now) => dissolveGroup(now, blockId, exerciseById, newIds(now)), t.dissolved(title), {
         focus: group.rows[0]?.id,
