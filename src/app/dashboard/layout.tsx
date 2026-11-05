@@ -1,7 +1,8 @@
 import type { Metadata } from 'next';
 import { CoachLauncher } from '@/components/coach/coach-launcher';
 import { redirect } from 'next/navigation';
-import { loadAppConfig } from '@/lib/config';
+import { loadAppConfig, readAppConfig } from '@/lib/config';
+import { panelShortName } from '@/lib/panel-manifest';
 import { requirePt } from '@/lib/guards';
 import { DashboardDock } from './nav';
 import { UserMenu } from './user-menu';
@@ -26,9 +27,17 @@ const CONTENT_TOP = 'pt-[calc(max(0.75rem,env(safe-area-inset-top))_+_0.75rem)]'
 
 /**
  * Panel kendi manifest'iyle yüklenir (`panel.webmanifest/route.ts`): danışan uygulamasından ayrı simge ve ad,
- * açılışı `/dashboard`. Kök düzenin bağladığı danışan manifest'inin yerini alır.
+ * açılışı `/dashboard`. Kök düzenin bağladığı danışan manifest'inin yerini alır. iPhone ana ekran başlığı da
+ * ayırt edici ("<ad> Panel", `lib/panel-manifest.ts`); `appleWebApp` bütünüyle ezildiği için öteki alanlar
+ * kök düzendekiyle aynı yazılır.
  */
-export const metadata: Metadata = { manifest: '/panel.webmanifest' };
+export async function generateMetadata(): Promise<Metadata> {
+  const config = await readAppConfig();
+  return {
+    manifest: '/panel.webmanifest',
+    appleWebApp: { capable: true, title: panelShortName(config.appName), statusBarStyle: 'black-translucent' },
+  };
+}
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const session = await requirePt();
