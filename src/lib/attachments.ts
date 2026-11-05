@@ -1,6 +1,5 @@
 import 'server-only';
 import { ATTACHMENT_LIBRARY } from '@/data/attachment-library';
-import { getLocale } from '@/i18n/server';
 import type { Locale } from '@/i18n/locale';
 import { appRepoFiles } from './app-repo-files';
 import { ATTACHMENTS, readCatalog, type CatalogFile } from './catalog-store';
@@ -10,8 +9,9 @@ import type { Attachment } from './schemas/attachment';
 /**
  * Aparat havuzu: hazır liste (pakette) + PT'nin eklediği ya da değiştirdiği aparatlar
  * (repo'da). Aynı kimlik iki tarafta da varsa PT'ninki kazanır. Cihazlarda olduğu gibi
- * sunucuda önbellek yok: kaydın ardından açılan sayfa yeni kaydı görür. Hazır havuzun adı okunurken isteğin dilinde
- * verilir (`library-lists.ts`); PT'nin kayıtları olduğu gibi gelir. Dönen liste bir PT dosyasına olduğu gibi
+ * sunucuda önbellek yok: kaydın ardından açılan sayfa yeni kaydı görür. Hazır havuzun adı `locale` verilince o dilde
+ * okunur (`library-lists.ts`; verilmezse olduğu gibi, dil burada çerezden okunmaz: `unstable_cache` içinde çağrılabilir);
+ * PT'nin kayıtları olduğu gibi gelir. Dönen liste bir PT dosyasına olduğu gibi
  * yazılmamalı (çevrilmiş metin PT'nin içeriği olurdu).
  */
 
@@ -32,14 +32,14 @@ export async function readCustomAttachments(): Promise<CustomAttachments> {
   return readCatalog(appRepoFiles(), ATTACHMENTS);
 }
 
-/** Hazır havuz + PT'nin aparatları. Dosya zaten okunduysa (`custom`) yeniden okunmaz. `locale` verilmezse isteğin dili. */
+/** Hazır havuz + PT'nin aparatları. Dosya zaten okunduysa (`custom`) yeniden okunmaz. `locale` verilmezse çeviri yok. */
 export async function listAttachments(custom?: Pick<CustomAttachments, 'items'>, locale?: Locale): Promise<AttachmentWithSource[]> {
   const { items } = custom ?? (await readCustomAttachments());
-  return mergeAttachments(items, ATTACHMENT_LIBRARY, locale ?? (await getLocale()));
+  return mergeAttachments(items, ATTACHMENT_LIBRARY, locale);
 }
 
-export async function getAttachment(id: string, list?: AttachmentWithSource[]): Promise<AttachmentDetail | null> {
-  const all = list ?? (await listAttachments());
+export async function getAttachment(id: string, list?: AttachmentWithSource[], locale?: Locale): Promise<AttachmentDetail | null> {
+  const all = list ?? (await listAttachments(undefined, locale));
   const found = all.find((item) => item.id === id);
   if (!found) return null;
   return { ...found, overridesLibrary: found.source === 'custom' && ATTACHMENT_LIBRARY.some((item) => item.id === id) };

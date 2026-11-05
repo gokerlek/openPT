@@ -57,6 +57,18 @@ describe('egzersiz listesi', () => {
   });
 });
 
+describe('dil verilmezse çeviri yok (istek dışı bağlamlar: unstable_cache içindeki bildirim özeti)', () => {
+  test('egzersiz, cihaz ve aparat öğeleri olduğu gibi ve Türkçe sırayla', () => {
+    assert.deepEqual(mergeExercises([], EXERCISE_LIBRARY), mergeExercises([], EXERCISE_LIBRARY, 'tr'));
+    assert.deepEqual(mergeDevices([], DEVICE_LIBRARY), mergeDevices([], DEVICE_LIBRARY, 'tr'));
+    assert.deepEqual(mergeAttachments([], ATTACHMENT_LIBRARY), mergeAttachments([], ATTACHMENT_LIBRARY, 'tr'));
+    const found = mergeExercises([], EXERCISE_LIBRARY).find((item) => item.id === exercise.id)!;
+    assert.deepEqual(found, { ...exercise, source: 'library' });
+    assert.equal(mergeDevices([], DEVICE_LIBRARY).find((item) => item.id === device.id)!.name, device.name);
+    assert.equal(mergeAttachments([], ATTACHMENT_LIBRARY).find((item) => item.id === attachment.id)!.name, attachment.name);
+  });
+});
+
 describe('cihaz ve aparat listeleri', () => {
   test('Türkçe aynen, İngilizce çevrilmiş, PT sürümü dokunulmamış', () => {
     assert.deepEqual(mergeDevices([], DEVICE_LIBRARY, 'tr').find((item) => item.id === device.id), { ...device, source: 'library' });

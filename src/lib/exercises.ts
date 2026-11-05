@@ -1,6 +1,5 @@
 import 'server-only';
 import { EXERCISE_LIBRARY } from '@/data/exercise-library';
-import { getLocale } from '@/i18n/server';
 import type { Locale } from '@/i18n/locale';
 import { appRepoFiles } from './app-repo-files';
 import { EXERCISES, readCatalog, type CatalogFile } from './catalog-store';
@@ -14,8 +13,9 @@ import type { Exercise } from './schemas/exercise';
  * iki tarafta da varsa PT'ninki kazanır — böylece PT hazır bir egzersizin ipuçlarını
  * kendine göre değiştirebilir.
  *
- * Hazır kütüphanenin metni okunurken isteğin dilinde verilir (`library-lists.ts`; veri taşıma yok, dosyada Türkçe
- * kalır). PT'nin kendi ve değiştirdiği egzersizler PT'nin yazdığı metindir, olduğu gibi gelir. Dönen liste bir PT
+ * Hazır kütüphanenin metni `locale` verilince o dilde okunur (`library-lists.ts`; veri taşıma yok, dosyada Türkçe
+ * kalır); verilmezse olduğu gibi (Türkçe). Dil isteğin çerezinden gelir ama burada okunmaz: `unstable_cache` içindeki
+ * çağrılar (bildirim özeti) çerez okuyamaz. Sayfalar ve uçlar `await getLocale()` ile verir. PT'nin kendi ve değiştirdiği egzersizler PT'nin yazdığı metindir, olduğu gibi gelir. Dönen liste bir PT
  * dosyasına olduğu gibi yazılmamalı: hazır bir öğenin çevrilmiş metni PT'nin içeriği olurdu.
  *
  * Sunucuda önbellek yok, her okuma GitHub'dan taze: kaydın hemen ardından açılan
@@ -43,11 +43,11 @@ export async function readCustomExercises(): Promise<CustomExercises> {
 
 /**
  * Hazır kütüphane + PT'nin egzersizleri. Dosya zaten okunduysa (`custom`) yeniden okunmaz. `locale` verilmezse
- * isteğin dili (yapay zekâ bağlamı, değişiklik denetimi için dilden bağımsız Türkçe hâlini de ister).
+ * çeviri yok (ham Türkçe veri).
  */
 export async function listExercises(custom?: Pick<CustomExercises, 'items'>, locale?: Locale): Promise<ExerciseWithSource[]> {
   const { items } = custom ?? (await readCustomExercises());
-  return mergeExercises(items, EXERCISE_LIBRARY, locale ?? (await getLocale()));
+  return mergeExercises(items, EXERCISE_LIBRARY, locale);
 }
 
 export type ExerciseDetail = ExerciseWithSource & {
@@ -55,8 +55,8 @@ export type ExerciseDetail = ExerciseWithSource & {
   overridesLibrary: boolean;
 };
 
-export async function getExercise(id: string, list?: ExerciseWithSource[]): Promise<ExerciseDetail | null> {
-  const all = list ?? (await listExercises());
+export async function getExercise(id: string, list?: ExerciseWithSource[], locale?: Locale): Promise<ExerciseDetail | null> {
+  const all = list ?? (await listExercises(undefined, locale));
   const found = all.find((item) => item.id === id);
   if (!found) return null;
   const inLibrary = EXERCISE_LIBRARY.some((item) => item.id === id);
