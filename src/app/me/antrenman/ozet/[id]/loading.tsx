@@ -1,14 +1,19 @@
+'use client';
+
 import { Skeleton } from '@/components/ui/skeleton';
+import { useMessages } from '@/i18n/client';
+import { clientWorkoutMessages } from '@/i18n/messages/client-workout';
 
 /**
  * Özet yüklenirken (danışanın repo'su okunuyor): üst satır, ilk kartın dört sayısı ve alttaki düğme yerinde.
  * Tam ekran, dock yok.
  */
 export default function Loading() {
+  const t = useMessages(clientWorkoutMessages).summaryScreen;
   return (
     <div className="mx-auto flex h-dvh w-full max-w-md flex-col gap-3 px-4 pt-[env(safe-area-inset-top)] pb-[max(0.75rem,env(safe-area-inset-bottom))]" aria-busy="true">
       <span role="status" className="sr-only">
-        Özet hazırlanıyor…
+        {t.loading}
       </span>
       <div className="flex h-13 items-center justify-between">
         <Skeleton className="h-5 w-14" />

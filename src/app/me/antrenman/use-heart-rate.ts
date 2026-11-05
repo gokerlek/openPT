@@ -1,5 +1,7 @@
 'use client';
 
+import { currentClientLocale } from '@/i18n/client-locale';
+import { clientWorkoutMessages } from '@/i18n/messages/client-workout';
 import { useEffect, useRef, useSyncExternalStore } from 'react';
 import {
   fakeHeartRate,
@@ -208,12 +210,12 @@ export async function connectHeartRate(): Promise<void> {
     device = picked;
     wanted = true;
     picked.addEventListener('gattserverdisconnected', onDisconnected);
-    if (await attach(picked)) update({ status: 'connected', device: picked.name?.trim() || 'Nabız bandı', problem: null });
+    if (await attach(picked)) update({ status: 'connected', device: picked.name?.trim() || clientWorkoutMessages(currentClientLocale()).heart.band, problem: null });
   } catch (error) {
     // Seçici kapatıldı (`NotFoundError`): sorun değil.
     const cancelled = error instanceof DOMException && error.name === 'NotFoundError';
     release();
-    update({ ...IDLE, problem: cancelled ? null : 'Bağlanılamadı. Bandın açık ve telefona yakın olsun, sonra yeniden dene.' });
+    update({ ...IDLE, problem: cancelled ? null : clientWorkoutMessages(currentClientLocale()).heart.connectFailed });
   }
 }
 
@@ -260,7 +262,7 @@ export function startFakeHeartRate(): void {
   fakeBpm = FAKE_START_BPM;
   fakeAt = Date.now();
   fakeTimer = window.setInterval(fakeTick, FAKE_TICK_MS);
-  update({ status: 'connected', device: 'Deneme nabzı', fake: true, problem: null });
+  update({ status: 'connected', device: clientWorkoutMessages(currentClientLocale()).heart.fake, fake: true, problem: null });
   onMeasurement(fakeBpm);
 }
 

@@ -4,7 +4,9 @@ import { useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { Bandaids, CheckCircle } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
-import { afterReportText, REGION_LABELS } from '@/lib/constraints';
+import { useLocale } from '@/i18n/client';
+import { clientWorkoutMessages } from '@/i18n/messages/client-workout';
+import { afterReportText, regionLabels } from '@/lib/constraints';
 import { DURATION, EASE, tween } from '@/lib/motion';
 import type { PainReportOffer } from '@/lib/pain-report';
 import { ReportSheet, type ReportDraft } from '../../../report-sheet';
@@ -18,6 +20,8 @@ import { ReportSheet, type ReportDraft } from '../../../report-sheet';
 export function PainReportCallout({ offers }: { offers: readonly PainReportOffer[] }) {
   const [open, setOpen] = useState<number | null>(null);
   const [sent, setSent] = useState<Record<number, string>>({});
+  const locale = useLocale();
+  const t = clientWorkoutMessages(locale).summaryScreen;
   const offer = open === null ? null : offers[open];
   const initial: ReportDraft = offer
     ? { ...(offer.region ? { region: offer.region } : {}), triggers: offer.triggers, note: offer.note }
@@ -41,18 +45,18 @@ export function PainReportCallout({ offers }: { offers: readonly PainReportOffer
             <motion.section
               key="offer"
               exit={{ opacity: 0, transition: tween(DURATION.fast, EASE.exit) }}
-              aria-label="Ağrı yüzünden geçilen hareket"
+              aria-label={t.painOffer}
               className="flex flex-col gap-2.5 rounded-xl bg-card p-3.5 ring-1 ring-foreground/10">
               <p className="flex items-start gap-2 text-[0.9375rem] font-medium">
                 <Bandaids weight="fill" className="mt-0.5 size-4 shrink-0 text-primary-text" aria-hidden />
-                Ağrı yüzünden yine geçtin
+                {t.painAgain}
               </p>
               <p className="text-sm">{item.exercises.join(' · ')}</p>
               <p className="text-sm text-muted-foreground">
-                {item.region ? `${REGION_LABELS[item.region]} için ` : ''}antrenörüne bildirirsen programını buna göre ayarlar.
+                {t.painReport(item.region ? regionLabels(locale)[item.region] : null)}
               </p>
               <Button variant="outline" className="h-11 w-full" onClick={() => setOpen(index)}>
-                Antrenörüne kısıt olarak bildir
+                {t.reportAsConstraint}
               </Button>
             </motion.section>
           )}
@@ -65,7 +69,7 @@ export function PainReportCallout({ offers }: { offers: readonly PainReportOffer
         initial={initial}
         onSent={(draft) => {
           const text =
-            draft.severity && draft.type ? afterReportText({ severity: draft.severity, type: draft.type, ...(draft.since ? { since: draft.since } : {}) }) : 'Antrenörüne iletildi.';
+            draft.severity && draft.type ? afterReportText({ severity: draft.severity, type: draft.type, ...(draft.since ? { since: draft.since } : {}) }, locale) : t.sent;
           if (open !== null) setSent((current) => ({ ...current, [open]: text }));
           setOpen(null);
         }}
