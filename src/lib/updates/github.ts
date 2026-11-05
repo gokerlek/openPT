@@ -1,6 +1,6 @@
+import 'server-only';
 import {LocalizedError} from '../../i18n/errors.ts';
 import {installMessages} from '../../i18n/messages/install/index.ts';
-import 'server-only';
 import * as v from 'valibot';
 import {serverEnv} from '@/lib/env';
 import {githubAccessToken} from '@/lib/github/app-auth';
