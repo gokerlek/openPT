@@ -2,22 +2,35 @@
  * Service worker (kapsam `/`; kayıt `src/components/install/pwa-root.tsx`).
  *
  * Yalnız sayfa gezinmelerine karışır: önce ağ; ağa ulaşılamazsa önbellekteki `/offline` sayfası
- * (`src/lib/offline-page.ts`). Önbellekte yalnız o tek HTML durur. API yanıtları, sayfa verisi (RSC), resim
+ * (`src/lib/offline-page.ts`). Önbellekte yalnız o tek HTML durur. Kurulurken alınır ve uygulama her açıldığında
+ * tazelenir (kayıt bileşeninin `refresh-offline` mesajı): marka adı/rengi değişince eskisi kalmaz. API yanıtları, sayfa verisi (RSC), resim
  * ve dosyalar hiç önbelleğe alınmaz ve bu dosyadan geçmez: danışan verisi telefonda saklanmaz (gizlilik),
  * eski veri gösterilmez (bayatlık).
  *
- * Bu dosya değişince tarayıcı yenisini kurar; `CACHE` adı değişirse eski önbellek silinir.
+ * Bu dosya değişince tarayıcı yenisini kurar; `CACHE` adı değişirse eski önbellek silinir. Ad ve mesaj
+ * `src/lib/offline-cache.ts`'teki sabitlerle aynı (`offline-page.test.ts` denetler).
  */
-const CACHE = 'axon-offline-v1';
+const CACHE = 'axon-offline-v2';
 const OFFLINE_URL = '/offline';
 
+/**
+ * `/offline`'ı ağdan yeniden alır. Yalnız düzgün yanıt yazılır: hata ya da yönlendirme (ör. kurulum bitmemişken
+ * `/install`'a) eskisinin yerine geçmez. Kurulumda hata fırlatır (service worker kurulmaz, sonra yeniden denenir).
+ */
+async function refreshOffline() {
+  const response = await fetch(new Request(OFFLINE_URL, { cache: 'reload' }));
+  if (!(response.ok && !response.redirected)) throw new Error('offline sayfası alınamadı');
+  const cache = await caches.open(CACHE);
+  await cache.put(OFFLINE_URL, response);
+}
+
 self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches
-      .open(CACHE)
-      .then((cache) => cache.add(new Request(OFFLINE_URL, { cache: 'reload' })))
-      .then(() => self.skipWaiting()),
-  );
+  event.waitUntil(refreshOffline().then(() => self.skipWaiting()));
+});
+
+// Uygulama açılınca kayıt bileşeni yollar; ağ yoksa eski kopya kalır.
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'refresh-offline') event.waitUntil(refreshOffline().catch(() => {}));
 });
 
 self.addEventListener('activate', (event) => {

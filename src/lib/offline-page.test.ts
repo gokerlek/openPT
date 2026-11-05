@@ -1,5 +1,7 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { OFFLINE_CACHE, OFFLINE_REFRESH_MESSAGE } from './offline-cache.ts';
 import { offlineHtml } from './offline-page.ts';
 
 describe('/offline sayfası', () => {
@@ -20,5 +22,26 @@ describe('/offline sayfası', () => {
     assert.doesNotMatch(html, /red;\}/);
     assert.match(offlineHtml({ appName: 'A', accent: null }), /--accent: #c4f000/);
     assert.match(offlineHtml({ appName: 'A', accent: '#123ABC' }), /--accent: #123ABC/);
+  });
+
+  test('danışanı rahatlatır: antrenmandaki setler telefonda durur, bağlantı gelince gönderilir', () => {
+    const html = offlineHtml({ appName: 'Axon Fit', accent: null });
+    assert.match(html, /setler telefonda durur, bağlantı gelince gönderilir/);
+    assert.match(html, /Yeniden dene/);
+  });
+});
+
+describe('service worker /offline önbelleğini tazeler', () => {
+  const worker = readFileSync(new URL('../../public/sw.js', import.meta.url), 'utf8');
+
+  test('önbellek adı ve tazeleme mesajı kayıt bileşeniyle aynı', () => {
+    assert.ok(worker.includes(`const CACHE = '${OFFLINE_CACHE}';`), 'sw.js önbellek adı');
+    assert.ok(worker.includes(`'${OFFLINE_REFRESH_MESSAGE}'`), 'sw.js tazeleme mesajını dinlemiyor');
+    assert.notEqual(OFFLINE_CACHE, 'axon-offline-v1', 'metin değişti: eski önbellek silinsin');
+  });
+
+  test('mesaj gelince /offline yeniden alınır; bozuk ya da yönlenmiş yanıt eskisinin yerine geçmez', () => {
+    assert.match(worker, /addEventListener\('message'/);
+    assert.match(worker, /response\.ok && !response\.redirected/);
   });
 });

@@ -1,6 +1,8 @@
 /**
- * Ağ yokken gösterilen sayfa (`/offline`, `public/sw.js`). Service worker onu kurulurken bir kez önbelleğe
- * alır ve sayfa gezinmesi ağa ulaşamayınca bunu döner. Önbellekte yalnız bu HTML durur: Next'in stil ve
+ * Ağ yokken gösterilen sayfa (`/offline`, `public/sw.js`). Service worker onu kurulurken önbelleğe alır ve
+ * uygulama her açıldığında tazeler (`offline-cache.ts`): marka adı ya da rengi
+ * değişirse, ya da kurulumda ayar okunamayıp varsayılan ad yazıldıysa eskisi kalıcı olmaz. Sayfa gezinmesi
+ * ağa ulaşamayınca bu döner. Önbellekte yalnız bu HTML durur: Next'in stil ve
  * betik dosyaları alınmadığı için sayfa kendi başına çalışır (satır içi stil, tek düğme). Marka adı ve
  * rengi kurulum anındaki ayardan gelir (düğme yazısı renge göre okunaklı); tema cihazın açık/koyu
  * tercihine uyar.
@@ -43,7 +45,7 @@ button { margin-top: 1rem; min-height: 2.75rem; width: 100%; border: 0; border-r
 <svg viewBox="0 0 240 40" fill="none" aria-hidden="true"><path d="M0 20h78l8-13 10 26 9-19 7 6h128" stroke="var(--accent)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>
 <p>${name}</p>
 <h1>Bağlantı yok</h1>
-<p>Sayfa internete bağlanınca açılır.</p>
+<p>Sayfa internete bağlanınca açılır. Antrenmanda girilen setler telefonda durur, bağlantı gelince gönderilir.</p>
 <button type="button" onclick="location.reload()">Yeniden dene</button>
 </main>
 </body>
