@@ -1,4 +1,4 @@
-import { localizedLibraryTitle } from '../data/library-text.ts';
+import { localizedLibraryTitle } from '../data/library-titles.ts';
 import { DEFAULT_LOCALE, intlLocale, type Locale } from '../i18n/locale.ts';
 import { clientProgressMessages } from '../i18n/messages/client-progress/index.ts';
 import { upper } from '../i18n/text.ts';

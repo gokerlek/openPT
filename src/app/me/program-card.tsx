@@ -131,7 +131,8 @@ export async function ProgramCard({
   care?: TodayCare;
   children?: React.ReactNode;
 }) {
-  const [overview, exercises, locale] = await Promise.all([readOwnOverview(clientId).catch(() => null), listExercises(), getLocale()]);
+  const locale = await getLocale();
+  const [overview, exercises] = await Promise.all([readOwnOverview(clientId).catch(() => null), listExercises(undefined, locale)]);
   const t = clientHomeMessages(locale).card;
   const f = getFormat(locale);
   const weekdayNames = weekdayLabels(locale);

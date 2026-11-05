@@ -36,8 +36,7 @@ export async function loadPainReport(client: Client, sessionId: string, locale: 
     const [current, previous, exercises] = await Promise.all([
       readSession(repo, sessionId),
       Promise.all(earlier.map((item) => readSession(repo, item.sessionId).catch(() => null))),
-      // i18n-followup(T5): `listExercises(undefined, locale)` gelince dili ver (yalnız kaslar ve kalıp okunur).
-      listExercises(),
+      listExercises(undefined, locale),
     ]);
     if (current.status !== 'ok') return [];
     const earlierExercises = earlier.map((item, index) => {

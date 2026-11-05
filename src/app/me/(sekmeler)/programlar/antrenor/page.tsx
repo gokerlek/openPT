@@ -27,7 +27,8 @@ export async function generateMetadata(): Promise<Metadata> {
  * altında "Kendi programına kopyala". Kalıcı seçim kendi programsa "Bugün'ün programı yap". Programın değişiklik geçmişi danışana gösterilmez.
  */
 export default async function PtProgramPage() {
-  const [client, config, exercises, locale] = await Promise.all([currentClient(), readAppConfig(), listExercises(), getLocale()]);
+  const locale = await getLocale();
+  const [client, config, exercises] = await Promise.all([currentClient(), readAppConfig(), listExercises(undefined, locale)]);
   const t = clientProgramsMessages(locale).pages;
   const PT_PROGRAM_NAME = ptProgramName(locale);
   const overview = await readOwnOverview(client.id).catch(() => null);

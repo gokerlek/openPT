@@ -65,11 +65,12 @@ export async function sessionRouteDeps(): Promise<SessionRouteDeps> {
  * aileleri (muadil sıralaması) ve setin kaslara payı (set artışı önerisinin haftalık kesirli seti).
  */
 export async function workoutRouteDeps(): Promise<WorkoutRouteDeps> {
+  const deps = await sessionRouteDeps();
   return {
-    ...(await sessionRouteDeps()),
+    ...deps,
     catalog: async () => {
-      // i18n-followup(T5): `listExercises(undefined, locale)` / `listDevices(undefined, locale)` gelince dili ver.
-      const [exercises, devices] = await Promise.all([listExercises(), listDevices()]);
+      // Hazır kütüphanenin adları okuyanın dilinde (set kaydının ad kopyası da; geçmiş `localizedLibraryTitle` ile okunur).
+      const [exercises, devices] = await Promise.all([listExercises(undefined, deps.locale), listDevices(undefined, deps.locale)]);
       return { exercises, devices };
     },
     familyOf,

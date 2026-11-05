@@ -63,8 +63,8 @@ export function loadProgress(
       digest: (row, read) =>
         unstable_cache(read, ['progress-digest', String(DIGEST_VERSION), repoName, row.sha], { tags: [`session:${row.id}`] })(),
       catalog: async () => {
-        // i18n-followup(T5): `listExercises(undefined, options.locale)` / `listDevices(undefined, options.locale)` gelince dili ver.
-        const [exercises, devices] = await Promise.all([listExercises(), listDevices()]);
+        // Katalog önbelleğin dışında: adlar okuyanın dilinde.
+        const [exercises, devices] = await Promise.all([listExercises(undefined, options.locale), listDevices(undefined, options.locale)]);
         return { exercises, deviceNames: new Map(devices.map((device) => [device.id, device.name])) };
       },
       weeklyGoals: (index,target)=>freezeWeeklyGoals(sessionRepo(client.id),index,target),

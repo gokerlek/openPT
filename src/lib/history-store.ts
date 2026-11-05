@@ -91,8 +91,7 @@ export async function loadSummary(
 ): Promise<SessionLoad<SessionSummary>> {
   const locale = options.locale ?? DEFAULT_LOCALE;
   const repo = sessionRepo(clientId);
-  // i18n-followup(T5): `listExercises(undefined, locale)` / `listDevices(undefined, locale)` gelince dili ver.
-  const [loaded, repaired, exercises] = await Promise.all([readFinished(clientId, id), readIndex(repo), listExercises()]);
+  const [loaded, repaired, exercises] = await Promise.all([readFinished(clientId, id), readIndex(repo), listExercises(undefined, locale)]);
   if (loaded.status !== 'ok') return loaded;
   const doc = loaded.value;
   const own = doc.program?.programId ?? null;
@@ -109,7 +108,7 @@ export async function loadSummary(
   if (program && dayId && latest?.id === doc.id) {
     // Antrenmanın günü seansın tarihi: planlanan program o güne atanmış olan (Faz 3).
     const window = { exerciseIds: new Set(doc.entries.map((entry) => entry.exerciseId)), rowIds: dayRowIds(program, dayId, doc.date), programId: own };
-    const [devices, history] = await Promise.all([listDevices(), readHistory(repo, index, window)]);
+    const [devices, history] = await Promise.all([listDevices(undefined, locale), readHistory(repo, index, window)]);
     const owner = own ? { programId: own, name: doc.program?.programName ?? '' } : null;
     const day = buildWorkoutDay({
       program,

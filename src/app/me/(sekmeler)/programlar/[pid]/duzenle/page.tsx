@@ -33,7 +33,7 @@ export default async function EditOwnProgramPage({
   const [read, overview, library, templates] = await Promise.all([
     readOwnProgramOf(client.id, pid),
     readOwnOverview(client.id).catch(() => null),
-    ownEditorLibrary(client),
+    ownEditorLibrary(client, locale),
     clientTemplates().catch(() => []),
   ]);
   if (read.status === 'missing') notFound();

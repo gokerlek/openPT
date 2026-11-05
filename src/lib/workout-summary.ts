@@ -1,4 +1,4 @@
-import { localizedLibraryTitle } from '../data/library-text.ts';
+import { localizedLibraryTitle } from '../data/library-titles.ts';
 import { DEFAULT_LOCALE, intlLocale, type Locale } from '../i18n/locale.ts';
 import { clientWorkoutMessages } from '../i18n/messages/client-workout/index.ts';
 import { totalKcal } from './cardio.ts';
