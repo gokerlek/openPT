@@ -109,7 +109,7 @@ export function coachProgramMatches(current: ProgramState, body: ProgramBody): b
 /** Known high-risk wording has a local gate as well as the provider classifier. */
 export function coachSensitiveIntent(message: string): 'support' | 'health_question' | null {
   const text = message.toLocaleLowerCase('tr').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/ı/g, 'i');
-  if (/ceza|punish|telafi|compensat|kusmak|kusuy|yeme bozuk|eating disorder|kendimden nefret|vucudumdan nefret|ac kal|starv|yediklerimi.*yak|\b(?:vomit\w*|throw(?:ing)? up|purg(?:e|ing)|binge\w*|bulimi\w*|anorexi\w*)\b|hate (?:myself|my body)|(?:burn(?:ing)? off|make up for|makes? up for) (?:what|everything|the)\b.*\b(?:ate|eaten|food)/.test(text)) return 'support';
-  if (/\b(?:tani|teshis|tedavi|diagnos\w*|treatment|agri\w*|pain\w*|ameliyat\w*|surgery)\b/.test(text)) return 'health_question';
+  if (/ceza|punish|telafi|compensat|kusmak|kusuy|yeme bozuk|eating disorder|kendimden nefret|vucudumdan nefret|ac kal|starv|yediklerimi.*yak|\b(?:vomit\w*|throw(?:ing)? up|threw up|purg(?:e|ing)|binge\w*|bulimi\w*|anorexi\w*|skip(?:ping|ped)? meals|stop(?:ping|ped)? eating)\b|hate (?:myself|my body)|(?:burn(?:ing)? off|make up for|makes? up for) (?:what|everything|the)\b.*\b(?:ate|eaten|food)/.test(text)) return 'support';
+  if (/\b(?:tani|teshis|tedavi|diagnos\w*|treatment|agri\w*|pain\w*|ameliyat\w*|surgery|injur\w*|hurt(?:s|ing)?)\b/.test(text)) return 'health_question';
   return null;
 }
