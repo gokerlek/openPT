@@ -400,7 +400,7 @@ export function WorkoutScreen({
   const [heartAlarm, setHeartAlarm] = useState<number | null>(null);
   const heart = useHeartRate(Boolean(local?.rest));
   // Dinlenme sayacı nabzı kare kare buradan okur (effect nabız değiştikçe yeniden kurulmasın). Band bağlı değilse yok:
-  // bugünkü sayaç; koptuysa ölçüm yok, uzayan dinlenme o an biter.
+  // bugünkü sayaç; koptuysa ölçüm yok, uzayan dinlenme nabzın son görüldüğü an biter.
   const restHeart = useRef<RestHeart | undefined>(undefined);
   useEffect(() => {
     restHeart.current = heart.status === 'connected' || heart.status === 'lost' ? { bpm: heart.bpm, recovery: heartLimits.recovery } : undefined;
