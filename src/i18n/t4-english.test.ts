@@ -234,7 +234,7 @@ describe('kısıt cümleleri İngilizce', () => {
   test('güvenlik ve acil yönlendirme metinleri', () => {
     assert.equal(emergencyText('en'), 'Urgent: refer the client to the emergency department today.');
     assert.match(reportSafety('en').urgent, /emergency department without waiting\.$/);
-    assert.match(reportSafety('en').other, /see a health professional before training\.$/);
+    assert.match(reportSafety('en').other, /see a health professional before you train\.$/);
     assert.match(afterReportText({ severity: 'severe', type: 'injury' }, 'en'), /see a health professional\.$/);
   });
 
@@ -338,5 +338,58 @@ describe('ölçüm metinleri İngilizce', () => {
   test('sözlüklerde klinik metin İngilizcede Türkçe harf taşımaz', () => {
     assert.ok(!TURKISH.test(JSON.stringify(screeningMessages('en').tests)));
     assert.ok(!TURKISH.test(JSON.stringify(measurementsMessages('en').defs)));
+  });
+});
+
+describe('inceleme düzeltmeleri', () => {
+  test('kart notu bölgeyi cümlenin dilinde yeniden kurar (etiket başka dilde gelse de)', () => {
+    const turkishLabel: RowCare = { kind: 'report', label: 'İki diz', region: 'knee', side: 'both' };
+    assert.equal(rowCareText(turkishLabel, 'en').text, 'This may strain both knees you reported; if it causes pain, skip it.');
+    assert.equal(rowCareText(turkishLabel, 'en').title, 'Note: Both knees');
+    assert.equal(
+      rowCareText({ kind: 'severe', label: 'Left knee', region: 'knee', side: 'left' }, 'tr').text,
+      "Kötüleştiğini bildirdiğin sol diz için zorlayabilir. Antrenörün bakana kadar ağrı yaparsa geç ya da Değiştir'e dokun.",
+    );
+    assert.equal(rowCareText({ kind: 'report', label: 'Başka bir yer', region: 'other' }, 'en').text, 'This may strain the area you reported; if it causes pain, skip it.');
+    assert.equal(careLine({ kind: 'note', label: 'Sol diz', region: 'knee', side: 'left' }, 'Back Squat', 'en'), 'Caution (left knee): Back Squat');
+    const kneeRecord = addConstraint(empty(), { region: 'knee', side: 'left', type: 'injury', avoid: ['deep_knee_flexion'] }, { id: 'k_000009', now: NOW });
+    const turkish = evaluateCare(exercise('hack-squat'), careInputOf(kneeRecord, { today: TODAY, painConsent: false }));
+    const warned = { ...turkish, reasons: turkish.reasons.map((reason) => ({ ...reason, decision: 'warn' as const })) };
+    assert.equal(optionCareText(warned, 'en'), 'Caution: left knee');
+    assert.equal(optionCareText(warned), 'Sol diz için dikkatli');
+  });
+
+  test('güvenlik metinleri (klinik gözden geçirme bekliyor)', () => {
+    assert.equal(
+      reportSafety('en').other,
+      "If pain wakes you at night, you can't put weight on the area after a fall or a blow, or a joint swells quickly or locks, see a health professional before you train.",
+    );
+    assert.equal(
+      reportSafety('en').urgent,
+      'If you have a new change in urination or bowel movements, numbness around your genitals, bottom or inner thighs, or new leg weakness, go to the emergency department without waiting.',
+    );
+  });
+
+  test('zorlayanlar tarafsız, ABD İngilizcesi, çoğullar', () => {
+    const en = healthMessages('en');
+    assert.equal(en.constraints.triggers.overhead, 'Raising the arm overhead');
+    assert.equal(en.constraints.diagnosisSources.clinician, 'Physician or physical therapist');
+    assert.equal(en.constraintsPage.programCounts(1, 2), '1 blocked · 2 cautions');
+    assert.equal(en.constraintsPage.programCounts(0, 1), '1 caution');
+    assert.match(en.constraintForm.preview(0, 1, 0, 0), /· 1 caution ·/);
+    assert.equal(en.validation.maxMinutes(1), 'At most 1 minute.');
+  });
+
+  test('ölçüm cümleleri', () => {
+    const en = measurementsMessages('en');
+    assert.equal(
+      en.text.forecast.bound('Trend −1 cm per week.', true, '0 cm', 3, '1 Oct 2026'),
+      'Trend −1 cm per week. At this rate it reaches the lower limit (0 cm) about 3 weeks after the last measurement (around 1 Oct 2026). The forecast assumes the trend continues.',
+    );
+    assert.equal(en.camera.wizard.position(1, 3), 'Analysis 1 of 3');
+    assert.equal(
+      en.camera.meaning.dynamic,
+      "For each completed rep, the difference between its largest and smallest angle is taken; the value is the median of those differences. It isn't an instantaneous joint angle.",
+    );
   });
 });

@@ -238,8 +238,9 @@ const tr = {
       avoidOwn: (where: Where) => `Bu hareket şu an ${yourRegion(where, 'gen')} için önerilmiyor. Bugün geç ya da antrenörüne sor.`,
       avoid: (where: Where) => `Antrenörün bu hareketi ${yourRegion(where, 'gen')} için değiştirecek. Bugün 'Değiştir'den bir muadil seç.`,
       referral: 'Antrenörün bu bölge için sağlık profesyonelinin görüşünü bekliyor. Ağrı yaparsa hareketi geç.',
-      report: (label: string) => `Bildirdiğin ${lower(label)} için zorlayabilir; ağrı yaparsa geç.`,
-      severe: (label: string) =>
+      /** `label`: bölgenin bu dildeki adı ("Sol diz"); `where` İngilizcede "the" için. */
+      report: (label: string, _where: Where) => `Bildirdiğin ${lower(label)} için zorlayabilir; ağrı yaparsa geç.`,
+      severe: (label: string, _where: Where) =>
         `Kötüleştiğini bildirdiğin ${lower(label)} için zorlayabilir. Antrenörün bakana kadar ağrı yaparsa geç ya da Değiştir'e dokun.`,
       noteOwn: (where: Where) => {
         const yours = yourRegion(where, 'gen');
@@ -257,7 +258,7 @@ const tr = {
     /** "Değiştir"deki kısa satır. */
     option: {
       caution: (label: string) => `${label} için dikkatli`,
-      reported: (label: string) => `Bildirdiğin ${lower(label)} için dikkatli`,
+      reported: (label: string, _where: Where | null) => `Bildirdiğin ${lower(label)} için dikkatli`,
     },
     /** Danışana yasaklı hareketin metni (antrenmanda "Hareket ekle" ve kendi programın kaydı aynı cümle). */
     blocked: 'Bu hareket şu an sana önerilmiyor; antrenörüne sor.',

@@ -48,8 +48,10 @@ export type CareKind = 'rule' | 'avoid' | 'fallback' | 'referral' | 'report' | '
 
 export type CareReason = {
   constraintId: string;
-  /** "Sol diz". */
+  /** "Sol diz" (süzgecin girdisinin dilinde; `region`/`side` okuyanın dilinde yeniden kurmak için). */
   label: string;
+  region?: ConstraintRegion;
+  side?: ConstraintSide;
   decision: Decision;
   /** PT'ye gerekçe. */
   message: string;
@@ -150,8 +152,14 @@ function careText(locale: Locale | undefined) {
 }
 
 /** Bir kısıtın bu hareketteki gerekçeleri ve değerlendirilemeyen kuralları. */
+/** Gerekçenin bölgesi: taraf yalnız çift bölgede. */
+function placeOf(item: Pick<Constraint, 'region' | 'side'>): { region: ConstraintRegion; side?: ConstraintSide } {
+  return item.side && isPaired(item.region) ? { region: item.region, side: item.side } : { region: item.region };
+}
+
 function constraintReasons(tags: CareTags, constraint: Constraint, input: CareInput): { reasons: CareReason[]; unassessed: number } {
   const label = regionText(constraint, input.locale);
+  const where = placeOf(constraint);
   const t = careText(input.locale).reasons;
   const avoidLabels = healthMessages(input.locale ?? DEFAULT_LOCALE).constraints.avoid;
   const reasons: CareReason[] = [];
@@ -160,7 +168,7 @@ function constraintReasons(tags: CareTags, constraint: Constraint, input: CareIn
   for (const condition of conditionsOf(constraint)) {
     const result = evaluateExercise(tags, [condition], context);
     for (const finding of result.findings) {
-      reasons.push({ constraintId: constraint.id, label, decision: finding.decision, message: `${label}: ${finding.message}`, kind: 'rule' });
+      reasons.push({ constraintId: constraint.id, label, ...where, decision: finding.decision, message: `${label}: ${finding.message}`, kind: 'rule' });
     }
     unassessed += result.skipped;
   }
@@ -168,12 +176,13 @@ function constraintReasons(tags: CareTags, constraint: Constraint, input: CareIn
     const avoid = AVOID_TAGS[tag];
     const hit = avoidMatch(tag, tags, constraint.region);
     if (hit) {
-      reasons.push({ constraintId: constraint.id, label, decision: avoid.decision, message: t.avoid(label, avoidLabels[tag]), kind: 'avoid' });
+      reasons.push({ constraintId: constraint.id, label, ...where, decision: avoid.decision, message: t.avoid(label, avoidLabels[tag]), kind: 'avoid' });
     } else if (hit === null) {
       if (tags.pattern && avoid.families.includes(tags.pattern)) {
         reasons.push({
           constraintId: constraint.id,
           label,
+          ...where,
           decision: 'warn',
           message: t.fallback(label, avoidLabels[tag]),
           kind: 'fallback',
@@ -187,6 +196,7 @@ function constraintReasons(tags: CareTags, constraint: Constraint, input: CareIn
     reasons.push({
       constraintId: constraint.id,
       label,
+      ...where,
       decision: 'warn',
       message: t.referral(label),
       kind: 'referral',
@@ -196,6 +206,7 @@ function constraintReasons(tags: CareTags, constraint: Constraint, input: CareIn
     reasons.push({
       constraintId: constraint.id,
       label,
+      ...where,
       decision: 'warn',
       message: t.severe(label),
       kind: 'severe',
@@ -211,6 +222,7 @@ function constraintReasons(tags: CareTags, constraint: Constraint, input: CareIn
  */
 function reportReasons(tags: CareTags, report: Constraint, locale: Locale | undefined): CareReason[] {
   const label = regionText(report, locale);
+  const where = placeOf(report);
   const t = careText(locale).reasons;
   const triggers = healthMessages(locale ?? DEFAULT_LOCALE).constraints.triggers;
   const reasons: CareReason[] = [];
@@ -221,6 +233,7 @@ function reportReasons(tags: CareTags, report: Constraint, locale: Locale | unde
       reasons.push({
         constraintId: report.id,
         label,
+        ...where,
         decision: 'warn',
         message: t.reportTrigger(label, triggers[trigger]),
         kind: 'report',
@@ -231,6 +244,7 @@ function reportReasons(tags: CareTags, report: Constraint, locale: Locale | unde
     reasons.push({
       constraintId: report.id,
       label,
+      ...where,
       decision: 'warn',
       message: t.reportSevere(label),
       kind: 'report',
@@ -364,18 +378,20 @@ export function rowCareOf(result: CareResult, input: CareInput): RowCare | null 
 /** Kartın sheet'i: başlık "Sol diz için not" ve metin (danışana, telaşsız; "yasak", "risk", tanı adı yok). */
 export function rowCareText(care: RowCare, locale: Locale = DEFAULT_LOCALE): { title: string; text: string } {
   const t = careText(locale).row;
-  const title = t.title(care.label);
-  // Taraf yalnız çift bölgede söylenir ("sol dizin"); eski kayıtta tek bölgeye yazılmış taraf okunmaz.
-  const where = care.side && isPaired(care.region) ? { region: care.region, side: care.side } : { region: care.region };
+  // Taraf yalnız çift bölgede söylenir ("sol dizin"); eski kayıtta tek bölgeye yazılmış taraf okunmaz. Bölgenin adı
+  // `care.label`'dan değil koddan, cümlenin dilinde: satır sunucuda başka dille kurulmuş olabilir (gün planı saklanır).
+  const where = placeOf(care);
+  const label = regionText(where, locale);
+  const title = t.title(label);
   switch (care.kind) {
     case 'avoid':
       return { title, text: care.own ? t.avoidOwn(where) : t.avoid(where) };
     case 'referral':
       return { title, text: t.referral };
     case 'report':
-      return { title, text: t.report(care.label) };
+      return { title, text: t.report(label, where) };
     case 'severe':
-      return { title, text: t.severe(care.label) };
+      return { title, text: t.severe(label, where) };
     default:
       return { title, text: care.note ?? (care.own ? t.noteOwn(where) : t.note(where)) };
   }
@@ -385,8 +401,9 @@ export function rowCareText(care: RowCare, locale: Locale = DEFAULT_LOCALE): { t
 export function careLine(care: RowCare, title: string, locale: Locale = DEFAULT_LOCALE): string {
   // Kendi programda hareketi danışan seçti: "değiştir" yerine "önerilmiyor" (antrenman kartıyla aynı dil, `rowCareText`).
   const t = careText(locale).line;
-  if (care.kind !== 'avoid') return t.caution(care.label, title);
-  return care.own ? t.notRecommended(care.label, title) : t.swap(care.label, title);
+  const label = regionText(placeOf(care), locale);
+  if (care.kind !== 'avoid') return t.caution(label, title);
+  return care.own ? t.notRecommended(label, title) : t.swap(label, title);
 }
 
 /** "Değiştir"deki kısa satır ("Sol diz için dikkatli"). */
@@ -394,7 +411,10 @@ export function optionCareText(result: CareResult, locale: Locale = DEFAULT_LOCA
   const first = result.reasons.find((reason) => reason.decision === 'warn' || reason.decision === 'cue');
   if (!first) return null;
   const t = careText(locale).option;
-  return first.kind === 'report' || first.kind === 'severe' ? t.reported(first.label) : t.caution(first.label);
+  // Gerekçenin etiketi süzgecin girdisinin dilinde; bölge varsa okuyanın dilinde yeniden kurulur.
+  const where = first.region ? placeOf({ region: first.region, side: first.side }) : null;
+  const label = where ? regionText(where, locale) : first.label;
+  return first.kind === 'report' || first.kind === 'severe' ? t.reported(label, where) : t.caution(label);
 }
 
 /* --- PT: sheet, önizleme, çelişkiler --- */

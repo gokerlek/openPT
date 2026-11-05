@@ -43,9 +43,10 @@ function yourRegion(where: Where, _form: 'gen' | 'acc' | 'dat'): string {
   return `your ${where.side} ${name}`;
 }
 
-/** "the left knee you reported" ("the area you reported" when the region has no name). */
-function reportedArea(label: string, what: string): string {
-  return label === regions.other ? `the area you ${what}` : `the ${lowerFirst('en', label)} you ${what}`;
+/** "the left knee you reported", "both knees you reported", "the area you reported" (region without a name). */
+function reportedArea(label: string, where: Where | null, what: string): string {
+  if (where?.region === 'other') return `the area you ${what}`;
+  return where?.side === 'both' ? `${lowerFirst('en', label)} you ${what}` : `the ${lowerFirst('en', label)} you ${what}`;
 }
 
 const en: Shape<typeof tr> = {
@@ -74,7 +75,7 @@ const en: Shape<typeof tr> = {
       severe: 'Affects daily life',
     },
     diagnosisSources: {
-      clinician: 'Physician or physiotherapist',
+      clinician: 'Physician or physical therapist',
       client: "Client's own report",
     },
     clearanceBases: {
@@ -90,7 +91,7 @@ const en: Shape<typeof tr> = {
     },
     triggers: {
       squat: 'Squatting',
-      overhead: 'Raising my arm overhead',
+      overhead: 'Raising the arm overhead',
       bend: 'Bending forward',
       jump: 'Jumping',
       lean_back: 'Leaning back',
@@ -120,10 +121,11 @@ const en: Shape<typeof tr> = {
     fallbackName: 'Limitation',
     emergency: 'Urgent: refer the client to the emergency department today.',
     reportSafety: {
+      // Clinical review: more specific than the Turkish ("kasıkta uyuşma", "yeni güç kaybı"); cauda equina red flags.
       urgent:
-        'If you have a new change in urination or bowel movements, numbness in the groin, or new loss of strength, go to the emergency department without waiting.',
+        'If you have a new change in urination or bowel movements, numbness around your genitals, bottom or inner thighs, or new leg weakness, go to the emergency department without waiting.',
       other:
-        "If you have pain that wakes you at night, can't put weight on it after a fall or a blow, or a joint that swells quickly or locks, see a health professional before training.",
+        "If pain wakes you at night, you can't put weight on the area after a fall or a blow, or a joint swells quickly or locks, see a health professional before you train.",
     },
     afterReport: {
       serious:
@@ -208,9 +210,9 @@ const en: Shape<typeof tr> = {
       avoidOwn: (where) => `This exercise isn't recommended for ${yourRegion(where, 'gen')} right now. Skip it today or ask your trainer.`,
       avoid: (where) => `Your trainer will change this exercise for ${yourRegion(where, 'gen')}. For today, pick an alternative from 'Swap'.`,
       referral: "Your trainer is waiting for a health professional's opinion about this area. If it causes pain, skip the exercise.",
-      report: (label) => `This may strain ${reportedArea(label, 'reported')}; if it causes pain, skip it.`,
-      severe: (label) =>
-        `This may strain ${reportedArea(label, 'said got worse')}. Until your trainer looks at it, skip it if it causes pain or tap Swap.`,
+      report: (label, where) => `This may strain ${reportedArea(label, where, 'reported')}; if it causes pain, skip it.`,
+      severe: (label, where) =>
+        `This may strain ${reportedArea(label, where, 'said got worse')}. Until your trainer looks at it, skip it if it causes pain or tap Swap.`,
       noteOwn: (where) => `Be careful with ${yourRegion(where, 'gen')}; stay in a pain-free range and skip the exercise if pain increases.`,
       note: (where) =>
         `Your trainer planned this exercise with ${yourRegion(where, 'acc')} in mind. Stay in a pain-free range; if pain increases, skip the exercise or tap Swap.`,
@@ -222,7 +224,7 @@ const en: Shape<typeof tr> = {
     },
     option: {
       caution: (label) => `Caution: ${lowerFirst('en', label)}`,
-      reported: (label) => `Caution: ${reportedArea(label, 'reported')}`,
+      reported: (label, where) => `Caution: ${reportedArea(label, where, 'reported')}`,
     },
     blocked: "This exercise isn't recommended for you right now; ask your trainer.",
     noConsent: "Limitations can't be used: the client hasn't given health consent.",
@@ -337,7 +339,8 @@ const en: Shape<typeof tr> = {
     noAvoid: 'No movements to avoid selected.',
     inProgram: 'In the program:',
     programClear: 'no issues',
-    programCounts: (blocked, warned) => [blocked ? `${blocked} blocked` : null, warned ? `${warned} caution` : null].filter(Boolean).join(' · '),
+    programCounts: (blocked, warned) =>
+      [blocked ? `${blocked} blocked` : null, warned ? `${warned} ${plural('en', warned, { one: 'caution', other: 'cautions' })}` : null].filter(Boolean).join(' · '),
     toClient: (note) => `To the client: “${note}”`,
     yourNote: (note) => `Your note: ${note}`,
     emptyTitle: 'No limitations recorded',
@@ -384,10 +387,10 @@ const en: Shape<typeof tr> = {
     side: 'Side',
     whatTitle: 'What',
     whatHint:
-      "Don't diagnose it yourself; choose what the client learned from their doctor or physiotherapist. If chosen, the library's evidence-based rules also apply.",
+      "Don't diagnose it yourself; choose what the client learned from their doctor or physical therapist. If chosen, the library's evidence-based rules also apply.",
     type: 'Type',
     diagnosis: 'Diagnosis by a health professional (if any)',
-    diagnosisHint: 'Filtered by region. The client only sees the name of a diagnosis from a physician or physiotherapist.',
+    diagnosisHint: 'Filtered by region. The client only sees the name of a diagnosis from a physician or physical therapist.',
     diagnosisSource: 'Source of the diagnosis',
     emergencyDetail: 'No exercise is programmed with this diagnosis; permission cannot be given even after an opinion.',
     redFlagTitle: 'Red flag: refer to a health professional',
@@ -418,7 +421,7 @@ const en: Shape<typeof tr> = {
       "The program editor and “Swap” during workouts don't allow exercises that conflict with these (“forward bending” is only a caution). An exercise with missing tags doesn't count as “suitable”.",
     avoidWarn: (label) => `${label} (caution)`,
     preview: (blocked, warned, unassessed, untagged) =>
-      `Preview: in the library ${blocked} blocked · ${warned} caution · ${unassessed} missing information · ${untagged} not checked (untagged).`,
+      `Preview: in the library ${blocked} blocked · ${warned} ${plural('en', warned, { one: 'caution', other: 'cautions' })} · ${unassessed} missing information · ${untagged} not checked (untagged).`,
     previewEmpty: 'Choose a movement to avoid or a diagnosis to see its effect on the library here.',
     previewLink: 'See in the list with saved limitations',
     saveFailed: "Couldn't save",
@@ -479,7 +482,7 @@ const en: Shape<typeof tr> = {
     min: (min) => `At least ${min}.`,
     max: (max) => `At most ${max}.`,
     nonNegative: "Can't be negative.",
-    maxMinutes: (max) => `At most ${max} minutes.`,
+    maxMinutes: (max) => `At most ${max} ${plural('en', max, { one: 'minute', other: 'minutes' })}.`,
     minMinutes: (min) => `At least ${min} ${plural('en', min, { one: 'minute', other: 'minutes' })}.`,
     maxSeconds: (max) => `At most ${max} s.`,
     minCm: (min) => `At least ${min} cm.`,

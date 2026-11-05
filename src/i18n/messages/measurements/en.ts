@@ -144,8 +144,8 @@ const en: Shape<typeof tr> = {
         `${trend} The line ${down ? 'reached the lower' : 'reached the upper'} limit (${bound}) at the last measurement; no forecast ahead.`,
       bound: (trend, down, bound, weekCount, date) =>
         `${trend} At this rate it ${down ? 'reaches the lower' : 'reaches the upper'} limit (${bound}) ${
-          weekCount === null ? 'within a week' : `in about ${weekCount} ${weeks(weekCount)}`
-        } of the last measurement (around ${date}). The forecast assumes the trend continues.`,
+          weekCount === null ? 'within a week of the last measurement' : `about ${weekCount} ${weeks(weekCount)} after the last measurement`
+        } (around ${date}). The forecast assumes the trend continues.`,
       today: (date, value) => `today (${date}) ≈ ${value}, `,
       range: (range) => `; likely range ${range}`,
       ahead: (trend, now, weekCount, date, value, range) =>
@@ -342,7 +342,8 @@ const en: Shape<typeof tr> = {
       right_shoulder: 'Elevation angle of the right upper arm relative to the trunk.',
     },
     meaning: {
-      dynamic: "The value is the median of the difference between the largest and smallest angle in each completed rep. It isn't an instantaneous joint angle.",
+      dynamic:
+        "For each completed rep, the difference between its largest and smallest angle is taken; the value is the median of those differences. It isn't an instantaneous joint angle.",
       static: 'The value is the median angle of the clear samples taken while standing still.',
     },
     quality: {
@@ -446,7 +447,7 @@ const en: Shape<typeof tr> = {
       sides: { both: 'Both sides', left: 'Left side', right: 'Right side' },
       technical: (side, seconds, valid, total, size, protocol) =>
         `${side} · ${seconds} s · ${valid}/${total} clear samples · ${size} · Protocol ${protocol} · 2D estimate. Camera tilt and perspective affect the result. The image isn't stored.`,
-      position: (index, total) => `${index}/${total} analyses`,
+      position: (index, total) => `Analysis ${index} of ${total}`,
       summaryTitle: 'Analysis session summary',
       backToList: 'Back to the analysis list',
       closeCamera: 'Turn off camera',
