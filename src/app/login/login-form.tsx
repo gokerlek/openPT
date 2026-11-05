@@ -4,6 +4,8 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Field as FormField, Form, useForm } from '@formisch/react';
 import { Button } from '@/components/ui/button';
+import { useMessages } from '@/i18n/client';
+import { authMessages } from '@/i18n/messages/auth';
 import { Field, FieldError, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Spinner } from '@/components/ui/spinner';
@@ -20,6 +22,7 @@ import { enterCodeSchema, OTP_LENGTH, requestCodeSchema } from '@/lib/schemas/au
  * - Girişten sonra `next` (sunucuda doğrulanmış PT yolu) açılır, yoksa genel bakış.
  */
 export function LoginForm({ next = null }: { next?: string | null }) {
+  const t = useMessages(authMessages).trainer;
   const router = useRouter();
   const [email, setEmail] = useState('');
 
@@ -30,7 +33,7 @@ export function LoginForm({ next = null }: { next?: string | null }) {
     fn: (address: string) =>
       fetchJson<{ ok: true }>('/api/auth/otp', { method: 'POST', body: JSON.stringify({ email: address }) }),
     onSuccess: (_data, address) => setEmail(address),
-    notify: { success: 'Giriş kodu gönderildi.' },
+    notify: { success: t.codeSent },
   });
 
   const verify = useServiceMutation({
@@ -49,9 +52,7 @@ export function LoginForm({ next = null }: { next?: string | null }) {
         <FormField of={codeForm} path={['code']}>
           {(field) => (
             <Field data-invalid={Boolean(field.errors || verify.error) || undefined}>
-              <FieldLabel htmlFor="code">
-                {email} adresine gönderilen {OTP_LENGTH} haneli kod
-              </FieldLabel>
+              <FieldLabel htmlFor="code">{t.codeLabel(email, OTP_LENGTH)}</FieldLabel>
               <Input
                 {...field.props}
                 id="code"
@@ -70,7 +71,7 @@ export function LoginForm({ next = null }: { next?: string | null }) {
         </FormField>
         <Button type="submit" size="lg" className="h-11" disabled={verify.isPending}>
           {verify.isPending ? <Spinner data-icon="inline-start" /> : null}
-          {verify.isPending ? 'Kontrol ediliyor…' : 'Giriş yap'}
+          {verify.isPending ? t.verifying : t.verify}
         </Button>
         <Button
           type="button"
@@ -79,7 +80,7 @@ export function LoginForm({ next = null }: { next?: string | null }) {
             sendCode.reset();
             verify.reset();
           }}>
-          Adresi değiştir
+          {t.changeEmail}
         </Button>
       </Form>
     );
@@ -93,7 +94,7 @@ export function LoginForm({ next = null }: { next?: string | null }) {
       <FormField of={emailForm} path={['email']}>
         {(field) => (
           <Field data-invalid={Boolean(field.errors) || undefined}>
-            <FieldLabel htmlFor="email">E-posta adresi</FieldLabel>
+            <FieldLabel htmlFor="email">{t.emailLabel}</FieldLabel>
             <Input
               {...field.props}
               id="email"
@@ -102,7 +103,7 @@ export function LoginForm({ next = null }: { next?: string | null }) {
               inputMode="email"
               autoComplete="email"
               value={field.input ?? ''}
-              placeholder="ornek@eposta.com"
+              placeholder={t.emailPlaceholder}
               aria-invalid={Boolean(field.errors) || undefined}
             />
             <FieldError>{field.errors?.[0]}</FieldError>
@@ -111,9 +112,9 @@ export function LoginForm({ next = null }: { next?: string | null }) {
       </FormField>
       <Button type="submit" variant="outline" size="lg" className="h-11" disabled={sendCode.isPending}>
         {sendCode.isPending ? <Spinner data-icon="inline-start" /> : null}
-        {sendCode.isPending ? 'Gönderiliyor…' : 'Giriş kodu gönder'}
+        {sendCode.isPending ? t.sending : t.sendCode}
       </Button>
-      <p className="text-center text-xs text-muted-foreground">Kod 5 dakika geçerli, tek kullanımlık.</p>
+      <p className="text-center text-xs text-muted-foreground">{t.codeValidity}</p>
     </Form>
   );
 }

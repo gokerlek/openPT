@@ -1,3 +1,5 @@
+import {LocalizedError,type LocalizedText} from '../../i18n/errors.ts';
+import {installMessages} from '../../i18n/messages/install/index.ts';
 import {installationProblems,workflowScopes,type InstallationInfo} from './github-app.ts';
 import {WorkflowSetupError} from './update-workflow.ts';
 
@@ -10,17 +12,20 @@ export type InstallationReader={
   installation:(appId:string,privateKey:string,installationId:string)=>Promise<InstallationInfo>;
   installationToken:(appId:string,privateKey:string,installationId:string)=>Promise<string>;
 };
-export class InstallationAccountError extends Error {}
+/** `message`: dile göre metin ya da düz Türkçe metin. */
+export class InstallationAccountError extends LocalizedError {
+  constructor(message:string|LocalizedText){super(typeof message==='function'?message:()=>message);}
+}
 const LOGIN=/^[a-z\d](?:[a-z\d-]{0,37}[a-z\d])?$/i;
 export async function connectGithubApp(app:{appId:string;privateKey:string;installationId:string},expectedOwner:string|undefined,codeRepo:string|undefined,github:InstallationReader,prepare:(token:string,repo:string,branch:string,scopes:string[])=>Promise<void>):Promise<{owner:string;installationId:number}> {
   const info=await github.installation(app.appId,app.privateKey,app.installationId);
-  if(!LOGIN.test(info.account))throw new InstallationAccountError('GitHub hesabı doğrulanamadı.');
+  if(!LOGIN.test(info.account))throw new InstallationAccountError(l=>installMessages(l).githubApp.accountUnverified);
   const problems=installationProblems(info,expectedOwner??info.account);
-  if(problems.length)throw new InstallationAccountError(problems.join(' '));
+  if(problems.length)throw new InstallationAccountError(l=>installationProblems(info,expectedOwner??info.account,l).join(' '));
   if(expectedOwner&&codeRepo){
     const token=await github.installationToken(app.appId,app.privateKey,app.installationId);
     try{await prepare(token,`${expectedOwner}/${codeRepo}`,'main',workflowScopes(info.permissions));}
-    catch(error){if(error instanceof WorkflowSetupError)throw new InstallationAccountError(error.message);throw error;}
+    catch(error){if(error instanceof WorkflowSetupError)throw new InstallationAccountError(l=>error.localized(l));throw error;}
   }
   return {owner:info.account,installationId:info.id};
 }

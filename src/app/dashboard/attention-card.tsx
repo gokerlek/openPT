@@ -4,8 +4,10 @@ import { CoachButton } from '@/components/coach/coach-button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
+import { ptShellMessages } from '@/i18n/messages/pt-shell';
+import { getLocale } from '@/i18n/server';
 import { attentionGroups } from '@/lib/attention';
-import { formatNumber } from '@/lib/format';
+import { getFormat } from '@/lib/format';
 import { AttentionRow } from './attention-row';
 import { clientOverviews } from './client-overviews';
 
@@ -23,29 +25,32 @@ const TOUCH_LINK = 'underline-offset-4 hover:underline touch:inline-flex touch:m
  * (`titles`). Zamana bağlı kararlar (kaçan gün, evrenin bitişi) her açılışta şimdiye göre verilir.
  */
 export async function AttentionCard({ timeZone, titles }: { timeZone: string; titles: ReadonlyMap<string, string> }) {
+  const locale = await getLocale();
+  const t = ptShellMessages(locale).attention;
+  const { number } = getFormat(locale);
   const { overviews, failed } = await clientOverviews();
   // AI koç açık danışanlar (özetten): grubun başlığında "AI'ya sor". `attentionGroups` saf kalsın diye ayrı.
   const coach = new Set(overviews.filter((overview) => overview.coach).map((overview) => overview.id));
   const { groups, total, hidden } = attentionGroups(
     overviews.map((overview) => ({ id: overview.id, name: overview.name, facts: overview.attention })),
-    { now: new Date(), timeZone, titleOf: (exerciseId) => titles.get(exerciseId) ?? exerciseId },
+    { now: new Date(), timeZone, titleOf: (exerciseId) => titles.get(exerciseId) ?? exerciseId, locale },
   );
 
   return (
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          Dikkat gerektirenler
+          {t.title}
           {total > 0 ? (
             <Badge variant="secondary" className="tabular-nums">
-              {formatNumber(total)}
-              <span className="sr-only"> danışan</span>
+              {number(total)}
+              <span className="sr-only">{t.clientsSr(total)}</span>
             </Badge>
           ) : null}
         </CardTitle>
         <CardDescription>
-          En acil danışan üstte; kırmızı ünlem sağlık güvenliği.
-          {failed > 0 ? ` ${formatNumber(failed)} danışanın kaydı okunamadı.` : ''}
+          {t.description}
+          {failed > 0 ? ` ${t.failedRecords(failed, number(failed))}` : ''}
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-2">
@@ -55,10 +60,8 @@ export async function AttentionCard({ timeZone, titles }: { timeZone: string; ti
               <EmptyMedia variant="icon">
                 <CheckCircle weight="fill" />
               </EmptyMedia>
-              <EmptyTitle>Şu an dikkat gerektiren bir şey yok</EmptyTitle>
-              <EmptyDescription>
-                Danışan antrenman gününü kaçırdığında, bir hareket ilerlemediğinde ya da bir karar beklediğinde burada görünür.
-              </EmptyDescription>
+              <EmptyTitle>{t.emptyTitle}</EmptyTitle>
+              <EmptyDescription>{t.emptyBody}</EmptyDescription>
             </EmptyHeader>
           </Empty>
         ) : (
@@ -73,7 +76,7 @@ export async function AttentionCard({ timeZone, titles }: { timeZone: string; ti
                     // Sağlık güvenliği maddesi var: renk tek başına bilgi taşımaz, ekran okuyucu "Acil" duyar.
                     <>
                       <WarningCircle weight="fill" aria-hidden className="size-4 shrink-0 text-destructive" />
-                      <span className="sr-only">Acil</span>
+                      <span className="sr-only">{t.urgent}</span>
                     </>
                   ) : null}
                   {/* Grubun düğmeleri: AI koç açıksa "AI'ya sor" (paneli bu danışanla açar, hemen değerlendirir). */}
@@ -82,7 +85,7 @@ export async function AttentionCard({ timeZone, titles }: { timeZone: string; ti
                       <CoachButton
                         variant="ghost"
                         size="sm"
-                        label="AI'ya sor"
+                        label={t.askAi}
                         srLabel={`: ${group.clientName}`}
                         detail={{ clientId: group.clientId, autoReview: true }}
                         className="touch:h-11"
@@ -99,7 +102,7 @@ export async function AttentionCard({ timeZone, titles }: { timeZone: string; ti
                 </ul>
                 {group.more > 0 ? (
                   <Link href={`/dashboard/clients/${group.clientId}`} className={`w-fit px-3 text-sm text-muted-foreground ${TOUCH_LINK}`}>
-                    +{formatNumber(group.more)} madde daha
+                    {t.moreItems(group.more, number(group.more))}
                     <span className="sr-only">: {group.clientName}</span>
                   </Link>
                 ) : null}
@@ -109,7 +112,7 @@ export async function AttentionCard({ timeZone, titles }: { timeZone: string; ti
         )}
         {hidden > 0 ? (
           <Link href="/dashboard/clients" className={`w-fit px-3 text-sm text-muted-foreground ${TOUCH_LINK}`}>
-            +{formatNumber(hidden)} danışan daha
+            {t.moreClients(hidden, number(hidden))}
           </Link>
         ) : null}
       </CardContent>

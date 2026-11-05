@@ -24,6 +24,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { useLocale, useMessages } from "@/i18n/client";
+import { setupMessages } from "@/i18n/messages/setup";
 import { fetchJson } from "@/lib/query/errors";
 import { applyFieldErrors } from "@/lib/query/field-errors";
 import { useServiceMutation } from "@/lib/query/use-service";
@@ -37,11 +39,7 @@ import { LogoPicker } from "./logo-picker";
 import { AppearancePreview } from "./appearance-preview";
 import { useAppearancePreview } from "./use-appearance-preview";
 
-const THEMES = [
-  { value: "dark", label: "Koyu" },
-  { value: "light", label: "Açık" },
-  { value: "system", label: "Sistem" },
-] as const;
+const THEMES = ["dark", "light", "system"] as const;
 
 /**
  * Tema ayarı: uygulama adı, logo, ana renk, köşe yuvarlaklığı, tema.
@@ -61,6 +59,8 @@ export function SetupForm({
   /** Kayıttan sonra gidilecek sayfa (sihirbazda panele, ayarlarda aynı sayfada kal). */
   afterSave?: string;
 }) {
+  const t = useMessages(setupMessages).form;
+  const radiusNames = setupMessages(useLocale()).radius;
   const router = useRouter();
   const form = useForm({ schema: setupFormSchema, initialInput: initial });
 
@@ -79,7 +79,7 @@ export function SetupForm({
     // Hata balonda değil formda kalır: veri repo'su açık ya da fork gibi Vercel'de
     // düzeltilecek bir sebep, kaybolan bir balonda okunamaz.
     notify: {
-      success: firstRun ? "Kurulum tamamlandı." : "Görünüm güncellendi.",
+      success: firstRun ? t.savedFirstRun : t.saved,
       error: false,
     },
     onError: (error) => applyFieldErrors(form as never, error),
@@ -106,13 +106,13 @@ export function SetupForm({
             <FormField of={form} path={["appName"]}>
               {(field) => (
                 <Field data-invalid={Boolean(field.errors) || undefined}>
-                  <FieldLabel htmlFor="appName">Uygulama adı</FieldLabel>
+                  <FieldLabel htmlFor="appName">{t.appName}</FieldLabel>
                   <Input
                     {...field.props}
                     id="appName"
                     value={field.input ?? ""}
                     maxLength={40}
-                    placeholder="Ece Kaya Training"
+                    placeholder={t.appNamePlaceholder}
                     aria-invalid={Boolean(field.errors) || undefined}
                   />
                   <FieldError>{field.errors?.[0]}</FieldError>
@@ -127,7 +127,7 @@ export function SetupForm({
             <FormField of={form} path={["radius"]}>
               {(field) => (
                 <Field>
-                  <FieldLabel id="setup-radius-label">Köşeler</FieldLabel>
+                  <FieldLabel id="setup-radius-label">{t.radius}</FieldLabel>
                   <ToggleGroup
                     aria-labelledby="setup-radius-label"
                     variant="outline"
@@ -141,7 +141,7 @@ export function SetupForm({
                   >
                     {(Object.keys(RADIUS_OPTIONS) as RadiusKey[]).map((key) => (
                       <ToggleGroupItem key={key} value={key} className="flex-1 touch:h-11">
-                        {RADIUS_OPTIONS[key].label}
+                        {radiusNames[key]}
                       </ToggleGroupItem>
                     ))}
                   </ToggleGroup>
@@ -152,7 +152,7 @@ export function SetupForm({
             <FormField of={form} path={["theme"]}>
               {(field) => (
                 <Field>
-                  <FieldLabel id="setup-theme-label">Varsayılan tema</FieldLabel>
+                  <FieldLabel id="setup-theme-label">{t.theme}</FieldLabel>
                   <ToggleGroup
                     aria-labelledby="setup-theme-label"
                     variant="outline"
@@ -168,17 +168,15 @@ export function SetupForm({
                   >
                     {THEMES.map((theme) => (
                       <ToggleGroupItem
-                        key={theme.value}
-                        value={theme.value}
+                        key={theme}
+                        value={theme}
                         className="flex-1 touch:h-11"
                       >
-                        {theme.label}
+                        {t.themes[theme]}
                       </ToggleGroupItem>
                     ))}
                   </ToggleGroup>
-                  <FieldDescription>
-                    Salonda koyu tema göz yormaz.
-                  </FieldDescription>
+                  <FieldDescription>{t.themeHint}</FieldDescription>
                 </Field>
               )}
             </FormField>
@@ -197,15 +195,11 @@ export function SetupForm({
               disabled={save.isPending}
             >
               {save.isPending ? <Spinner data-icon="inline-start" /> : null}
-              {save.isPending
-                ? "Kaydediliyor…"
-                : firstRun
-                  ? "Kurulumu tamamla"
-                  : "Kaydet"}
+              {save.isPending ? t.saving : firstRun ? t.finish : t.save}
             </Button>
-            {firstRun && <Button type="button" variant="outline" disabled={save.isPending} onClick={() => save.mutate(initial)}>Görünümü şimdilik atla</Button>}
+            {firstRun && <Button type="button" variant="outline" disabled={save.isPending} onClick={() => save.mutate(initial)}>{t.skip}</Button>}
             <p className="text-center text-xs text-muted-foreground">
-              Değişiklikler anında görünür. Kalıcı olması için kaydet.
+              {t.hint}
             </p>
           </Form>
         </CardContent>

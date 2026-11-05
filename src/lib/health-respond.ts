@@ -1,5 +1,7 @@
 import 'server-only';
+import { messageOf } from '../i18n/errors.ts';
 import { DEFAULT_LOCALE, type Locale } from '../i18n/locale.ts';
+import { healthMessages } from '../i18n/messages/health/index.ts';
 import { NextResponse } from 'next/server';
 import type * as v from 'valibot';
 import { ConstraintError } from './constraints';
@@ -15,25 +17,30 @@ export async function isPt(): Promise<boolean> {
   return (await readPtSession())?.role === 'pt';
 }
 
-export function forbidden() {
-  return NextResponse.json({ error: 'Bu işlem için yetkin yok.' }, { status: 403 });
+export function forbidden(locale: Locale = DEFAULT_LOCALE) {
+  return NextResponse.json({ error: healthMessages(locale).api.forbidden }, { status: 403 });
 }
 
-export function notFound(message = 'Bulunamadı.') {
-  return NextResponse.json({ error: message }, { status: 404 });
+export function notFound(message?: string, locale: Locale = DEFAULT_LOCALE) {
+  return NextResponse.json({ error: message ?? healthMessages(locale).api.notFound }, { status: 404 });
 }
 
-export function failed(error: unknown, fallback: string, _locale: Locale = DEFAULT_LOCALE) {
-  if (error instanceof ConstraintError) return NextResponse.json({ error: error.message }, { status: error.status });
+/**
+ * Hata yanıtı. Kural hatası (`ConstraintError`) ve GitHub hatası mesajıyla, okuyanın dilinde (`messageOf`); başkası
+ * `fallback` (çağıran o dilde verir) ve günlüğe yalnız hatanın adı.
+ */
+export function failed(error: unknown, fallback: string, locale: Locale = DEFAULT_LOCALE) {
+  if (error instanceof ConstraintError) return NextResponse.json({ error: error.localized(locale) }, { status: error.status });
   const failure = error instanceof GithubError ? error : null;
+  // Günlük satırı geliştiriciye: dil seçimine bağlı değil.
   if (!failure) console.error(`[sağlık] ${fallback}`, error instanceof Error ? error.name : 'bilinmeyen hata');
-  return NextResponse.json({ error: failure?.message ?? fallback }, { status: failure?.status ?? 502 });
+  return NextResponse.json({ error: (failure ? messageOf(failure, locale) : null) ?? fallback }, { status: failure?.status ?? 502 });
 }
 
 /** Şema hataları alan yoluyla ("constraint.side"); form alanın altında gösterir. */
-export function invalid(issues: readonly v.BaseIssue<unknown>[]) {
+export function invalid(issues: readonly v.BaseIssue<unknown>[], locale: Locale = DEFAULT_LOCALE) {
   const fields: Record<string, string> = {};
-  let message = 'Bilgileri kontrol et.';
+  let message = healthMessages(locale).api.invalid;
   for (const issue of issues) {
     const key = issue.path?.map((segment) => String(segment.key as PropertyKey)).join('.') ?? '';
     if (!key) message = issue.message;

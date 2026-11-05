@@ -11,8 +11,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group';
 import { Spinner } from '@/components/ui/spinner';
+import { useLocale, useMessages } from '@/i18n/client';
+import { ptClientsMessages } from '@/i18n/messages/pt-clients';
 import { formatInviteCode } from '@/lib/client-status';
-import { formatDateTime } from '@/lib/format';
+import { getFormat } from '@/lib/format';
 import { fetchJson } from '@/lib/query/errors';
 import { useServiceMutation } from '@/lib/query/use-service';
 
@@ -40,6 +42,8 @@ export function InvitePanel({
   /** Uygulama ayarındaki saat dilimi: son kullanma saati PT'nin saatiyle yazılır. */
   timeZone: string;
 }) {
+  const t = useMessages(ptClientsMessages).invite.panel;
+  const { dateTime } = getFormat(useLocale());
   const router = useRouter();
   const [issued, setIssued] = useState<Issued | null>(null);
 
@@ -56,9 +60,9 @@ export function InvitePanel({
     if (!issued) return;
     try {
       await navigator.clipboard.writeText(issued.url);
-      toast.success('Bağlantı kopyalandı.');
+      toast.success(t.copied);
     } catch {
-      toast.error('Kopyalanamadı. Bağlantıyı elle seç.');
+      toast.error(t.copyFailed);
     }
   };
 
@@ -67,12 +71,10 @@ export function InvitePanel({
     <div className="flex flex-col items-center gap-2 text-center">
       <Button onClick={() => issue.mutate()} disabled={issue.isPending}>
         {issue.isPending ? <Spinner data-icon="inline-start" /> : <QrIcon data-icon="inline-start" weight="fill" />}
-        {again ? 'Yeni kare kod üret' : 'Kare kod üret'}
+        {again ? t.generateAgain : t.generate}
       </Button>
       {again ? (
-        <p className="text-xs text-muted-foreground">
-          Danışan şifresini unuttuysa yeni kare kodla girer ve yeni şifre belirler; kod kullanılınca eski şifre açmaz.
-        </p>
+        <p className="text-xs text-muted-foreground">{t.passwordReset}</p>
       ) : null}
     </div>
   );
@@ -87,14 +89,10 @@ export function InvitePanel({
                 <QrIcon weight="fill" />
               </EmptyMedia>
               <EmptyTitle>
-                {joined ? `${clientName} zaten katıldı` : hasPending ? 'Bekleyen bir kare kod var' : 'Henüz kare kod yok'}
+                {joined ? t.joinedTitle(clientName) : hasPending ? t.pendingTitle : t.noneTitle}
               </EmptyTitle>
               <EmptyDescription>
-                {joined
-                  ? 'Şifresiyle girer, yeni kare kod gerekmez. Yeni kod kullanılınca eski şifresi açmaz; açık oturumları kapanmaz. Telefonu kaybolduysa önce düzenleme sayfasından erişimi kapat.'
-                  : hasPending
-                    ? 'Kodun kendisi saklanmadığı için yeniden gösterilemez. Yenisini üretirsen eskisi anında geçersiz olur.'
-                    : `${clientName} kare kodu okutur, şifresini belirler ve uygulamayı ana ekrana ekler. Kod tek kullanımlıktır.`}
+                {joined ? t.joinedBody : hasPending ? t.pendingBody : t.noneBody(clientName)}
               </EmptyDescription>
             </EmptyHeader>
             <EmptyContent>{generate}</EmptyContent>
@@ -107,34 +105,30 @@ export function InvitePanel({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>{clientName} için kare kod</CardTitle>
-        <CardDescription>Son kullanma: {formatDateTime(issued.expiresAt, timeZone)}</CardDescription>
+        <CardTitle>{t.codeTitle(clientName)}</CardTitle>
+        <CardDescription>{t.expires(dateTime(issued.expiresAt, timeZone))}</CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col items-center gap-5">
-        <QrCode value={issued.url} label={`${clientName} için davet kare kodu`} className="w-full max-w-64 border" />
+        <QrCode value={issued.url} label={t.qrLabel(clientName)} className="w-full max-w-64 border" />
 
         <InputGroup className="w-full">
-          <InputGroupInput readOnly value={issued.url} aria-label="Davet bağlantısı" onFocus={(e) => e.currentTarget.select()} />
+          <InputGroupInput readOnly value={issued.url} aria-label={t.linkLabel} onFocus={(e) => e.currentTarget.select()} />
           <InputGroupAddon align="inline-end">
-            <InputGroupButton onClick={copy} aria-label="Bağlantıyı kopyala">
+            <InputGroupButton onClick={copy} aria-label={t.copyLabel}>
               <Copy weight="fill" />
             </InputGroupButton>
           </InputGroupAddon>
         </InputGroup>
 
         <div className="flex w-full flex-col gap-1 rounded-lg border border-dashed p-3 text-sm">
-          <span className="text-muted-foreground">Bağlantı açılmıyorsa kodu elle gir</span>
+          <span className="text-muted-foreground">{t.manualTitle}</span>
           <span className="font-mono font-medium tabular-nums">{formatInviteCode(issued.code)}</span>
-          <span className="text-xs text-muted-foreground">
-            Kare kodla açılan ekranda kod hazır gelir; gelmezse danışan bu kodu yazar.
-          </span>
+          <span className="text-xs text-muted-foreground">{t.manualHint}</span>
         </div>
 
         <Alert>
           <WarningCircle weight="fill" />
-          <AlertDescription>
-            Bu kod bir daha gösterilmez. Bağlantıyı yalnız {clientName} ile paylaş: kimde olursa o girer ve şifre belirler.
-          </AlertDescription>
+          <AlertDescription>{t.once(clientName)}</AlertDescription>
         </Alert>
 
         {generate}

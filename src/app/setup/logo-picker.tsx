@@ -6,6 +6,8 @@ import { ImageSquare, Trash, UploadSimple } from '@phosphor-icons/react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { FieldDescription, FieldError, FieldLabel } from '@/components/ui/field';
+import { useMessages } from '@/i18n/client';
+import { setupMessages } from '@/i18n/messages/setup';
 import { fetchJson } from '@/lib/query/errors';
 import { useServiceMutation } from '@/lib/query/use-service';
 
@@ -15,6 +17,7 @@ import { useServiceMutation } from '@/lib/query/use-service';
  * sebep alanın altında kalır (ör. veri repo'su açık ya da fork, ayar okunamadı).
  */
 export function LogoPicker({ hasLogo }: { hasLogo: boolean }) {
+  const t = useMessages(setupMessages).logo;
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
   const [preview, setPreview] = useState<string | null>(hasLogo ? '/api/brand/logo' : null);
@@ -25,7 +28,7 @@ export function LogoPicker({ hasLogo }: { hasLogo: boolean }) {
       body.append('logo', file);
       return fetchJson<{ logo: string }>('/api/setup/logo', { method: 'POST', body });
     },
-    notify: { success: 'Logo yüklendi.', error: false },
+    notify: { success: t.uploaded, error: false },
     onSuccess: () => {
       // Aynı adres, yeni içerik: önbelleği atlat.
       setPreview(`/api/brand/logo?v=${Date.now()}`);
@@ -35,7 +38,7 @@ export function LogoPicker({ hasLogo }: { hasLogo: boolean }) {
 
   const remove = useServiceMutation({
     fn: () => fetchJson<{ ok: true }>('/api/setup/logo', { method: 'DELETE' }),
-    notify: { success: 'Logo kaldırıldı.', error: false },
+    notify: { success: t.removed, error: false },
     onSuccess: () => {
       setPreview(null);
       if (inputRef.current) inputRef.current.value = '';
@@ -48,10 +51,10 @@ export function LogoPicker({ hasLogo }: { hasLogo: boolean }) {
 
   return (
     <div className="flex flex-col gap-2">
-      <FieldLabel>Logo</FieldLabel>
+      <FieldLabel>{t.label}</FieldLabel>
       <div className="flex items-center gap-4">
         <Avatar className="size-16 rounded-lg after:rounded-lg">
-          {preview ? <AvatarImage src={preview} alt="Yüklenen logo" className="rounded-lg object-contain" /> : null}
+          {preview ? <AvatarImage src={preview} alt={t.alt} className="rounded-lg object-contain" /> : null}
           <AvatarFallback className="rounded-lg">
             <ImageSquare className="size-6" aria-hidden />
           </AvatarFallback>
@@ -85,7 +88,7 @@ export function LogoPicker({ hasLogo }: { hasLogo: boolean }) {
         <div className="flex flex-wrap gap-2">
           <Button type="button" variant="outline" disabled={busy} onClick={() => inputRef.current?.click()}>
             <UploadSimple data-icon="inline-start" />
-            {upload.isPending ? 'Yükleniyor…' : preview ? 'Değiştir' : 'Dosya seç'}
+            {upload.isPending ? t.uploading : preview ? t.change : t.choose}
           </Button>
           {preview ? (
             <Button
@@ -98,12 +101,12 @@ export function LogoPicker({ hasLogo }: { hasLogo: boolean }) {
               }}
             >
               <Trash data-icon="inline-start" />
-              {remove.isPending ? 'Kaldırılıyor…' : 'Kaldır'}
+              {remove.isPending ? t.removing : t.remove}
             </Button>
           ) : null}
         </div>
       </div>
-      <FieldDescription>PNG, JPG veya WebP · en fazla 512 KB. Sekme ikonu da bundan üretilir.</FieldDescription>
+      <FieldDescription>{t.hint}</FieldDescription>
       <FieldError>{error?.message}</FieldError>
     </div>
   );

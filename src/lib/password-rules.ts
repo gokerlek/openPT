@@ -1,3 +1,5 @@
+import { DEFAULT_LOCALE, type Locale } from '../i18n/locale.ts';
+import { authMessages } from '../i18n/messages/auth/index.ts';
 import { PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH } from './client-status.ts';
 
 /**
@@ -46,13 +48,14 @@ function trivial(folded: string): boolean {
   return false;
 }
 
-/** Uygunsa null; değilse danışana gösterilecek sebep. */
-export function passwordProblem(password: string): string | null {
+/** Uygunsa null; değilse danışana gösterilecek sebep (`locale` dilinde). */
+export function passwordProblem(password: string, locale: Locale = DEFAULT_LOCALE): string | null {
+  const t = authMessages(locale).password;
   const length = [...password.normalize('NFC')].length;
-  if (length < PASSWORD_MIN_LENGTH) return `Şifre en az ${PASSWORD_MIN_LENGTH} karakter olmalı.`;
-  if (length > PASSWORD_MAX_LENGTH) return `Şifre en fazla ${PASSWORD_MAX_LENGTH} karakter olabilir.`;
+  if (length < PASSWORD_MIN_LENGTH) return t.tooShort(PASSWORD_MIN_LENGTH);
+  if (length > PASSWORD_MAX_LENGTH) return t.tooLong(PASSWORD_MAX_LENGTH);
   const folded = fold(password);
-  if (COMMON_PASSWORDS.has(folded)) return 'Bu şifre çok yaygın, kolay tahmin edilir. Başka bir şifre seç.';
-  if (trivial(folded)) return 'Şifre sıralı ya da tekrarlanan karakterlerden oluşamaz.';
+  if (COMMON_PASSWORDS.has(folded)) return t.common;
+  if (trivial(folded)) return t.trivial;
   return null;
 }

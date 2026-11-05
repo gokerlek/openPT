@@ -1,5 +1,6 @@
 import { createCipheriv, createDecipheriv, hkdfSync, randomBytes } from 'node:crypto';
 import * as v from 'valibot';
+import { installMessages } from '../../i18n/messages/install/index.ts';
 import { SESSION_DAYS } from '../session-core.ts';
 
 /**
@@ -14,7 +15,8 @@ import { SESSION_DAYS } from '../session-core.ts';
  */
 
 export const USER_TOKEN_COOKIE = 'pc_github';
-export const REAUTH_MESSAGE = 'Bu işlem için GitHub ile yeniden giriş yap.';
+/** Türkçe metin (eski çağrılar); hata `reauthError()`'da dile göre. */
+export const REAUTH_MESSAGE = installMessages('tr').github.reauth;
 
 export type UserToken = {
   /** Anahtarın sahibi (GitHub kullanıcı adı): yalnız `GITHUB_OWNER` ise kullanılır. */

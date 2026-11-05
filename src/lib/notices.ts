@@ -1,4 +1,6 @@
-import { formatKg, formatNumber } from './format.ts';
+import { DEFAULT_LOCALE, type Locale } from '../i18n/locale.ts';
+import { ptShellMessages } from '../i18n/messages/pt-shell/index.ts';
+import { getFormat } from './format.ts';
 import type { OwnIndex } from './own-program-index.ts';
 import type { ProgramLogEntry } from './program-plan.ts';
 import type { SessionIndex } from './schemas/session.ts';
@@ -31,17 +33,12 @@ const DAY_MS = 86_400_000;
 export const PT_NOTICE_KINDS = ['other_day', 'unfinished', 'overload', 'lighter', 'pain', 'program', 'proposal', 'own_program', 'constraint'] as const;
 export type PtNoticeKind = (typeof PT_NOTICE_KINDS)[number];
 
-export const PT_NOTICE_LABELS: Record<PtNoticeKind, string> = {
-  other_day: 'Başka program',
-  unfinished: 'Yarım',
-  overload: 'Aşırı yük',
-  lighter: 'Hafifletildi',
-  pain: 'Ağrı',
-  program: 'Program',
-  proposal: 'Bekleyen öneri',
-  own_program: 'Kendi programı',
-  constraint: 'Kısıt',
-};
+export function ptNoticeLabels(locale: Locale = DEFAULT_LOCALE): Record<PtNoticeKind, string> {
+  return ptShellMessages(locale).notices.labels;
+}
+
+/** Türkçe etiketler (eski çağrılar ve testler); arayüz `ptNoticeLabels(locale)` kullanır. */
+export const PT_NOTICE_LABELS: Record<PtNoticeKind, string> = ptNoticeLabels('tr');
 
 export type PtNotice = {
   /** Listede benzersiz anahtar. */
@@ -74,37 +71,42 @@ function time(iso: string | undefined): number {
   return Number.isNaN(at) ? 0 : at;
 }
 
-const ADJUST_REASON: Record<NonNullable<SessionHealth['adjustReason']>, string> = { readiness: 'hazır oluşluk', pain: 'ağrı' };
-
 /** Bitmiş antrenmanlardan: `since`ten (ms) sonra bitenler. */
-export function sessionNotices(index: SessionIndex, since: number, health: readonly SessionHealth[] = []): PtNotice[] {
+export function sessionNotices(
+  index: SessionIndex,
+  since: number,
+  health: readonly SessionHealth[] = [],
+  locale: Locale = DEFAULT_LOCALE,
+): PtNotice[] {
+  const t = ptShellMessages(locale).notices;
+  const format = getFormat(locale);
   const bySession = new Map(health.map((item) => [item.sessionId, item]));
   const notices: PtNotice[] = [];
   for (const row of index.items) {
     if (!row.finishedAt || time(row.finishedAt) < since) continue;
     const at = row.finishedAt;
-    const day = row.dayName ?? 'Antrenman';
+    const day = row.dayName ?? t.defaultDay;
     const push = (kind: PtNoticeKind, text: string, suffix = '') => notices.push({ key: `${kind}:${row.id}${suffix}`, kind, at, text, target: 'client' });
     if (row.otherDay || row.notices.includes('other_day')) {
       // "Alt vücut yerine Üst vücut yapıldı"; planlanan programın adı yoksa (eski satır) genel metin.
-      push('other_day', row.plannedDayName ? `${row.plannedDayName} yerine ${day} yapıldı` : `Başka program seçildi: ${day}`);
+      push('other_day', row.plannedDayName ? t.otherDayPlanned(row.plannedDayName, day) : t.otherDay(day));
     }
     if (row.unfinished || row.notices.includes('unfinished')) {
-      push('unfinished', `${day} yarım bırakıldı${row.progress ? ` (${formatNumber(row.progress.done)}/${formatNumber(row.progress.planned)} set)` : ''}`);
+      push('unfinished', t.unfinished(day, row.progress ? { done: format.number(row.progress.done), planned: format.number(row.progress.planned) } : null));
     }
     if (row.notices.includes('overload')) {
       const items = row.overloads ?? [];
-      if (items.length === 0) push('overload', `${day}: hedefin çok üzerinde set onaylandı`);
+      if (items.length === 0) push('overload', t.overloadNone(day));
       items.forEach((item, position) =>
-        push('overload', `${item.title} ${formatKg(item.kg)}${item.plannedKg !== undefined ? ` (hedef ${formatNumber(item.plannedKg)})` : ''}`, `:${position}`),
+        push('overload', t.overloadRow(item.title, format.kg(item.kg), item.plannedKg !== undefined ? format.number(item.plannedKg) : null), `:${position}`),
       );
     }
     const detail = bySession.get(row.id);
     if (row.notices.includes('lighter')) {
-      push('lighter', `${day} hafifletildi${detail?.adjustReason ? ` (${ADJUST_REASON[detail.adjustReason]})` : ''}`);
+      push('lighter', t.lighter(day, detail?.adjustReason ? t.adjustReason[detail.adjustReason] : null));
     }
     if (detail && detail.painSkips > 0) {
-      push('pain', `${day}: ağrı nedeniyle ${formatNumber(detail.painSkips)} hareket geçildi`);
+      push('pain', t.painSkips(day, detail.painSkips, format.number(detail.painSkips)));
     }
   }
   return notices;
@@ -138,28 +140,34 @@ function clientEdit(entry: Pick<ProgramLogEntry, 'kind' | 'by' | 'sessionId'>): 
  * sildi (`events`), paylaşılmış programı düzenledi (`logs`: çağıran yalnız `clientEditedAt`'i pencerede olan
  * paylaşılmış programların geçmişini verir). Paylaşılmamış programdaki düzenlemeler bildirilmez.
  */
-export function ownProgramNotices(index: OwnIndex | null | undefined, since: number, logs: ReadonlyMap<string, readonly ProgramLogEntry[]> = new Map()): PtNotice[] {
+export function ownProgramNotices(
+  index: OwnIndex | null | undefined,
+  since: number,
+  logs: ReadonlyMap<string, readonly ProgramLogEntry[]> = new Map(),
+  locale: Locale = DEFAULT_LOCALE,
+): PtNotice[] {
   if (!index) return [];
+  const t = ptShellMessages(locale).notices;
   const notices: PtNotice[] = [];
   const push = (key: string, at: string, text: string) => notices.push({ key: `own_program:${key}`, kind: 'own_program', at, text, target: 'program' });
   const names = new Map(index.items.map((item) => [item.id, item.name]));
   if (index.active && time(index.active.at) >= since) {
     const id = index.active.programId;
     const name = id ? (names.get(id) ?? index.events.find((event) => event.id === id)?.name) : null;
-    push(`active:${index.active.at}`, index.active.at, id ? `Bugün'ün programı: ${name ?? 'kendi programı'}` : 'Antrenörün programına döndü');
+    push(`active:${index.active.at}`, index.active.at, id ? t.ownActive(name ?? t.ownDefaultName) : t.ownBack);
   }
   for (const item of index.items) {
-    if (item.shared && time(item.shared.at) >= since) push(`shared:${item.id}:${item.shared.at}`, item.shared.at, `Paylaştı: ${item.name}`);
+    if (item.shared && time(item.shared.at) >= since) push(`shared:${item.id}:${item.shared.at}`, item.shared.at, t.ownShared(item.name));
     if (!item.shared) continue;
     for (const entry of logs.get(item.id) ?? []) {
       if (!clientEdit(entry) || time(entry.at) < since) continue;
       const text = entry.changes.map((change) => (change.scope ? `${change.scope}: ${change.text}` : change.text)).join(' · ');
-      push(`edit:${item.id}:${entry.at}`, entry.at, `${item.name} · ${text}`);
+      push(`edit:${item.id}:${entry.at}`, entry.at, t.ownEdited(item.name, text));
     }
   }
   for (const event of index.events) {
     if (time(event.at) < since) continue;
-    push(`${event.kind}:${event.id}:${event.at}`, event.at, event.kind === 'deleted' ? `Sildi: ${event.name}` : `Paylaşımı kapattı: ${event.name}`);
+    push(`${event.kind}:${event.id}:${event.at}`, event.at, event.kind === 'deleted' ? t.ownDeleted(event.name) : t.ownUnshared(event.name));
   }
   return notices;
 }
@@ -169,13 +177,22 @@ export function ownProgramNotices(index: OwnIndex | null | undefined, since: num
  * okunur, bilinmeyen türler de sayılır): tek bildirim, en yeni önerinin anında; tek öneri varsa metniyle
  * ("Öneri: Leg Press 3 → 4 set"). Bekleyen öneri pencere dışında da görünür (PT'nin kararını bekliyor).
  */
-export function proposalNotices(raw: unknown): PtNotice[] {
+export function proposalNotices(raw: unknown, locale: Locale = DEFAULT_LOCALE): PtNotice[] {
+  const t = ptShellMessages(locale).notices;
   const items = isRecord(raw) && Array.isArray(raw.items) ? raw.items : [];
   const pending = items.filter((item): item is Record<string, unknown> => isRecord(item) && item.status === 'pending' && typeof item.at === 'string');
   if (pending.length === 0) return [];
   const at = pending.map((item) => item.at as string).sort((a, b) => time(b) - time(a))[0] as string;
   const only = pending.length === 1 && typeof pending[0]?.text === 'string' ? pending[0].text : null;
-  return [{ key: `proposal:${at}`, kind: 'proposal', at, text: only ? `Öneri: ${only}` : `${formatNumber(pending.length)} değişiklik önerisi bekliyor`, target: 'program' }];
+  return [
+    {
+      key: `proposal:${at}`,
+      kind: 'proposal',
+      at,
+      text: only ? t.proposalOne(only) : t.proposalMany(pending.length, getFormat(locale).number(pending.length)),
+      target: 'program',
+    },
+  ];
 }
 
 /** Bir danışanın bildirimleri, en yeniden eskiye; pencere `windowDays`, en çok `limit`. */
@@ -191,13 +208,16 @@ export function clientNotices(input: {
   now: Date;
   windowDays?: number;
   limit?: number;
+  /** Metinlerin dili; yoksa Türkçe. */
+  locale?: Locale;
 }): PtNotice[] {
+  const locale = input.locale ?? DEFAULT_LOCALE;
   const since = input.now.getTime() - (input.windowDays ?? NOTICE_WINDOW_DAYS) * DAY_MS;
   const all = [
-    ...(input.index ? sessionNotices(input.index, since, input.health) : []),
+    ...(input.index ? sessionNotices(input.index, since, input.health, locale) : []),
     ...programNotices(input.log, since),
-    ...proposalNotices(input.proposals),
-    ...(input.own ? ownProgramNotices(input.own.index, since, input.own.logs) : []),
+    ...proposalNotices(input.proposals, locale),
+    ...(input.own ? ownProgramNotices(input.own.index, since, input.own.logs, locale) : []),
     ...constraintNotices(input.constraintLog ?? [], since),
   ];
   return all.sort((a, b) => time(b.at) - time(a.at) || (a.key < b.key ? -1 : a.key > b.key ? 1 : 0)).slice(0, input.limit ?? NOTICES_PER_CLIENT);

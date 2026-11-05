@@ -1,5 +1,6 @@
 import 'server-only';
 import type { Octokit } from 'octokit';
+import { installMessages } from '../../i18n/messages/install';
 import { jsonText } from './blob';
 import { assertRepoAllowed, gh, GithubError, owner, toGithubError } from './client';
 import { BrokenJsonError } from './errors';
@@ -42,7 +43,7 @@ export async function readJson<T>(
     });
     const data = response.data;
     if (Array.isArray(data) || data.type !== 'file' || !('content' in data)) {
-      throw new GithubError(`${path} bir dosya değil.`, 400);
+      throw new GithubError((l) => installMessages(l).github.notAFile(path), 400);
     }
     sha = data.sha;
     return { content: JSON.parse(decode(data.content)) as T, sha: data.sha };
@@ -232,7 +233,7 @@ export async function listTree(repo: string, treeSha: string, api: Octokit = gh(
   if (cached) return cached;
   try {
     const { data } = await api.rest.git.getTree({ owner: owner(), repo, tree_sha: treeSha });
-    if (data.truncated) throw new GithubError(`${repo}: klasör listesi GitHub'da kesildi.`, 502);
+    if (data.truncated) throw new GithubError((l) => installMessages(l).github.listTruncated(repo), 502);
     const entries = data.tree.flatMap((item): TreeEntry[] =>
       (item.type === 'blob' || item.type === 'tree') && item.path && item.sha ? [{ path: item.path, sha: item.sha, type: item.type }] : [],
     );
@@ -400,7 +401,7 @@ export async function readJsonConditional<T>(repo: string, path: string, api: Oc
       `contents:${repo}:${path}`,
       (headers) => api.rest.repos.getContent({ owner: owner(), repo, path, headers }),
       (data): StoredFile<T> => {
-        if (Array.isArray(data) || data.type !== 'file' || !('content' in data)) throw new GithubError(`${path} bir dosya değil.`, 400);
+        if (Array.isArray(data) || data.type !== 'file' || !('content' in data)) throw new GithubError((l) => installMessages(l).github.notAFile(path), 400);
         try {
           return { content: JSON.parse(decode(data.content)) as T, sha: data.sha };
         } catch {

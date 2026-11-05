@@ -18,6 +18,10 @@ import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui
 import { Input } from '@/components/ui/input';
 import { Spinner } from '@/components/ui/spinner';
 import { Textarea } from '@/components/ui/textarea';
+import { useLocale, useMessages } from '@/i18n/client';
+import type { Locale } from '@/i18n/locale';
+import { commonMessages } from '@/i18n/messages/common';
+import { healthMessages } from '@/i18n/messages/health';
 import { conditionInfo, conditionLabel, parseCondition } from '@/lib/conditions';
 import { careCounts } from '@/lib/constraint-filter';
 import {
@@ -28,22 +32,13 @@ import {
   CONSTRAINT_REGIONS,
   CONSTRAINT_TYPES,
   conditionsForRegion,
-  DIAGNOSIS_SOURCE_LABELS,
   DIAGNOSIS_SOURCES,
   detailFields,
-  EMERGENCY_TEXT,
-  GRAFT_LABELS,
   isEmergency,
   isPaired,
   isRedFlag,
-  REGION_LABELS,
   SEVERITIES,
-  SEVERITY_DESCRIPTIONS,
-  SEVERITY_LABELS,
-  SIDE_LABELS,
   CONSTRAINT_SIDES,
-  STAGE_LABELS,
-  TYPE_LABELS,
   type AvoidTagId,
   type CareTags,
   type ConstraintRegion,
@@ -85,12 +80,13 @@ export type ConstraintFormMode =
 
 const NONE = 'none';
 
-function conditionOptions(region: ConstraintRegion | undefined, kind: 'diagnosis' | 'finding'): Record<string, string> {
-  const labels: Record<string, string> = { [NONE]: kind === 'diagnosis' ? 'Tanı yok' : 'Gözlem yok' };
+function conditionOptions(region: ConstraintRegion | undefined, kind: 'diagnosis' | 'finding', locale: Locale): Record<string, string> {
+  const t = healthMessages(locale).constraintForm;
+  const labels: Record<string, string> = { [NONE]: kind === 'diagnosis' ? t.noDiagnosis : t.noFinding };
   for (const id of conditionsForRegion(region ?? null, kind)) {
-    const info = conditionInfo(id);
+    const info = conditionInfo(id, locale);
     labels[id] = info.label;
-    for (const qualifier of info.qualifiers ?? []) labels[`${id}:${qualifier}`] = conditionLabel({ id, qualifier });
+    for (const qualifier of info.qualifiers ?? []) labels[`${id}:${qualifier}`] = conditionLabel({ id, qualifier }, locale);
   }
   return labels;
 }
@@ -148,6 +144,11 @@ export function ConstraintFormView({
   reportSummary?: React.ReactNode;
 }) {
   const router = useRouter();
+  const locale = useLocale();
+  const messages = useMessages(healthMessages);
+  const labels = messages.constraints;
+  const t = messages.constraintForm;
+  const common = useMessages(commonMessages).actions;
   const base = `/dashboard/clients/${clientId}/constraints`;
   const [draft, setDraft] = useState<ConstraintDraft>(initial);
   const [dirty, setDirty] = useState(false);
@@ -162,8 +163,8 @@ export function ConstraintFormView({
   };
 
   const details = detailFields(draft.conditionId);
-  const diagnoses = useMemo(() => conditionOptions(draft.region, 'diagnosis'), [draft.region]);
-  const findings = useMemo(() => conditionOptions(draft.region, 'finding'), [draft.region]);
+  const diagnoses = useMemo(() => conditionOptions(draft.region, 'diagnosis', locale), [draft.region, locale]);
+  const findings = useMemo(() => conditionOptions(draft.region, 'finding', locale), [draft.region, locale]);
   const preview = useMemo(() => {
     const constraint = draftConstraint(draft);
     return constraint ? careCounts(library, { active: [constraint], reports: [], overrides: [], today }) : null;
@@ -194,10 +195,11 @@ export function ConstraintFormView({
       clientNote: draft.clientNote ?? '',
     };
     const local: Record<string, string> = {};
-    if (!draft.region) local.region = 'Bölgeyi seç.';
-    if (draft.region && isPaired(draft.region) && !draft.side) local.side = 'Tarafı seç.';
-    if (!draft.type) local.type = 'Türü seç.';
-    if (draft.conditionId && !draft.diagnosisSource) local.diagnosisSource = 'Tanının kaynağını seç.';
+    const validation = messages.validation;
+    if (!draft.region) local.region = validation.region;
+    if (draft.region && isPaired(draft.region) && !draft.side) local.side = validation.side;
+    if (!draft.type) local.type = validation.type;
+    if (draft.conditionId && !draft.diagnosisSource) local.diagnosisSource = validation.diagnosisSource;
     const parsed = v.safeParse(constraintFormSchema, input);
     if (!parsed.success) {
       for (const issue of parsed.issues) {
@@ -220,7 +222,7 @@ export function ConstraintFormView({
             method: 'PATCH',
             body: JSON.stringify({ action: 'edit', baseUpdatedAt: mode.baseUpdatedAt, constraint }),
           }),
-    notify: { success: mode.kind === 'new' ? 'Kısıt kaydedildi.' : mode.confirming ? 'Bildirim onaylandı.' : 'Kısıt güncellendi.' },
+    notify: { success: mode.kind === 'new' ? t.saved : mode.confirming ? t.confirmed : t.updated },
     onError: (error) => setErrors(Object.fromEntries(Object.entries(error.fields).map(([key, message]) => [key.replace(/^constraint\./, ''), message]))),
     onSuccess: () => {
       router.push(base);
@@ -232,7 +234,7 @@ export function ConstraintFormView({
     const constraint = body();
     if (constraint) save.mutate(constraint);
   };
-  const saveLabel = save.isPending ? 'Kaydediliyor…' : mode.kind === 'edit' && mode.confirming ? 'Onayla ve kaydet' : 'Kaydet';
+  const saveLabel = save.isPending ? common.saving : mode.kind === 'edit' && mode.confirming ? t.confirmSave : common.save;
   const saveButton = (className?: string) => (
     <Button type="button" disabled={save.isPending} onClick={submit} className={className}>
       {save.isPending ? <Spinner data-icon="inline-start" /> : <Check data-icon="inline-start" />}
@@ -244,7 +246,7 @@ export function ConstraintFormView({
   return (
     <div className="flex flex-col gap-6">
       <SectionHeader
-        back={{ href: base, label: 'Kısıtlar' }}
+        back={{ href: base, label: t.back }}
         title={title}
         description={description}
         actions={
@@ -260,17 +262,17 @@ export function ConstraintFormView({
       <div className="grid gap-6 lg:grid-cols-2 lg:items-start">
         <Card>
           <CardHeader>
-            <CardTitle>Nerede</CardTitle>
-            <CardDescription>Çift bölgede taraf zorunlu. Egzersiz etiketleri taraf ayırmaz: tek bacak hareketinde kısıt iki taraf için geçerlidir.</CardDescription>
+            <CardTitle>{t.whereTitle}</CardTitle>
+            <CardDescription>{t.whereHint}</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-5">
             <Field data-invalid={Boolean(errors.region) || undefined}>
-              <FieldLabel id="region-label">Bölge</FieldLabel>
+              <FieldLabel id="region-label">{t.region}</FieldLabel>
               <ChoiceChips
                 labelledBy="region-label"
                 value={draft.region}
                 invalid={Boolean(errors.region)}
-                options={CONSTRAINT_REGIONS.map((region) => ({ value: region, label: REGION_LABELS[region] }))}
+                options={CONSTRAINT_REGIONS.map((region) => ({ value: region, label: labels.regions[region] }))}
                 onChange={(region) => {
                   if (region === draft.region) return;
                   set('region', region);
@@ -282,12 +284,12 @@ export function ConstraintFormView({
             </Field>
             {draft.region && isPaired(draft.region) ? (
               <Field data-invalid={Boolean(errors.side) || undefined}>
-                <FieldLabel id="side-label">Taraf</FieldLabel>
+                <FieldLabel id="side-label">{t.side}</FieldLabel>
                 <ChoiceChips
                   labelledBy="side-label"
                   value={draft.side}
                   invalid={Boolean(errors.side)}
-                  options={CONSTRAINT_SIDES.map((side) => ({ value: side, label: SIDE_LABELS[side] }))}
+                  options={CONSTRAINT_SIDES.map((side) => ({ value: side, label: labels.sides[side] }))}
                   onChange={(side) => set('side', side)}
                 />
                 <FieldError>{errors.side}</FieldError>
@@ -298,40 +300,40 @@ export function ConstraintFormView({
 
         <Card>
           <CardHeader>
-            <CardTitle>Ne</CardTitle>
-            <CardDescription>Tanıyı sen koyma; danışanın doktorundan ya da fizyoterapistinden öğrendiğini seç. Seçilirse kütüphanenin kanıta dayalı kuralları da çalışır.</CardDescription>
+            <CardTitle>{t.whatTitle}</CardTitle>
+            <CardDescription>{t.whatHint}</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-5">
             <Field data-invalid={Boolean(errors.type) || undefined}>
-              <FieldLabel id="type-label">Tür</FieldLabel>
+              <FieldLabel id="type-label">{t.type}</FieldLabel>
               <ChoiceChips
                 labelledBy="type-label"
                 value={draft.type}
                 invalid={Boolean(errors.type)}
-                options={CONSTRAINT_TYPES.map((type) => ({ value: type, label: TYPE_LABELS[type] }))}
+                options={CONSTRAINT_TYPES.map((type) => ({ value: type, label: labels.types[type] }))}
                 onChange={(type) => set('type', type)}
               />
               <FieldError>{errors.type}</FieldError>
             </Field>
             <Field data-invalid={Boolean(errors.conditionId) || undefined}>
-              <FieldLabel htmlFor="diagnosis">Sağlık profesyonelinin koyduğu tanı (varsa)</FieldLabel>
+              <FieldLabel htmlFor="diagnosis">{t.diagnosis}</FieldLabel>
               <LabeledSelect
                 id="diagnosis"
                 value={draft.conditionId && diagnoses[draft.conditionId] ? draft.conditionId : NONE}
                 labels={diagnoses}
                 onChange={(next) => set('conditionId', next === NONE ? undefined : next)}
               />
-              <FieldDescription>Bölgeye göre süzülür. Danışan yalnız hekim ya da fizyoterapist kaynaklı tanının adını görür.</FieldDescription>
+              <FieldDescription>{t.diagnosisHint}</FieldDescription>
               <FieldError>{errors.conditionId}</FieldError>
             </Field>
             {draft.conditionId ? (
               <Field data-invalid={Boolean(errors.diagnosisSource) || undefined}>
-                <FieldLabel id="source-label">Tanının kaynağı</FieldLabel>
+                <FieldLabel id="source-label">{t.diagnosisSource}</FieldLabel>
                 <ChoiceChips
                   labelledBy="source-label"
                   value={draft.diagnosisSource}
                   invalid={Boolean(errors.diagnosisSource)}
-                  options={DIAGNOSIS_SOURCES.map((source) => ({ value: source, label: DIAGNOSIS_SOURCE_LABELS[source] }))}
+                  options={DIAGNOSIS_SOURCES.map((source) => ({ value: source, label: labels.diagnosisSources[source] }))}
                   onChange={(source) => set('diagnosisSource', source)}
                 />
                 <FieldError>{errors.diagnosisSource}</FieldError>
@@ -340,78 +342,75 @@ export function ConstraintFormView({
             {emergency ? (
               <Alert variant="destructive">
                 <WarningCircle weight="fill" />
-                <AlertTitle>{EMERGENCY_TEXT}</AlertTitle>
-                <AlertDescription>Bu tanıda egzersiz yazılmaz; görüş alınsa da izin verilemez.</AlertDescription>
+                <AlertTitle>{labels.emergency}</AlertTitle>
+                <AlertDescription>{t.emergencyDetail}</AlertDescription>
               </Alert>
             ) : flagged ? (
               <Alert>
                 <FirstAidKit weight="fill" />
-                <AlertTitle>Kırmızı bayrak: sağlık profesyoneline yönlendir</AlertTitle>
-                <AlertDescription>
-                  Kaydedince Kısıtlar’da iki adım çıkar: “Sağlık profesyoneline yönlendirdim” ve “Görüş alındı”. Görüş alınana kadar bu bölgeyi
-                  çalıştıran hareketler dikkat alır, bu kısıtın yasaklarına izin verilemez ve danışan kartta not görür.
-                </AlertDescription>
+                <AlertTitle>{t.redFlagTitle}</AlertTitle>
+                <AlertDescription>{t.redFlagDetail}</AlertDescription>
               </Alert>
             ) : null}
             {details.surgery ? (
               <Field data-invalid={Boolean(errors['details.surgeryDate']) || undefined} className="max-w-xs">
-                <FieldLabel htmlFor="surgery">Ameliyat tarihi</FieldLabel>
+                <FieldLabel htmlFor="surgery">{t.surgery}</FieldLabel>
                 <DatePicker id="surgery" max={today} value={draft.surgeryDate ?? ''} onValueChange={value => set('surgeryDate', value || undefined)} />
-                <FieldDescription>Haftaya bağlı kurallar (açık zincir diz açma) buna göre.</FieldDescription>
+                <FieldDescription>{t.surgeryHint}</FieldDescription>
                 <FieldError>{errors['details.surgeryDate']}</FieldError>
               </Field>
             ) : null}
             {details.graft ? (
               <Field className="max-w-xs">
-                <FieldLabel htmlFor="graft">Greft</FieldLabel>
-                <LabeledSelect id="graft" value={draft.graft} labels={GRAFT_LABELS} placeholder="Bilinmiyor" onChange={(graft) => set('graft', graft)} />
+                <FieldLabel htmlFor="graft">{t.graft}</FieldLabel>
+                <LabeledSelect id="graft" value={draft.graft} labels={labels.grafts} placeholder={t.unknown} onChange={(graft) => set('graft', graft)} />
               </Field>
             ) : null}
             {details.stage ? (
               <Field className="max-w-xs">
-                <FieldLabel htmlFor="stage">Tendinopati evresi</FieldLabel>
+                <FieldLabel htmlFor="stage">{t.stage}</FieldLabel>
                 <LabeledSelect
                   id="stage"
                   value={draft.stage ? (String(draft.stage) as `${Stage}`) : undefined}
-                  labels={Object.fromEntries(Object.entries(STAGE_LABELS)) as Record<`${Stage}`, string>}
-                  placeholder="Bilinmiyor"
+                  labels={Object.fromEntries(Object.entries(labels.stages)) as Record<`${Stage}`, string>}
+                  placeholder={t.unknown}
                   onChange={(stage) => set('stage', Number(stage) as Stage)}
                 />
               </Field>
             ) : null}
             <Field>
-              <FieldLabel htmlFor="finding">Gözlem (yalnız sen görürsün)</FieldLabel>
+              <FieldLabel htmlFor="finding">{t.finding}</FieldLabel>
               <LabeledSelect
                 id="finding"
                 value={draft.findingId && findings[draft.findingId] ? draft.findingId : NONE}
                 labels={findings}
                 onChange={(next) => set('findingId', next === NONE ? undefined : next)}
               />
-              <FieldDescription>Postür ya da hareket gözlemi; danışana hiç gösterilmez.</FieldDescription>
+              <FieldDescription>{t.findingHint}</FieldDescription>
             </Field>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader>
-            <CardTitle>Şiddet ve başlangıç</CardTitle>
-            <CardDescription>Şiddet gösterim ve “kötüleşti” içindir; süzgeci değiştirmez. Yalnız danışanın “şiddetli” demesi, sen bakana kadar bölgeyi çalıştıran hareketlere dikkat ekler.</CardDescription>
+            <CardTitle>{t.severityTitle}</CardTitle>
+            <CardDescription>{t.severityHint}</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-5">
             <Field>
-              <FieldLabel id="severity-label">Şiddet</FieldLabel>
+              <FieldLabel id="severity-label">{t.severity}</FieldLabel>
               <ChoiceChips
                 labelledBy="severity-label"
                 value={draft.severity}
-                options={SEVERITIES.map((severity) => ({ value: severity, label: SEVERITY_LABELS[severity], description: SEVERITY_DESCRIPTIONS[severity] }))}
+                options={SEVERITIES.map((severity) => ({ value: severity, label: labels.severities[severity], description: labels.severityDescriptions[severity] }))}
                 onChange={(severity) => set('severity', severity)}
               />
-              <FieldDescription>{draft.severity ? SEVERITY_DESCRIPTIONS[draft.severity] : 'Hafif: antrenmanı etkilemiyor · Orta: bazı hareketlerde zorluyor · Şiddetli: günlük hayatı etkiliyor.'}</FieldDescription>
+              <FieldDescription>{draft.severity ? labels.severityDescriptions[draft.severity] : t.severityAll}</FieldDescription>
             </Field>
             <Field data-invalid={Boolean(errors.onset) || undefined} className="max-w-xs">
-              <FieldLabel htmlFor="onset">Başlangıç</FieldLabel>
+              <FieldLabel htmlFor="onset">{t.onset}</FieldLabel>
               <Input id="onset" inputMode="numeric" placeholder="2026-08" value={draft.onset ?? ''} onChange={(event) => set('onset', event.currentTarget.value.trim() || undefined)} />
-              <FieldDescription>Bildiğin kesinlikte: yıl (2024), ay (2026-08) ya da gün (2026-08-12).</FieldDescription>
+              <FieldDescription>{t.onsetHint}</FieldDescription>
               <FieldError>{errors.onset}</FieldError>
             </Field>
           </CardContent>
@@ -419,25 +418,25 @@ export function ConstraintFormView({
 
         <Card>
           <CardHeader>
-            <CardTitle>Notlar</CardTitle>
-            <CardDescription>Danışana not antrenmandaki hareket kartında ve Sağlık sayfasında görünür.</CardDescription>
+            <CardTitle>{t.notesTitle}</CardTitle>
+            <CardDescription>{t.notesHint}</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-5">
             <Field data-invalid={Boolean(errors.note) || undefined}>
-              <FieldLabel htmlFor="note">Senin notun (danışan görmez)</FieldLabel>
+              <FieldLabel htmlFor="note">{t.note}</FieldLabel>
               <Textarea id="note" maxLength={CONSTRAINT_LIMITS.note} value={draft.note ?? ''} onChange={(event) => set('note', event.currentTarget.value)} />
               <FieldError>{errors.note}</FieldError>
             </Field>
             <Field data-invalid={Boolean(errors.clientNote) || undefined}>
-              <FieldLabel htmlFor="client-note">Danışana not</FieldLabel>
+              <FieldLabel htmlFor="client-note">{t.clientNote}</FieldLabel>
               <Input
                 id="client-note"
                 maxLength={CONSTRAINT_LIMITS.clientNote}
-                placeholder="Ağrısız aralıkta kal, derine inme."
+                placeholder={t.clientNotePlaceholder}
                 value={draft.clientNote ?? ''}
                 onChange={(event) => set('clientNote', event.currentTarget.value)}
               />
-              <FieldDescription>En fazla {CONSTRAINT_LIMITS.clientNote} karakter. Tanı adı yazma.</FieldDescription>
+              <FieldDescription>{t.clientNoteHint(CONSTRAINT_LIMITS.clientNote)}</FieldDescription>
               <FieldError>{errors.clientNote}</FieldError>
             </Field>
           </CardContent>
@@ -446,26 +445,21 @@ export function ConstraintFormView({
 
       <Card>
         <CardHeader>
-          <CardTitle>Kaçınılacak hareketler</CardTitle>
-          <CardDescription>
-            Program düzenleyicisi ve antrenmandaki “Değiştir” bunlara uymayan hareketi yaptırmaz (“öne eğilme” yalnız dikkat). Etiketi eksik hareket
-            “uygun” sayılmaz.
-          </CardDescription>
+          <CardTitle>{t.avoidTitle}</CardTitle>
+          <CardDescription>{t.avoidHint}</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
           <MultiChips
-            label="Kaçınılacak hareketler"
+            label={t.avoidTitle}
             value={draft.avoid}
-            options={AVOID_TAG_IDS.map((tag) => ({ value: tag, label: AVOID_TAGS[tag].decision === 'warn' ? `${AVOID_TAGS[tag].label} (dikkat)` : AVOID_TAGS[tag].label }))}
+            options={AVOID_TAG_IDS.map((tag) => ({ value: tag, label: AVOID_TAGS[tag].decision === 'warn' ? t.avoidWarn(labels.avoid[tag]) : labels.avoid[tag] }))}
             onChange={(avoid) => set('avoid', avoid)}
             itemClassName="h-auto min-h-11 whitespace-normal text-left"
           />
           <p className="text-sm text-muted-foreground" aria-live="polite">
-            {preview
-              ? `Önizleme: kütüphanede ${preview.blocked} yaptırma · ${preview.warned} dikkat · ${preview.unassessed} eksik bilgi · ${preview.untagged} kontrol edilmedi (etiketsiz).`
-              : 'Kaçınma ya da tanı seçince kütüphanedeki etkisi burada görünür.'}{' '}
+            {preview ? t.preview(preview.blocked, preview.warned, preview.unassessed, preview.untagged) : t.previewEmpty}{' '}
             <Link href={`/dashboard/exercises?client=${clientId}`} className="inline-flex items-center gap-1 underline-offset-4 hover:underline">
-              Kayıtlı kısıtlarla listede gör
+              {t.previewLink}
               <ArrowSquareOut className="size-3.5" />
             </Link>
           </p>
@@ -475,14 +469,14 @@ export function ConstraintFormView({
       {errorList.length > 0 ? (
         <Alert variant="destructive" data-form-error>
           <WarningCircle />
-          <AlertTitle>Kaydedilemedi</AlertTitle>
+          <AlertTitle>{t.saveFailed}</AlertTitle>
           <AlertDescription>{errorList[0]}</AlertDescription>
         </Alert>
       ) : null}
 
       <div className="flex justify-end sm:hidden">{saveButton('h-11 w-full')}</div>
 
-      <UnsavedChangesGuard active={dirty && !save.isPending && !save.isSuccess} description="Çıkarsan kısıttaki değişiklikler kaydedilmez." onLeave={() => undefined} />
+      <UnsavedChangesGuard active={dirty && !save.isPending && !save.isSuccess} description={t.leave} onLeave={() => undefined} />
     </div>
   );
 }

@@ -1,6 +1,8 @@
 'use client';
 
 import { Item, ItemContent, ItemDescription, ItemMedia, ItemTitle } from '@/components/ui/item';
+import { useLocale, useMessages } from '@/i18n/client';
+import { ptShellMessages } from '@/i18n/messages/pt-shell';
 import { LIVE_IDLE_POLL_MS, LIVE_POLL_MS, liveDetailText, type LiveResponse } from '@/lib/live-text';
 import { fetchJson } from '@/lib/query/errors';
 import { useServiceQuery } from '@/lib/query/use-service';
@@ -17,6 +19,8 @@ import { LiveDot } from '../../live-dot';
  * Satır ekran okuyucuya canlı bölge değildir: 10 sn'de bir değişen "dk önce" sürekli duyurulurdu.
  */
 export function LiveSession({ clientId, initial, className }: { clientId: string; initial: LiveResponse | null; className?: string }) {
+  const locale = useLocale();
+  const t = useMessages(ptShellMessages).live;
   const { data } = useServiceQuery<LiveResponse>({
     key: ['live', clientId],
     fn: ({ signal }) => fetchJson<LiveResponse>(`/api/clients/${clientId}/live`, { signal }),
@@ -34,8 +38,8 @@ export function LiveSession({ clientId, initial, className }: { clientId: string
         <LiveDot />
       </ItemMedia>
       <ItemContent>
-        <ItemTitle>Şu an antrenmanda</ItemTitle>
-        <ItemDescription className="tabular-nums">{liveDetailText(live, new Date(data.checkedAt))}</ItemDescription>
+        <ItemTitle>{t.title}</ItemTitle>
+        <ItemDescription className="tabular-nums">{liveDetailText(live, new Date(data.checkedAt), locale)}</ItemDescription>
       </ItemContent>
     </Item>
   );

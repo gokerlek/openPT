@@ -1,4 +1,5 @@
 import { DEFAULT_LOCALE, type Locale } from '../i18n/locale.ts';
+import { healthMessages } from '../i18n/messages/health/index.ts';
 import { evaluateCare, hasCare, type CareInput } from './constraint-filter.ts';
 import type { CareTags } from './constraints.ts';
 
@@ -16,7 +17,7 @@ import type { CareTags } from './constraints.ts';
  */
 
 /** Danışana yasaklı hareketin metni (antrenmanda "Hareket ekle" ve kendi programın kaydı aynı cümle). */
-export const BLOCKED_TEXT = 'Bu hareket şu an sana önerilmiyor; antrenörüne sor.';
+export const BLOCKED_TEXT: string = healthMessages('tr').care.blocked;
 
 export type ExerciseCaution = { blocked: Set<string>; caution: Set<string> };
 
@@ -60,8 +61,7 @@ export function blockedAdditions(phases: Phases, blocked: ReadonlySet<string>, b
   return found;
 }
 
-/* --- dil: imza dondurma (i18n planı §7 F). Sahibi görev çevirir; şimdilik Türkçe döner. --- */
-
-export function blockedText(_locale: Locale = DEFAULT_LOCALE): string {
-  return BLOCKED_TEXT;
+/** `BLOCKED_TEXT` okuyanın dilinde. */
+export function blockedText(locale: Locale = DEFAULT_LOCALE): string {
+  return healthMessages(locale).care.blocked;
 }

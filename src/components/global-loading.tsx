@@ -4,6 +4,8 @@ import { Suspense, useEffect, useState } from 'react';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { useIsFetching, useIsMutating } from '@tanstack/react-query';
 import { Progress } from '@/components/ui/progress';
+import { useMessages } from '@/i18n/client';
+import { uiMessages } from '@/i18n/messages/ui';
 import { navigationHref } from '@/lib/navigation';
 
 /** Kısa isteklerde çubuğun yanıp sönmesini engelleyen eşik. */
@@ -75,6 +77,7 @@ function NavigationWatcher({ onChange }: { onChange: (navigating: boolean) => vo
  * bildirir. Geçişte yeni sayfanın iskeleti (`loading.tsx`) gelince çubuk çekilir.
  */
 export function GlobalLoading() {
+  const t = useMessages(uiMessages).loading;
   const busy = useIsFetching() + useIsMutating() > 0;
   const [navigating, setNavigating] = useState(false);
   const [visible, setVisible] = useState(false);
@@ -100,7 +103,7 @@ export function GlobalLoading() {
       {visible ? (
         <Progress
           value={null}
-          aria-label={navigating ? 'Sayfa yükleniyor' : 'Yükleniyor'}
+          aria-label={navigating ? t.page : t.generic}
           className="fixed inset-x-0 top-0 z-50 [&_[data-slot=progress-indicator]]:w-full [&_[data-slot=progress-indicator]]:animate-pulse [&_[data-slot=progress-track]]:h-0.5 [&_[data-slot=progress-track]]:rounded-none"
         />
       ) : null}

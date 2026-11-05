@@ -9,10 +9,12 @@ import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/
 import { Field, FieldError, FieldLabel } from '@/components/ui/field';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Spinner } from '@/components/ui/spinner';
+import { useLocale, useMessages } from '@/i18n/client';
+import { authMessages } from '@/i18n/messages/auth';
 import { fetchJson } from '@/lib/query/errors';
 import { useServiceMutation } from '@/lib/query/use-service';
 import { passwordLoginSchema, type PasswordLoginInput } from '@/lib/schemas/auth';
-import { loginScreen, NO_PASSWORD_NOTICE, NO_PASSWORD_TITLE } from './login-screen';
+import { loginScreen } from './login-screen';
 import { PasswordInput } from './password-input';
 import { rememberClient, useRememberedClient } from './remembered-client';
 
@@ -32,8 +34,10 @@ export function ClientLoginForm({
   loggedOut: boolean;
   passwordless: boolean;
 }) {
+  const locale = useLocale();
+  const t = useMessages(authMessages);
   const remembered = useRememberedClient();
-  const screen = loginScreen({ clientId, remembered, loggedOut, passwordless });
+  const screen = loginScreen({ clientId, remembered, loggedOut, passwordless, locale });
 
   // Telefonda saklanan kimlik ilk çizimden sonra okunur: o ana kadar formun yeri tutulur.
   if (screen.kind === 'loading') return <Skeleton className="h-52 w-full" />;
@@ -44,8 +48,8 @@ export function ClientLoginForm({
           <EmptyMedia variant="icon">
             <QrCode weight="fill" />
           </EmptyMedia>
-          <EmptyTitle>{NO_PASSWORD_TITLE}</EmptyTitle>
-          <EmptyDescription>{NO_PASSWORD_NOTICE}</EmptyDescription>
+          <EmptyTitle>{t.loginScreen.noPasswordTitle}</EmptyTitle>
+          <EmptyDescription>{t.loginScreen.noPasswordNotice}</EmptyDescription>
         </EmptyHeader>
       </Empty>
     );
@@ -57,8 +61,8 @@ export function ClientLoginForm({
           <EmptyMedia variant="icon">
             <QrCode weight="fill" />
           </EmptyMedia>
-          <EmptyTitle>Bağlantını aç</EmptyTitle>
-          <EmptyDescription>Antrenöründen aldığın bağlantıyı aç ya da yeni bir kare kod iste.</EmptyDescription>
+          <EmptyTitle>{t.login.openLinkTitle}</EmptyTitle>
+          <EmptyDescription>{t.login.openLinkBody}</EmptyDescription>
         </EmptyHeader>
       </Empty>
     );
@@ -67,6 +71,7 @@ export function ClientLoginForm({
 }
 
 function PasswordLogin({ clientId, notice }: { clientId: string; notice: string | null }) {
+  const t = useMessages(authMessages).login;
   const router = useRouter();
   const form = useForm({ schema: passwordLoginSchema, initialInput: { password: '' } });
   const login = useServiceMutation({
@@ -94,7 +99,7 @@ function PasswordLogin({ clientId, notice }: { clientId: string; notice: string 
         <FormField of={form} path={['password']}>
           {(field) => (
             <Field data-invalid={Boolean(field.errors || login.error) || undefined}>
-              <FieldLabel htmlFor="current-password">Şifre</FieldLabel>
+              <FieldLabel htmlFor="current-password">{t.passwordLabel}</FieldLabel>
               <PasswordInput
                 {...field.props}
                 id="current-password"
@@ -108,10 +113,10 @@ function PasswordLogin({ clientId, notice }: { clientId: string; notice: string 
         </FormField>
         <Button type="submit" size="lg" className="h-12 w-full text-base" disabled={busy}>
           {busy ? <Spinner data-icon="inline-start" /> : null}
-          Giriş yap
+          {t.submit}
         </Button>
       </Form>
-      <p className="text-center text-sm text-muted-foreground">Şifreni unuttun mu? Antrenörüne söyle, yeni kare kod versin.</p>
+      <p className="text-center text-sm text-muted-foreground">{t.forgot}</p>
     </div>
   );
 }

@@ -7,6 +7,8 @@ import useEmblaCarousel, {
 } from "embla-carousel-react"
 
 import { Button } from "@/components/ui/button"
+import { useMessages } from "@/i18n/client"
+import { uiMessages } from "@/i18n/messages/ui"
 import { CaretLeftIcon, CaretRightIcon } from "@phosphor-icons/react"
 
 type CarouselApi = UseEmblaCarouselType[1]
@@ -178,6 +180,7 @@ function CarouselPrevious({
   ...props
 }: React.ComponentProps<typeof Button>) {
   const { orientation, scrollPrev, canScrollPrev } = useCarousel()
+  const t = useMessages(uiMessages).kit
 
   return (
     <Button
@@ -196,7 +199,7 @@ function CarouselPrevious({
       {...props}
     >
       <CaretLeftIcon />
-      <span className="sr-only">Önceki kart</span>
+      <span className="sr-only">{t.previousCard}</span>
     </Button>
   )
 }
@@ -208,6 +211,7 @@ function CarouselNext({
   ...props
 }: React.ComponentProps<typeof Button>) {
   const { orientation, scrollNext, canScrollNext } = useCarousel()
+  const t = useMessages(uiMessages).kit
 
   return (
     <Button
@@ -226,7 +230,7 @@ function CarouselNext({
       {...props}
     >
       <CaretRightIcon />
-      <span className="sr-only">Sonraki kart</span>
+      <span className="sr-only">{t.nextCard}</span>
     </Button>
   )
 }

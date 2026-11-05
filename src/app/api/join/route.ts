@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { localeFromRequest } from '@/i18n/locale';
 import { joinRoute, postGuard } from '@/lib/client-auth-routes';
 import { isKnownClient, redeemInvite } from '@/lib/clients';
 import { createSession } from '@/lib/session';
@@ -12,10 +13,11 @@ import { origin } from '@/lib/urls';
  * harcamasın); yalnız bu siteden ve JSON'la. Kurallar `client-auth-routes.ts`'te.
  */
 export async function POST(request: Request) {
-  const blocked = postGuard(request.headers, origin(request));
+  const locale = localeFromRequest(request);
+  const blocked = postGuard(request.headers, origin(request), locale);
   if (blocked) return NextResponse.json(blocked.body, { status: blocked.status });
   const result = await joinRoute(
-    { isKnownClient, redeem: redeemInvite, createSession, log: (message) => console.error(message) },
+    { isKnownClient, redeem: redeemInvite, createSession, log: (message) => console.error(message), locale },
     await request.json().catch(() => null),
   );
   return NextResponse.json(result.body, { status: result.status });

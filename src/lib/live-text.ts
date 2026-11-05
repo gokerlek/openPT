@@ -1,4 +1,6 @@
-import { formatNumber } from './format.ts';
+import { DEFAULT_LOCALE, type Locale } from '../i18n/locale.ts';
+import { ptShellMessages } from '../i18n/messages/pt-shell/index.ts';
+import { getFormat } from './format.ts';
 import { minutesText } from './workout-summary.ts';
 
 /**
@@ -37,28 +39,31 @@ export type LiveResponse = { live: LiveSession | null; checkedAt: string };
 export type LiveOverviewResponse = { items: LiveClient[]; failed: number; checkedAt: string };
 
 /** "az önce", "2 dk önce", "1 sa 5 dk önce". Gelecekteki an (saat farkı) "az önce". */
-export function agoText(iso: string, now: Date): string {
+export function agoText(iso: string, now: Date, locale: Locale = DEFAULT_LOCALE): string {
+  const t = ptShellMessages(locale).live;
   const at = Date.parse(iso);
   const minutes = Number.isNaN(at) ? 0 : Math.max(0, Math.floor((now.getTime() - at) / 60_000));
-  return minutes < 1 ? 'az önce' : `${minutesText(minutes)} önce`;
+  return minutes < 1 ? t.justNow : t.ago(minutesText(minutes, locale));
 }
 
 /** "7/17 set"; plan bilinmiyorsa "7 set". */
-export function liveSetsText(live: Pick<LiveSession, 'done' | 'planned'>): string {
-  return live.planned !== null ? `${formatNumber(live.done)}/${formatNumber(live.planned)} set` : `${formatNumber(live.done)} set`;
+export function liveSetsText(live: Pick<LiveSession, 'done' | 'planned'>, locale: Locale = DEFAULT_LOCALE): string {
+  const { number } = getFormat(locale);
+  return ptShellMessages(locale).live.sets(live.done, number(live.done), live.planned !== null ? number(live.planned) : null);
 }
 
 /** "son set 2 dk önce"; henüz set yoksa "başladı 3 dk önce". */
-export function liveLastText(live: Pick<LiveSession, 'lastSetAt' | 'startedAt'>, now: Date): string {
-  return live.lastSetAt ? `son set ${agoText(live.lastSetAt, now)}` : `başladı ${agoText(live.startedAt, now)}`;
+export function liveLastText(live: Pick<LiveSession, 'lastSetAt' | 'startedAt'>, now: Date, locale: Locale = DEFAULT_LOCALE): string {
+  const t = ptShellMessages(locale).live;
+  return live.lastSetAt ? t.lastSet(agoText(live.lastSetAt, now, locale)) : t.started(agoText(live.startedAt, now, locale));
 }
 
 /** "Gün A · 7/17 set · son set 2 dk önce" (başlık "Şu an antrenmanda" ayrı yazılır). */
-export function liveDetailText(live: LiveSession, now: Date): string {
-  return [live.dayName, liveSetsText(live), liveLastText(live, now)].join(' · ');
+export function liveDetailText(live: LiveSession, now: Date, locale: Locale = DEFAULT_LOCALE): string {
+  return [live.dayName, liveSetsText(live, locale), liveLastText(live, now, locale)].join(' · ');
 }
 
 /** Tek satır: "Şu an antrenmanda · Gün A · 7/17 set · son set 2 dk önce". */
-export function liveText(live: LiveSession, now: Date): string {
-  return `Şu an antrenmanda · ${liveDetailText(live, now)}`;
+export function liveText(live: LiveSession, now: Date, locale: Locale = DEFAULT_LOCALE): string {
+  return ptShellMessages(locale).live.line(liveDetailText(live, now, locale));
 }

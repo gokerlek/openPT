@@ -6,7 +6,9 @@ import { CaretRight, Trophy } from '@phosphor-icons/react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Item, ItemActions, ItemContent, ItemDescription, ItemMedia, ItemTitle } from '@/components/ui/item';
-import { formatNumber } from '@/lib/format';
+import { useLocale, useMessages } from '@/i18n/client';
+import { ptClientsMessages } from '@/i18n/messages/pt-clients';
+import { getFormat } from '@/lib/format';
 import { firstHistoryRows, HISTORY_PAGE, type HistoryMonth, type HistoryRow } from '@/lib/session-history';
 
 /**
@@ -15,6 +17,8 @@ import { firstHistoryRows, HISTORY_PAGE, type HistoryMonth, type HistoryRow } fr
  * antrenman, altında "Daha fazla göster (n)". Satır antrenmanın detayını açar (yalnız okuma).
  */
 export function SessionList({ clientId, months }: { clientId: string; months: HistoryMonth[] }) {
+  const t = useMessages(ptClientsMessages).sessions;
+  const { number } = getFormat(useLocale());
   const [count, setCount] = useState(HISTORY_PAGE);
   const total = months.reduce((sum, month) => sum + month.rows.length, 0);
   return (
@@ -35,7 +39,7 @@ export function SessionList({ clientId, months }: { clientId: string; months: Hi
       ))}
       {total > count ? (
         <Button variant="ghost" className="self-center text-muted-foreground touch:h-11" onClick={() => setCount(count + HISTORY_PAGE)}>
-          Daha fazla göster ({formatNumber(total - count)})
+          {t.showMore(number(total - count))}
         </Button>
       ) : null}
     </div>
@@ -44,6 +48,8 @@ export function SessionList({ clientId, months }: { clientId: string; months: Hi
 
 /** Antrenmanın satırı (liste ve Genel'in Antrenmanlar kartı): bütünü detayın bağlantısı. */
 export function SessionRow({ clientId, row }: { clientId: string; row: HistoryRow }) {
+  const t = useMessages(ptClientsMessages).sessions;
+  const { number } = getFormat(useLocale());
   return (
     <Item variant="outline" size="sm" className="h-full touch:min-h-11" render={<Link href={`/dashboard/clients/${clientId}/sessions/${row.id}`} />}>
       <ItemMedia className="w-14 flex-col gap-0 leading-tight" aria-hidden>
@@ -61,13 +67,13 @@ export function SessionRow({ clientId, row }: { clientId: string; row: HistoryRo
           {row.prs > 0 ? (
             <Badge className="bg-primary/15 text-primary-text">
               <Trophy weight="fill" data-icon="inline-start" />
-              {formatNumber(row.prs)} rekor
+              {t.records(row.prs, number(row.prs))}
             </Badge>
           ) : null}
           {/* Danışanın kendi programından (adı başlıkta, "Evde · Gün A"). */}
-          {row.program ? <Badge variant="outline">Kendi programı</Badge> : null}
-          {row.otherDay ? <Badge variant="secondary">başka program</Badge> : null}
-          {row.unfinished ? <Badge variant="outline">yarım</Badge> : null}
+          {row.program ? <Badge variant="outline">{t.ownProgram}</Badge> : null}
+          {row.otherDay ? <Badge variant="secondary">{t.otherDay}</Badge> : null}
+          {row.unfinished ? <Badge variant="outline">{t.unfinished}</Badge> : null}
         </ItemTitle>
         <ItemDescription className="tabular-nums">{row.meta}</ItemDescription>
       </ItemContent>

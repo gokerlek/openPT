@@ -1,6 +1,8 @@
+import {LocalizedError} from '../../i18n/errors.ts';
+import {installMessages} from '../../i18n/messages/install/index.ts';
 export async function requireUpdateWorkflow(repo:string,fileExists:()=>Promise<boolean>,loadWorkflow:()=>Promise<{state:string}|null>) {
-  if(!(await fileExists()))throw new Error(`${repo}: .github/workflows/axon-update.yml dosyası varsayılan dalda eksik. Otomatik güncelleme için bu dosyayı ana openPT reposundan kendi kod repona ekle. Kurulum adımları: https://github.com/gokerlek/openPT/blob/main/docs/UPDATES.md`);
+  if(!(await fileExists()))throw new LocalizedError(l=>installMessages(l).updates.workflowMissing(repo));
   const workflow=await loadWorkflow();
-  if(!workflow)throw new Error(`${repo}: workflow dosyası var fakat GitHub Actions üzerinden erişilemiyor. Reponun Actions ekranını ve GITHUB_TOKEN anahtarının ya da GitHub uygulamasının Actions erişimini kontrol et.`);
-  if(workflow.state!=='active')throw new Error(`${repo}: Axon update workflow’u devre dışı. GitHub → Actions → Axon update → Enable workflow ile etkinleştir.`);
+  if(!workflow)throw new LocalizedError(l=>installMessages(l).updates.workflowUnreachable(repo));
+  if(workflow.state!=='active')throw new LocalizedError(l=>installMessages(l).updates.workflowDisabled(repo));
 }

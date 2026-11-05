@@ -1,6 +1,8 @@
 'use client';
 
 import { useState } from 'react';
+import { useMessages } from '@/i18n/client';
+import { authMessages } from '@/i18n/messages/auth';
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from '@/components/ui/input-group';
 import { cn } from '@/lib/utils';
 
@@ -16,6 +18,7 @@ export function PasswordInput({
 }: Omit<React.ComponentProps<'input'>, 'type' | 'autoComplete'> & {
   autoComplete: 'current-password' | 'new-password';
 }) {
+  const t = useMessages(authMessages).passwordField;
   const [visible, setVisible] = useState(false);
   return (
     <InputGroup className={cn('h-12', className)}>
@@ -33,9 +36,9 @@ export function PasswordInput({
           className="h-11 min-w-16 px-3"
           aria-pressed={visible}
           aria-controls={props.id}
-          aria-label="Şifreyi göster"
+          aria-label={t.showLabel}
           onClick={() => setVisible((current) => !current)}>
-          {visible ? 'Gizle' : 'Göster'}
+          {visible ? t.hide : t.show}
         </InputGroupButton>
       </InputGroupAddon>
     </InputGroup>

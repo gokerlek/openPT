@@ -1,5 +1,7 @@
 'use client';
 
+import { useMessages } from '@/i18n/client';
+import { authMessages } from '@/i18n/messages/auth';
 import { useInstall } from '@/components/install/install-state';
 import { joinStepTotal } from './join-steps';
 
@@ -9,9 +11,6 @@ import { joinStepTotal } from './join-steps';
  */
 export function JoinStepLabel({ step }: { step: number }) {
   const { state } = useInstall();
-  return (
-    <>
-      Adım {step} / {joinStepTotal(state?.guide ?? null)}
-    </>
-  );
+  const t = useMessages(authMessages).join;
+  return t.stepLabel(step, joinStepTotal(state?.guide ?? null));
 }

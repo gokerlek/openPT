@@ -1,11 +1,15 @@
 import * as v from 'valibot';
+import { measurementsMessages } from '../../i18n/messages/measurements/index.ts';
+import { msg } from '../../i18n/valibot.ts';
 import {POSE_TASKS,PROTOCOLS,POSE_PROTOCOL} from '../pose/protocols.ts';
 import type {HealthRecord} from './health.ts';
+/** Şema mesajı okuyanın dilinde (`issue.lang`; yoksa Türkçe). */
+const schemaMessage=(pick:(t:ReturnType<typeof measurementsMessages>['camera']['schema'])=>string)=>msg((locale)=>pick(measurementsMessages(locale).camera.schema));
 const finite=(max:number)=>v.pipe(v.number(),v.finite(),v.minValue(0),v.maxValue(max));
 const integer=(min:number,max:number)=>v.pipe(finite(max),v.integer(),v.minValue(min));
 export const cameraMetricSchema=v.pipe(v.strictObject({
  id:v.pipe(v.string(),v.maxLength(32)),median:finite(180),minimum:finite(180),maximum:finite(180),range:finite(180),spread:finite(180),
-}),v.check(m=>m.minimum<=m.median && m.median<=m.maximum && m.range<=m.maximum-m.minimum+.01 && m.spread<=m.maximum-m.minimum+.01,'Ölçüm özeti tutarsız.'));
+}),v.check(m=>m.minimum<=m.median && m.median<=m.maximum && m.range<=m.maximum-m.minimum+.01 && m.spread<=m.maximum-m.minimum+.01,schemaMessage(t=>t.inconsistent)));
 export const cameraMeasurementSchema=v.pipe(v.strictObject({
  id:v.pipe(v.string(),v.uuid()),capturedAt:v.pipe(v.string(),v.isoTimestamp()),task:v.picklist(POSE_TASKS),
  protocol:v.literal(POSE_PROTOCOL),model:v.literal('mediapipe-lite-v1'),side:v.picklist(['left','right','both']),
@@ -14,8 +18,8 @@ export const cameraMeasurementSchema=v.pipe(v.strictObject({
  deletedAt:v.optional(v.pipe(v.string(),v.isoTimestamp())),
  chairHeightCm:v.optional(v.pipe(finite(100),v.minValue(20))),armSupport:v.optional(v.boolean()),
  metrics:v.pipe(v.array(cameraMetricSchema),v.minLength(1),v.maxLength(6)),
-}),v.check(r=>r.validSamples<=r.totalSamples && r.validSamples/r.totalSamples>=.7 && r.validSamples/(r.durationMs/1000)>=4,'Yeterli örnek yok.'),
- v.check(r=>{const p=PROTOCOLS[r.task];return r.metrics.length===p.metrics.length && p.metrics.every(id=>r.metrics.some(m=>m.id===id)) && (p.dynamic?r.repetitions>=3:r.repetitions===0) && (p.view==='Önden'?r.side==='both':r.side!=='both') && (r.task==='sit_stand' || (r.chairHeightCm===undefined && r.armSupport===undefined));},'Görev ve ölçüm sonucu eşleşmiyor.'));
+}),v.check(r=>r.validSamples<=r.totalSamples && r.validSamples/r.totalSamples>=.7 && r.validSamples/(r.durationMs/1000)>=4,schemaMessage(t=>t.fewSamples)),
+ v.check(r=>{const p=PROTOCOLS[r.task];return r.metrics.length===p.metrics.length && p.metrics.every(id=>r.metrics.some(m=>m.id===id)) && (p.dynamic?r.repetitions>=3:r.repetitions===0) && (p.view==='front'?r.side==='both':r.side!=='both') && (r.task==='sit_stand' || (r.chairHeightCm===undefined && r.armSupport===undefined));},schemaMessage(t=>t.mismatch)));
 export type CameraMeasurement=v.InferOutput<typeof cameraMeasurementSchema>;
 export const CAMERA_RECORD_LIMIT=2000;
 export function withCameraMeasurement(record:HealthRecord,entry:CameraMeasurement):HealthRecord {

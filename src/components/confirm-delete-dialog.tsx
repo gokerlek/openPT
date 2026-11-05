@@ -13,6 +13,9 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
+import { useMessages } from '@/i18n/client';
+import { commonMessages } from '@/i18n/messages/common';
+import { uiMessages } from '@/i18n/messages/ui';
 
 /**
  * Kayıt silmenin tek onay penceresi (danışan, program, geçmiş antrenman, kütüphanedeki egzersiz, cihaz, aparat, şablon,
@@ -28,7 +31,7 @@ export function ConfirmDeleteDialog({
   subject,
   body,
   detail,
-  confirmLabel = 'Sil',
+  confirmLabel,
   confirmVariant = 'destructive',
   confirmDisabled = false,
   busy = false,
@@ -49,6 +52,8 @@ export function ConfirmDeleteDialog({
   onConfirm: () => void;
   children?: React.ReactNode;
 }) {
+  const common = useMessages(commonMessages).actions;
+  const t = useMessages(uiMessages).confirm;
   const cancel = useRef<HTMLButtonElement>(null);
   const [expanded, setExpanded] = useState(false);
   return (
@@ -66,7 +71,7 @@ export function ConfirmDeleteDialog({
           {detail ? (
             <div className="w-full text-left">
               <Button variant="ghost" className="-ml-2 h-11 px-2 text-muted-foreground" aria-expanded={expanded} onClick={() => setExpanded(!expanded)}>
-                Ayrıntı
+                {t.details}
                 <CaretDown data-icon="inline-end" className={expanded ? 'rotate-180' : undefined} />
               </Button>
               {expanded ? <p className="text-sm text-muted-foreground">{detail}</p> : null}
@@ -76,11 +81,11 @@ export function ConfirmDeleteDialog({
         {children}
         <AlertDialogFooter>
           <AlertDialogCancel ref={cancel} className="h-11" disabled={busy}>
-            Vazgeç
+            {common.cancel}
           </AlertDialogCancel>
           <Button variant={confirmVariant} className="h-11" disabled={busy || confirmDisabled} onClick={onConfirm}>
             {busy ? <Spinner data-icon="inline-start" /> : null}
-            {confirmLabel}
+            {confirmLabel ?? common.delete}
           </Button>
         </AlertDialogFooter>
       </AlertDialogContent>

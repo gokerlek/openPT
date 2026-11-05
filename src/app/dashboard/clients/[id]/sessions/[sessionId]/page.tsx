@@ -6,12 +6,15 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { ptClientsMessages } from '@/i18n/messages/pt-clients';
+import { getLocale } from '@/i18n/server';
+import type { Locale } from '@/i18n/locale';
 import { loadClient } from '@/lib/clients';
 import { bodyMassOn } from '@/lib/cardio';
 import { canRecordHealth } from '@/lib/client-status';
 import { readAppConfig } from '@/lib/config';
 import { listExercises } from '@/lib/exercises';
-import { formatNumber } from '@/lib/format';
+import { getFormat } from '@/lib/format';
 import { requirePt } from '@/lib/guards';
 import { readHealth } from '@/lib/health';
 import { loadDetail } from '@/lib/history-store';
@@ -22,7 +25,9 @@ import type { Program } from '@/lib/schemas/program';
 import { cn } from '@/lib/utils';
 import { LiveSession } from '../../live-session';
 
-export const metadata: Metadata = { title: 'Antrenman' };
+export async function generateMetadata(): Promise<Metadata> {
+  return { title: ptClientsMessages(await getLocale()).sessions.detail.metaTitle };
+}
 
 /** Programdaki satırın hareketinin kütüphanedeki adı (muadilin yerini aldığı hareket). */
 function rowTitleOf(program: Pick<Program, 'phases'> | null, titles: ReadonlyMap<string, string>) {
@@ -50,18 +55,21 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
   if (!loaded) notFound();
   if (!loaded.ok) redirect(`/dashboard/clients/${id}`);
   const { client } = loaded;
-  const back = { href: `/dashboard/clients/${id}/sessions`, label: 'Antrenmanlar' };
+  const locale = await getLocale();
+  const t = ptClientsMessages(locale).sessions;
+  const format = getFormat(locale);
+  const back = { href: `/dashboard/clients/${id}/sessions`, label: t.title };
 
-  const [config, detail] = await Promise.all([readAppConfig(), loadDetail(id, sessionId).catch(() => null)]);
+  const [config, detail] = await Promise.all([readAppConfig(), loadDetail(id, sessionId, locale).catch(() => null)]);
 
   if (detail === null) {
     return (
       <div className="flex flex-col gap-6">
-        <SectionHeader title="Antrenman" back={back} />
+        <SectionHeader title={t.detail.metaTitle} back={back} />
         <Card>
           <CardHeader>
-            <CardTitle>Antrenman şu an açılamıyor</CardTitle>
-            <CardDescription>Danışanın kayıt deposuna ulaşılamadı. Biraz sonra sayfayı yenile.</CardDescription>
+            <CardTitle>{t.detail.unavailableTitle}</CardTitle>
+            <CardDescription>{t.unreadableBody}</CardDescription>
           </CardHeader>
         </Card>
       </div>
@@ -71,7 +79,7 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
   if (detail.status === 'active') {
     return (
       <div className="flex flex-col gap-6">
-        <SectionHeader title="Antrenman sürüyor" description="Bitince setleri ve program değişiklikleri burada görünür." back={back} />
+        <SectionHeader title={t.detail.activeTitle} description={t.detail.activeBody} back={back} />
         <LiveSession clientId={id} initial={await readLiveResponse(id)} />
       </div>
     );
@@ -81,7 +89,7 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
     const deleted = detail.status === 'deleted';
     return (
       <div className="flex flex-col gap-6">
-        <SectionHeader title="Antrenman" back={back} />
+        <SectionHeader title={t.detail.metaTitle} back={back} />
         <Card>
           <CardContent>
             <Empty>
@@ -89,12 +97,8 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
                 <EmptyMedia variant="icon">
                   <ClockCounterClockwise weight="fill" />
                 </EmptyMedia>
-                <EmptyTitle>{deleted ? 'Bu antrenman silinmiş' : 'Antrenman bulunamadı'}</EmptyTitle>
-                <EmptyDescription>
-                  {deleted
-                    ? 'Danışan bu kaydı sildi: uygulamada görünmez, veri deposunun geçmişinde kalır.'
-                    : 'Adres yanlış olabilir ya da antrenman silinmiş olabilir.'}
-                </EmptyDescription>
+                <EmptyTitle>{deleted ? t.detail.deletedTitle : t.detail.missingTitle}</EmptyTitle>
+                <EmptyDescription>{deleted ? t.detail.deletedBody : t.detail.missingBody}</EmptyDescription>
               </EmptyHeader>
             </Empty>
           </CardContent>
@@ -115,8 +119,9 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
     rowTitle: rowTitleOf(program, titles),
     painRows: health && canRecordHealth(client, 'check_in') ? painSkippedRows(health.record.checkIns, doc.id) : new Set(),
     bodyMassKg: health && canRecordHealth(client, 'measurements') ? bodyMassOn(health.record.measurements, doc.date) : undefined,
+    locale,
   });
-  const lines = ptChangeLines(changes);
+  const lines = ptChangeLines(changes, locale);
 
   return (
     <div className="flex flex-col gap-6">
@@ -124,14 +129,14 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
         title={view.title}
         description={
           <span className="tabular-nums">
-            {view.meta} · {formatNumber(view.water)} bardak su
+            {view.meta} · {t.detail.water(view.water, format.number(view.water))}
           </span>
         }
         back={back}
       />
 
       {view.flags.length > 0 ? (
-        <ul className="flex flex-wrap gap-1.5" aria-label="Antrenmanın işaretleri">
+        <ul className="flex flex-wrap gap-1.5" aria-label={t.detail.flagsLabel}>
           {view.flags.map((flag) => (
             <li key={flag}>
               <Badge variant="outline">{flag}</Badge>
@@ -148,17 +153,17 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
                 <EmptyMedia variant="icon">
                   <Barbell weight="fill" />
                 </EmptyMedia>
-                <EmptyTitle>Kayıtlı set yok</EmptyTitle>
-                <EmptyDescription>Bu antrenmanın setleri silinmiş.</EmptyDescription>
+                <EmptyTitle>{t.detail.noSetsTitle}</EmptyTitle>
+                <EmptyDescription>{t.detail.noSetsBody}</EmptyDescription>
               </EmptyHeader>
             </Empty>
           </CardContent>
         </Card>
       ) : (
-        <ul className="grid gap-4 lg:grid-cols-2 lg:items-start" aria-label="Hareketler">
+        <ul className="grid gap-4 lg:grid-cols-2 lg:items-start" aria-label={t.detail.exercisesLabel}>
           {view.exercises.map((exercise) => (
             <li key={exercise.entryId}>
-              <SessionExercise exercise={exercise} />
+              <SessionExercise exercise={exercise} locale={locale} />
             </li>
           ))}
         </ul>
@@ -167,8 +172,8 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
       {lines.length > 0 ? (
         <Card>
           <CardHeader>
-            <CardTitle>Program değişiklikleri</CardTitle>
-            <CardDescription>Bu antrenmanın bitişinde: danışanın programa yazdıkları ve onaya gönderdikleri.</CardDescription>
+            <CardTitle>{t.detail.changesTitle}</CardTitle>
+            <CardDescription>{t.detail.changesBody}</CardDescription>
           </CardHeader>
           <CardContent>
             <ul className="flex flex-col gap-3">
@@ -189,23 +194,27 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
   );
 }
 
-function SessionExercise({ exercise }: { exercise: PtDetailExercise }) {
+function SessionExercise({ exercise, locale }: { exercise: PtDetailExercise; locale: Locale }) {
+  const t = ptClientsMessages(locale).sessions.detail;
   const description = [exercise.note, ...exercise.notes].join(' · ');
   return (
     <Card size="sm">
       <CardHeader>
         <CardTitle>{exercise.title}</CardTitle>
         <CardDescription>{description}</CardDescription>
-        {exercise.setupNote ? <CardDescription>Ayar notu: {exercise.setupNote}</CardDescription> : null}
+        {exercise.setupNote ? <CardDescription>
+            {t.setupNote}
+            {exercise.setupNote}
+          </CardDescription> : null}
       </CardHeader>
       {exercise.sets.length > 0 ? (
         <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-16">Set</TableHead>
-                <TableHead>Yapılan</TableHead>
-                <TableHead className="text-right">Zorluk</TableHead>
+                <TableHead className="w-16">{t.set}</TableHead>
+                <TableHead>{t.done}</TableHead>
+                <TableHead className="text-right">{t.effort}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -215,8 +224,8 @@ function SessionExercise({ exercise }: { exercise: PtDetailExercise }) {
                   <TableCell className="tabular-nums">
                     <span className="inline-flex flex-wrap items-center gap-1.5">
                       {set.text}
-                      {set.extra ? <Badge variant="outline">fazladan</Badge> : null}
-                      {set.overload ? <Badge variant="destructive">aşırı yük</Badge> : null}
+                      {set.extra ? <Badge variant="outline">{t.extra}</Badge> : null}
+                      {set.overload ? <Badge variant="destructive">{t.overload}</Badge> : null}
                     </span>
                   </TableCell>
                   <TableCell className="text-right">{set.effort ?? '—'}</TableCell>

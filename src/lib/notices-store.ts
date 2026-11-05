@@ -5,6 +5,7 @@ import { ASSISTANT_PATH } from './ai/assistant-contract';
 import { assistantNotices } from './ai/assistant-notices';
 import { revalidateTag, unstable_cache } from 'next/cache';
 import * as v from 'valibot';
+import { DEFAULT_LOCALE, type Locale } from '../i18n/locale';
 import { attentionFactsOf, constraintFactsOf, screeningFactsOf, type AttentionFacts, type ConstraintFacts } from './attention';
 import { readClient } from './client-record';
 import { canRecordHealth } from './client-status';
@@ -108,7 +109,7 @@ function joined(client: Pick<Client, 'access'>): boolean {
 /** `coach`: AI koç bu danışan için açık (`coachAccess`); Genel bakış'ın "AI'ya sor" düğmesi buna bakar. */
 export type ClientOverview = ClientDigest & { attention: AttentionFacts; coach: boolean };
 
-async function buildDigest(id: string): Promise<ClientOverview | null> {
+async function buildDigest(id: string, locale: Locale): Promise<ClientOverview | null> {
   const stored = await readClient(id);
   if (!stored) return null;
   const { client } = stored;
@@ -147,9 +148,10 @@ async function buildDigest(id: string): Promise<ClientOverview | null> {
     own,
     constraintLog: consent.conditions && record ? constraintLogOf(record) : [],
     now,
+    locale,
   });
   const permission = createHash('sha256').update(JSON.stringify({ status: client.status, modules: client.modules, consents: client.consents })).digest('hex');
-  notices.push(...assistantNotices(assistantRaw, permission, own.index, now));
+  notices.push(...assistantNotices(assistantRaw, permission, own.index, now, locale));
   notices.sort((a, b) => b.at.localeCompare(a.at));
   notices.splice(10);
   const invite = inviteRaw === null ? null : v.safeParse(inviteSchema, inviteRaw);
@@ -160,11 +162,13 @@ async function buildDigest(id: string): Promise<ClientOverview | null> {
     const today = todayIn((await readAppConfig()).timeZone, now);
     const input = careInputOf(record, { today, painConsent: consent.pain });
     // "Sıradaki" bugünkü ya da sıradaki atanmış program (Faz 3).
+    // i18n-followup(T5): `listExercises(custom?, locale?)` gelince `listExercises(undefined, locale)` yaz: dil dışarıdan
+    // verilir (burası `unstable_cache` içinde, `getLocale()` okunamaz); o zamana kadar çelişen hareketin adı Türkçe.
     const conflicts =
       programOk && input.active.length > 0
         ? programConflicts(programOk, new Map((await listExercises()).map((exercise) => [exercise.id, exercise])), input, today)
         : [];
-    constraints = constraintFactsOf(record, conflicts);
+    constraints = constraintFactsOf(record, conflicts, locale);
   }
   const attention = attentionFactsOf({
     client,
@@ -175,7 +179,7 @@ async function buildDigest(id: string): Promise<ClientOverview | null> {
     // Onay yoksa ya da dosya okunamıyorsa ölçüm, kısıt ve tarama maddesi yok.
     measurements: consent.measurements && record ? record.measurements : null,
     constraints,
-    screening: consent.screening && record ? screeningFactsOf(consent.conditions ? record : { ...record, constraints: [] }) : null,
+    screening: consent.screening && record ? screeningFactsOf(consent.conditions ? record : { ...record, constraints: [] }, locale) : null,
     now,
     // Kalıcı seçim kendi programsa günler ve pencere ondan (kendi-program.md §4).
     own: own.index,
@@ -185,8 +189,10 @@ async function buildDigest(id: string): Promise<ClientOverview | null> {
 
 /**
  * Danışanın Genel bakış özeti (önbellekli): bildirimler, dikkat özeti ve AI koçun açık olup olmadığı; kaydı yoksa null.
- * Anahtardaki sürüm özetin biçimi değişince eski önbelleği bırakır (`v2`: `coach` alanı).
+ * Anahtardaki sürüm özetin biçimi değişince eski önbelleği bırakır (`v3`: dile göre). Özetteki metinler (bildirim,
+ * bölge adı) yazıldığı dildedir: anahtarda `locale` var, iki dil birbirinin özetini görmez. Dil çağıranın isteğinden
+ * gelir (`getLocale()`); önbelleğin içinde okunamaz.
  */
-export function readClientDigest(id: string): Promise<ClientOverview | null> {
-  return unstable_cache(() => buildDigest(id), ['client-overview', 'v2', id], { tags: [noticesTag(id)], revalidate: 300 })();
+export function readClientDigest(id: string, locale: Locale = DEFAULT_LOCALE): Promise<ClientOverview | null> {
+  return unstable_cache(() => buildDigest(id, locale), ['client-overview', 'v3', id, locale], { tags: [noticesTag(id)], revalidate: 300 })();
 }

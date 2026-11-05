@@ -3,6 +3,8 @@
 import { usePathname } from 'next/navigation';
 import { Skeleton } from '@/components/ui/skeleton';
 import { USER_MENU_GUTTER } from '@/components/user-menu-spot';
+import { useMessages } from '@/i18n/client';
+import { ptShellMessages } from '@/i18n/messages/pt-shell';
 import { skeletonKind } from '@/lib/navigation';
 import { cn } from '@/lib/utils';
 import { SettingsTabs } from './settings/settings-tabs';
@@ -21,6 +23,7 @@ import { TrainingTabs } from './training-tabs';
  * O geçişin iskeleti `settings/loading.tsx` (`SettingsTabSkeleton`): sekmeler düzende, yalnız başlık ve gövde.
  */
 export function RouteSkeleton() {
+  const t = useMessages(ptShellMessages).skeleton;
   const kind = skeletonKind(usePathname());
 
   // Ayarlar'ın düzeni (`settings/layout.tsx`): sekmeler, altında `gap-5` ile sayfa (başlık + form).
@@ -36,7 +39,7 @@ export function RouteSkeleton() {
   return (
     <div className="flex flex-col gap-6" aria-busy="true">
       <span role="status" className="sr-only">
-        Sayfa yükleniyor…
+        {t.loading}
       </span>
       {kind === 'library' ? <TrainingTabs /> : null}
       <HeaderSkeleton crumbs={kind === 'detail' || kind === 'form' || kind === 'client'} gutter={kind !== 'library'} />
@@ -48,10 +51,11 @@ export function RouteSkeleton() {
 
 /** Ayarlar'ın sekmesi değişirken (`settings/loading.tsx`): sekmeler yerinde (Ayarlar düzeni), yalnız başlık ve form. */
 export function SettingsTabSkeleton() {
+  const t = useMessages(ptShellMessages).skeleton;
   return (
     <div className="flex flex-col gap-6" aria-busy="true">
       <span role="status" className="sr-only">
-        Sayfa yükleniyor…
+        {t.loading}
       </span>
       <HeaderSkeleton crumbs={false} gutter={false} />
       <BodySkeleton kind="settings" />
@@ -61,10 +65,11 @@ export function SettingsTabSkeleton() {
 
 /** Danışanın sekmesi değişirken: başlık ve sekmeler yerinde (danışan düzeni), yalnız içerik. */
 export function ClientTabSkeleton() {
+  const t = useMessages(ptShellMessages).skeleton;
   return (
     <div className="flex flex-col gap-6" aria-busy="true">
       <span role="status" className="sr-only">
-        Sayfa yükleniyor…
+        {t.loading}
       </span>
       <Skeleton className="h-7 w-40" />
       <TwoColumns />

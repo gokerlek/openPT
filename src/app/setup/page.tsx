@@ -1,10 +1,14 @@
 import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
+import { setupMessages } from '@/i18n/messages/setup';
+import { getLocale } from '@/i18n/server';
 import { loadAppConfig } from '@/lib/config';
 import { requirePt } from '@/lib/guards';
 import { SetupForm } from './setup-form';
 
-export const metadata: Metadata = { title: 'Kurulum' };
+export async function generateMetadata(): Promise<Metadata> {
+  return { title: setupMessages(await getLocale()).page.title };
+}
 
 /**
  * Kurulum sihirbazı (SPEC §10). İlk girişte buraya düşülür; kurulumdan sonra
@@ -12,6 +16,7 @@ export const metadata: Metadata = { title: 'Kurulum' };
  */
 export default async function SetupPage() {
   await requirePt();
+  const t = setupMessages(await getLocale()).page;
   // Form kayıtlı değerlerle açılır; okunamazsa hata sayfası (varsayılanlar kaydedilip markayı ezmesin).
   const config = await loadAppConfig();
   // Kurulum bittiyse aynı form Ayarlar → Görünüm'de, gezinmesiyle birlikte açılır.
@@ -23,13 +28,9 @@ export default async function SetupPage() {
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 md:px-8">
         <header className="flex flex-col gap-1">
           <h1 className="font-heading text-2xl font-semibold tracking-tight">
-            {firstRun ? 'Uygulamanı kur' : 'Görünüm'}
+            {firstRun ? t.firstRunTitle : t.appearanceTitle}
           </h1>
-          <p className="text-muted-foreground">
-            {firstRun
-              ? 'Danışanların göreceği ad, renk ve temayı seç. Hepsi sonradan değiştirilebilir.'
-              : 'Uygulamanın adını, rengini ve temasını buradan değiştirebilirsin.'}
-          </p>
+          <p className="text-muted-foreground">{firstRun ? t.firstRunBody : t.appearanceBody}</p>
         </header>
 
         <SetupForm

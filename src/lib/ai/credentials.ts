@@ -1,5 +1,7 @@
 import {createCipheriv,createDecipheriv,createHash,randomBytes} from 'node:crypto';
 import * as v from 'valibot';
+import {LocalizedError} from '../../i18n/errors.ts';
+import {coachMessages} from '../../i18n/messages/coach/index.ts';
 
 import { geminiKeySchema } from './gemini-key-input.ts';
 export { geminiKeySchema } from './gemini-key-input.ts';
@@ -13,7 +15,7 @@ export type KeyStore={
 };
 export type KeyContext={secret:string;owner:string;repo:string};
 function encryptionKey(context:KeyContext) {
-  if(Buffer.byteLength(context.secret)<32)throw new Error('Geçersiz oturum anahtarı.');
+  if(Buffer.byteLength(context.secret)<32)throw new LocalizedError(l=>coachMessages(l).internal.keys.invalidSecret);
   return createHash('sha256').update(`axon-fit:gemini:v1\0${context.owner}/${context.repo}\0${context.secret}`).digest();
 }
 export function sealKey(key:string,context:KeyContext):string {
@@ -24,9 +26,9 @@ export function sealKey(key:string,context:KeyContext):string {
 }
 export function openKey(encrypted:string,context:KeyContext):string {
   const parts=encrypted.split('.');
-  if(parts.length!==3||parts.some(part=>!part||!/^[A-Za-z0-9_-]+$/.test(part)))throw new Error('Anahtar kaydı okunamadı.');
+  if(parts.length!==3||parts.some(part=>!part||!/^[A-Za-z0-9_-]+$/.test(part)))throw new LocalizedError(l=>coachMessages(l).internal.keys.unreadable);
   const [iv,tag,data]=parts.map(part=>Buffer.from(part,'base64url'));
-  if(iv!.length!==12||tag!.length!==16)throw new Error('Anahtar kaydı okunamadı.');
+  if(iv!.length!==12||tag!.length!==16)throw new LocalizedError(l=>coachMessages(l).internal.keys.unreadable);
   const decipher=createDecipheriv('aes-256-gcm',encryptionKey(context),iv!);decipher.setAuthTag(tag!);
   return v.parse(geminiKeySchema,Buffer.concat([decipher.update(data!),decipher.final()]).toString('utf8'));
 }

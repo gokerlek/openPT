@@ -10,6 +10,8 @@ import { StrengthProgress } from '@/components/progress/strength-progress';
 import { WeeklyProgress } from '@/components/progress/weekly-progress';
 import { SectionHeader } from '@/components/section-header';
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { ptClientsMessages } from '@/i18n/messages/pt-clients';
+import { getLocale } from '@/i18n/server';
 import { loadClient } from '@/lib/clients';
 import { healthConsentState } from '@/lib/client-status';
 import { readAppConfig } from '@/lib/config';
@@ -19,9 +21,11 @@ import { defaultStrengthWindow, STRENGTH_WINDOWS, type StrengthWindow } from '@/
 import { loadProgress } from '@/lib/progress-data';
 import { CLIENT_ID_PATTERN } from '@/lib/schemas/client';
 import { LOW_READINESS } from '@/lib/session-check';
-import { HEALTH_STATE_LABELS } from '../../health-state';
+import { healthStateLabels } from '../../health-state';
 
-export const metadata: Metadata = { title: 'İlerleme' };
+export async function generateMetadata(): Promise<Metadata> {
+  return { title: ptClientsMessages(await getLocale()).progress.title };
+}
 
 /**
  * Danışanın İlerleme sekmesi (PT; SPEC §6, §7.6) — danışanın İlerleme'siyle aynı kartlar ve aynı hesap
@@ -54,16 +58,15 @@ export default async function ClientProgressPage({
   if (!loaded.ok) redirect(`/dashboard/clients/${id}`);
   const { client } = loaded;
 
+  const locale = await getLocale();
+  const t = ptClientsMessages(locale).progress;
   const [config, query] = await Promise.all([readAppConfig(), searchParams]);
   const now = new Date();
   const today = todayIn(config.timeZone, now);
-  const load = await loadProgress(client, now, today, config.timeZone);
+  const load = await loadProgress(client, now, today, config.timeZone, { locale });
   const name = client.name.trim().split(/\s+/)[0] ?? client.name;
   const header = (
-    <SectionHeader
-      title="İlerleme"
-      description="Danışanın gidişatı: kas başına güç gelişimi, hareketlerin grafikleri, haftalık yük, antrenman düzeni, rekorlar ve başarılar."
-    />
+    <SectionHeader title={t.title} description={t.description} />
   );
 
   if (load.status === 'error') {
@@ -72,8 +75,8 @@ export default async function ClientProgressPage({
         {header}
         <Card>
           <CardHeader>
-            <CardTitle>İlerleme şu an açılamıyor</CardTitle>
-            <CardDescription>Danışanın kayıt deposuna ulaşılamadı. Biraz sonra sayfayı yenile.</CardDescription>
+            <CardTitle>{t.unavailableTitle}</CardTitle>
+            <CardDescription>{t.unavailableBody}</CardDescription>
           </CardHeader>
         </Card>
       </div>
@@ -120,7 +123,7 @@ export default async function ClientProgressPage({
           <ScreeningCard viewer="pt" screening={insights.screening} clientId={id} />
           <WaterCard viewer="pt" name={name} water={insights.water} today={today} />
           {health !== 'granted' ? (
-            <p className="text-sm text-muted-foreground">{HEALTH_STATE_LABELS[health]}: hazır oluşluk, ağrı, çevre ölçümleri ve hareket testi burada gösterilmez.</p>
+            <p className="text-sm text-muted-foreground">{t.healthHidden(healthStateLabels(locale)[health])}</p>
           ) : null}
         </div>
       </div>

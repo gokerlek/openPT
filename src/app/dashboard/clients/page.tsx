@@ -6,17 +6,21 @@ import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
+import { ptClientsMessages } from '@/i18n/messages/pt-clients';
+import { getLocale } from '@/i18n/server';
 import { listClients, readInvite } from '@/lib/clients';
 import { readAppConfig } from '@/lib/config';
 import { clientCardExtras, type CardExtras } from '@/lib/client-card-extras';
-import { CLIENT_STATUS_LABELS, CLIENT_STATUSES } from '@/lib/schemas/client';
+import { clientStatusLabels, CLIENT_STATUSES } from '@/lib/schemas/client';
 import { requirePt } from '@/lib/guards';
 import { clientOverviews } from '../client-overviews';
 import { ClientList, type ClientCardData, type ClientSectionData } from './client-list';
 import { clientsSummary, clientWork } from './client-work';
 import { passwordOf } from './invite-state';
 
-export const metadata: Metadata = { title: 'Danışanlar' };
+export async function generateMetadata(): Promise<Metadata> {
+  return { title: ptClientsMessages(await getLocale()).list.title };
+}
 
 /**
  * Danışanlar: durumuna göre gruplu (arşivdekiler en altta), ada göre aranır (`ClientList`). Her satır detaya
@@ -30,6 +34,8 @@ export const metadata: Metadata = { title: 'Danışanlar' };
  */
 export default async function ClientsPage() {
   await requirePt();
+  const locale = await getLocale();
+  const t = ptClientsMessages(locale).list;
   // Listeyle aynı anda başlar; reddedilmez (okunamazsa kartlarda dikkat bilgisi yok).
   const digests = Promise.all([clientOverviews(), readAppConfig()]).catch(() => null);
   const clients = await listClients();
@@ -42,9 +48,9 @@ export default async function ClientsPage() {
 
   const rows = clients.map((entry) => ({
     entry,
-    work: entry.ok ? clientWork(entry.client, invites.get(entry.id)?.invite ?? null, now) : null,
+    work: entry.ok ? clientWork(entry.client, invites.get(entry.id)?.invite ?? null, now, locale) : null,
   }));
-  const summary = clientsSummary(rows.map(({ entry, work }) => ({ status: entry.status, work })));
+  const summary = clientsSummary(rows.map(({ entry, work }) => ({ status: entry.status, work })), locale);
 
   const extras: Promise<Record<string, CardExtras>> = digests
     .then((loaded) => {
@@ -53,7 +59,7 @@ export default async function ClientsPage() {
       return clientCardExtras(
         rows.map(({ entry, work }) => ({ id: entry.id, ok: entry.ok, status: entry.status, access: work?.access ?? null })),
         new Map(overviews.map((overview) => [overview.id, overview.attention])),
-        { now, timeZone: config.timeZone },
+        { now, timeZone: config.timeZone, locale },
       );
     })
     .catch(() => ({}));
@@ -72,20 +78,21 @@ export default async function ClientsPage() {
           : null,
     }),
   );
+  const statusLabels = clientStatusLabels(locale);
   const sections = CLIENT_STATUSES.flatMap((status): ClientSectionData[] => {
     const group = cards.filter((card) => card.status === status);
-    return group.length > 0 ? [{ status, label: CLIENT_STATUS_LABELS[status], cards: group }] : [];
+    return group.length > 0 ? [{ status, label: statusLabels[status], cards: group }] : [];
   });
 
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
-        title="Danışanlar"
+        title={t.title}
         description={<span className="tabular-nums">{summary}.</span>}
         actions={
           <Button nativeButton={false} render={<Link href="/dashboard/clients/new" />}>
             <Plus data-icon="inline-start" />
-            Yeni danışan
+            {t.newClient}
           </Button>
         }
       />
@@ -97,15 +104,13 @@ export default async function ClientsPage() {
               <EmptyMedia variant="icon">
                 <UsersThree weight="fill" />
               </EmptyMedia>
-              <EmptyTitle>Henüz danışan yok</EmptyTitle>
-              <EmptyDescription>
-                Danışanı ekle, sonra kare kodla davet et; programını ve ölçümlerini buradan yönetirsin.
-              </EmptyDescription>
+              <EmptyTitle>{t.emptyTitle}</EmptyTitle>
+              <EmptyDescription>{t.emptyBody}</EmptyDescription>
             </EmptyHeader>
             <EmptyContent>
               <Button nativeButton={false} render={<Link href="/dashboard/clients/new" />}>
                 <Plus data-icon="inline-start" />
-                İlk danışanı ekle
+                {t.addFirst}
               </Button>
             </EmptyContent>
           </Empty>

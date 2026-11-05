@@ -1,8 +1,10 @@
 import { DatePicker } from '@/components/date-picker';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
+import type { Locale } from '@/i18n/locale';
+import { measurementsMessages } from '@/i18n/messages/measurements';
 import { isCalendarDate } from '@/lib/measurement-log';
-import { RANGE_PRESETS, rangeStart, type RangePreset } from '@/lib/trend';
+import { RANGE_PRESETS, rangePresets, rangeStart, type RangePreset } from '@/lib/trend';
 
 export type DateRange = {
   /** Hazır aralık; özel aralıkta null. */
@@ -42,10 +44,13 @@ const SELECTED = [
 ].join(' ');
 
 /** Hazır aralıklar bağlantı, özel aralık shadcn takvim seçicisiyle GET formu olarak gönderilir. */
-export function RangeFilter({ base, range }: { base: string; range: DateRange }) {
+export function RangeFilter({ base, range, locale }: { base: string; range: DateRange; locale: Locale }) {
+  const t = measurementsMessages(locale).page.range;
+  // i18n-followup(T3): `rangePresets(locale)` (`lib/trend.ts`) still returns the Turkish preset names.
+  const presets = rangePresets(locale);
   return (
     <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-      <nav aria-label="Tarih aralığı" className="flex flex-wrap gap-2">
+      <nav aria-label={t.nav} className="flex flex-wrap gap-2">
         {PRESETS.map((preset) => {
           const active = range.preset === preset;
           return (
@@ -57,22 +62,22 @@ export function RangeFilter({ base, range }: { base: string; range: DateRange })
               aria-current={active ? 'page' : undefined}
               nativeButton={false}
               render={<Link href={preset === 'tumu' ? base : `${base}?aralik=${preset}`} scroll={false} />}>
-              {RANGE_PRESETS[preset].label}
+              {presets[preset].label}
             </Button>
           );
         })}
       </nav>
-      <form method="get" action={base} className="flex flex-wrap items-end gap-2" aria-label="Özel tarih aralığı">
+      <form method="get" action={base} className="flex flex-wrap items-end gap-2" aria-label={t.custom}>
         <label className="flex flex-col gap-1 text-xs text-muted-foreground">
-          Başlangıç
-          <DatePicker aria-label="Başlangıç tarihi" name="bas" defaultValue={range.preset === null ? range.from : undefined} className="w-40" />
+          {t.start}
+          <DatePicker aria-label={t.startDate} name="bas" defaultValue={range.preset === null ? range.from : undefined} className="w-40" />
         </label>
         <label className="flex flex-col gap-1 text-xs text-muted-foreground">
-          Bitiş
-          <DatePicker aria-label="Bitiş tarihi" name="bit" defaultValue={range.preset === null ? range.to : undefined} className="w-40" />
+          {t.end}
+          <DatePicker aria-label={t.endDate} name="bit" defaultValue={range.preset === null ? range.to : undefined} className="w-40" />
         </label>
         <Button type="submit" size="sm" variant="outline">
-          Uygula
+          {t.apply}
         </Button>
       </form>
     </div>
