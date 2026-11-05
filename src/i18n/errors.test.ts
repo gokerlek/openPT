@@ -13,6 +13,12 @@ describe('LocalizedError', () => {
     assert.ok(error instanceof Error);
   });
 
+  test(".name düz Error gibi: Error'dan LocalizedError'a taşınan sınıfların kayıtlardaki adı değişmez", () => {
+    class EnvLike extends LocalizedError {}
+    assert.equal(new EnvLike(() => 'x').name, 'Error');
+    assert.equal(error.name, 'Error');
+  });
+
   test('messageOf dile göre; düz hata kendi mesajıyla; hata değilse null', () => {
     assert.equal(messageOf(error, 'en'), 'Not found.');
     assert.equal(messageOf(error, 'tr'), 'Bulunamadı.');
