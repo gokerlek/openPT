@@ -417,6 +417,44 @@ Chrome gerçek uygulama kurar, iPhone'da Safari → Paylaş → Ana Ekrana Ekle)
 
 ---
 
+### 6.1 Dil (Türkçe / İngilizce)
+
+**Diller:** Türkçe ve İngilizce. Kodun varsayılan dili Türkçedir; testler ve istek dışı bağlam da Türkçe çalışır.
+
+**Dil seçimi kişi başınadır:**
+- İlk açılışta tarayıcı dili kullanılır. Türkçe → tr, başka her dil → en.
+- Sonra herkes kendisi seçer:
+  - Danışan: Ayarlar → Dil.
+  - PT: Ayarlar → Uygulama ve kullanıcı menüsü.
+  - Giriş, katılma ve kurulum sayfalarında küçük bir seçici var.
+- Seçim `locale` çerezinde bir yıl saklanır.
+- Adresler, PWA başlangıç adresleri ve davet bağlantıları değişmez. Uygulama kimliği dosyası (manifest) ve çevrimdışı sayfa `Accept-Language`'e göre gelir.
+
+**Sözlükler:**
+- Metinler `src/i18n/messages/<alan>/{tr,en}.ts` dosyalarında.
+- `en` dosyasının anahtarları TypeScript ile `tr`'ye bağlıdır; eksik ya da fazla anahtar derleme hatası verir.
+- Yeni dil eklemek = her alana bir dosya.
+- Terimler `docs/i18n-glossary.md`'de.
+- Sözlükler kullanıcı grubuna göre bölünür: PT'ye özel sözlükler danışanın telefon paketine girmez (`src/i18n/audit/bundle.test.ts`).
+
+**Çevrilmeyenler:**
+- PT'nin yazdığı içerik: program, gün ve şablon adları, notlar, danışan adları, marka.
+- Kimlikler, rotalar, depolama anahtarları ve kodun ayrıştırdığı commit biçimleri.
+
+**Kayıtlara yazılan metin yazanın dilinde kalır:** program değişiklik kaydı, commit mesajları, kısıt kaydı, öneriler, AI gerekçesi. Hazır kütüphanenin egzersiz adları ise her zaman okuyanın dilinde gösterilir (`localizedLibraryTitle`).
+
+**Hazır kütüphane:** egzersiz, cihaz ve aparatların İngilizcesi `src/data/*.en.ts`'te. Okunurken çevrilir (`listExercises(custom, locale)`). PT'nin kendi ya da düzenlediği kayıtlar ve düzenleme formları ham kaydı kullanır; böylece İngilizce metin PT'nin verisine yazılmaz.
+
+**Kurulum ve AI:**
+- Kurulum komutu (`kur`) bilgisayarın diline göre konuşur; `KUR_LANG=tr|en` ile zorlanır.
+- AI koç, isteği yapanın dilinde yanıt verir. Taslak onayının özeti dilden bağımsızdır.
+
+**Denetim testleri (`src/i18n/audit/`):**
+- koda gömülü metin,
+- dili geçirilmeyen çağrılar,
+- arayüzde Türkçe sabit kullanımı,
+- danışan paketine PT sözlüğü sızması.
+
 ## 7. Antrenman sırasında yazma davranışı — set başına, canlı
 
 **Her set bitince bir commit.** Danışan başına ayrı repo olduğu için o repo'nun commit geçmişi doğrudan antrenman günlüğüdür: `Set 3/4 · Bench Press · 80 kg × 8`, dakikası dakikasına.
@@ -635,6 +673,7 @@ Tasarım dili, ekran akışları, Türkçe metinler, antrenman ekranı mantığ�
 7. **Danışan listesi N repo okuması ister** (30 danışan → 30 istek). Sunucu tarafı ETag önbelleğiyle tek seferlik maliyete iner.
 8. **Kod fork'u açıktır.** Açık bir repo'nun fork'u gizli yapılamaz. Bu yüzden uygulama kod repo'suna hiçbir şey yazmaz; `APP_REPO` fork'un adıyla çakışırsa ya da açık/fork bir repo'yu gösterirse kurulum durur (`createAppRepo`). PT'nin kodda yaptığı değişiklikler de herkese açık olur.
 9. **Vercel ücretsiz plan ticari kullanıma kapalı.** Danışanlardan ücret alınmaya başlanırsa ücretli plana geçmek ya da Cloudflare'e taşımak gerekir.
+10. **İngilizce klinik metinler uzman onayı bekliyor.** Kısıtlar, hareket testi, durum etiketleri, güvenlik ve acil durum metinleri çeviriyle yazıldı. İngilizce yayımlanmadan önce bir fizyoterapist ya da hekim okumalı. Türkçe metinler değişmedi.
 
 ---
 
