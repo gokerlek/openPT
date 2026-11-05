@@ -17,6 +17,8 @@ import type { ClientSession } from './session-core.ts';
  * edilir. Şifre ne yanıta ne günlüğe yazılır.
  */
 
+// i18n-followup(T3): `api/me/**` uçları (`/api/me/password`, oturum/antrenman/kısıt uçları) `originGuard`/`postGuard`'a ve
+// `setPasswordRoute`'un `deps.locale`'ine `localeFromRequest(request)`'i geçirmeli; şimdilik yanıtları Türkçe.
 export type RouteResult = { status: number; body: Record<string, unknown> };
 
 type Log = (message: string) => void;

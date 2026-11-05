@@ -163,8 +163,8 @@ const NONCE=/^[A-Za-z0-9+/=_-]{1,128}$/;
 export function handoffPage(credentials:AppCredentials,nonce:string,locale:Locale=DEFAULT_LOCALE):string {
   if(!NONCE.test(nonce))throw new LocalizedError(l=>installMessages(l).githubApp.badNonce);
   const t=installMessages(locale).githubApp.handoff;
-  const script=`try{sessionStorage.setItem(${scriptJson(INSTALL_STORAGE_KEY)},JSON.stringify(${scriptJson(credentials)}));location.replace(${scriptJson(installUrl(credentials.slug))});}catch(e){document.getElementById('durum').hidden=true;document.getElementById('hata').hidden=false;}`;
-  return `<!doctype html><html lang="${locale}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><meta name="robots" content="noindex"><title>${t.title}</title><style>body{font-family:system-ui,sans-serif;max-width:32rem;margin:3rem auto;padding:0 1rem;line-height:1.5;color-scheme:light dark}</style></head><body><p id="durum">${t.status}</p><p id="hata" hidden>${t.error}</p><noscript><p>${t.noscript}</p></noscript><script nonce="${nonce}">${script}</script></body></html>`;
+  const script=`try{sessionStorage.setItem(${scriptJson(INSTALL_STORAGE_KEY)},JSON.stringify(${scriptJson(credentials)}));location.replace(${scriptJson(installUrl(credentials.slug))});}catch(e){document.getElementById('status').hidden=true;document.getElementById('failure').hidden=false;}`;
+  return `<!doctype html><html lang="${locale}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><meta name="robots" content="noindex"><title>${t.title}</title><style>body{font-family:system-ui,sans-serif;max-width:32rem;margin:3rem auto;padding:0 1rem;line-height:1.5;color-scheme:light dark}</style></head><body><p id="status">${t.status}</p><p id="failure" hidden>${t.error}</p><noscript><p>${t.noscript}</p></noscript><script nonce="${nonce}">${script}</script></body></html>`;
 }
 
 /** Dönüş sayfasının başlıkları: önbellek yok, referrer yok, yalnız bu sayfanın betiği çalışır. */

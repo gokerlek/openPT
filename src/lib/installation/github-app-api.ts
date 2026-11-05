@@ -78,7 +78,7 @@ export function githubAppApi(jwt:AppJwt,fetcher:typeof fetch=fetch) {
       if(!response.ok)throw failure(response.status);
       return json(response,value=>{
         const token=(value as {token?:unknown}|null)?.token;
-        if(typeof token!=='string'||!token)throw new Error('token yok');
+        if(typeof token!=='string'||!token)throw new Error('no token');
         return token;
       });
     },

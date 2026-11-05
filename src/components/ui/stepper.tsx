@@ -6,6 +6,7 @@ import { Minus, Plus } from '@/components/line-icons';
 import { useLocale, useMessages } from '@/i18n/client';
 import { intlLocale, type Locale } from '@/i18n/locale';
 import { uiMessages } from '@/i18n/messages/ui';
+import { commaToPoint } from './decimal-text';
 import { cn } from '@/lib/utils';
 
 /**
@@ -60,8 +61,10 @@ const CENTER: Record<Size, { plain: string; unit: string }> = {
  * Binlik ayracı yok: `tr-TR`'de nokta binlik ayracıdır, "57.5" 575 okunurdu. Gruplama kapalıyken Türkçede hem virgül hem
  * nokta ondalık sayılır (İngilizce klavyeli telefonun ondalık tuşu nokta yazar); kutu "57,5" gösterir. İngilizcede
  * (`en-GB`) kutu "57.5" gösterir ama Base UI virgülü ondalık saymaz ("2,5" → 2): `commaAsDecimal` yazılan virgülü noktaya
- * çevirir (`Stepper` ondalık kutularında; `me/antrenman/set-row.tsx` de kullanmalı).
+ * çevirir (`Stepper` ondalık kutularında).
  */
+// i18n-followup(T3): `me/antrenman/set-row.tsx` hâlâ `locale="tr-TR"`: `useLocale()` + `intlLocale` ve ondalık kutuda `commaAsDecimal`
+// kullanmalı (aynı NumberField sorunu).
 export const NUMBER_FORMAT = { useGrouping: false } as const satisfies Intl.NumberFormatOptions;
 /** Tam sayı alanı (tekrar, saniye, set): yazılan "8,5" kutudan çıkınca 9 olur, kutu da 9 gösterir. */
 export const WHOLE_FORMAT = { useGrouping: false, maximumFractionDigits: 0 } as const satisfies Intl.NumberFormatOptions;
@@ -83,9 +86,10 @@ function wideText(locale: Locale): Intl.NumberFormat {
  */
 export function commaAsDecimal(event: React.FormEvent<HTMLInputElement>): void {
   const input = event.currentTarget;
-  if (!input.value.includes(',')) return;
+  const next = commaToPoint(input.value);
+  if (next === input.value) return;
   const caret = input.selectionStart;
-  input.value = input.value.replace(/,/g, '.');
+  input.value = next;
   if (caret !== null) input.setSelectionRange(caret, caret);
 }
 

@@ -37,6 +37,7 @@ export function usePreview(change: ImageChange): string | null {
   return change.kind === 'upload' && preview?.file === change.file ? preview.url : null;
 }
 
+// i18n-followup(unowned): `imageProblem` (`lib/image.ts`) Türkçe mesaj döndürüyor; sahibi planda yok.
 export function ImageField({
   id = 'image',
   label,
