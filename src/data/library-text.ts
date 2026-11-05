@@ -5,7 +5,6 @@ import type { Locale } from '../i18n/locale.ts';
 import { ATTACHMENT_LIBRARY_EN } from './attachment-library.en.ts';
 import { DEVICE_LIBRARY_EN } from './device-library.en.ts';
 import { EXERCISE_LIBRARY_EN } from './exercise-library.en.ts';
-import { LIBRARY_TITLES } from './library-titles.ts';
 
 /**
  * Hazır kataloğun metni okuyanın dilinde. Kütüphane Türkçe yazılı (`*-library.ts`); İngilizcesi kimliğe göre ayrı
@@ -50,14 +49,8 @@ export function localizeAttachment<T extends Attachment>(attachment: T, locale: 
 }
 
 /**
- * Geçmişte saklanan egzersiz adı (o günkü adın kopyası: set kaydı, geri bildirim, öneri) okuyanın dilinde:
- * kopya o kimliğin kütüphanedeki adıyla (herhangi bir dilde) aynıysa kütüphanenin bu dildeki adı; değilse kopya
- * (PT'nin verdiği ad, sonradan değişen ya da silinen egzersiz). Türkçe çıktı değişmez; İngilizce kaydedilmiş geçmiş
- * Türkçe okuyana Türkçe görünür. Adlar küçük, üretilmiş bir tablodan (`library-titles.ts`) gelir: istemci paketine
- * kütüphanenin kendisi girmez.
+ * `localizedLibraryTitle` (geçmişte saklanan egzersiz adı okuyanın dilinde) `library-titles.ts`'te durur: küçük ve hiçbir
+ * şeye bağlı değil. Buradan da alınabilir (imza ve yol aynı), ama istemci bileşenleri `@/data/library-titles`'tan almalı:
+ * bu dosya İngilizce metin tablolarını (~32 KB) içe alır. `library-bundle.test.ts` istemcinin buraya varmasını reddeder.
  */
-export function localizedLibraryTitle(exerciseId: string, snapshot: string, locale: Locale): string {
-  const entry = Object.hasOwn(LIBRARY_TITLES, exerciseId) ? LIBRARY_TITLES[exerciseId] : undefined;
-  if (!entry || (snapshot !== entry[0] && snapshot !== entry[1])) return snapshot;
-  return locale === 'en' ? entry[1] : entry[0];
-}
+export { localizedLibraryTitle } from './library-titles.ts';

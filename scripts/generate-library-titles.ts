@@ -14,10 +14,25 @@ export function renderLibraryTitles(): string {
   const rows = EXERCISE_LIBRARY.map((exercise) => `  ${quote(exercise.id)}: [${quote(exercise.title)}, ${quote(EXERCISE_LIBRARY_EN[exercise.id]?.title || exercise.title)}],`);
   return [
     '// Üretildi: scripts/generate-library-titles.ts (elle değiştirme; `library-titles.test.ts` kütüphaneyle aynı olduğunu denetler).',
+    "import type { Locale } from '../i18n/locale.ts';",
+    '',
     '/** Hazır egzersizin kimliğine göre adı: [Türkçe, İngilizce]. İngilizcesi olmayanın ikinci değeri Türkçesidir. */',
     'export const LIBRARY_TITLES: Readonly<Record<string, readonly [tr: string, en: string]>> = {',
     ...rows,
     '};',
+    '',
+    '/**',
+    ' * Geçmişte saklanan egzersiz adı (o günkü adın kopyası: set kaydı, geri bildirim, öneri) okuyanın dilinde: kopya o',
+    " * kimliğin kütüphanedeki adıyla (herhangi bir dilde) aynıysa kütüphanenin bu dildeki adı; değilse kopya (PT'nin verdiği",
+    ' * ad, sonradan değişen ya da silinen egzersiz). Türkçe çıktı değişmez; İngilizce kaydedilmiş geçmiş Türkçe okuyana',
+    ' * Türkçe görünür. İstemci bileşenleri bunu BURADAN alır (`@/data/library-titles`): `library-text.ts` İngilizce metin',
+    ' * tablolarını da içe alır, istemci paketine girmesin.',
+    ' */',
+    'export function localizedLibraryTitle(exerciseId: string, snapshot: string, locale: Locale): string {',
+    '  const entry = Object.hasOwn(LIBRARY_TITLES, exerciseId) ? LIBRARY_TITLES[exerciseId] : undefined;',
+    '  if (!entry || (snapshot !== entry[0] && snapshot !== entry[1])) return snapshot;',
+    "  return locale === 'en' ? entry[1] : entry[0];",
+    '}',
     '',
   ].join('\n');
 }

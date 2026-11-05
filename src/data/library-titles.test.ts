@@ -4,8 +4,8 @@ import { readFileSync } from 'node:fs';
 import { renderLibraryTitles } from '../../scripts/generate-library-titles.ts';
 import { EXERCISE_LIBRARY } from './exercise-library.ts';
 import { EXERCISE_LIBRARY_EN } from './exercise-library.en.ts';
-import { LIBRARY_TITLES } from './library-titles.ts';
-import { localizedLibraryTitle } from './library-text.ts';
+import { LIBRARY_TITLES, localizedLibraryTitle } from './library-titles.ts';
+import * as libraryText from './library-text.ts';
 
 /** Adlar tablosu üretilmiş dosya: kütüphane ya da İngilizce tablo değişince yeniden üretilmeli. */
 describe('hazır egzersiz adları tablosu', () => {
@@ -23,6 +23,14 @@ describe('hazır egzersiz adları tablosu', () => {
   test('kimlik tablonun kendi anahtarı olmalı (prototip adları bulunmaz)', () => {
     assert.equal(localizedLibraryTitle('constructor', 'Object', 'en'), 'Object');
     assert.equal(localizedLibraryTitle('__proto__', 'x', 'en'), 'x');
+  });
+});
+
+describe('localizedLibraryTitle iki yoldan', () => {
+  test("library-titles.ts'ten (istemci bileşenleri için, İngilizce tablolar paketine girmez) ve library-text.ts'ten aynı işlev", () => {
+    assert.equal(libraryText.localizedLibraryTitle, localizedLibraryTitle);
+    const exercise = EXERCISE_LIBRARY[0]!;
+    assert.equal(libraryText.localizedLibraryTitle(exercise.id, exercise.title, 'en'), localizedLibraryTitle(exercise.id, exercise.title, 'en'));
   });
 });
 
