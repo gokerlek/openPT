@@ -104,7 +104,7 @@ export async function createClientRepo(clientId: string): Promise<{ repo: string
       return { repo };
     } catch (error) {
       if (typeof error === 'object' && error && 'status' in error && error.status === 422) {
-        throw new GithubError('Bu kimlikle bir repo zaten var.', 409);
+        throw new GithubError((l) => installMessages(l).github.repoAlreadyExists, 409);
       }
       throw adminError(error, repo);
     }

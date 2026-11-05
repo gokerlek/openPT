@@ -243,6 +243,8 @@ const tr = {
     repoForkOrPublic: (repo: string, fork: boolean) =>
       `"${repo}" ${fork ? 'bir fork' : 'herkese açık'}. Veri repo'su kodun fork'undan ayrı ve özel olmalı: APP_REPO'ya yeni bir ad ver (ör. openpt-data).`,
     onlyClientRepos: 'Yalnız danışan repoları silinebilir.',
+    /** Yeni danışanın repo'su açılamadı: aynı adla repo var (GitHub 422). */
+    repoAlreadyExists: 'Bu kimlikle bir repo zaten var.',
     reauth: 'Bu işlem için GitHub ile yeniden giriş yap.',
     oauthMissing: 'GITHUB_CLIENT_ID / GITHUB_CLIENT_SECRET tanımlı değil',
   },

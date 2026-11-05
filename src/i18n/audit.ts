@@ -17,7 +17,7 @@ import ts from 'typescript';
 const TURKISH = /[çğıİöşüÇĞÖŞÜ]/;
 /** Türkçe harfi olmadığı için `TURKISH`'e takılmayan, İngilizcede sözcük olmayan yaygın arayüz sözcükleri. */
 const ASCII_TURKISH =
-  /\b(?:kaydet|kaydedildi|kaydedilemedi|ekle|eklendi|tamam|ayarlar|uygulama|devam|geri|yeni|hata|kapat|bitti|tekrar|genel|silindi|hareket|hareketler|programlar|antrenman|antrenmanlar|olarak|veya|icin|sonra|simdi|henuz|yok)\b/i;
+  /\b(?:kaydet|kaydedildi|kaydedilemedi|ekle|eklendi|tamam|ayarlar|uygulama|devam|geri|yeni|hata|kapat|bitti|tekrar|genel|silindi|hareket|hareketler|programlar|antrenman|antrenmanlar|olarak|veya|icin|sonra|simdi|henuz|yok|zaten)\b/i;
 const LETTER = /\p{L}/u;
 const TEXT_ATTRIBUTES = new Set(['aria-label', 'title', 'placeholder', 'alt']);
 const TEXT_PROPERTIES = new Set(['title', 'description', 'label', 'hint', 'placeholder', 'message', 'error', 'heading', 'caption', 'subtitle', 'summary']);

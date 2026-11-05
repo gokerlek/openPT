@@ -230,6 +230,7 @@ const en: Shape<typeof tr> = {
     repoForkOrPublic: (repo: string, fork: boolean) =>
       `"${repo}" is ${fork ? 'a fork' : 'public'}. The data repo must be separate from the code fork and private: give APP_REPO a new name (e.g. openpt-data).`,
     onlyClientRepos: 'Only client repos can be deleted.',
+    repoAlreadyExists: 'A repo with this id already exists.',
     reauth: 'Sign in with GitHub again for this action.',
     oauthMissing: 'GITHUB_CLIENT_ID / GITHUB_CLIENT_SECRET are not set',
   },
