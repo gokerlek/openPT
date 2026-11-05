@@ -1,6 +1,8 @@
+import { DEFAULT_LOCALE, type Locale } from '../i18n/locale.ts';
+import { ptShellMessages } from '../i18n/messages/pt-shell/index.ts';
 import { ATTENTION_TUNING, attentionItems, type AttentionFacts } from './attention.ts';
 import type { AccessState } from './client-status.ts';
-import { formatDayShort, formatNumber } from './format.ts';
+import { getFormat } from './format.ts';
 import type { ClientStatus } from './schemas/client.ts';
 
 /**
@@ -18,11 +20,13 @@ export type CardExtrasRow = { id: string; ok: boolean; status: ClientStatus; acc
  * `expected` iken söylenir: danışan aktif ve giriş yapmış (duraklatılmışta ya da daveti bekleyende antrenman
  * beklenmez).
  */
-export function lastWorkoutText(facts: Pick<AttentionFacts, 'sessionDays'>, expected: boolean): string | null {
+export function lastWorkoutText(facts: Pick<AttentionFacts, 'sessionDays'>, expected: boolean, locale: Locale = DEFAULT_LOCALE): string | null {
+  const t = ptShellMessages(locale).cardExtras;
+  const format = getFormat(locale);
   // Özet günleri sıralı tutar; yine de en büyüğü alınır.
   const last = facts.sessionDays.reduce<string | null>((latest, day) => (latest === null || day > latest ? day : latest), null);
-  if (last) return `Son antrenman ${formatDayShort(last)}`;
-  return expected ? `Son ${formatNumber(ATTENTION_TUNING.sessionDaysKept)} günde antrenman yok` : null;
+  if (last) return t.lastWorkout(format.dayShort(last));
+  return expected ? t.noWorkout(ATTENTION_TUNING.sessionDaysKept, format.number(ATTENTION_TUNING.sessionDaysKept)) : null;
 }
 
 /**
@@ -32,9 +36,10 @@ export function lastWorkoutText(facts: Pick<AttentionFacts, 'sessionDays'>, expe
 export function clientCardExtras(
   rows: readonly CardExtrasRow[],
   facts: ReadonlyMap<string, AttentionFacts>,
-  ctx: { now: Date; timeZone: string },
+  ctx: { now: Date; timeZone: string; locale?: Locale },
 ): Record<string, CardExtras> {
-  const itemCtx = { now: ctx.now, timeZone: ctx.timeZone, titleOf: (exerciseId: string) => exerciseId };
+  const locale = ctx.locale ?? DEFAULT_LOCALE;
+  const itemCtx = { now: ctx.now, timeZone: ctx.timeZone, titleOf: (exerciseId: string) => exerciseId, locale };
   return Object.fromEntries(
     rows.flatMap((row): [string, CardExtras][] => {
       const attention = row.ok && row.status !== 'archived' ? facts.get(row.id) : undefined;
@@ -46,7 +51,7 @@ export function clientCardExtras(
           row.id,
           {
             attention: { count: items.length, urgent: items.some((item) => item.tone === 'danger') },
-            lastWorkout: lastWorkoutText(attention, row.status === 'active' && joined),
+            lastWorkout: lastWorkoutText(attention, row.status === 'active' && joined, locale),
           },
         ],
       ];

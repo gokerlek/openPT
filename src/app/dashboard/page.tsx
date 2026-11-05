@@ -6,8 +6,11 @@ import { PageHeader } from '@/components/page-header';
 import { CaretRight } from '@phosphor-icons/react/dist/ssr';
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import type { Locale } from '@/i18n/locale';
+import { ptShellMessages } from '@/i18n/messages/pt-shell';
+import { getLocale } from '@/i18n/server';
 import { readAppConfig } from '@/lib/config';
-import { formatNumber } from '@/lib/format';
+import { getFormat } from '@/lib/format';
 import { listExercises } from '@/lib/exercises';
 import { listClientIds } from '@/lib/github/repos';
 import { requirePt } from '@/lib/guards';
@@ -17,7 +20,9 @@ import { clientOverviews } from './client-overviews';
 import { LiveNow } from './live-now';
 import { NoticesCard } from './notices-card';
 
-export const metadata: Metadata = { title: 'Genel bakış' };
+export async function generateMetadata(): Promise<Metadata> {
+  return { title: ptShellMessages(await getLocale()).home.title };
+}
 
 /**
  * Genel bakış: önce "Dikkat gerektirenler" (danışana göre gruplu; kaçan gün, ilerlemeyen hareket, evre, öneri,
@@ -28,6 +33,9 @@ export const metadata: Metadata = { title: 'Genel bakış' };
  */
 export default async function DashboardPage() {
   await requirePt();
+  const locale = await getLocale();
+  const t = ptShellMessages(locale);
+  const { number } = getFormat(locale);
   // Dikkat ve bildirimlerin danışan özetleri hemen başlar ama beklenmez (kartlar kendi akışında; React `cache` aynı
   // okumayı paylaştırır). Reddedilmez: okunamayan danışan sayılır (`client-overviews.ts`).
   void clientOverviews();
@@ -40,32 +48,32 @@ export default async function DashboardPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <PageHeader title="Genel bakış" description="Önce bakılacaklar: dikkat isteyen danışanlar ve bildirimler." />
+      <PageHeader title={t.home.title} description={t.home.description} />
 
       {/* Danışan başına özet önbellekten (iki kart ortak); önbellek boşken sayfanın geri kalanı beklemesin. */}
       <div className="grid gap-6 lg:grid-cols-2 lg:items-start">
-        <Suspense fallback={<ListSkeleton title="Dikkat gerektirenler" />}>
+        <Suspense fallback={<ListSkeleton title={t.attention.title} reading={t.home.loadingRecords} />}>
           <AttentionCard timeZone={config.timeZone} titles={new Map(exercises.map((exercise) => [exercise.id, exercise.title]))} />
         </Suspense>
-        <Suspense fallback={<ListSkeleton title="Bildirimler" />}>
+        <Suspense fallback={<ListSkeleton title={t.notices.title} reading={t.home.loadingRecords} />}>
           <NoticesCard timeZone={config.timeZone} />
         </Suspense>
       </div>
 
       {/* Sayılar ikincil: telefonda iki küçük kart yan yana, canlı kart altta tam genişlikte. */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
-        <CountCard href="/dashboard/clients" label="Danışan" count={clientIds.length} hint="Danışan listesini aç" />
+        <CountCard href="/dashboard/clients" label={t.home.clientsLabel} count={number(clientIds.length)} hint={t.home.clientsHint} />
         <CountCard
           href="/dashboard/exercises"
-          label="Egzersiz"
-          count={exercises.length}
-          hint={`${formatNumber(custom)} tanesi senin · kütüphaneyi aç`}
+          label={t.home.exercisesLabel}
+          count={number(exercises.length)}
+          hint={t.home.exercisesHint(number(custom))}
         />
 
         {/* Danışan başına bir koşullu okuma; sayfanın geri kalanı beklemesin. */}
         <div className="col-span-2 grid lg:col-span-1">
-          <Suspense fallback={<LiveSkeleton />}>
-            <LiveNowCard />
+          <Suspense fallback={<LiveSkeleton title={t.live.title} />}>
+            <LiveNowCard locale={locale} />
           </Suspense>
         </div>
 
@@ -76,19 +84,19 @@ export default async function DashboardPage() {
 }
 
 /** "Şu an antrenmanda": ilk değer sunucudan, sonra tarayıcı tazeler. */
-async function LiveNowCard() {
+async function LiveNowCard({ locale }: { locale: Locale }) {
   const now = new Date();
-  const initial = await readLiveOverview(now)
+  const initial = await readLiveOverview(now, locale)
     .then((overview) => ({ ...overview, checkedAt: now.toISOString() }))
     .catch(() => null);
   return <LiveNow initial={initial} />;
 }
 
-function LiveSkeleton() {
+function LiveSkeleton({ title }: { title: string }) {
   return (
     <Card size="sm" aria-busy="true">
       <CardHeader>
-        <CardDescription>Şu an antrenmanda</CardDescription>
+        <CardDescription>{title}</CardDescription>
         <Skeleton className="h-8 w-10" />
       </CardHeader>
       <CardContent>
@@ -98,12 +106,12 @@ function LiveSkeleton() {
   );
 }
 
-function ListSkeleton({ title }: { title: string }) {
+function ListSkeleton({ title, reading }: { title: string; reading: string }) {
   return (
     <Card aria-busy="true">
       <CardHeader>
         <CardTitle>{title}</CardTitle>
-        <CardDescription>Danışanların kayıtları okunuyor…</CardDescription>
+        <CardDescription>{reading}</CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-2">
         <Skeleton className="h-12 w-full" />
@@ -115,13 +123,13 @@ function ListSkeleton({ title }: { title: string }) {
 }
 
 /** Tıklanınca listesine giden sayı kartı; bağlantı olduğu ok ve alt satırdan okunur. */
-function CountCard({ href, label, count, hint }: { href: string; label: string; count: number; hint: string }) {
+function CountCard({ href, label, count, hint }: { href: string; label: string; count: string; hint: string }) {
   return (
     <Link href={href} className="group/count rounded-xl outline-none focus-visible:ring-3 focus-visible:ring-ring/50">
       <Card size="sm" className="h-full transition-colors group-hover/count:bg-muted/50">
         <CardHeader>
           <CardDescription>{label}</CardDescription>
-          <CardTitle className="tabular-nums group-data-[size=sm]/card:text-2xl">{formatNumber(count)}</CardTitle>
+          <CardTitle className="tabular-nums group-data-[size=sm]/card:text-2xl">{count}</CardTitle>
           <CardAction>
             <CaretRight
               weight="fill"
