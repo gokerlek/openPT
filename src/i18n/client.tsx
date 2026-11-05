@@ -6,7 +6,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import * as v from 'valibot';
 import { OFFLINE_REFRESH_MESSAGE } from '@/lib/offline-cache';
 import type { Messages } from './define';
-import { DEFAULT_LOCALE, isLocale, localeCookie, type Locale } from './locale';
+import { DEFAULT_LOCALE, localeCookie, type Locale } from './locale';
 
 /**
  * İstemci bileşenlerinin dili. Kök düzen isteğin dilini (`getLocale`) `Providers` üzerinden buraya verir; istemci
@@ -39,12 +39,7 @@ export function useMessages<T>(messages: Messages<T>): T {
   return messages(useLocale());
 }
 
-/** React dışındaki istemci kodu için: sayfanın dili (`<html lang>`, dil seçici değiştirir); sunucuda Türkçe. */
-export function currentClientLocale(): Locale {
-  if (typeof document === 'undefined') return DEFAULT_LOCALE;
-  const lang = document.documentElement.lang;
-  return isLocale(lang) ? lang : DEFAULT_LOCALE;
-}
+export { currentClientLocale } from './client-locale';
 
 /**
  * Dili değiştirir (dil seçici):
