@@ -190,3 +190,38 @@ Every English string must use these terms. Plan: `docs/plans/2026-11-05-coklu-di
 | Beklenmeyen bir hata oldu. | Something went wrong. |
 | az önce / N dakika önce | just now / N minutes ago |
 | bugün 14:05 / dün 14:05 | today at 14:05 / yesterday at 14:05 |
+
+## Added from area work (T4 health, T5 AI coach)
+
+| Turkish | English | Notes |
+|---|---|---|
+| izin (kısıtta) | permission | |
+| görüş (hekim/fizyoterapist) | opinion | Not "clearance". |
+| yönlendirme | referral | |
+| zorlayan | aggravated by | |
+| gözlem | finding | |
+| yaptırma / dikkat | blocked / caution | Exercise filter states. |
+| kaçınılacak hareket | movement to avoid | |
+| hareket testi | movement test | Health tab "Hareket" → "Movement". |
+| kaçan nokta | missed point | |
+| Temiz / Telafiyle / Kolaylaştırılmış / Yapılamadı / Ağrılı | Clean / With compensation / Easier version / Unable / Painful | Screening results. |
+| ön uzanma | anterior reach | |
+| bacak boyu | leg length | |
+| eğilim / durağan | trend / plateau | |
+| gerçek gelişme / gerileme | real improvement / decline | |
+| ölçüm hatası | measurement error | |
+| Antropometri / Hareketlilik / Anketler | Anthropometry / Mobility / Questionnaires | |
+| kamera ölçümü | camera measurement | |
+| Tanışma / Başlangıç / Orta / İleri | Intro / Beginner / Intermediate / Advanced | |
+| puan | points | Display label only; the unit code `'puan'` stays. |
+| Oluşturucu | builder | |
+| taslak | draft | |
+| Gelişim değerlendirmesi | Progress review | |
+| Kayıt özeti | Record summary | |
+| Dayanak kayıtları | Source records | |
+| Seçim gerekçesi | Why these exercises | |
+| Gözden geçirilecekler | To review | |
+| Antrenman düzeni | Workout routine | |
+| Genel koç / Tüm danışanlar | general coach / All clients | AI coach scope. |
+| Paneldeki anahtar | dashboard key | Gemini key stored in settings. |
+| Hedefler | Getting fitter / Gaining strength / Muscle growth / Supporting weight management / Mobility | AI goals. |
