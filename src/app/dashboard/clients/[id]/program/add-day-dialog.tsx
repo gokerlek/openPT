@@ -5,10 +5,12 @@ import { LabeledSelect } from '@/components/labeled-select';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Field, FieldDescription, FieldLabel } from '@/components/ui/field';
-import { formatNumber } from '@/lib/format';
 import type { TemplateOption } from '@/lib/program-plan';
 import type { PickerExercise } from '@/lib/template-edit';
 import { templateSummary } from '@/lib/template-plan';
+import { useMessages } from '@/i18n/client';
+import { ptProgramMessages } from '@/i18n/messages/pt-program';
+import { commonMessages } from '@/i18n/messages/common';
 
 /**
  * Şablondan program ekleme: şablonun blokları yeni kimlikle kopyalanır; program şablona bağlı
@@ -31,6 +33,8 @@ export function AddDayDialog({
   exercises: ReadonlyMap<string, PickerExercise>;
   onAdd: (template: TemplateOption) => void;
 }) {
+  const t = useMessages(ptProgramMessages).addDayDialog;
+  const common = useMessages(commonMessages);
   const sorted = useMemo(() => [...templates].sort((a, b) => a.name.localeCompare(b.name, 'tr')), [templates]);
   const [templateId, setTemplateId] = useState(sorted[0]?.id ?? '');
   const template = sorted.find((item) => item.id === templateId);
@@ -41,27 +45,25 @@ export function AddDayDialog({
     <Dialog open={open} onOpenChange={(next) => onOpenChange(next)}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Şablondan program ekle</DialogTitle>
+          <DialogTitle>{t.title}</DialogTitle>
           <DialogDescription>
-            {phaseName === null ? 'Programa' : `'${phaseName}' evresine`} yeni program olarak eklenir; şablonla bağı kalmaz, burada
-            yaptığın değişiklik şablonu etkilemez.
+            {t.description(phaseName)}
           </DialogDescription>
         </DialogHeader>
         <Field>
-          <FieldLabel htmlFor="add-day-template">Şablon</FieldLabel>
+          <FieldLabel htmlFor="add-day-template">{t.templateLabel}</FieldLabel>
           <LabeledSelect id="add-day-template" value={templateId || undefined} labels={labels} onChange={setTemplateId} />
           {summary ? (
-            <FieldDescription className="tabular-nums">
-              {formatNumber(summary.rows)} hareket · {formatNumber(summary.workingSets)} set · ≈ {formatNumber(summary.minutes)} dk
+            <FieldDescription className="tabular-nums">{t.summary(summary.rows, summary.workingSets, summary.minutes)}
             </FieldDescription>
           ) : null}
         </Field>
         <DialogFooter>
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-            Vazgeç
+            {common.actions.cancel}
           </Button>
           <Button type="button" disabled={!template} onClick={() => template && onAdd(template)}>
-            Ekle
+            {common.actions.add}
           </Button>
         </DialogFooter>
       </DialogContent>

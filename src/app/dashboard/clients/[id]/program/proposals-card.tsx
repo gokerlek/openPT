@@ -26,6 +26,9 @@ import { useServiceMutation } from '@/lib/query/use-service';
 import { PROPOSAL_LIMITS } from '@/lib/proposals';
 import { programDraftKey } from '@/lib/unsaved-changes';
 import { cn } from '@/lib/utils';
+import { useMessages } from '@/i18n/client';
+import { ptProgramMessages } from '@/i18n/messages/pt-program';
+import { commonMessages } from '@/i18n/messages/common';
 
 /** Kartın satırı (sunucuda hazırlanır). */
 export type ProposalView = {
@@ -72,6 +75,8 @@ function useDraftExists(clientId: string): boolean {
  * 30 günden eski öneri soluk görünür, silinmez. Danışan kararı Bugün'de görür.
  */
 export function ProposalsCard({ clientId, items }: { clientId: string; items: ProposalView[] }) {
+  const t = useMessages(ptProgramMessages).proposalsCard;
+  const common = useMessages(commonMessages);
   const router = useRouter();
   const draft = useDraftExists(clientId);
   const [confirm, setConfirm] = useState<ProposalView | null>(null);
@@ -85,7 +90,7 @@ export function ProposalsCard({ clientId, items }: { clientId: string; items: Pr
         method: 'POST',
         body: JSON.stringify({ action: 'approve', sessionId: item.sessionId }),
       }),
-    notify: { success: 'Öneri programa yazıldı.' },
+    notify: { success: t.approved },
     onMutate: (item) => setBusy(item.id),
     onSettled: () => {
       setBusy(null);
@@ -101,7 +106,7 @@ export function ProposalsCard({ clientId, items }: { clientId: string; items: Pr
         method: 'POST',
         body: JSON.stringify({ action: 'decline', sessionId: input.item.sessionId, ...(input.note.trim() ? { note: input.note.trim() } : {}) }),
       }),
-    notify: { success: 'Öneri reddedildi; danışan görecek.' },
+    notify: { success: t.declined },
     onMutate: (input) => setBusy(input.item.id),
     onSettled: () => {
       setBusy(null);
@@ -121,9 +126,9 @@ export function ProposalsCard({ clientId, items }: { clientId: string; items: Pr
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Lightbulb weight="fill" className="size-5 text-primary-text" aria-hidden />
-          Danışandan öneriler ({items.length})
+          {t.title(items.length)}
         </CardTitle>
-        <CardDescription>Uygularsan programa yazılır ve geçmişe girer; reddedersen danışan görür.</CardDescription>
+        <CardDescription>{t.description}</CardDescription>
       </CardHeader>
       <CardContent>
         <ul className="flex flex-col divide-y">
@@ -133,7 +138,7 @@ export function ProposalsCard({ clientId, items }: { clientId: string; items: Pr
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="font-medium">{item.text}</span>
                   <Badge variant="outline">{item.kindLabel}</Badge>
-                  {item.faded ? <Badge variant="secondary">30 günden eski</Badge> : null}
+                  {item.faded ? <Badge variant="secondary">{t.old}</Badge> : null}
                 </div>
                 {item.why ? <span className="text-sm text-muted-foreground">{item.why}</span> : null}
                 <span className="text-xs text-muted-foreground tabular-nums">{item.meta}</span>
@@ -141,11 +146,11 @@ export function ProposalsCard({ clientId, items }: { clientId: string; items: Pr
               <div className="flex shrink-0 gap-2">
                 <Button size="sm" className="touch:h-11" disabled={busy !== null} onClick={() => onApprove(item)}>
                   {busy === item.id && approve.isPending ? <Spinner data-icon="inline-start" /> : <Check data-icon="inline-start" />}
-                  Uygula
+                  {t.apply}
                 </Button>
                 <Button size="sm" variant="ghost" className="min-h-11" disabled={busy !== null} onClick={() => setDeclining(item)}>
                   <X data-icon="inline-start" />
-                  Reddet
+                  {t.decline}
                 </Button>
               </div>
             </li>
@@ -156,20 +161,19 @@ export function ProposalsCard({ clientId, items }: { clientId: string; items: Pr
       <AlertDialog open={confirm !== null} onOpenChange={(open) => (open ? undefined : setConfirm(null))}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Düzenleyicide kaydedilmemiş değişikliğin var</AlertDialogTitle>
+            <AlertDialogTitle>{t.dirtyTitle}</AlertDialogTitle>
             <AlertDialogDescription>
-              Öneriyi şimdi uygularsan program yeni bir sürüme geçer; düzenleyicideki taslağını kaydederken &quot;başka bir yerde
-              değişti&quot; uyarısı çıkar. Önce taslağını kaydedebilir ya da atabilirsin.
+              {t.dirtyBody}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Vazgeç</AlertDialogCancel>
+            <AlertDialogCancel>{common.actions.cancel}</AlertDialogCancel>
             <Button variant="outline" nativeButton={false} render={<Link href={`/dashboard/clients/${clientId}/program/edit`} />}>
-              Düzenleyiciyi aç
+              {t.openEditor}
             </Button>
             <Button disabled={approve.isPending} onClick={() => confirm && approve.mutate(confirm)}>
               {approve.isPending ? <Spinner data-icon="inline-start" /> : null}
-              Yine de uygula
+              {t.applyAnyway}
             </Button>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -184,27 +188,27 @@ export function ProposalsCard({ clientId, items }: { clientId: string; items: Pr
         }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Öneri reddedilsin mi?</DialogTitle>
+            <DialogTitle>{t.declineTitle}</DialogTitle>
             <DialogDescription>{declining?.text}</DialogDescription>
           </DialogHeader>
           <Field>
-            <FieldLabel htmlFor="decline-note">Not (isteğe bağlı)</FieldLabel>
+            <FieldLabel htmlFor="decline-note">{t.noteLabel}</FieldLabel>
             <Textarea
               id="decline-note"
               value={note}
               maxLength={PROPOSAL_LIMITS.note}
-              placeholder="Ör. Önce tekniği oturtalım, sonra set ekleriz."
+              placeholder={t.notePlaceholder}
               onChange={(event) => setNote(event.target.value)}
             />
-            <FieldDescription>Danışan Bugün ekranında kararınla birlikte görür.</FieldDescription>
+            <FieldDescription>{t.noteHint}</FieldDescription>
           </Field>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeclining(null)}>
-              Vazgeç
+              {common.actions.cancel}
             </Button>
             <Button variant="destructive" disabled={decline.isPending} onClick={() => declining && decline.mutate({ item: declining, note })}>
               {decline.isPending ? <Spinner data-icon="inline-start" /> : null}
-              Reddet
+              {t.decline}
             </Button>
           </DialogFooter>
         </DialogContent>

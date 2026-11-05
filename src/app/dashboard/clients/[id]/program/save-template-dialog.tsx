@@ -16,6 +16,9 @@ import { useServiceMutation } from '@/lib/query/use-service';
 import { dayBlocksSchema } from '@/lib/schemas/program';
 import { templateNameSchema } from '@/lib/schemas/template';
 import { TEMPLATE_LIMITS, countRows, type TemplateBlock } from '@/lib/template-plan';
+import { useMessages } from '@/i18n/client';
+import { ptProgramMessages } from '@/i18n/messages/pt-program';
+import { commonMessages } from '@/i18n/messages/common';
 
 /**
  * Bir program (antrenman) yeni şablon olur. Şablonlar uygulama repo'sunda durur ve başka
@@ -35,6 +38,8 @@ export function SaveTemplateDialog({
   /** Yeni şablon: "Şablondan…" hemen kullanabilsin. */
   onCreated: (template: TemplateOption) => void;
 }) {
+  const t = useMessages(ptProgramMessages).saveTemplateDialog;
+  const common = useMessages(commonMessages);
   const [name, setName] = useState('');
   const [nameError, setNameError] = useState<string | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
@@ -52,8 +57,8 @@ export function SaveTemplateDialog({
     },
     onSuccess: ({ id }, input) => {
       onOpenChange(false);
-      toast.success(`'${input.name}' şablonu oluşturuldu.`, {
-        action: { label: 'Aç', onClick: () => window.open(`/dashboard/templates/${id}`, '_blank') },
+      toast.success(t.created(input.name), {
+        action: { label: t.open, onClick: () => window.open(`/dashboard/templates/${id}`, '_blank') },
       });
       onCreated({ id, name: input.name, blocks: dayToTemplate({ blocks: input.blocks }, input.name).template.blocks });
     },
@@ -74,19 +79,18 @@ export function SaveTemplateDialog({
     <Dialog open={open} onOpenChange={(next) => onOpenChange(next)}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Şablon olarak kaydet</DialogTitle>
+          <DialogTitle>{t.title}</DialogTitle>
           <DialogDescription>
-            Bu programın hareketleri ({countRows(blocks)} hareket) yeni bir şablona kopyalanır; şablonu başka danışanlarda da
-            kullanabilirsin.
+            {t.description(countRows(blocks))}
           </DialogDescription>
         </DialogHeader>
         <Field data-invalid={Boolean(nameError) || undefined}>
-          <FieldLabel htmlFor="template-from-day-name">Şablon adı</FieldLabel>
+          <FieldLabel htmlFor="template-from-day-name">{t.nameLabel}</FieldLabel>
           <Input
             id="template-from-day-name"
             value={name}
             maxLength={TEMPLATE_LIMITS.name}
-            placeholder="Ör. Alt vücut A"
+            placeholder={t.namePlaceholder}
             aria-invalid={Boolean(nameError) || undefined}
             onChange={(event) => setName(event.currentTarget.value)}
             onKeyDown={(event) => {
@@ -95,30 +99,30 @@ export function SaveTemplateDialog({
               if (valid && !create.isPending) submit();
             }}
           />
-          <FieldDescription>Şablonlar uygulama repo&apos;nda durur: ada kişisel bilgi yazma.</FieldDescription>
+          <FieldDescription>{t.nameHint}</FieldDescription>
           <FieldError>{nameError}</FieldError>
         </Field>
         <Alert>
           <Info />
           <AlertDescription>
-            Satır notları kopyalanmaz: şablonda kişisel bilgi bulunmamalı.
-            {droppedNotes > 0 ? ` Bu programda ${droppedNotes} not var.` : null}
+            {t.notesNote}
+            {droppedNotes > 0 ? t.notesCount(droppedNotes) : null}
           </AlertDescription>
         </Alert>
         {valid ? null : (
           <Alert variant="destructive">
             <WarningCircle />
-            <AlertDescription>Bu programda düzeltilmesi gereken alanlar var; önce onları düzelt.</AlertDescription>
+            <AlertDescription>{t.invalid}</AlertDescription>
           </Alert>
         )}
         {failure ? <p className="text-sm text-destructive">{failure}</p> : null}
         <DialogFooter>
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-            Vazgeç
+            {common.actions.cancel}
           </Button>
           <Button type="button" disabled={!valid || create.isPending} onClick={submit}>
             {create.isPending ? <Spinner data-icon="inline-start" /> : null}
-            Şablonu oluştur
+            {t.create}
           </Button>
         </DialogFooter>
       </DialogContent>

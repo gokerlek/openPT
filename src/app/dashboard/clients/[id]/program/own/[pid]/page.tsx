@@ -17,7 +17,7 @@ import { loadClient } from '@/lib/clients';
 import { readAppConfig } from '@/lib/config';
 import { programConflicts } from '@/lib/constraint-filter';
 import { listExercises } from '@/lib/exercises';
-import { formatDate, formatNumber, todayIn } from '@/lib/format';
+import { getFormat, todayIn } from '@/lib/format';
 import { requirePt } from '@/lib/guards';
 import { exerciseSetWeights } from '@/lib/muscles';
 import { programLine } from '@/lib/own-program-text';
@@ -28,8 +28,13 @@ import { CLIENT_ID_PATTERN } from '@/lib/schemas/client';
 import { templateSummary } from '@/lib/template-plan';
 import { upcomingAssigned, weekdaysText } from '@/lib/training-days';
 import { cn } from '@/lib/utils';
+import { getLocale, getMessages } from '@/i18n/server';
+import { ptProgramMessages } from '@/i18n/messages/pt-program';
 
-export const metadata: Metadata = { title: 'Danışanın programı' };
+export async function generateMetadata(): Promise<Metadata> {
+  const t = (await getMessages(ptProgramMessages)).ownProgramView;
+  return { title: t.title };
+}
 
 /**
  * Danışanın paylaştığı kendi programı (`docs/design/kendi-program.md` §4): PT program sayfasının evresiz hâli —
@@ -40,6 +45,9 @@ export const metadata: Metadata = { title: 'Danışanın programı' };
  */
 export default async function OwnProgramViewPage({ params }: { params: Promise<{ id: string; pid: string }> }) {
   await requirePt();
+  const locale = await getLocale();
+  const t = ptProgramMessages(locale).ownProgramView;
+  const format = getFormat(locale);
   const { id, pid } = await params;
   if (!CLIENT_ID_PATTERN.test(id) || !isOwnProgramId(pid)) notFound();
   const loaded = await loadClient(id);
@@ -48,20 +56,20 @@ export default async function OwnProgramViewPage({ params }: { params: Promise<{
 
   const [read, exercises, config] = await Promise.all([readOwnProgramOf(id, pid), listExercises(), readAppConfig()]);
   if (read.status === 'missing') notFound();
-  const back = <EditorBackLink href={`/dashboard/clients/${id}/program`} label="Program" />;
+  const back = <EditorBackLink href={`/dashboard/clients/${id}/program`} label={t.backLabel} />;
 
   if (read.status === 'invalid' || !read.program.shared) {
     return (
       <div className="flex flex-col gap-6">
         <div className="flex flex-col gap-2">
           {back}
-          <SectionHeader title="Danışanın programı" />
+          <SectionHeader title={t.title} />
         </div>
         <Alert>
           <WarningCircle weight="fill" />
-          <AlertTitle>{read.status === 'invalid' ? 'Program okunamadı' : 'Danışan bu programın paylaşımını kapattı.'}</AlertTitle>
+          <AlertTitle>{read.status === 'invalid' ? t.unreadableTitle : t.unsharedTitle}</AlertTitle>
           <AlertDescription>
-            {read.status === 'invalid' ? 'Dosyası beklenen biçimde değil; danışan silebilir.' : 'Yeniden paylaşırsa burada görünür.'}
+            {read.status === 'invalid' ? t.invalidBody : t.unsharedBody}
           </AlertDescription>
         </Alert>
       </div>
@@ -77,8 +85,8 @@ export default async function OwnProgramViewPage({ params }: { params: Promise<{
   const upcoming = upcomingAssigned(program, today);
   const load = phase ? phaseMuscleLoad(phase, byId, exerciseSetWeights) : null;
   const missingRows = missingExerciseDays(program.phases, new Set(byId.keys())).reduce((sum, item) => sum + item.rowIds.length, 0);
-  const description = [programLine(ownSummaryOf(program)), `${formatDate(program.createdAt, timeZone)} tarihinde oluşturuldu`].join(' · ');
-  const careInput = await loadCareInput(loaded.client, today);
+  const description = [programLine(ownSummaryOf(program), undefined, locale), t.createdOn(format.date(program.createdAt, timeZone))].join(' · ');
+  const careInput = await loadCareInput(loaded.client, today, locale);
   const conflicts = careInput ? programConflicts(program, byId, careInput, today) : [];
   const editHref = `/dashboard/clients/${id}/program/own/${pid}/edit`;
 
@@ -92,15 +100,15 @@ export default async function OwnProgramViewPage({ params }: { params: Promise<{
       {conflicts.length > 0 ? (
         <Alert>
           <Bandaids weight="fill" />
-          <AlertTitle>Kısıtlarla çelişen {formatNumber(conflicts.length)} hareket</AlertTitle>
+          <AlertTitle>{t.conflictsTitle(conflicts.length)}</AlertTitle>
           <AlertDescription className="flex flex-col gap-2">
             <p>{conflicts.map((conflict) => `${conflict.dayName} · ${conflict.title} (${conflict.message})`).join(' · ')}</p>
             <div className="flex flex-wrap gap-2">
               <Button size="sm" variant="outline" nativeButton={false} render={<Link href={editHref} />}>
-                Programı düzenle
+                {t.editProgram}
               </Button>
               <Button size="sm" variant="outline" nativeButton={false} render={<Link href={`/dashboard/clients/${id}/constraints`} />}>
-                Kısıtlar
+                {t.limitations}
               </Button>
             </div>
           </AlertDescription>
@@ -110,15 +118,15 @@ export default async function OwnProgramViewPage({ params }: { params: Promise<{
       {missingRows > 0 ? (
         <Alert>
           <WarningCircle weight="fill" />
-          <AlertTitle>{missingRows} hareket kütüphanede bulunamadı</AlertTitle>
-          <AlertDescription>Silinmiş bir egzersize bağlı; danışanın ekranında görünmez.</AlertDescription>
+          <AlertTitle>{t.missingTitle(missingRows)}</AlertTitle>
+          <AlertDescription>{t.missingBody}</AlertDescription>
         </Alert>
       ) : null}
 
       <Card>
         <CardHeader>
-          <CardTitle>Haftanın programı</CardTitle>
-          <CardDescription>Danışan atanan programı o gün Bugün ekranında görür.</CardDescription>
+          <CardTitle>{t.weekTitle}</CardTitle>
+          <CardDescription>{t.weekHint}</CardDescription>
         </CardHeader>
         <CardContent>
           <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -130,15 +138,14 @@ export default async function OwnProgramViewPage({ params }: { params: Promise<{
                   <div className="flex flex-col gap-1">
                     <div className="flex items-center justify-between gap-2">
                       <span className="font-medium break-words">{day.name}</span>
-                      {isNext ? <Badge>{upcoming?.date === today ? 'Bugün' : 'Sıradaki'}</Badge> : null}
+                      {isNext ? <Badge>{upcoming?.date === today ? t.today : t.next}</Badge> : null}
                     </div>
-                    <span className="text-sm text-muted-foreground">{weekdaysText(day.weekdays ?? []) || 'Gün atanmadı'}</span>
-                    <span className="text-sm tabular-nums text-muted-foreground">
-                      {formatNumber(summary.rows)} hareket · {formatNumber(summary.workingSets)} set · ≈ {formatNumber(summary.minutes)} dk
+                    <span className="text-sm text-muted-foreground">{weekdaysText(day.weekdays ?? [], locale) || t.noDays}</span>
+                    <span className="text-sm tabular-nums text-muted-foreground">{t.summary(summary.rows, summary.workingSets, summary.minutes)}
                     </span>
-                    {day.copiedFrom ? <span className="text-xs text-muted-foreground">Senin programından kopya: &apos;{day.copiedFrom.dayName}&apos;</span> : null}
+                    {day.copiedFrom ? <span className="text-xs text-muted-foreground">{t.copiedFrom(day.copiedFrom.dayName)}</span> : null}
                   </div>
-                  <DayPlan blocks={day.blocks} exercises={byId} missing="show" />
+                  <DayPlan blocks={day.blocks} exercises={byId} missing="show" locale={locale} />
                 </li>
               );
             })}
@@ -149,8 +156,8 @@ export default async function OwnProgramViewPage({ params }: { params: Promise<{
       {phase && load ? (
         <Card>
           <CardHeader>
-            <CardTitle>Kas yükü</CardTitle>
-            <CardDescription>Programın planlanan kas yükü.</CardDescription>
+            <CardTitle>{t.loadTitle}</CardTitle>
+            <CardDescription>{t.loadHint}</CardDescription>
           </CardHeader>
           <CardContent>
             <PhaseLoad
@@ -160,7 +167,7 @@ export default async function OwnProgramViewPage({ params }: { params: Promise<{
               daysPerWeek={phase.daysPerWeek}
               dayCount={phase.days.length}
               assigned={load.assigned}
-              label="Programın kas yükü"
+              label={t.loadLabel}
               done={null}
             />
           </CardContent>
@@ -169,8 +176,8 @@ export default async function OwnProgramViewPage({ params }: { params: Promise<{
 
       <Card>
         <CardHeader>
-          <CardTitle>Değişiklikler</CardTitle>
-          <CardDescription>Danışanın ve senin kayıtların, antrenmandan yazılanlar ve paylaşım.</CardDescription>
+          <CardTitle>{t.changesTitle}</CardTitle>
+          <CardDescription>{t.changesHint}</CardDescription>
         </CardHeader>
         <CardContent>
           <ChangeLog entries={program.log} timeZone={timeZone} initial={20} viewer="pt" />

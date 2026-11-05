@@ -11,6 +11,8 @@ import { AddDayMenu, DayChips } from './day-chips';
 import { FrequencySelect } from './frequency-select';
 import type { PhaseActions, ProgramFormStore } from './program-form';
 import { AssignmentSummary } from './weekday-field';
+import { useMessages } from '@/i18n/client';
+import { ptProgramMessages } from '@/i18n/messages/pt-program';
 
 /**
  * Evresiz program (Faz 3): "Haftanın programı" — her program haftanın günlerine atanır (seçili programın kartındaki
@@ -33,6 +35,7 @@ export function DaysCard({
   hasTemplates: boolean;
   actions: PhaseActions;
 }) {
+  const t = useMessages(ptProgramMessages).daysCard;
   const phasesArray = useFieldArray(form, { path: ['phases'] });
   const daysArray = useFieldArray(form, { path: ['phases', 0, 'days'] });
   const phase = phases[0];
@@ -41,15 +44,14 @@ export function DaysCard({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Haftanın programı</CardTitle>
+        <CardTitle>{t.title}</CardTitle>
         <CardDescription>
-          Her program haftanın günlerine atanır; danışan o gün Bugün ekranında onu görür, istediği gün başka birini de
-          yapabilir. Uyum, güç gibi dönemler için program evrelere bölünebilir.
+          {t.description}
         </CardDescription>
         <CardAction>
           <Button type="button" variant="outline" size="sm" onClick={() => actions.setPhased(true)}>
             <Rows data-icon="inline-start" />
-            Evrelere böl
+            {t.splitPhases}
           </Button>
         </CardAction>
       </CardHeader>
@@ -60,13 +62,13 @@ export function DaysCard({
             form={form}
             phaseIndex={0}
             id="program-frequency"
-            label="Haftada kaç gün"
-            description="Gün atanmamışsa danışanın haftalık hedefi bu sayıdır."
+            label={t.freqLabel}
+            description={t.freqHint}
             className="max-w-xs"
           />
         )}
         <div className="flex flex-col gap-1.5">
-          <span className="text-xs text-muted-foreground">Programlar</span>
+          <span className="text-xs text-muted-foreground">{t.programsLabel}</span>
           <DayChips
             form={form}
             phase={phase}
