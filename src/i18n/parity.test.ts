@@ -12,7 +12,7 @@ import { pathToFileURL } from 'node:url';
 
 const MESSAGES_DIR = join(import.meta.dirname, 'messages');
 /** İngilizce metinde Türkçe harf: unutulmuş çeviri. */
-const TURKISH = /[çğıİşÇĞŞ]/;
+const TURKISH = /[çğıİöşüÇĞÖŞÜ]/;
 /** İngilizcede geçebilecek Türkçe adlar (dil seçicinin "Türkçe"si gibi). */
 const ALLOW = [/Türkçe/g];
 

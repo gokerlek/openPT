@@ -1,4 +1,4 @@
-import { currentClientLocale } from '@/i18n/client';
+import { currentClientLocale } from '@/i18n/client-locale';
 import { commonMessages } from '@/i18n/messages/common';
 
 /**
