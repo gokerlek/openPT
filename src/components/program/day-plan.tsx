@@ -1,9 +1,11 @@
+import { DEFAULT_LOCALE, type Locale } from '@/i18n/locale';
+import { programEditorMessages } from '@/i18n/messages/program-editor';
 import { Badge } from '@/components/ui/badge';
 import { cardioKind } from '@/lib/cardio';
 import { groupWorkText, rowWorkText } from '@/lib/edit-messages';
 import { formatSets } from '@/lib/set-plan';
 import {
-  BLOCK_KIND_LABELS,
+  blockKindLabels,
   describeBlock,
   formatRest,
   groupSkipNote,
@@ -32,6 +34,7 @@ export function DayPlan({
   audience = 'pt',
   rowNotes,
   className,
+  locale = DEFAULT_LOCALE,
 }: {
   blocks: readonly TemplateBlock[];
   exercises: ReadonlyMap<string, Pick<PlanExercise, 'title' | 'trackingType' | 'pattern' | 'locomotion'>>;
@@ -39,7 +42,10 @@ export function DayPlan({
   audience?: 'pt' | 'client';
   rowNotes?: Readonly<Record<string, string>>;
   className?: string;
+  /** Metinlerin dili (sunucu ve istemci ortak; kancasız); yoksa Türkçe. */
+  locale?: Locale;
 }) {
+  const t = programEditorMessages(locale).dayPlan;
   const labels = rowLabels({ blocks });
   return (
     <ol className={cn('flex flex-col gap-3', className)}>
@@ -51,12 +57,12 @@ export function DayPlan({
             {block.kind !== 'single' ? (
               <div className="flex flex-col gap-1">
                 <div className="flex flex-wrap items-center gap-2">
-                  <Badge variant="secondary">{BLOCK_KIND_LABELS[block.kind]}</Badge>
+                  <Badge variant="secondary">{blockKindLabels(locale)[block.kind]}</Badge>
                   <span className="text-xs tabular-nums text-muted-foreground">
-                    {audience === 'pt' ? groupWorkText({ ...block, rows }, roundsOf({ rows })) : describeBlock({ ...block, sets: roundsOf({ rows }) })}
+                    {audience === 'pt' ? groupWorkText({ ...block, rows }, roundsOf({ rows }), locale) : describeBlock({ ...block, sets: roundsOf({ rows }) }, locale)}
                   </span>
                 </div>
-                {skipNote({ ...block, rows }, exercises)}
+                {skipNote({ ...block, rows }, exercises, locale)}
               </div>
             ) : null}
             {rows.map((row) => {
@@ -66,10 +72,10 @@ export function DayPlan({
               const cardio = exercise ? cardioKind(exercise) : null;
               const work =
                 audience === 'pt'
-                  ? rowWorkText(row.sets, trackingType, rest, cardio)
+                  ? rowWorkText(row.sets, trackingType, rest, cardio, locale)
                   : rest !== undefined && rest > 0
-                    ? `${formatSets(row.sets, trackingType, 'client', cardio)} · ${formatRest(rest)} dinlenme`
-                    : formatSets(row.sets, trackingType, 'client', cardio);
+                    ? t.workWithRest(formatSets(row.sets, trackingType, 'client', cardio, locale), formatRest(rest, locale))
+                    : formatSets(row.sets, trackingType, 'client', cardio, locale);
               return (
                 <div key={row.id} className="flex items-baseline gap-3">
                   <span className="w-6 shrink-0 text-sm font-medium tabular-nums text-muted-foreground">{labels.get(row.id)}</span>
@@ -78,13 +84,13 @@ export function DayPlan({
                       <span className="font-medium">{exercise.title}</span>
                     ) : (
                       <span className="font-medium text-destructive">
-                        Silinmiş egzersiz <span className="font-mono text-xs font-normal text-muted-foreground">{row.exerciseId}</span>
+                        {t.deletedExercise} <span className="font-mono text-xs font-normal text-muted-foreground">{row.exerciseId}</span>
                       </span>
                     )}
                     <span className="text-sm tabular-nums text-muted-foreground">{work}</span>
                     {rowNotes?.[row.id] ? (
                       <span className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-muted-foreground tabular-nums">
-                        <Badge variant="secondary">Danışan güncelledi</Badge>
+                        <Badge variant="secondary">{t.clientUpdated}</Badge>
                         {rowNotes[row.id]}
                       </span>
                     ) : null}
@@ -100,7 +106,7 @@ export function DayPlan({
   );
 }
 
-function skipNote(block: TemplateBlock, exercises: ReadonlyMap<string, Pick<PlanExercise, 'title'>>) {
-  const note = groupSkipNote(block, (row) => exercises.get(row.exerciseId)?.title ?? 'Silinmiş egzersiz');
+function skipNote(block: TemplateBlock, exercises: ReadonlyMap<string, Pick<PlanExercise, 'title'>>, locale: Locale) {
+  const note = groupSkipNote(block, (row) => exercises.get(row.exerciseId)?.title ?? programEditorMessages(locale).dayPlan.deletedExercise, locale);
   return note ? <span className="text-xs text-muted-foreground">{note}</span> : null;
 }

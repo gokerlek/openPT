@@ -1,6 +1,10 @@
 import { NextResponse } from 'next/server';
 import * as v from 'valibot';
-import { GithubError } from '@/lib/github/client';
+import { commonMessages } from '@/i18n/messages/common';
+import { localeFromRequest } from '@/i18n/locale';
+import { ptProgramMessages } from '@/i18n/messages/pt-program';
+import { langConfig } from '@/i18n/valibot';
+import { failureOf } from '@/lib/route-failure';
 import { switchPhase } from '@/lib/programs';
 import { clientIdSchema } from '@/lib/schemas/client';
 import { programPhaseSwitchSchema } from '@/lib/schemas/program';
@@ -12,33 +16,35 @@ import { readPtSession } from '@/lib/session';
  * yeniden oluşturulduysa oluşturulma anı tutmuyorsa) 412 döner.
  */
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  if ((await readPtSession())?.role !== 'pt') return NextResponse.json({ error: 'Bu işlem için yetkin yok.' }, { status: 403 });
+  const locale = localeFromRequest(request);
+  const t = ptProgramMessages(locale).apiRoutes;
+  if ((await readPtSession())?.role !== 'pt') return NextResponse.json({ error: commonMessages(locale).errors.status[403] }, { status: 403 });
   const { id } = await params;
-  if (!v.is(clientIdSchema, id)) return NextResponse.json({ error: 'Danışan bulunamadı.' }, { status: 404 });
+  if (!v.is(clientIdSchema, id)) return NextResponse.json({ error: t.clientNotFound }, { status: 404 });
 
-  const parsed = v.safeParse(programPhaseSwitchSchema, await request.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: 'İstek geçersiz.' }, { status: 400 });
+  const parsed = v.safeParse(programPhaseSwitchSchema, await request.json().catch(() => null), langConfig(locale));
+  if (!parsed.success) return NextResponse.json({ error: t.invalidRequest }, { status: 400 });
 
   try {
     const { phaseId, baseRevision, baseCreatedAt } = parsed.output;
-    const result = await switchPhase(id, phaseId, { revision: baseRevision, createdAt: baseCreatedAt });
+    const result = await switchPhase(id, phaseId, { revision: baseRevision, createdAt: baseCreatedAt }, locale);
     switch (result.status) {
       case 'saved':
         return NextResponse.json({ revision: result.revision });
       case 'unchanged':
         return NextResponse.json({ revision: result.revision, unchanged: true });
       case 'unknown':
-        return NextResponse.json({ error: 'Evre bulunamadı.' }, { status: 400 });
+        return NextResponse.json({ error: t.phaseNotFound }, { status: 400 });
       case 'missing':
-        return NextResponse.json({ error: 'Program bulunamadı; silinmiş olabilir.' }, { status: 404 });
+        return NextResponse.json({ error: t.programNotFoundMaybeDeleted }, { status: 404 });
       case 'stale':
         return NextResponse.json(
-          { error: 'Program bu arada başka bir yerde değişti; sayfayı yeniledim, öneriye yeniden bak.' },
+          { error: t.phaseStale },
           { status: 412 },
         );
     }
   } catch (error) {
-    const failure = error instanceof GithubError ? error : null;
-    return NextResponse.json({ error: failure?.message ?? 'Evre değiştirilemedi.' }, { status: failure?.status ?? 502 });
+    const { message, status } = failureOf(error, t.phaseSwitchFailed, locale);
+    return NextResponse.json({ error: message }, { status });
   }
 }

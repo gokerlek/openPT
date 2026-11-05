@@ -9,7 +9,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { discardDrafts } from '@/components/block-editor/editor-draft';
+import { discardDrafts } from '@/lib/draft-store';
 import { Button } from '@/components/ui/button';
 import { useMessages } from '@/i18n/client';
 import { clientHomeMessages } from '@/i18n/messages/client-home';

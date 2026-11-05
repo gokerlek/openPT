@@ -1,6 +1,8 @@
 import * as v from 'valibot';
 import { DEFAULT_LOCALE, type Locale } from '../../i18n/locale.ts';
 import { catalogMessages } from '../../i18n/messages/catalog/index.ts';
+import { libraryValidationMessages } from '../../i18n/messages/library-validation/index.ts';
+import { msg } from '../../i18n/valibot.ts';
 import { MOVEMENT_PATTERNS } from '../alternatives.ts';
 import { DEEP_MUSCLE_MAX, DEEP_MUSCLES } from '../deep-muscles.ts';
 import { parseCondition } from '../conditions.ts';
@@ -88,8 +90,16 @@ export const TRACKING_TYPES = ['weight_reps', 'bodyweight_reps', 'duration'] as 
 export const CATEGORIES = ['compound', 'isolation', 'conditioning', 'warmup', 'cooldown'] as const;
 export type Category = (typeof CATEGORIES)[number];
 
+/** Doğrulama mesajları (`msg`: şemayı ayrıştıran isteğin diliyle). */
+const text = (locale: Locale) => libraryValidationMessages(locale).exerciseSchema;
+
 const count = (max: number) =>
-  v.pipe(v.number('Sayı gir.'), v.integer('Tam sayı gir.'), v.minValue(1, 'En az 1.'), v.maxValue(max, `En fazla ${max}.`));
+  v.pipe(
+    v.number(msg((l) => text(l).enterNumber)),
+    v.integer(msg((l) => text(l).enterInteger)),
+    v.minValue(1, msg((l) => text(l).atLeast1)),
+    v.maxValue(max, msg((l) => text(l).atMost(max))),
+  );
 
 /**
  * İlerleme kuralı (`src/lib/progression.ts`): tür, hedef aralığı (tekrar ya da saniye)
@@ -98,16 +108,21 @@ const count = (max: number) =>
  */
 export const progressionSchema = v.pipe(
   v.object({
-    scheme: v.picklist(PROGRESSION_SCHEMES, 'Geçerli bir ilerleme türü seç.'),
+    scheme: v.picklist(PROGRESSION_SCHEMES, msg((l) => text(l).pickProgression)),
     targetMin: count(3600),
     targetMax: count(3600),
-    targetRir: v.pipe(v.number('Sayı gir.'), v.integer('Tam sayı gir.'), v.minValue(0, 'En az 0.'), v.maxValue(4, 'En fazla 4.')),
+    targetRir: v.pipe(
+      v.number(msg((l) => text(l).enterNumber)),
+      v.integer(msg((l) => text(l).enterInteger)),
+      v.minValue(0, msg((l) => text(l).atLeast0)),
+      v.maxValue(4, msg((l) => text(l).atMost4)),
+    ),
   }),
   v.forward(
     v.partialCheck(
       [['targetMin'], ['targetMax']],
       (rule) => rule.targetMax >= rule.targetMin,
-      'Üst sınır alt sınırdan küçük olamaz.',
+      msg((l) => text(l).upperBelowLower),
     ),
     ['targetMax'],
   ),
@@ -116,24 +131,24 @@ export const progressionSchema = v.pipe(
 /** "lumbar_disc_herniation" ya da "lumbar_disc_herniation:acute"; sözlükte olmalı. */
 const conditionRef = v.pipe(
   v.string(),
-  v.check((value) => parseCondition(value) !== null, 'Bilinmeyen kısıt kimliği.'),
+  v.check((value) => parseCondition(value) !== null, msg((l) => text(l).unknownLimitation)),
 );
 
 export const exerciseSchema = v.object({
   /** Okunabilir kimlik (slug). Şablonlar ve set kayıtları buna bakar; değiştirilmez. */
-  id: v.pipe(v.string(), v.regex(/^[a-z0-9-]{2,60}$/, 'Kimlik yalnız küçük harf, rakam ve tire içerebilir.')),
-  title: v.pipe(v.string(), v.trim(), v.minLength(2, 'Egzersiz adı çok kısa.'), v.maxLength(60)),
-  description: v.pipe(v.string(), v.trim(), v.maxLength(400, 'Açıklama en fazla 400 karakter.')),
+  id: v.pipe(v.string(), v.regex(/^[a-z0-9-]{2,60}$/, msg((l) => text(l).idChars))),
+  title: v.pipe(v.string(), v.trim(), v.minLength(2, msg((l) => text(l).titleShort)), v.maxLength(60)),
+  description: v.pipe(v.string(), v.trim(), v.maxLength(400, msg((l) => text(l).descriptionMax))),
   /** Harekete başlarken hatırlatılacak kısa maddeler. */
   cues: v.pipe(
-    v.array(v.pipe(v.string(), v.trim(), v.maxLength(120, 'İpucu en fazla 120 karakter.'))),
+    v.array(v.pipe(v.string(), v.trim(), v.maxLength(120, msg((l) => text(l).cueMax)))),
     // Formda boş bırakılan satırlar kayda girmesin.
     v.transform((items) => items.filter((item) => item.length > 0)),
-    v.maxLength(6, 'En fazla 6 ipucu.'),
+    v.maxLength(6, msg((l) => text(l).cuesMax)),
   ),
-  category: v.picklist(CATEGORIES, 'Geçerli bir tür seç.'),
-  trackingType: v.picklist(TRACKING_TYPES, 'Geçerli bir kayıt türü seç.'),
-  equipment: v.picklist(EQUIPMENT, 'Geçerli bir ekipman seç.'),
+  category: v.picklist(CATEGORIES, msg((l) => text(l).pickCategory)),
+  trackingType: v.picklist(TRACKING_TYPES, msg((l) => text(l).pickTracking)),
+  equipment: v.picklist(EQUIPMENT, msg((l) => text(l).pickEquipment)),
   /**
    * Hareketin yapıldığı cihaz (`src/data/device-library.ts` ya da PT'nin cihazı). Varsa
    * ağırlık önerileri cihazın ayarlanabilen ağırlıklarından seçilir; `loadStepKg` ve
@@ -146,39 +161,39 @@ export const exerciseSchema = v.object({
    * Biyomekanik etiketler — sakatlık süzgeci bunlara bakar (`src/lib/exercise-filter.ts`).
    * Hepsi isteğe bağlı: etiketlenmemiş hareket süzülmez, uygulama bunu açıkça söyler.
    */
-  kineticChain: v.optional(v.picklist(KINETIC_CHAINS, 'Zincir tipini seç.')),
-  axialLoading: v.optional(v.picklist(AXIAL_LOADS, 'Eksenel yükü seç.')),
-  shearForce: v.optional(v.picklist(SHEAR_LEVELS, 'Kesme kuvvetini seç.')),
-  spinalAlignment: v.optional(v.picklist(SPINAL_ALIGNMENTS, 'Omurga hizasını seç.')),
+  kineticChain: v.optional(v.picklist(KINETIC_CHAINS, msg((l) => text(l).pickChain))),
+  axialLoading: v.optional(v.picklist(AXIAL_LOADS, msg((l) => text(l).pickAxial))),
+  shearForce: v.optional(v.picklist(SHEAR_LEVELS, msg((l) => text(l).pickShear))),
+  spinalAlignment: v.optional(v.picklist(SPINAL_ALIGNMENTS, msg((l) => text(l).pickAlignment))),
   /** Hareketin geçtiği kritik açı pencereleri: hareketi yasaklamak yerine aralığı kısmak için. */
-  jointWindows: v.optional(v.pipe(v.array(v.picklist(JOINT_WINDOWS)), v.maxLength(6, 'En fazla 6 açı penceresi.'))),
-  loadVector: v.optional(v.picklist(LOAD_VECTORS, 'Yük vektörünü seç.')),
-  contractionType: v.optional(v.picklist(CONTRACTION_TYPES, 'Kasılma tipini seç.')),
-  resistanceProfile: v.optional(v.picklist(RESISTANCE_PROFILES, 'Direnç profilini seç.')),
+  jointWindows: v.optional(v.pipe(v.array(v.picklist(JOINT_WINDOWS)), v.maxLength(6, msg((l) => text(l).windowsMax)))),
+  loadVector: v.optional(v.picklist(LOAD_VECTORS, msg((l) => text(l).pickVector))),
+  contractionType: v.optional(v.picklist(CONTRACTION_TYPES, msg((l) => text(l).pickContraction))),
+  resistanceProfile: v.optional(v.picklist(RESISTANCE_PROFILES, msg((l) => text(l).pickProfile))),
   /** Yük altında omuz iç rotasyonda mı (upright row, empty can). */
   internalRotationUnderLoad: v.optional(v.boolean()),
   /** Bu hareketin yaptırılmayacağı kısıtlar ("lumbar_disc_herniation:acute"). */
-  contraindications: v.optional(v.pipe(v.array(conditionRef), v.maxLength(12, 'En fazla 12 kısıt.'))),
+  contraindications: v.optional(v.pipe(v.array(conditionRef), v.maxLength(12, msg((l) => text(l).limitationsMax)))),
   /** PT'nin "bunda sorun yok" dediği kısıtlar: uyarıyı susturur, yasağı susturmaz. */
-  safeFor: v.optional(v.pipe(v.array(conditionRef), v.maxLength(12, 'En fazla 12 kısıt.'))),
+  safeFor: v.optional(v.pipe(v.array(conditionRef), v.maxLength(12, msg((l) => text(l).limitationsMax)))),
   /**
    * Derin/stabilizatör aktivasyon hedefleri (`src/lib/deep-muscles.ts`): rotator manşet,
    * multifidus, pelvik taban… Haritada çizilmez ve **haftalık hacme girmez**; düzeltici
    * çalışmada "bu hareket şunu uyandırır" demek için.
    */
   activationTargets: v.optional(
-    v.pipe(v.array(v.picklist(DEEP_MUSCLES, 'Geçerli bir derin kas seç.')), v.maxLength(DEEP_MUSCLE_MAX, `En fazla ${DEEP_MUSCLE_MAX} aktivasyon hedefi.`)),
+    v.pipe(v.array(v.picklist(DEEP_MUSCLES, msg((l) => text(l).pickDeepMuscle))), v.maxLength(DEEP_MUSCLE_MAX, msg((l) => text(l).activationMax(DEEP_MUSCLE_MAX)))),
   ),
   /** Tutuş: pronasyon/supinasyon/nötr/karışık ve genişlik (`src/lib/grips.ts`). */
-  grip: v.optional(v.picklist(GRIPS, 'Geçerli bir tutuş seç.')),
-  gripWidth: v.optional(v.picklist(GRIP_WIDTHS, 'Geçerli bir tutuş genişliği seç.')),
+  grip: v.optional(v.picklist(GRIPS, msg((l) => text(l).pickGrip))),
+  gripWidth: v.optional(v.picklist(GRIP_WIDTHS, msg((l) => text(l).pickGripWidth))),
   /** Hareket kalıbı (yatay itiş, squat…): muadil önerisinin ilk ölçütü (`src/lib/alternatives.ts`). */
-  pattern: v.optional(v.picklist(MOVEMENT_PATTERNS, 'Hareket kalıbını seç.')),
+  pattern: v.optional(v.picklist(MOVEMENT_PATTERNS, msg((l) => text(l).pickPattern))),
   /** Yürüyüş/koşu (koşu bandı): kardiyo hareketinde eğim ve kalori (`src/lib/cardio.ts`). */
   locomotion: v.optional(v.boolean()),
   /** PT'nin sabitlediği muadiller (egzersiz kimlikleri); önerilerde en başta gelir. */
   alternatives: v.optional(
-    v.pipe(v.array(v.pipe(v.string(), v.regex(/^[a-z0-9-]{2,60}$/))), v.maxLength(12, 'En fazla 12 muadil sabitlenebilir.')),
+    v.pipe(v.array(v.pipe(v.string(), v.regex(/^[a-z0-9-]{2,60}$/))), v.maxLength(12, msg((l) => text(l).alternativesMax))),
   ),
   /**
    * Kasın bu hareketteki payı üç seviyede: hedef, yardımcı, dengeleyici (haftalık yükte
@@ -186,14 +201,14 @@ export const exerciseSchema = v.object({
    * hedef olabilir. Bir kas yalnız bir seviyede bulunur; form ve sunucu ayırır.
    */
   primaryMuscles: v.pipe(
-    v.array(v.picklist(MUSCLES, 'Geçerli bir kas seç.')),
-    v.minLength(1, 'En az bir hedef kas seç.'),
-    v.maxLength(8, 'En fazla 8 hedef kas seçilebilir.'),
+    v.array(v.picklist(MUSCLES, msg((l) => text(l).pickMuscle))),
+    v.minLength(1, msg((l) => text(l).primaryMin)),
+    v.maxLength(8, msg((l) => text(l).primaryMax)),
   ),
-  secondaryMuscles: v.pipe(v.array(v.picklist(MUSCLES, 'Geçerli bir kas seç.')), v.maxLength(10, 'En fazla 10 yardımcı kas seçilebilir.')),
+  secondaryMuscles: v.pipe(v.array(v.picklist(MUSCLES, msg((l) => text(l).pickMuscle))), v.maxLength(10, msg((l) => text(l).secondaryMax))),
   /** Hareketi taşımayan ama gövdeyi sabit tutan kaslar (squat'ta karın, plank'ta omuz). */
   stabilizerMuscles: v.optional(
-    v.pipe(v.array(v.picklist(MUSCLES, 'Geçerli bir kas seç.')), v.maxLength(10, 'En fazla 10 dengeleyici kas seçilebilir.')),
+    v.pipe(v.array(v.picklist(MUSCLES, msg((l) => text(l).pickMuscle))), v.maxLength(10, msg((l) => text(l).stabilizerMax))),
     [],
   ),
   /**
@@ -201,17 +216,17 @@ export const exerciseSchema = v.object({
    * Ne kadar artacağını danışanın performansı belirler; öneri bu adıma yuvarlanır.
    * Taban: barın/aletin kendi ağırlığı; öneri bunun altına inmez.
    */
-  loadStepKg: v.pipe(v.number('Sayı gir.'), v.minValue(0, 'Negatif olamaz.'), v.maxValue(50, 'En fazla 50 kg.')),
-  minLoadKg: v.pipe(v.number('Sayı gir.'), v.minValue(0, 'Negatif olamaz.'), v.maxValue(500, 'En fazla 500 kg.')),
+  loadStepKg: v.pipe(v.number(msg((l) => text(l).enterNumber)), v.minValue(0, msg((l) => text(l).nonNegative)), v.maxValue(50, msg((l) => text(l).stepMax))),
+  minLoadKg: v.pipe(v.number(msg((l) => text(l).enterNumber)), v.minValue(0, msg((l) => text(l).nonNegative)), v.maxValue(500, msg((l) => text(l).minLoadMax))),
   progression: v.optional(progressionSchema),
   video: v.optional(
     v.pipe(
       v.object({
-        provider: v.picklist(['youtube', 'vimeo'], 'Video sağlayıcı YouTube ya da Vimeo olabilir.'),
+        provider: v.picklist(['youtube', 'vimeo'], msg((l) => text(l).videoProvider)),
         /** Video kimliği; gömme adresi buradan kurulur, medya barındırmıyoruz (`src/lib/video.ts`). */
         id: v.pipe(v.string(), v.trim(), v.maxLength(64)),
       }),
-      v.check(isValidVideoId, 'Video kimliği geçersiz.'),
+      v.check(isValidVideoId, msg((l) => text(l).videoId)),
     ),
   ),
 });
@@ -227,7 +242,7 @@ export type Exercise = v.InferOutput<typeof exerciseSchema>;
 export const exerciseFormSchema = v.object({
   // Sabitlenen muadiller detay sayfasındaki karttan yönetilir; form onlara dokunmaz.
   ...v.omit(exerciseSchema, ['id', 'video', 'alternatives']).entries,
-  pattern: v.picklist(MOVEMENT_PATTERNS, 'Hareket kalıbını seç.'),
+  pattern: v.picklist(MOVEMENT_PATTERNS, msg((l) => text(l).pickPattern)),
   // Formda kural her zaman açık yazılır (varsayılan da olsa); egzersizde isteğe bağlı.
   progression: progressionSchema,
   videoUrl: v.pipe(
@@ -235,7 +250,7 @@ export const exerciseFormSchema = v.object({
     v.trim(),
     v.check(
       (value) => value === '' || parseVideoUrl(value) !== null,
-      'Bu bağlantıyı tanıyamadım. YouTube ya da Vimeo video bağlantısı yapıştır.',
+      msg((l) => text(l).videoLink),
     ),
   ),
 });

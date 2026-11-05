@@ -9,14 +9,22 @@ import { displayDays, blankDay, canAddDay, copyDay, programIdSource, addDay, typ
 import { weekdayNamesText, weekdaysText } from '@/lib/training-days';
 import { cn } from '@/lib/utils';
 import type { PhaseActions, ProgramFormStore } from './program-form';
+import { useLocale, useMessages } from '@/i18n/client';
+import { ptProgramMessages } from '@/i18n/messages/pt-program';
 
 /** Evreye program eklenir: evreyi güncel hâlinden bulur, yeni programı seçer. */
-function addDayTo(actions: PhaseActions, phaseId: string, make: (phase: ProgramPhase, all: ProgramPhase[]) => ProgramPhase['days'][number], after?: string) {
+function addDayTo(
+  actions: PhaseActions,
+  phaseId: string,
+  make: (phase: ProgramPhase, all: ProgramPhase[]) => ProgramPhase['days'][number],
+  announce: (name: string) => string,
+  after?: string,
+) {
   const all = actions.current();
   const phase = all.find((item) => item.id === phaseId);
   if (!phase) return;
   const day = make(phase, all);
-  actions.update((phasesNow) => addDay(phasesNow, phaseId, day, after), { select: day.id, announce: `${day.name} eklendi` });
+  actions.update((phasesNow) => addDay(phasesNow, phaseId, day, after), { select: day.id, announce: announce(day.name) });
 }
 
 /** "+ Program": boş program, şablondan, seçili programın kopyası (kopya ve yeni program atamasız gelir). */
@@ -35,23 +43,25 @@ export function AddDayMenu({
   hasTemplates: boolean;
   actions: PhaseActions;
 }) {
+  const t = useMessages(ptProgramMessages).dayChips;
+  const locale = useLocale();
   const selectedHere = phase.days.find((day) => day.id === selectedDayId);
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
         disabled={!canAddDay(phases, phase.id)}
-        render={<Button type="button" variant="outline" size="sm" aria-label={phased ? `'${phase.name}' evresine program ekle` : 'Program ekle'} />}>
+        render={<Button type="button" variant="outline" size="sm" aria-label={phased ? t.addToPhase(phase.name) : t.addAria} />}>
         <Plus data-icon="inline-start" />
-        Program
+        {t.trigger}
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="min-w-52 touch:**:data-[slot=dropdown-menu-item]:min-h-11 touch:**:data-[slot=dropdown-menu-sub-trigger]:min-h-11">
-        <DropdownMenuItem onClick={() => addDayTo(actions, phase.id, (target, all) => blankDay(target, programIdSource(all)))}>
+        <DropdownMenuItem onClick={() => addDayTo(actions, phase.id, (target, all) => blankDay(target, programIdSource(all), locale), t.added)}>
           <Square />
-          Boş program
+          {t.blank}
         </DropdownMenuItem>
         <DropdownMenuItem disabled={!hasTemplates} onClick={() => actions.openAddDay(phase.id)}>
           <FileText />
-          {hasTemplates ? 'Şablondan…' : 'Şablondan… (şablon yok)'}
+          {hasTemplates ? t.fromTemplate : t.fromTemplateNone}
         </DropdownMenuItem>
         {selectedHere ? (
           <DropdownMenuItem
@@ -61,13 +71,14 @@ export function AddDayMenu({
                 phase.id,
                 (target, all) => {
                   const source = target.days.find((day) => day.id === selectedHere.id) ?? selectedHere;
-                  return copyDay(target, source, programIdSource(all));
+                  return copyDay(target, source, programIdSource(all), locale);
                 },
+                t.added,
                 selectedHere.id,
               )
             }>
             <Copy />
-            Seçili programın kopyası
+            {t.copySelected}
           </DropdownMenuItem>
         ) : null}
       </DropdownMenuContent>
@@ -99,6 +110,8 @@ export function DayChips({
   actions: PhaseActions;
   children?: React.ReactNode;
 }) {
+  const t = useMessages(ptProgramMessages).dayChips;
+  const locale = useLocale();
   return (
     <div className="flex flex-wrap gap-2">
       {displayDays(phase.days).map((day) => {
@@ -114,7 +127,7 @@ export function DayChips({
             size="sm"
             variant={selected ? 'default' : 'outline'}
             aria-pressed={selected}
-            aria-label={`${phased ? `${phase.name} · ` : ''}${day.name}, ${weekdayNamesText(assigned) || 'gün atanmadı'}${failing ? ', hatalı' : ''}`}
+            aria-label={`${phased ? `${phase.name} · ` : ''}${day.name}, ${weekdayNamesText(assigned, locale) || t.noDays}${failing ? t.failing : ''}`}
             className={cn('max-w-full', failing && 'ring-2 ring-destructive')}
             onClick={() => actions.select(day.id)}>
             {failing ? <WarningCircle data-icon="inline-start" className="text-destructive" /> : null}
@@ -122,7 +135,7 @@ export function DayChips({
             {assigned.length > 0 ? (
               // Seçili (dolu) çipte soluk gri okunmaz: yazının kendi rengi biraz açılır.
               <span className={cn('shrink-0 text-xs font-normal', selected ? 'opacity-80' : 'text-muted-foreground')} aria-hidden>
-                {weekdaysText(assigned)}
+                {weekdaysText(assigned, locale)}
               </span>
             ) : null}
           </Button>

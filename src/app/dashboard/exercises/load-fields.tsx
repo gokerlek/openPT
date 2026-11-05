@@ -9,11 +9,15 @@ import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui
 import { Input } from '@/components/ui/input';
 import { Toggle } from '@/components/ui/toggle';
 import { loadSpecFor } from '@/lib/device-loads';
-import { formatNumber } from '@/lib/format';
-import { defaultRule, describeRule, PROGRESSION_LABELS, RIR_LABELS, type ProgressionRule } from '@/lib/progression';
+import { getFormat } from '@/lib/format';
+import { defaultRule, describeRule, progressionLabels, rirLabels, type ProgressionRule } from '@/lib/progression';
 import type { Device } from '@/lib/schemas/device';
-import type { exerciseFormSchema, TRACKING_TYPES } from '@/lib/schemas/exercise';
-import { describeDefaultRule, deviceLoadFields, LIBRARY_IMPACT_NOTE, sameRule } from './exercise-form-logic';
+import type { exerciseFormSchema } from '@/lib/schemas/exercise';
+import { describeDefaultRule, deviceLoadFields, libraryImpactNote, sameRule } from './exercise-form-logic';
+import { useLocale, useMessages } from '@/i18n/client';
+import { catalogMessages } from '@/i18n/messages/catalog';
+import { ptLibraryMessages } from '@/i18n/messages/pt-library';
+import { commonMessages } from '@/i18n/messages/common';
 
 /**
  * "Yük ve ilerleme": kayıt türü, ağırlık adımı ve taban, ilerleme kuralı (SPEC §7.1).
@@ -24,24 +28,14 @@ import { describeDefaultRule, deviceLoadFields, LIBRARY_IMPACT_NOTE, sameRule } 
  */
 
 type Form = ReturnType<typeof useForm<typeof exerciseFormSchema>>;
-type TrackingType = (typeof TRACKING_TYPES)[number];
-
-const TRACKING_LABELS: Record<TrackingType, string> = {
-  weight_reps: 'Ağırlık + tekrar',
-  bodyweight_reps: 'Vücut ağırlığı (tekrar)',
-  duration: 'Süre',
-};
-
-const RIR_ITEMS: Record<string, string> = Object.fromEntries(
-  Object.entries(RIR_LABELS).map(([rir, label]) => [rir, rir === '2' ? `${label} (önerilen)` : label]),
-);
 
 /** Kütüphanedeki değişikliğin şablon ve programlara geçtiğini söyleyen satır. */
 export function LibraryImpactNote() {
+  const locale = useLocale();
   return (
     <p role="status" className="flex items-start gap-2 text-sm text-muted-foreground">
       <Info aria-hidden className="mt-0.5 size-4 shrink-0" />
-      {LIBRARY_IMPACT_NOTE}
+      {libraryImpactNote(locale)}
     </p>
   );
 }
@@ -91,37 +85,41 @@ function NumberField({
 
 /** Ağırlık adımı ve taban: cihazdan (salt okunur) ya da egzersizin kendi değerleri. */
 function LoadStep({ form, deviceById }: { form: Form; deviceById: ReadonlyMap<string, Device> }) {
+  const t = useMessages(ptLibraryMessages).loadFields;
+  const locale = useLocale();
+  const format = getFormat(locale);
   return (
     <FormField of={form} path={['deviceId']}>
       {(deviceField) => {
         const device = deviceField.input ? deviceById.get(deviceField.input) : undefined;
-        const fromDevice = deviceLoadFields(device);
+        const fromDevice = deviceLoadFields(device, locale);
         if (device && fromDevice) {
           return (
             <div className="grid gap-4 sm:grid-cols-2">
               <Field>
-                <FieldLabel htmlFor="loadStepKg">Ağırlık adımı (kg)</FieldLabel>
+                <FieldLabel htmlFor="loadStepKg">{t.stepLabel}</FieldLabel>
                 <Input
                   id="loadStepKg"
                   readOnly
                   aria-describedby="load-from-device"
                   className="bg-muted/50 text-muted-foreground tabular-nums dark:bg-muted/50"
-                  value={fromDevice.stepKg === null ? 'Setteki ağırlıklar' : formatNumber(fromDevice.stepKg)}
+                  value={fromDevice.stepKg === null ? t.setWeights : format.number(fromDevice.stepKg)}
                 />
               </Field>
               <Field>
-                <FieldLabel htmlFor="minLoadKg">Taban ağırlık (kg)</FieldLabel>
+                <FieldLabel htmlFor="minLoadKg">{t.baseLabel}</FieldLabel>
                 <Input
                   id="minLoadKg"
                   readOnly
                   aria-describedby="load-from-device"
                   className="bg-muted/50 text-muted-foreground tabular-nums dark:bg-muted/50"
-                  value={formatNumber(fromDevice.minKg)}
+                  value={format.number(fromDevice.minKg)}
                 />
               </Field>
               <FieldDescription id="load-from-device" className="sm:col-span-2">
-                Cihazın ayarından geliyor: {device.name} · {fromDevice.summary}. Değiştirmek için{' '}
-                <Link href={`/dashboard/devices/${device.id}`}>cihazı gör</Link>.
+                {t.deviceNote.lead(device.name, fromDevice.summary)}
+                <Link href={`/dashboard/devices/${device.id}`}>{t.seeEquipment}</Link>
+                {t.deviceNote.tail}
               </FieldDescription>
             </div>
           );
@@ -131,16 +129,16 @@ function LoadStep({ form, deviceById }: { form: Form; deviceById: ReadonlyMap<st
             <NumberField
               form={form}
               path={['loadStepKg']}
-              label="Ağırlık adımı (kg)"
-              description="Aletin izin verdiği en küçük artış; öneriler bu adıma yuvarlanır."
+              label={t.stepLabel}
+              description={t.stepHint}
               step="0.5"
               min="0"
             />
             <NumberField
               form={form}
               path={['minLoadKg']}
-              label="Taban ağırlık (kg)"
-              description="Bar ya da aletin kendi ağırlığı; öneri bunun altına inmez."
+              label={t.baseLabel}
+              description={t.baseHint}
               step="0.5"
               min="0"
             />
@@ -153,6 +151,8 @@ function LoadStep({ form, deviceById }: { form: Form; deviceById: ReadonlyMap<st
 
 /** Süreli kardiyo harekette (deseni kardiyo) yürüyüş/koşu anahtarı: eğim ve kalori (`cardio.ts`). */
 function LocomotionField({ form }: { form: Form }) {
+  const t = useMessages(ptLibraryMessages).loadFields;
+  const common = useMessages(commonMessages);
   return (
     <FormField of={form} path={['pattern']}>
       {(patternField) =>
@@ -160,18 +160,18 @@ function LocomotionField({ form }: { form: Form }) {
           <FormField of={form} path={['locomotion']}>
             {(field) => (
               <Field>
-                <FieldLabel htmlFor="locomotion">Yürüyüş/koşu: eğim ve kalori</FieldLabel>
+                <FieldLabel htmlFor="locomotion">{t.walkLabel}</FieldLabel>
                 <div>
                   <Toggle
                     id="locomotion"
                     variant="outline"
                     pressed={field.input === true}
                     onPressedChange={(pressed) => setInput(form, { path: ['locomotion'], input: pressed })}>
-                    {field.input === true ? 'Açık' : 'Kapalı'}
+                    {field.input === true ? common.states.on : common.states.off}
                   </Toggle>
                 </div>
                 <FieldDescription>
-                  Açıksa hedefe mesafenin yanında eğim de yazılır; danışan eğimi girer, kalori danışanın kilosundan hesaplanır.
+                  {t.walkHint}
                 </FieldDescription>
               </Field>
             )}
@@ -194,20 +194,27 @@ export function LoadFields({
   /** Düzenlemede açılıştaki kural: değişirse şablon ve programlara etkisi söylenir. Yenide yok. */
   startRule?: ProgressionRule;
 }) {
+  const t = useMessages(ptLibraryMessages).loadFields;
+  const locale = useLocale();
+  const trackingLabels = ptLibraryMessages(locale).trackingTypes;
+  const time = catalogMessages(locale).time;
+  const rirItems: Record<string, string> = Object.fromEntries(
+    Object.entries(rirLabels(locale)).map(([rir, label]) => [rir, rir === '2' ? t.recommended(label) : label]),
+  );
   return (
     <FormField of={form} path={['trackingType']}>
       {(trackingField) => {
         const tracking = trackingField.input ?? 'weight_reps';
-        const unit = tracking === 'duration' ? 'sn' : 'tekrar';
+        const unit = tracking === 'duration' ? time.secondsUnit : time.reps(2);
         return (
           <div className="flex flex-col gap-5">
             <div className="grid gap-4 sm:grid-cols-2">
               <Field>
-                <FieldLabel htmlFor="trackingType">Kayıt türü</FieldLabel>
+                <FieldLabel htmlFor="trackingType">{t.trackingLabel}</FieldLabel>
                 <LabeledSelect
                   id="trackingType"
                   value={trackingField.input}
-                  labels={TRACKING_LABELS}
+                  labels={trackingLabels}
                   onChange={(value) => {
                     setInput(form, { path: ['trackingType'], input: value });
                     // Birim değişir (tekrar ↔ saniye): aralık yeni türün varsayılanına döner.
@@ -215,7 +222,7 @@ export function LoadFields({
                     setInput(form, { path: ['progression'], input: defaultRule(category, value) });
                   }}
                 />
-                <FieldDescription>Danışan bu harekette ne girer: ağırlık + tekrar, yalnız tekrar, süre.</FieldDescription>
+                <FieldDescription>{t.trackingHint}</FieldDescription>
               </Field>
             </div>
 
@@ -226,11 +233,11 @@ export function LoadFields({
               <FormField of={form} path={['progression', 'scheme']}>
                 {(field) => (
                   <Field>
-                    <FieldLabel htmlFor="progressionScheme">İlerleme</FieldLabel>
+                    <FieldLabel htmlFor="progressionScheme">{t.progressionLabel}</FieldLabel>
                     <LabeledSelect
                       id="progressionScheme"
                       value={field.input}
-                      labels={PROGRESSION_LABELS}
+                      labels={progressionLabels(locale)}
                       onChange={(value) => setInput(form, { path: ['progression', 'scheme'], input: value })}
                     />
                   </Field>
@@ -240,22 +247,22 @@ export function LoadFields({
                 <FormField of={form} path={['progression', 'targetRir']}>
                   {(field) => (
                     <Field>
-                      <FieldLabel htmlFor="targetRir">Yedekte tekrar (RIR)</FieldLabel>
+                      <FieldLabel htmlFor="targetRir">{t.rirLabel}</FieldLabel>
                       <LabeledSelect
                         id="targetRir"
                         value={String(field.input ?? 2)}
-                        labels={RIR_ITEMS}
+                        labels={rirItems}
                         onChange={(value) => setInput(form, { path: ['progression', 'targetRir'], input: Number(value) })}
                       />
                       <FieldDescription>
-                        Setin sonunda kaç tekrar daha yapabilirdi; öneri motoru buna göre artırır.
+                        {t.rirHint}
                       </FieldDescription>
                     </Field>
                   )}
                 </FormField>
               ) : null}
-              <NumberField form={form} path={['progression', 'targetMin']} label={`Hedef en az (${unit})`} step="1" min="1" />
-              <NumberField form={form} path={['progression', 'targetMax']} label={`Hedef en çok (${unit})`} step="1" min="1" />
+              <NumberField form={form} path={['progression', 'targetMin']} label={t.targetMin(unit)} step="1" min="1" />
+              <NumberField form={form} path={['progression', 'targetMax']} label={t.targetMax(unit)} step="1" min="1" />
             </div>
 
             {/* Kuralın düz cümleyle anlatımı, türün varsayılanı ve kütüphane etkisi. */}
@@ -281,11 +288,11 @@ export function LoadFields({
                         const complete = rule && rule.targetMin > 0 && rule.targetMax > 0;
                         return (
                           <div className="flex flex-col gap-3 text-sm">
-                            {complete ? <p className="text-muted-foreground">{describeRule(rule, spec)}</p> : null}
+                            {complete ? <p className="text-muted-foreground">{describeRule(rule, spec, locale)}</p> : null}
                             <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
                               <p className="text-muted-foreground">
-                                {describeDefaultRule(category, tracking)}
-                                {isDefault ? ' (kullanılıyor).' : '.'}
+                                {describeDefaultRule(category, tracking, locale)}
+                                {isDefault ? t.inUse : '.'}
                               </p>
                               {isDefault ? null : (
                                 <Button
@@ -294,7 +301,7 @@ export function LoadFields({
                                   size="sm"
                                   onClick={() => setInput(form, { path: ['progression'], input: fallback })}>
                                   <ArrowCounterClockwise data-icon="inline-start" />
-                                  Varsayılan kuralı kullan
+                                  {t.useDefault}
                                 </Button>
                               )}
                             </div>

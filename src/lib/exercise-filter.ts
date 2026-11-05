@@ -1,4 +1,5 @@
-import type { Locale } from '../i18n/locale.ts';
+import { DEFAULT_LOCALE, type Locale } from '../i18n/locale.ts';
+import { exerciseFilterMessages } from '../i18n/messages/exercise-filter/index.ts';
 import {
   conditionInfo,
   type ClientCondition,
@@ -137,14 +138,14 @@ export type FilterContext = {
  * satırında bir kez söylenir. Greft tipi ve topuk sabit bilgidir (ameliyatın ve hareketin yapılışının),
  * eksikse kural kartta sayılır.
  */
-export const CONTEXT_LABELS = {
-  weeksPostOp: 'ameliyat haftası',
-  symptomDirection: 'semptom yönü',
-  tendinopathyStage: 'tendinopati evresi',
-  plannedReps: 'planlanan tekrar',
-  hoursSinceWaking: 'uyanmadan geçen süre',
-} as const satisfies Partial<Record<keyof FilterContext, string>>;
-export type TimedContext = keyof typeof CONTEXT_LABELS;
+export type TimedContext = 'weeksPostOp' | 'symptomDirection' | 'tendinopathyStage' | 'plannedReps' | 'hoursSinceWaking';
+
+export function contextLabels(locale: Locale = DEFAULT_LOCALE): Record<TimedContext, string> {
+  return exerciseFilterMessages(locale).exerciseFilter.contextLabels;
+}
+
+/** Türkçe adlar (eski çağrılar); arayüz `contextLabels(locale)` kullanır. */
+export const CONTEXT_LABELS: Record<TimedContext, string> = contextLabels('tr');
 
 export const DECISIONS = ['block', 'warn', 'cue'] as const;
 export type Decision = (typeof DECISIONS)[number];
@@ -157,12 +158,12 @@ export type Finding = {
   rule: string;
 };
 
+/** Gerekçe metni kuralda değil, sözlükte kuralın kimliğiyle durur (`exerciseFilter.rules`). */
 type Rule = {
   id: string;
   /** Hangi kısıt için; 'any' her kısıtta çalışır. */
   condition: ConditionId;
   decision: Decision;
-  message: string;
   /** Yalnız bu niteleyicilerde geçerli (boşsa hepsinde). */
   qualifiers?: readonly ConditionQualifier[];
   /**
@@ -228,21 +229,18 @@ export const RULES: readonly Rule[] = [
     id: 'disc-flexion-rotation',
     condition: 'lumbar_disc_herniation',
     decision: 'block',
-    message: 'Yüklü fleksiyon + rotasyon birleşimi diskte en riskli yüklemedir; anti-rotasyon hareketiyle değiştir.',
     match: (tags) => (tags.spinalAlignment === undefined ? null : tags.spinalAlignment === 'flexion_with_rotation'),
   },
   {
     id: 'disc-loaded-flexion',
     condition: 'lumbar_disc_herniation',
     decision: 'block',
-    message: 'Omurga fleksiyondayken orta/yüksek eksenel yük var; nötr omurgalı bir varyanta geç.',
     match: (tags) => and(tags.spinalAlignment === undefined ? null : tags.spinalAlignment === 'flexion', loaded(tags)),
   },
   {
     id: 'disc-flexion-high-reps',
     condition: 'lumbar_disc_herniation',
     decision: 'warn',
-    message: 'Disk hasarı tek ağır tekrardan değil, tekrarlı fleksiyon siklüslerinden birikir: tekrar sayısını düşür.',
     match: (tags) => (tags.spinalAlignment === undefined ? null : tags.spinalAlignment === 'flexion'),
     when: { needs: 'plannedReps', test: (context) => (context.plannedReps === undefined ? null : context.plannedReps > 15) },
   },
@@ -250,7 +248,6 @@ export const RULES: readonly Rule[] = [
     id: 'disc-morning-flexion',
     condition: 'lumbar_disc_herniation',
     decision: 'warn',
-    message: 'Uyanmadan sonraki ilk saatlerde diskteki bükülme stresi katlanır; fleksiyonlu işi güne yay.',
     match: (tags) => (tags.spinalAlignment === undefined ? null : tags.spinalAlignment === 'flexion'),
     when: {
       needs: 'hoursSinceWaking',
@@ -261,14 +258,12 @@ export const RULES: readonly Rule[] = [
     id: 'flexion-intolerant-end-range',
     condition: 'flexion_intolerant_back',
     decision: 'block',
-    message: 'Son aralık omurga fleksiyonu bu profilde semptomu tetikler; hareketi nötr aralıkta bitir.',
     match: (tags) => and(tags.spinalAlignment === undefined ? null : tags.spinalAlignment === 'flexion', has(tags.jointWindows, 'spine_end_range')),
   },
   {
     id: 'spondylolisthesis-shear',
     condition: 'lumbar_spondylolisthesis',
     decision: 'block',
-    message: 'Yüksek kesme kuvveti ya da yüklü ekstansiyon kaymayı artırır; desteklenmiş bir varyant seç.',
     match: (tags) =>
       or(
         tags.shearForce === undefined ? null : tags.shearForce === 'high',
@@ -279,14 +274,12 @@ export const RULES: readonly Rule[] = [
     id: 'stenosis-loaded-extension',
     condition: 'lumbar_stenosis',
     decision: 'warn',
-    message: 'Stenozda ekstansiyon intoleransı tipiktir; yüklü ekstansiyonda semptomu sor.',
     match: (tags) => and(tags.spinalAlignment === undefined ? null : tags.spinalAlignment === 'extension', loaded(tags)),
   },
   {
     id: 'radiculopathy-peripheralizing',
     condition: 'lumbar_disc_herniation_with_radiculopathy',
     decision: 'block',
-    message: 'Son seansta semptom aşağı yayılmış: yükleme durur, önce merkezileşme sağlanır.',
     // Hareketten bağımsız: semptom aşağı yayılıyorsa bütün yükleme durur. Bilinmiyorsa her kartta
     // değil, özet satırında bir kez söylenir.
     match: () => true,
@@ -299,7 +292,6 @@ export const RULES: readonly Rule[] = [
     id: 'cauda-equina',
     condition: 'cauda_equina_or_progressive_neuro_deficit',
     decision: 'block',
-    message: 'Egzersiz yazılmaz: acil tıbbi değerlendirme gerekir.',
     match: () => true,
   },
 
@@ -308,7 +300,6 @@ export const RULES: readonly Rule[] = [
     id: 'pfp-open-chain-constant',
     condition: 'patellofemoral_pain',
     decision: 'block',
-    message: 'Açık zincir sabit dirençte patellofemoral basınç tepe yapar; kapalı zincir bir varyanta geç.',
     match: (tags) =>
       and(
         touches(tags, 'knee'),
@@ -320,7 +311,6 @@ export const RULES: readonly Rule[] = [
     id: 'pfp-deep-closed-chain',
     condition: 'patellofemoral_pain',
     decision: 'warn',
-    message: '90° üstü diz fleksiyonunda kapalı zincirde basınç artar; derinliği ağrısız aralıkta tut.',
     match: (tags) =>
       and(
         touches(tags, 'knee'),
@@ -332,7 +322,6 @@ export const RULES: readonly Rule[] = [
     id: 'pfp-terminal-extension',
     condition: 'patellofemoral_pain',
     decision: 'warn',
-    message: 'Açık zincirde 0–30° terminal aralık en yüksek stres bölgesidir; ROM’u 90–45° arasına al.',
     match: (tags) =>
       and(
         touches(tags, 'knee'),
@@ -344,7 +333,6 @@ export const RULES: readonly Rule[] = [
     id: 'acl-open-chain-early',
     condition: 'acl_reconstruction_early',
     decision: 'block',
-    message: 'İlk 4 haftada açık zincir diz ekstansiyonu greft üzerinde anterior kayma üretir.',
     match: (tags) => and(touches(tags, 'knee'), tags.kineticChain === undefined ? null : tags.kineticChain === 'open'),
     when: { needs: 'weeksPostOp', test: (context) => (context.weeksPostOp === undefined ? null : context.weeksPostOp < 4) },
   },
@@ -352,7 +340,6 @@ export const RULES: readonly Rule[] = [
     id: 'acl-open-chain-rom',
     condition: 'acl_reconstruction_early',
     decision: 'block',
-    message: 'Bu dönemde açık zincir yalnız korunan ROM penceresinde yapılır; terminal ekstansiyona girme.',
     // Pencere haftayla açılır (4. hafta 90–45°, … 7. hafta 90–10°), 8. haftada tam ROM.
     match: (tags) =>
       and(
@@ -369,7 +356,6 @@ export const RULES: readonly Rule[] = [
     id: 'acl-hamstring-graft-load',
     condition: 'acl_reconstruction_early',
     decision: 'block',
-    message: 'Hamstring grefti ilk 12 haftada yüklü açık zincir diz fleksiyonunu kaldırmaz.',
     // Kaynakta `external_load_kg > 0`: vücut ağırlığı dışındaki her direnç (bant dahil) dış yüktür.
     // Greft tipi ameliyatın sabit bilgisidir: bilinmezse kural kartta sayılır.
     match: (tags, context) =>
@@ -385,7 +371,6 @@ export const RULES: readonly Rule[] = [
     id: 'tendinopathy-ballistic',
     condition: 'patellar_tendinopathy',
     decision: 'block',
-    message: 'Enerji depolayan (balistik) yükleme erken evrede ağrıyı azdırır; izometrik/izotonik evreyi tamamla.',
     match: (tags) =>
       and(touches(tags, 'knee'), tags.contractionType === undefined ? null : tags.contractionType === 'energy_storage_ballistic'),
     when: { needs: 'tendinopathyStage', test: earlyTendinopathy },
@@ -394,7 +379,6 @@ export const RULES: readonly Rule[] = [
     id: 'ankle-df-deep-squat',
     condition: 'ankle_dorsiflexion_restriction',
     decision: 'warn',
-    message: 'Dorsifleksiyon yetmezken derin squat açığı belden kapatır; topuk yükselt ya da derinliği kıs.',
     // Topuğun yükseltilmesi hareketin yapılışıdır (sabit bilgi): bilinmezse kural kartta sayılır.
     // Kayıtta alanı yok (Faz 5b); o gelene kadar kural yalnız bağlamdaki `heelElevated` ile karar verir.
     match: (tags, context) =>
@@ -409,7 +393,6 @@ export const RULES: readonly Rule[] = [
     id: 'knee-effusion-load',
     condition: 'acute_knee_effusion',
     decision: 'warn',
-    message: 'Efüzyon kuadrisepsi inhibe eder; yükü artırma, şişlik geçene kadar hacmi koru.',
     match: (tags) => and(touches(tags, 'knee'), tags.axialLoading === undefined ? null : tags.axialLoading !== 'none'),
   },
 
@@ -418,14 +401,12 @@ export const RULES: readonly Rule[] = [
     id: 'saps-behind-neck',
     condition: 'subacromial_pain_syndrome',
     decision: 'block',
-    message: '90° abduksiyon + son aralık dış rotasyon (ense arkası) subakromiyal aralığı daraltır.',
     match: (tags) => and(touches(tags, 'shoulder'), has(tags.jointWindows, 'shoulder_abduction_90_end_range_er')),
   },
   {
     id: 'saps-internal-rotation-overhead',
     condition: 'subacromial_pain_syndrome',
     decision: 'block',
-    message: 'Yük altında iç rotasyonda kol kaldırmak (upright row, empty can) tendonu sıkıştırır.',
     match: (tags) =>
       and(
         touches(tags, 'shoulder'),
@@ -437,14 +418,12 @@ export const RULES: readonly Rule[] = [
     id: 'saps-overhead-repetitive',
     condition: 'subacromial_pain_syndrome',
     decision: 'warn',
-    message: '90° üstü tekrarlı yükleme semptomu azdırabilir; skapular düzlemde ve ağrısız aralıkta çalış.',
     match: (tags) => and(touches(tags, 'shoulder'), has(tags.jointWindows, 'shoulder_elevation_over_90')),
   },
   {
     id: 'saps-scapular-plane-cue',
     condition: 'subacromial_pain_syndrome',
     decision: 'cue',
-    message: 'Kolu gövdeden 30–45° önde (skapular düzlemde) çalıştır, tam yan düzlemde değil.',
     match: (tags) =>
       and(
         touches(tags, 'shoulder'),
@@ -456,21 +435,18 @@ export const RULES: readonly Rule[] = [
     id: 'instability-apprehension',
     condition: 'anterior_shoulder_instability',
     decision: 'block',
-    message: '90° abduksiyon + son aralık dış rotasyon apprehension pozisyonudur; anterior kapsülü zorlar.',
     match: (tags) => and(touches(tags, 'shoulder'), has(tags.jointWindows, 'shoulder_abduction_90_end_range_er')),
   },
   {
     id: 'instability-gh-extension',
     condition: 'anterior_shoulder_instability',
     decision: 'block',
-    message: 'Dirseğin gövde hizasının arkasına yüklü inmesi anterior kapsülü gerer; ROM’u sınırla (floor press).',
     match: (tags) => and(touches(tags, 'shoulder'), has(tags.jointWindows, 'glenohumeral_extension_beyond_neutral'), loaded(tags)),
   },
   {
     id: 'mdi-end-range',
     condition: 'multidirectional_shoulder_instability',
     decision: 'block',
-    message: 'Son aralık omuz yüklemesi ve pasif kapsül germesi gevşekliği artırır.',
     match: (tags) =>
       and(
         touches(tags, 'shoulder'),
@@ -481,7 +457,6 @@ export const RULES: readonly Rule[] = [
     id: 'ac-horizontal-adduction',
     condition: 'ac_joint_injury',
     decision: 'block',
-    message: 'Yüklü horizontal adduksiyon AC eklemini sıkıştırır; ROM’u kıs ya da nötr tutuşa geç.',
     match: (tags) =>
       and(touches(tags, 'shoulder'), tags.loadVector === undefined ? null : tags.loadVector === 'horizontal_adduction', loaded(tags)),
   },
@@ -489,14 +464,12 @@ export const RULES: readonly Rule[] = [
     id: 'upper-crossed-overhead',
     condition: 'upper_crossed_pattern',
     decision: 'warn',
-    message: 'Skapular kontrol kurulmadan baş üstü itiş paterni pekiştirir; önce alt trapez/serratus çalış.',
     match: (tags) => and(touches(tags, 'shoulder'), has(tags.jointWindows, 'shoulder_elevation_over_90')),
   },
   {
     id: 'thoracic-deficit-overhead',
     condition: 'thoracic_extension_deficit',
     decision: 'warn',
-    message: 'Torasik ekstansiyon yetmezken baş üstü açığı bel hiperekstansiyonuyla kapanır; landmine varyantına geç.',
     match: (tags) => and(touches(tags, 'shoulder'), has(tags.jointWindows, 'shoulder_elevation_over_90')),
   },
 
@@ -506,7 +479,6 @@ export const RULES: readonly Rule[] = [
     condition: 'hypertension',
     decision: 'block',
     qualifiers: ['uncontrolled'],
-    message: 'Kontrolsüz tansiyonda ağır eksenel yük + nefes tutma kan basıncını ani yükseltir.',
     match: (tags) => (tags.axialLoading === undefined ? null : tags.axialLoading === 'high'),
   },
   {
@@ -514,14 +486,12 @@ export const RULES: readonly Rule[] = [
     condition: 'hypertension',
     decision: 'cue',
     qualifiers: ['controlled'],
-    message: 'Ağır sette nefesi tutma; kalkışta ver. Maksimal denemelerden kaçın.',
     match: (tags) => (tags.axialLoading === undefined ? null : tags.axialLoading === 'high'),
   },
   {
     id: 'pregnancy-axial-load',
     condition: 'pregnancy_second_third_trimester',
     decision: 'warn',
-    message: 'Ağır eksenel yük ve sırtüstü uzun kalma bu dönemde uygun değil; yük vektörünü değiştir.',
     match: (tags) => (tags.axialLoading === undefined ? null : tags.axialLoading === 'high'),
   },
 ];
@@ -587,6 +557,9 @@ export function evaluateExercise(
   conditions: readonly ClientCondition[],
   context: FilterContext = {},
 ): FilterResult {
+  const locale = context.locale ?? DEFAULT_LOCALE;
+  const t = exerciseFilterMessages(locale).exerciseFilter;
+  const ruleMessages: Record<string, string> = t.rules;
   const findings: Finding[] = [];
   const pending: FilterResult['pending'] = [];
   let skipped = 0;
@@ -602,7 +575,7 @@ export function evaluateExercise(
       findings.push({
         decision: 'block',
         condition,
-        message: `${conditionLabel(condition)} için işaretlenmiş: bu harekette yaptırma.`,
+        message: t.manual(conditionLabel(condition, locale)),
         rule: 'manual',
       });
       continue;
@@ -627,7 +600,7 @@ export function evaluateExercise(
       const fixed = and(qualified, rule.match(tags, context));
       const hit = and(fixed, rule.when ? rule.when.test(context, condition) : true);
       if (hit) {
-        findings.push({ decision: rule.decision, condition, message: rule.message, rule: rule.id });
+        findings.push({ decision: rule.decision, condition, message: ruleMessages[rule.id] ?? rule.id, rule: rule.id });
         continue;
       }
       if (hit === false) continue;
@@ -658,13 +631,12 @@ export function evaluateExercise(
 export const FILTER_GROUPS = ['blocked', 'warned', 'clear', 'untagged', 'unassessed'] as const;
 export type FilterGroup = (typeof FILTER_GROUPS)[number];
 
-export const FILTER_GROUP_LABELS: Record<FilterGroup, string> = {
-  blocked: 'yasak',
-  warned: 'uyarı',
-  clear: 'uygun',
-  untagged: 'kontrol edilmedi',
-  unassessed: 'eksik bilgi',
-};
+export function filterGroupLabels(locale: Locale = DEFAULT_LOCALE): Record<FilterGroup, string> {
+  return exerciseFilterMessages(locale).exerciseFilter.groups;
+}
+
+/** Türkçe adlar (eski çağrılar); arayüz `filterGroupLabels(locale)` kullanır. */
+export const FILTER_GROUP_LABELS: Record<FilterGroup, string> = filterGroupLabels('tr');
 
 /**
  * Hareketin kümesi. Karar bilinmeyenden önce gelir: yaptırma kararı eksik bilgiyle değişmez, uyarılı
@@ -746,76 +718,41 @@ export function requiresClearance(conditions: readonly ClientCondition[]): Clien
 
 /* --- Ekranda görünen adlar --- */
 
-export const KINETIC_CHAIN_LABELS: Record<KineticChain, string> = {
-  open: 'Açık zincir (uç serbest)',
-  closed: 'Kapalı zincir (ayak/el sabit)',
-  semi_closed: 'Yarı kapalı',
-};
+export function kineticChainLabels(locale: Locale = DEFAULT_LOCALE): Record<KineticChain, string> {
+  return exerciseFilterMessages(locale).exerciseFilter.kineticChains;
+}
+export function axialLoadLabels(locale: Locale = DEFAULT_LOCALE): Record<AxialLoad, string> {
+  return exerciseFilterMessages(locale).exerciseFilter.axialLoads;
+}
+export function shearLevelLabels(locale: Locale = DEFAULT_LOCALE): Record<ShearLevel, string> {
+  return exerciseFilterMessages(locale).exerciseFilter.shearLevels;
+}
+export function spinalAlignmentLabels(locale: Locale = DEFAULT_LOCALE): Record<SpinalAlignment, string> {
+  return exerciseFilterMessages(locale).exerciseFilter.spinalAlignments;
+}
+export function jointWindowLabels(locale: Locale = DEFAULT_LOCALE): Record<JointWindow, string> {
+  return exerciseFilterMessages(locale).exerciseFilter.jointWindows;
+}
+export function loadVectorLabels(locale: Locale = DEFAULT_LOCALE): Record<LoadVector, string> {
+  return exerciseFilterMessages(locale).exerciseFilter.loadVectors;
+}
+export function contractionTypeLabels(locale: Locale = DEFAULT_LOCALE): Record<ContractionType, string> {
+  return exerciseFilterMessages(locale).exerciseFilter.contractionTypes;
+}
+export function resistanceProfileLabels(locale: Locale = DEFAULT_LOCALE): Record<ResistanceProfile, string> {
+  return exerciseFilterMessages(locale).exerciseFilter.resistanceProfiles;
+}
+export function decisionLabels(locale: Locale = DEFAULT_LOCALE): Record<Decision, string> {
+  return exerciseFilterMessages(locale).exerciseFilter.decisions;
+}
 
-export const AXIAL_LOAD_LABELS: Record<AxialLoad, string> = {
-  none: 'Yok (omurgaya binmiyor)',
-  low: 'Düşük',
-  moderate: 'Orta',
-  high: 'Yüksek (bar omurga üstünde)',
-};
-
-export const SHEAR_LEVEL_LABELS: Record<ShearLevel, string> = {
-  low: 'Düşük',
-  moderate: 'Orta',
-  high: 'Yüksek',
-};
-
-export const SPINAL_ALIGNMENT_LABELS: Record<SpinalAlignment, string> = {
-  neutral: 'Nötr',
-  flexion: 'Fleksiyon (öne bükülme)',
-  extension: 'Ekstansiyon (geriye)',
-  flexion_with_rotation: 'Fleksiyon + rotasyon',
-  extension_with_rotation: 'Ekstansiyon + rotasyon',
-  lateral_flexion: 'Yana eğilme',
-  unloaded: 'Yüksüz (omurga çalışmıyor)',
-};
-
-export const JOINT_WINDOW_LABELS: Record<JointWindow, string> = {
-  knee_flexion_0_45: 'Diz 0–45°',
-  knee_flexion_45_90: 'Diz 45–90°',
-  knee_flexion_over_90: 'Diz 90° üstü',
-  knee_terminal_extension_0_30: 'Diz terminal ekstansiyon (0–30°)',
-  shoulder_elevation_60_90: 'Omuz 60–90°',
-  shoulder_elevation_over_90: 'Omuz 90° üstü',
-  shoulder_abduction_90_end_range_er: 'Omuz 90° abduksiyon + son aralık dış rotasyon',
-  glenohumeral_extension_beyond_neutral: 'Dirsek gövde hizasının arkasında',
-  spine_end_range: 'Omurga son aralık',
-  hip_flexion_over_90: 'Kalça 90° üstü',
-};
-
-export const LOAD_VECTOR_LABELS: Record<LoadVector, string> = {
-  vertical_axial: 'Dikey (eksenel)',
-  anterior_posterior_shear: 'Ön-arka kesme',
-  frontal_lateral: 'Yana',
-  diagonal_scapular_plane: 'Skapular düzlem (çapraz)',
-  horizontal: 'Yatay',
-  horizontal_adduction: 'Yatay adduksiyon (göğüste kapanma)',
-};
-
-export const CONTRACTION_TYPE_LABELS: Record<ContractionType, string> = {
-  isometric: 'İzometrik (tutuş)',
-  concentric_emphasis: 'Konsantrik ağırlıklı',
-  eccentric_emphasis: 'Eksantrik ağırlıklı',
-  isotonic_balanced: 'Dengeli izotonik',
-  energy_storage_ballistic: 'Balistik (enerji depolayan)',
-};
-
-export const RESISTANCE_PROFILE_LABELS: Record<ResistanceProfile, string> = {
-  bodyweight: 'Vücut ağırlığı',
-  constant_resistance: 'Sabit direnç',
-  variable_resistance_cam: 'Kam (değişken direnç)',
-  elastic: 'Elastik bant',
-  free_weight: 'Serbest ağırlık',
-  machine_guided: 'Makine (yönlendirilmiş)',
-};
-
-export const DECISION_LABELS: Record<Decision, string> = {
-  block: 'Yaptırma',
-  warn: 'Dikkat',
-  cue: 'İpucu ver',
-};
+/** Türkçe adlar (eski çağrılar ve testler); arayüz yukarıdaki `…Labels(locale)` işlevlerini kullanır. */
+export const KINETIC_CHAIN_LABELS: Record<KineticChain, string> = kineticChainLabels('tr');
+export const AXIAL_LOAD_LABELS: Record<AxialLoad, string> = axialLoadLabels('tr');
+export const SHEAR_LEVEL_LABELS: Record<ShearLevel, string> = shearLevelLabels('tr');
+export const SPINAL_ALIGNMENT_LABELS: Record<SpinalAlignment, string> = spinalAlignmentLabels('tr');
+export const JOINT_WINDOW_LABELS: Record<JointWindow, string> = jointWindowLabels('tr');
+export const LOAD_VECTOR_LABELS: Record<LoadVector, string> = loadVectorLabels('tr');
+export const CONTRACTION_TYPE_LABELS: Record<ContractionType, string> = contractionTypeLabels('tr');
+export const RESISTANCE_PROFILE_LABELS: Record<ResistanceProfile, string> = resistanceProfileLabels('tr');
+export const DECISION_LABELS: Record<Decision, string> = decisionLabels('tr');

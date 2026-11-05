@@ -1,10 +1,14 @@
 import { NextResponse } from 'next/server';
+import { commonMessages } from '@/i18n/messages/common';
+import { localeFromRequest, type Locale } from '@/i18n/locale';
+import { ptLibraryMessages } from '@/i18n/messages/pt-library';
 import { appRepoFiles } from '@/lib/app-repo-files';
 import { getAttachment } from '@/lib/attachments';
 import { removeAttachmentImage, saveAttachmentImage } from '@/lib/catalog-actions';
-import { appRepo, GithubError } from '@/lib/github/client';
+import { appRepo } from '@/lib/github/client';
 import { readBinary } from '@/lib/github/files';
 import { IMAGE_CONTENT_TYPES, IMAGE_MAX_BYTES, IMAGE_TYPES, imageVersion, sniffImage, type ImageExtension } from '@/lib/image';
+import { failureOf } from '@/lib/route-failure';
 import { readAnySession, readPtSession } from '@/lib/session';
 
 /**
@@ -15,17 +19,18 @@ import { readAnySession, readPtSession } from '@/lib/session';
 
 type Params = { params: Promise<{ id: string }> };
 
-function failed(error: unknown, fallback: string) {
-  const failure = error instanceof GithubError ? error : null;
-  return NextResponse.json({ error: failure?.message ?? fallback }, { status: failure?.status ?? 502 });
+function failed(error: unknown, fallback: string, locale: Locale) {
+  const { message, status } = failureOf(error, fallback, locale);
+  return NextResponse.json({ error: message }, { status });
 }
 
 export async function GET(request: Request, { params }: Params) {
   // Danışan da antrenmanda görecek; oturum yeterli.
+  const locale = localeFromRequest(request);
   try {
     if (!(await readAnySession())) return new NextResponse(null, { status: 401 });
   } catch (error) {
-    return failed(error, 'Oturum doğrulanamadı.');
+    return failed(error, ptLibraryMessages(locale).apiRoutes.sessionCheckFailed, locale);
   }
 
   const { id } = await params;
@@ -49,30 +54,33 @@ export async function GET(request: Request, { params }: Params) {
 }
 
 export async function POST(request: Request, { params }: Params) {
+  const locale = localeFromRequest(request);
+  const t = ptLibraryMessages(locale).apiRoutes;
   const session = await readPtSession();
-  if (session?.role !== 'pt') return NextResponse.json({ error: 'Bu işlem için yetkin yok.' }, { status: 403 });
+  if (session?.role !== 'pt') return NextResponse.json({ error: commonMessages(locale).errors.status[403] }, { status: 403 });
 
   const { id } = await params;
   const form = await request.formData().catch(() => null);
   const file = form?.get('image');
-  if (!(file instanceof File)) return NextResponse.json({ error: 'Görsel seçilmedi.' }, { status: 400 });
-  if (!IMAGE_TYPES[file.type]) return NextResponse.json({ error: 'Yalnız PNG, JPG ve WebP yüklenebilir.' }, { status: 400 });
-  if (file.size > IMAGE_MAX_BYTES) return NextResponse.json({ error: 'Görsel en fazla 1 MB olabilir.' }, { status: 413 });
+  if (!(file instanceof File)) return NextResponse.json({ error: t.imageNotChosen }, { status: 400 });
+  if (!IMAGE_TYPES[file.type]) return NextResponse.json({ error: t.imageTypeUnsupported }, { status: 400 });
+  if (file.size > IMAGE_MAX_BYTES) return NextResponse.json({ error: t.imageTooBig }, { status: 413 });
 
   const bytes = new Uint8Array(await file.arrayBuffer());
   const extension = sniffImage(bytes);
-  if (!extension) return NextResponse.json({ error: 'Dosya bir görsel değil ya da bozuk.' }, { status: 400 });
+  if (!extension) return NextResponse.json({ error: t.imageNotImage }, { status: 400 });
 
   // Yazma (hazır aparatta PT sürümü, eski fotoğrafın silinmesi) `saveAttachmentImage`'da (`src/lib/catalog-actions.ts`).
-  const { status, body } = await saveAttachmentImage(appRepoFiles(), id, bytes, extension);
+  const { status, body } = await saveAttachmentImage(appRepoFiles(), id, bytes, extension, locale);
   return NextResponse.json(body, { status });
 }
 
-export async function DELETE(_request: Request, { params }: Params) {
+export async function DELETE(request: Request, { params }: Params) {
+  const locale = localeFromRequest(request);
   const session = await readPtSession();
-  if (session?.role !== 'pt') return NextResponse.json({ error: 'Bu işlem için yetkin yok.' }, { status: 403 });
+  if (session?.role !== 'pt') return NextResponse.json({ error: commonMessages(locale).errors.status[403] }, { status: 403 });
 
   const { id } = await params;
-  const { status, body } = await removeAttachmentImage(appRepoFiles(), id);
+  const { status, body } = await removeAttachmentImage(appRepoFiles(), id, locale);
   return NextResponse.json(body, { status });
 }

@@ -1,3 +1,6 @@
+import { DEFAULT_LOCALE, type Locale } from '../i18n/locale.ts';
+import { ptLibraryMessages } from '../i18n/messages/pt-library/index.ts';
+
 /**
  * Egzersiz, cihaz ve aparat arasındaki bağlar (SPEC §7.3).
  *
@@ -80,19 +83,21 @@ export function dropPinnedAlternative<T extends { alternatives?: string[] | unde
 }
 
 /** Cihaz kaydı: seçilen aparatlar havuzda (hazır + PT'nin) olmalı. Sorun varsa alan hatası. */
-export function unknownAttachmentsProblem(ids: readonly string[], pool: ReadonlySet<string>): string | null {
+export function unknownAttachmentsProblem(ids: readonly string[], pool: ReadonlySet<string>, locale: Locale = DEFAULT_LOCALE): string | null {
   const missing = ids.filter((id) => !pool.has(id));
-  return missing.length > 0 ? `Havuzda olmayan aparat seçilemez: ${missing.join(', ')}.` : null;
+  return missing.length > 0 ? ptLibraryMessages(locale).catalogLib.unknownAttachments(missing.join(', ')) : null;
 }
 
 /** Egzersiz kaydı: aparat, seçili cihazın aparatlarından biri olmalı. Sorun varsa alan hatası. */
 export function attachmentChoiceProblem(
   exercise: { deviceId?: string | undefined; attachmentId?: string | undefined },
   device: { attachments?: readonly string[] | undefined } | undefined,
+  locale: Locale = DEFAULT_LOCALE,
 ): string | null {
+  const t = ptLibraryMessages(locale).catalogLib;
   if (!exercise.attachmentId) return null;
-  if (!exercise.deviceId) return 'Cihazsız egzersizde aparat seçilemez.';
-  if (!device?.attachments?.includes(exercise.attachmentId)) return 'Bu aparat seçili cihaza takılı değil.';
+  if (!exercise.deviceId) return t.noDeviceNoAttachment;
+  if (!device?.attachments?.includes(exercise.attachmentId)) return t.attachmentNotOnDevice;
   return null;
 }
 

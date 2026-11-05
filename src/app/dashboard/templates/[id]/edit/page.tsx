@@ -12,8 +12,13 @@ import { pickerDevices, pickerExercises, readTemplateFile } from '@/lib/template
 import { InvalidTemplateAlert } from '../../invalid-template-alert';
 import { TemplateForm } from '../../template-form';
 import { TemplateActions } from '../template-actions';
+import { getLocale, getMessages } from '@/i18n/server';
+import { ptLibraryMessages } from '@/i18n/messages/pt-library';
 
-export const metadata: Metadata = { title: 'Şablonu düzenle' };
+export async function generateMetadata(): Promise<Metadata> {
+  const t = (await getMessages(ptLibraryMessages)).templateEdit;
+  return { title: t.title };
+}
 
 /**
  * Şablon düzenleme. Program düzenleyicisiyle aynı desen: başlığın üstünde "‹" dönüş (şablonun
@@ -21,9 +26,11 @@ export const metadata: Metadata = { title: 'Şablonu düzenle' };
  */
 export default async function EditTemplatePage({ params }: { params: Promise<{ id: string }> }) {
   await requirePt();
+  const locale = await getLocale();
+  const t = ptLibraryMessages(locale).templateEdit;
   const { id } = await params;
   if (!TEMPLATE_ID_PATTERN.test(id)) notFound();
-  const [file, exercises, devices, config] = await Promise.all([readTemplateFile(id), listExercises(), listDevices(), readAppConfig()]);
+  const [file, exercises, devices, config] = await Promise.all([readTemplateFile(id, locale), listExercises(undefined, locale), listDevices(undefined, locale), readAppConfig()]);
   if (!file) notFound();
   const name = file.template?.name ?? file.name ?? id;
 
@@ -31,7 +38,7 @@ export default async function EditTemplatePage({ params }: { params: Promise<{ i
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-2">
         <EditorBackLink href={`/dashboard/templates/${id}`} label={name} className={USER_MENU_GUTTER} />
-        <PageHeader title="Şablonu düzenle" actions={<TemplateActions id={id} name={name} />} />
+        <PageHeader title={t.title} actions={<TemplateActions id={id} name={name} />} />
       </div>
       {file.template ? (
         <TemplateForm

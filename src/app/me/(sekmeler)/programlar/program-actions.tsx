@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { discardDraft } from '@/components/block-editor/editor-draft';
+import { discardDraft } from '@/lib/draft-store';
 import { ConfirmDeleteDialog } from '@/components/confirm-delete-dialog';
 import { Check } from '@/components/line-icons';
 import { Badge } from '@/components/ui/badge';

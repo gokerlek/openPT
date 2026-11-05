@@ -6,26 +6,28 @@ import { Field, FieldDescription, FieldError, FieldLabel, FieldSet } from '@/com
 import { Toggle } from '@/components/ui/toggle';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import {
-  AXIAL_LOAD_LABELS,
+  axialLoadLabels,
   AXIAL_LOADS,
-  CONTRACTION_TYPE_LABELS,
+  contractionTypeLabels,
   CONTRACTION_TYPES,
-  JOINT_WINDOW_LABELS,
+  jointWindowLabels,
   JOINT_WINDOWS,
-  KINETIC_CHAIN_LABELS,
+  kineticChainLabels,
   KINETIC_CHAINS,
-  LOAD_VECTOR_LABELS,
+  loadVectorLabels,
   LOAD_VECTORS,
-  RESISTANCE_PROFILE_LABELS,
+  resistanceProfileLabels,
   RESISTANCE_PROFILES,
-  SHEAR_LEVEL_LABELS,
+  shearLevelLabels,
   SHEAR_LEVELS,
-  SPINAL_ALIGNMENT_LABELS,
+  spinalAlignmentLabels,
   SPINAL_ALIGNMENTS,
   type JointWindow,
 } from '@/lib/exercise-filter';
 import type { exerciseFormSchema } from '@/lib/schemas/exercise';
 import { ConditionPicker } from '@/components/condition-picker';
+import { useLocale, useMessages } from '@/i18n/client';
+import { ptLibraryMessages } from '@/i18n/messages/pt-library';
 
 /**
  * Medikal etiketler: sakatlık süzgeci bunlara bakar (`src/lib/exercise-filter.ts`).
@@ -52,6 +54,7 @@ function TagSelect<Value extends string>({
   labels: Record<Value, string>;
   description?: string;
 }) {
+  const t = useMessages(ptLibraryMessages).medicalFields;
   return (
     <FormField of={form} path={[path as never]}>
       {(field) => (
@@ -61,7 +64,7 @@ function TagSelect<Value extends string>({
             id={path}
             value={(field.input as string | undefined) ?? ''}
             groups={[{ label, options: values.map((value) => ({ value, label: labels[value] })) }]}
-            empty="Belirtilmemiş"
+            empty={t.notSpecified}
             onChange={(value) => setInput(form, { path: [path as never], input: (value || undefined) as never })}
           />
           {description ? <FieldDescription>{description}</FieldDescription> : null}
@@ -84,6 +87,7 @@ function ConditionField({
   label: string;
   description: string;
 }) {
+  const t = useMessages(ptLibraryMessages).medicalFields;
   return (
     <FormField of={form} path={[path]}>
       {(field) => {
@@ -91,7 +95,7 @@ function ConditionField({
         return (
           <Field data-invalid={Boolean(field.errors) || undefined}>
             <FieldLabel htmlFor={path}>{label}</FieldLabel>
-            <ConditionPicker id={path} placeholder="Kısıt seç" value={current} onChange={(next) => setInput(form, { path: [path], input: next })} />
+            <ConditionPicker id={path} placeholder={t.limitationPlaceholder} value={current} onChange={(next) => setInput(form, { path: [path], input: next })} />
             <FieldDescription>{description}</FieldDescription>
             <FieldError>{field.errors?.[0]}</FieldError>
           </Field>
@@ -102,21 +106,22 @@ function ConditionField({
 }
 
 export function MedicalFields({ form }: { form: Form }) {
+  const t = useMessages(ptLibraryMessages).medicalFields;
+  const locale = useLocale();
   return (
     <FieldSet>
       <FieldDescription>
-        Sakatlık süzgeci bunlara bakar. Hiçbiri zorunlu değil; hiç etiketi olmayan hareket süzgeçte “kontrol
-        edilmedi”, bir kuralın ihtiyacı eksik kalan “eksik bilgi” diye görünür. Emin olmadığın alanı boş bırak.
+        {t.intro}
       </FieldDescription>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <TagSelect form={form} path="kineticChain" label="Kinetik zincir" values={KINETIC_CHAINS} labels={KINETIC_CHAIN_LABELS} />
-        <TagSelect form={form} path="axialLoading" label="Eksenel yük" values={AXIAL_LOADS} labels={AXIAL_LOAD_LABELS} />
-        <TagSelect form={form} path="shearForce" label="Kesme kuvveti" values={SHEAR_LEVELS} labels={SHEAR_LEVEL_LABELS} />
-        <TagSelect form={form} path="spinalAlignment" label="Omurga hizası" values={SPINAL_ALIGNMENTS} labels={SPINAL_ALIGNMENT_LABELS} />
-        <TagSelect form={form} path="loadVector" label="Yük vektörü" values={LOAD_VECTORS} labels={LOAD_VECTOR_LABELS} />
-        <TagSelect form={form} path="contractionType" label="Kasılma tipi" values={CONTRACTION_TYPES} labels={CONTRACTION_TYPE_LABELS} />
-        <TagSelect form={form} path="resistanceProfile" label="Direnç profili" values={RESISTANCE_PROFILES} labels={RESISTANCE_PROFILE_LABELS} />
+        <TagSelect form={form} path="kineticChain" label={t.chainLabel} values={KINETIC_CHAINS} labels={kineticChainLabels(locale)} />
+        <TagSelect form={form} path="axialLoading" label={t.axialLabel} values={AXIAL_LOADS} labels={axialLoadLabels(locale)} />
+        <TagSelect form={form} path="shearForce" label={t.shearLabel} values={SHEAR_LEVELS} labels={shearLevelLabels(locale)} />
+        <TagSelect form={form} path="spinalAlignment" label={t.alignmentLabel} values={SPINAL_ALIGNMENTS} labels={spinalAlignmentLabels(locale)} />
+        <TagSelect form={form} path="loadVector" label={t.vectorLabel} values={LOAD_VECTORS} labels={loadVectorLabels(locale)} />
+        <TagSelect form={form} path="contractionType" label={t.contractionLabel} values={CONTRACTION_TYPES} labels={contractionTypeLabels(locale)} />
+        <TagSelect form={form} path="resistanceProfile" label={t.resistanceLabel} values={RESISTANCE_PROFILES} labels={resistanceProfileLabels(locale)} />
       </div>
 
       <FormField of={form} path={['jointWindows']}>
@@ -124,24 +129,23 @@ export function MedicalFields({ form }: { form: Form }) {
           const current = (field.input ?? []).filter((item): item is JointWindow => typeof item === 'string');
           return (
             <Field>
-              <FieldLabel>Kritik açı pencereleri</FieldLabel>
+              <FieldLabel>{t.windowsLabel}</FieldLabel>
               <ToggleGroup
                 multiple
                 variant="outline"
                 size="sm"
                 className="flex-wrap justify-start"
-                aria-label="Açı pencereleri"
+                aria-label={t.windowsAria}
                 value={current}
                 onValueChange={(value) => setInput(form, { path: ['jointWindows'], input: value as JointWindow[] })}>
                 {JOINT_WINDOWS.map((window) => (
                   <ToggleGroupItem key={window} value={window}>
-                    {JOINT_WINDOW_LABELS[window]}
+                    {jointWindowLabels(locale)[window]}
                   </ToggleGroupItem>
                 ))}
               </ToggleGroup>
               <FieldDescription>
-                Hareketin geçtiği riskli aralıklar. Sayesinde süzgeç hareketi komple yasaklamak yerine
-                “90–45° arasında yap” diyebiliyor.
+                {t.windowsHint}
               </FieldDescription>
               <FieldError>{field.errors?.[0]}</FieldError>
             </Field>
@@ -153,19 +157,18 @@ export function MedicalFields({ form }: { form: Form }) {
         {(field) => (
           <Field>
             {/* Etiket düğmeye bağlı: ad "Yük altında iç rotasyon", durum basılı/değil (Var/Yok). */}
-            <FieldLabel htmlFor="internalRotationUnderLoad">Yük altında iç rotasyon</FieldLabel>
+            <FieldLabel htmlFor="internalRotationUnderLoad">{t.rotationLabel}</FieldLabel>
             <div>
               <Toggle
                 id="internalRotationUnderLoad"
                 variant="outline"
                 pressed={field.input === true}
                 onPressedChange={(pressed) => setInput(form, { path: ['internalRotationUnderLoad'], input: pressed })}>
-                {field.input === true ? 'Var' : 'Yok'}
+                {field.input === true ? t.present : t.absent}
               </Toggle>
             </div>
             <FieldDescription>
-              Upright row ve “empty can” gibi: kol yük altında iç rotasyondayken kalkıyorsa subakromiyal
-              aralık daralır.
+              {t.rotationHint}
             </FieldDescription>
           </Field>
         )}
@@ -175,14 +178,14 @@ export function MedicalFields({ form }: { form: Form }) {
         <ConditionField
           form={form}
           path="contraindications"
-          label="Yaptırma"
-          description="Bu kısıtı olan danışanda hareket yasaklanır. Şiddet belirtmezsen her şiddeti kapsar."
+          label={t.avoidLabel}
+          description={t.avoidHint}
         />
         <ConditionField
           form={form}
           path="safeFor"
-          label="Sorun yok"
-          description="Bu kısıtta uyarıları susturur; kural “yasak” diyorsa yine de yasak kalır."
+          label={t.safeLabel}
+          description={t.safeHint}
         />
       </div>
     </FieldSet>

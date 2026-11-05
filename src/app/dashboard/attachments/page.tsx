@@ -14,8 +14,13 @@ import { listExercises } from '@/lib/exercises';
 import { TrainingTabs } from '../training-tabs';
 import { UnreadableRecordsAlert } from '../unreadable-records-alert';
 import { requirePt } from '@/lib/guards';
+import { getLocale, getMessages } from '@/i18n/server';
+import { ptLibraryMessages } from '@/i18n/messages/pt-library';
 
-export const metadata: Metadata = { title: 'Aparatlar' };
+export async function generateMetadata(): Promise<Metadata> {
+  const t = (await getMessages(ptLibraryMessages)).attachmentsPage;
+  return { title: t.title };
+}
 
 /**
  * Aparat havuzu: hazır liste + PT'nin aparatları. Cihazlar buradan seçer, egzersiz
@@ -23,8 +28,10 @@ export const metadata: Metadata = { title: 'Aparatlar' };
  */
 export default async function AttachmentsPage() {
   await requirePt();
-  const [file, devices, exercises] = await Promise.all([readCustomAttachments(), listDevices(), listExercises()]);
-  const attachments = await listAttachments(file);
+  const locale = await getLocale();
+  const t = ptLibraryMessages(locale).attachmentsPage;
+  const [file, devices, exercises] = await Promise.all([readCustomAttachments(), listDevices(undefined, locale), listExercises(undefined, locale)]);
+  const attachments = await listAttachments(file, locale);
   const deviceCount = new Map<string, number>();
   for (const device of devices) {
     for (const id of new Set(device.attachments ?? [])) deviceCount.set(id, (deviceCount.get(id) ?? 0) + 1);
@@ -39,17 +46,12 @@ export default async function AttachmentsPage() {
     <div className="flex flex-col gap-6">
       <TrainingTabs />
       <PageHeader
-        title="Aparatlar"
-        description={
-          <>
-            <span className="tabular-nums">{attachments.length}</span> aparat · <span className="tabular-nums">{custom}</span>{' '}
-            tanesi senin · cihazlar bu havuzdan seçer
-          </>
-        }
+        title={t.title}
+        description={<span className="tabular-nums">{t.summary(attachments.length, custom)}</span>}
         actions={
           <Button nativeButton={false} render={<Link href="/dashboard/attachments/new" />}>
             <Plus data-icon="inline-start" />
-            Yeni aparat
+            {t.add}
           </Button>
         }
       />
@@ -77,19 +79,19 @@ export default async function AttachmentsPage() {
                     )}
                     <CardTitle>{attachment.name}</CardTitle>
                     <CardDescription>
-                      {devicesUsing > 0 ? `${devicesUsing} cihazda takılı` : 'Henüz bir cihazda seçili değil'}
+                      {devicesUsing > 0 ? t.usedOnDevices(devicesUsing) : t.notUsed}
                     </CardDescription>
                     {attachment.source === 'custom' ? (
                       <CardAction>
-                        <Badge variant="secondary">senin</Badge>
+                        <Badge variant="secondary">{t.mine}</Badge>
                       </CardAction>
                     ) : null}
                   </CardHeader>
                   <CardFooter className="justify-between text-xs text-muted-foreground">
                     <span>
-                      <span className="tabular-nums">{exercisesUsing}</span>&nbsp;egzersiz
+                      <span className="tabular-nums">{t.exerciseCount(exercisesUsing)}</span>
                     </span>
-                    <span>{attachment.source === 'library' ? 'Hazır havuz' : 'Senin aparatın'}</span>
+                    <span>{attachment.source === 'library' ? t.sourceLibrary : t.sourceCustom}</span>
                   </CardFooter>
                 </Card>
               </Link>

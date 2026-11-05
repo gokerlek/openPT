@@ -18,6 +18,9 @@ import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
 import { fetchJson } from '@/lib/query/errors';
 import { useServiceMutation } from '@/lib/query/use-service';
+import { useMessages } from '@/i18n/client';
+import { ptProgramMessages } from '@/i18n/messages/pt-program';
+import { commonMessages } from '@/i18n/messages/common';
 
 /**
  * Evre süresi doldu: sonraki evreye geçiş önerisi. PT onaylar, geçiş hemen yazılır ve
@@ -41,6 +44,8 @@ export function PhaseTransition({
   /** Programın oluşturulma anı: silinip yeniden oluşturulan program (revision yine 1) da 412 verir. */
   createdAt: string;
 }) {
+  const t = useMessages(ptProgramMessages).phaseTransition;
+  const common = useMessages(commonMessages);
   const router = useRouter();
 
   const advance = useServiceMutation({
@@ -49,7 +54,7 @@ export function PhaseTransition({
         method: 'POST',
         body: JSON.stringify({ phaseId: next.id, baseRevision: revision, baseCreatedAt: createdAt }),
       }),
-    notify: { success: `'${next.name}' evresine geçildi.` },
+    notify: { success: t.switched(next.name) },
     onSuccess: () => router.refresh(),
     onError: (error) => {
       // Program o arada değişti: güncel hâli yüklensin, öneri yeniden hesaplansın.
@@ -60,26 +65,26 @@ export function PhaseTransition({
   return (
     <Alert>
       <CalendarCheck weight="fill" />
-      <AlertTitle>&apos;{phaseName}&apos; evresinin süresi doldu</AlertTitle>
+      <AlertTitle>{t.expired(phaseName)}</AlertTitle>
       <AlertDescription>{description}</AlertDescription>
       <div className="col-start-2 mt-2">
         <AlertDialog>
           <AlertDialogTrigger render={<Button size="sm" />}>
             <ArrowRight data-icon="inline-start" />
-            Sonraki evreye geç
+            {t.advance}
           </AlertDialogTrigger>
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>&apos;{next.name}&apos; evresine geçilsin mi?</AlertDialogTitle>
+              <AlertDialogTitle>{t.confirmTitle(next.name)}</AlertDialogTitle>
               <AlertDialogDescription>
-                Danışan bu evrenin programlarını atandıkları günlerde görür. Geçiş program geçmişine yazılır.
+                {t.confirmBody}
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel>Vazgeç</AlertDialogCancel>
+              <AlertDialogCancel>{common.actions.cancel}</AlertDialogCancel>
               <AlertDialogAction disabled={advance.isPending} onClick={() => advance.mutate()}>
                 {advance.isPending ? <Spinner data-icon="inline-start" /> : null}
-                Geç
+                {t.go}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>

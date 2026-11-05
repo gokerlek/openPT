@@ -14,8 +14,13 @@ import { isOwnProgramId } from '@/lib/own-programs';
 import { readOwnProgramOf } from '@/lib/own-programs-store';
 import { CLIENT_ID_PATTERN } from '@/lib/schemas/client';
 import { listTemplates, pickerDevices, pickerExercises } from '@/lib/templates';
+import { getLocale, getMessages } from '@/i18n/server';
+import { ptProgramMessages } from '@/i18n/messages/pt-program';
 
-export const metadata: Metadata = { title: 'Danışanın programını düzenle' };
+export async function generateMetadata(): Promise<Metadata> {
+  const t = (await getMessages(ptProgramMessages)).ownProgramEdit;
+  return { title: t.title };
+}
 
 /**
  * PT danışanın paylaştığı programı düzenler (`docs/design/kendi-program.md` §4, §3.5): `OwnProgramForm` `own-pt`
@@ -25,6 +30,8 @@ export const metadata: Metadata = { title: 'Danışanın programını düzenle' 
  * (`kisit-tarama.md` §3.2): sheet'te işaret, "Bu danışana önerilmeyenler", "Yine de ekle", kartta rozet.
  */
 export default async function EditOwnProgramPtPage({ params }: { params: Promise<{ id: string; pid: string }> }) {
+  const locale = await getLocale();
+  const t = ptProgramMessages(locale).ownProgramEdit;
   await requirePt();
   const { id, pid } = await params;
   if (!CLIENT_ID_PATTERN.test(id) || !isOwnProgramId(pid)) notFound();
@@ -38,15 +45,15 @@ export default async function EditOwnProgramPtPage({ params }: { params: Promise
   if (read.status === 'invalid' || !read.program.shared) redirect(viewHref);
 
   const program = read.program;
-  const [templateFiles, exercises, devices, config] = await Promise.all([listTemplates().catch(() => []), listExercises(), listDevices(), readAppConfig()]);
+  const [templateFiles, exercises, devices, config] = await Promise.all([listTemplates(locale).catch(() => []), listExercises(undefined, locale), listDevices(undefined, locale), readAppConfig()]);
   const templates = templateFiles.flatMap((item) => (item.template ? [{ id: item.template.id, name: item.template.name, blocks: item.template.blocks }] : []));
-  const care = await loadEditorCare(loaded.client, exercises, todayIn(config.timeZone));
+  const care = await loadEditorCare(loaded.client, exercises, todayIn(config.timeZone), { locale });
 
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-2">
         <EditorBackLink href={viewHref} label={program.name} />
-        <SectionHeader title={`${program.name} · danışanın programı`} description="Kaydedince danışana bildirilir; programın geçmişine senin adınla yazılır." />
+        <SectionHeader title={t.subtitle(program.name)} description={t.description} />
       </div>
       <OwnProgramForm
         mode="own-pt"

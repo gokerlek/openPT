@@ -51,6 +51,9 @@ import { DayEditor } from './day-editor';
 import { DaysCard } from './days-card';
 import { PhasesCard } from './phases-card';
 import { SaveTemplateDialog } from './save-template-dialog';
+import { useLocale, useMessages } from '@/i18n/client';
+import { catalogMessages } from '@/i18n/messages/catalog';
+import { ptProgramMessages } from '@/i18n/messages/pt-program';
 
 export type ProgramFormStore = FormStore<typeof programFormSchema>;
 
@@ -144,6 +147,8 @@ export function ProgramForm({
   /** Danışanın kısıtları (sheet'te işaret, kartta rozet; `kisit-tarama.md` §3.2); kısıt parçası yoksa null. */
   care?: EditorCare | null;
 }) {
+  const t = useMessages(ptProgramMessages).programForm;
+  const locale = useLocale();
   const router = useRouter();
   const exerciseById = useMemo(() => new Map(exercises.map((exercise) => [exercise.id, exercise])), [exercises]);
   const deviceIds = useMemo(() => new Set(devices.map((device) => device.id)), [devices]);
@@ -297,20 +302,20 @@ export function ProgramForm({
     if (before.phased === next) return;
     if (next) {
       setInput(form, { path: ['phased'], input: true });
-      offerUndo(before, "Evrelere bölündü; programları 'Evreye taşı' ile dağıt.");
+      offerUndo(before, t.splitDone);
       return;
     }
     const check = mergePhasesCheck(before.phases);
     if (!check.ok) {
-      toast.error(`Birleşince ${check.days} antrenman olur; tek listede en fazla 7 olabilir. Önce bazı programları kaldır.`);
+      toast.error(t.mergeTooMany(check.days));
       return;
     }
-    const merged = mergePhases(before.phases, getInput(form, { path: ['currentPhaseId'] }) ?? '');
+    const merged = mergePhases(before.phases, getInput(form, { path: ['currentPhaseId'] }) ?? '', locale);
     const mergedId = merged.phases[0]?.id;
     write(merged.phases);
     if (mergedId) setInput(form, { path: ['currentPhaseId'], input: mergedId });
     setInput(form, { path: ['phased'], input: false });
-    offerUndo(before, 'Evreler kaldırıldı; programlar tek listede, öteki evrelerin gün atamaları kalktı.');
+    offerUndo(before, t.unphased);
   };
 
   const actions: PhaseActions = {
@@ -329,7 +334,7 @@ export function ProgramForm({
       const hadDays = cleanWeekdays(day.weekdays).length > 0;
       update((phasesNow) => moveDayToPhase(phasesNow, dayId, phaseId), {
         select: dayId,
-        announce: `${day.name} '${target.name}' evresine taşındı${hadDays ? '; günleri kaldırıldı' : ''}`,
+        announce: t.moved(day.name, target.name, hadDays),
       });
     },
     openAddDay: (phaseId) => {
@@ -354,17 +359,17 @@ export function ProgramForm({
     const template = templateList.find((item) => item.id === value);
     if (template) {
       // Şablondan gün (silinmiş cihaz egzersizinkine döner, düşen satır uyarıda sayılır): bloklar ve kaynak bu güne.
-      const filled = dayFromTemplateForEditing({ days: [] }, template, programIdSource(before), new Date(), deviceIds);
+      const filled = dayFromTemplateForEditing({ days: [] }, template, programIdSource(before), new Date(), deviceIds, locale);
       noteDropped(filled.droppedDeviceRowIds);
       updateWithUndo(
         (phasesNow) => replaceDayBlocks(phasesNow, dayId, filled.day.blocks, filled.day.source),
-        `${day.name} şablonla dolduruldu`,
+        t.filled(day.name),
         { select: dayId },
       );
       return;
     }
     if (day.blocks.length === 0 && !day.source) return;
-    updateWithUndo((phasesNow) => replaceDayBlocks(phasesNow, dayId, [], null), `${day.name} boşaltıldı`, { select: dayId });
+    updateWithUndo((phasesNow) => replaceDayBlocks(phasesNow, dayId, [], null), t.emptied(day.name), { select: dayId });
   };
 
   const addFromTemplate = (template: TemplateOption) => {
@@ -372,11 +377,11 @@ export function ProgramForm({
     const phase = before.find((item) => item.id === addDayPhaseId);
     if (!phase) return;
     // Şablonun silinmiş cihaza yazılmış satırları açılıştaki gibi egzersizin cihazına döner (uyarıda sayılır).
-    const { day, droppedDeviceRowIds } = dayFromTemplateForEditing(phase, template, programIdSource(before), new Date(), deviceIds);
+    const { day, droppedDeviceRowIds } = dayFromTemplateForEditing(phase, template, programIdSource(before), new Date(), deviceIds, locale);
     noteDropped(droppedDeviceRowIds);
     update((phasesNow) => addDay(phasesNow, phase.id, day), {
       select: day.id,
-      announce: `${day.name} eklendi ('${template.name}' şablonundan)`,
+      announce: t.addedFromTemplate(day.name, template.name),
     });
     setAddDayPhaseId(null);
   };
@@ -411,10 +416,10 @@ export function ProgramForm({
     onSuccess: (result) => {
       draft.discard();
       toast.success(
-        result.unchanged ? 'Değişiklik yoktu; program aynı kaldı.' : aiDraftId ? 'Program danışana atandı.' : mode === 'create' ? 'Program oluşturuldu.' : 'Program kaydedildi.',
+        result.unchanged ? t.unchanged : aiDraftId ? t.assigned : mode === 'create' ? t.created : t.saved,
         // Eski sekmede seçilip o arada silinen cihaz sunucuda egzersizin cihazına döner: sessiz kalmasın.
         result.droppedDevices
-          ? { description: `${result.droppedDevices} satırın cihazı artık yok; egzersizin kendi cihazı kullanıldı.` }
+          ? { description: t.droppedDevices(result.droppedDevices) }
           : undefined,
       );
       router.push(`/dashboard/clients/${clientId}/program`);
@@ -427,7 +432,7 @@ export function ProgramForm({
   const dirty = !!aiDraftId || form.isDirty || start.dropped.length > 0;
   const guarded = (form.isDirty || start.dropped.length > 0) && !save.isPending && !save.isSuccess;
   // "Kaydedince kalıcı olur" yalnız Kaydet görünürken (taslak yüklenen hâle döndüyse söylenmez).
-  const droppedNotice = droppedDeviceNotice(phases, noted, dirty);
+  const droppedNotice = droppedDeviceNotice(phases, noted, dirty, locale);
 
   const submit = (values: ProgramFormValues) => {
     // Kütüphanede olmayan egzersiz kaydedilmez: satırın altında söylenir, o gün açılır.
@@ -440,7 +445,7 @@ export function ProgramForm({
             firstDay ??= day.id;
             setErrors(form, {
               path: ['phases', i, 'days', j, 'blocks', b, 'rows', r, 'exerciseId'],
-              errors: ['Bu egzersiz kütüphanede yok; kartı sil, yerine yenisini ekle.'],
+              errors: [catalogMessages(locale).blocks.missingExercise],
             });
           }),
         ),
@@ -477,10 +482,10 @@ export function ProgramForm({
   const skeleton = locateDay(phases, start.skeletonDayId);
   const skeletonPhase = skeleton ? phases[skeleton.phaseIndex] : phases[0];
   const skeletonDay = skeleton ? skeletonPhase?.days[skeleton.dayIndex] : skeletonPhase?.days[0];
-  const startTarget = skeletonPhase && skeletonDay ? dayLabel(skeletonPhase.name, skeletonDay.name) : 'İlk program';
+  const startTarget = skeletonPhase && skeletonDay ? dayLabel(skeletonPhase.name, skeletonDay.name) : t.firstProgram;
   const addDayPhase = phases.find((phase) => phase.id === addDayPhaseId);
   const startLabels: Record<string, string> = {
-    [NO_TEMPLATE]: 'Şablonsuz (boş)',
+    [NO_TEMPLATE]: t.noTemplate,
     ...Object.fromEntries(templateList.map((template) => [template.id, template.name])),
   };
 
@@ -490,15 +495,14 @@ export function ProgramForm({
       {stale ? (
         <Alert variant="destructive">
           <WarningCircle />
-          <AlertTitle>Bu program başka bir yerde değişti</AlertTitle>
+          <AlertTitle>{t.staleTitle}</AlertTitle>
           <AlertDescription>
-            Sen düzenlerken program başka bir sekmede ya da cihazda kaydedildi. Değişikliklerin burada duruyor; yeni sürümü
-            ayrı sekmede açıp karşılaştırabilir ya da sayfayı yenileyip (değişikliklerin gider) baştan düzenleyebilirsin.
+            {t.staleBody}
           </AlertDescription>
           <div className="col-start-2 mt-2 flex flex-wrap gap-2">
             <Button variant="outline" size="sm" nativeButton={false} render={<Link href={programHref} target="_blank" rel="noopener" />}>
               <ArrowSquareOut data-icon="inline-start" />
-              Yeni sekmede aç
+              {t.openNewTab}
             </Button>
             <Button
               type="button"
@@ -512,7 +516,7 @@ export function ProgramForm({
                 window.location.reload();
               }}>
               <ArrowClockwise data-icon="inline-start" />
-              Sayfayı yenile
+              {t.reload}
             </Button>
           </div>
         </Alert>
@@ -521,16 +525,16 @@ export function ProgramForm({
       {hidden ? (
         <Alert variant="destructive" data-form-error>
           <WarningCircle />
-          <AlertTitle>Kaydedilemedi</AlertTitle>
+          <AlertTitle>{t.failedTitle}</AlertTitle>
           <AlertDescription>
             {hiddenPhase && hiddenDay
-              ? `${dayLabel(hiddenPhase.name, hiddenDay.name)} programında düzeltilecek alan var: ${hidden.errors[0] ?? ''}`
+              ? t.hiddenError(dayLabel(hiddenPhase.name, hiddenDay.name), hidden.errors[0] ?? '')
               : hidden.errors[0]}
           </AlertDescription>
           {hiddenDay && hiddenDay.id !== selectedDay?.id ? (
             <div className="col-start-2 mt-2">
               <Button type="button" variant="outline" size="sm" onClick={() => setSelectedDayId(hiddenDay.id)}>
-                O programa git
+                {t.goToProgram}
               </Button>
             </div>
           ) : null}
@@ -545,7 +549,7 @@ export function ProgramForm({
         dirty,
         pending: save.isPending || save.isSuccess,
         creating: mode === 'create',
-        submitLabel: aiDraftId ? 'Onayla ve danışana ata' : mode === 'create' ? 'Programı oluştur' : 'Programı kaydet',
+        submitLabel: aiDraftId ? t.approveAssign : mode === 'create' ? t.create : t.save,
       }}>
       <Form of={form} className="flex flex-col gap-6" onSubmit={submit}>
         <p className="sr-only" aria-live="polite">
@@ -563,8 +567,7 @@ export function ProgramForm({
         {missingRows > 0 ? (
           <Alert variant="destructive">
             <WarningCircle />
-            <AlertDescription>
-              {missingRows} hareket kütüphanede yok ({missingLabels}); kaydetmeden önce kartlarını sil, yerine yenisini ekle.
+            <AlertDescription>{t.missingRows(missingRows, missingLabels)}
             </AlertDescription>
           </Alert>
         ) : null}
@@ -572,15 +575,15 @@ export function ProgramForm({
         {mode === 'create' && !aiDraftId ? (
           <Card>
             <CardHeader>
-              <CardTitle>Başlangıç</CardTitle>
-              <CardDescription>Bir şablonla başlayıp bu danışana göre değiştirebilirsin.</CardDescription>
+              <CardTitle>{t.startTitle}</CardTitle>
+              <CardDescription>{t.startDescription}</CardDescription>
             </CardHeader>
             <CardContent>
               <Field className="max-w-sm">
-                <FieldLabel htmlFor="startTemplate">Başlangıç şablonu</FieldLabel>
+                <FieldLabel htmlFor="startTemplate">{t.startLabel}</FieldLabel>
                 <LabeledSelect id="startTemplate" value={startChoice} labels={startLabels} onChange={chooseStart} />
                 <FieldDescription>
-                  {startTarget} bu şablonla dolar. Başka programları &quot;+ Program → Şablondan…&quot; ile eklersin.
+                  {t.startHint(startTarget)}
                 </FieldDescription>
               </Field>
             </CardContent>
@@ -671,7 +674,7 @@ export function ProgramForm({
       <UnsavedChangesGuard
         ref={guard}
         active={guarded}
-        description="Çıkarsan bu değişiklikler kaydedilmez; danışan göremez."
+        description={t.guard}
         onLeave={draft.leave}
       />
     </EditorSaveProvider>

@@ -7,6 +7,9 @@ import { ConfirmDeleteDialog } from '@/components/confirm-delete-dialog';
 import { Button } from '@/components/ui/button';
 import { fetchJson } from '@/lib/query/errors';
 import { useServiceMutation } from '@/lib/query/use-service';
+import { useMessages } from '@/i18n/client';
+import { ptLibraryMessages } from '@/i18n/messages/pt-library';
+import { commonMessages } from '@/i18n/messages/common';
 
 /**
  * Düzenleme sayfasının yıkıcı eylemleri (detayda değil, SPEC §6):
@@ -25,13 +28,15 @@ export function ExerciseActions({
   source: 'library' | 'custom';
   overridesLibrary: boolean;
 }) {
+  const t = useMessages(ptLibraryMessages).exerciseActions;
+  const common = useMessages(commonMessages);
   const [open, setOpen] = useState(false);
   const router = useRouter();
 
   const remove = useServiceMutation({
     fn: () => fetchJson<{ ok: true }>(`/api/exercises/${id}`, { method: 'DELETE' }),
     invalidate: [['exercises']],
-    notify: { success: overridesLibrary ? 'Varsayılan sürüme dönüldü.' : 'Egzersiz silindi.' },
+    notify: { success: overridesLibrary ? t.resetDone : t.deleted },
     onSuccess: () => {
       // Varsayılana dönüldüyse egzersiz yerinde durur (hazır sürümüyle); silindiyse listeye dön.
       router.push(overridesLibrary ? `/dashboard/exercises/${id}` : '/dashboard/exercises');
@@ -45,16 +50,16 @@ export function ExerciseActions({
     <>
       <Button variant={overridesLibrary ? 'outline' : 'destructive'} onClick={() => setOpen(true)}>
         {overridesLibrary ? <ArrowCounterClockwise data-icon="inline-start" /> : <Trash data-icon="inline-start" />}
-        {overridesLibrary ? 'Varsayılana dön' : 'Sil'}
+        {overridesLibrary ? common.actions.resetToDefault : common.actions.delete}
       </Button>
       <ConfirmDeleteDialog
         open={open}
         onOpenChange={setOpen}
-        title={overridesLibrary ? `"${title}" varsayılana dönsün mü?` : `"${title}" silinsin mi?`}
+        title={overridesLibrary ? t.resetTitle(title) : t.deleteTitle(title)}
         body={overridesLibrary
-          ? 'Yaptığın değişiklikler kalkar, hazır kütüphanedeki sürüm geri gelir.'
-          : 'Bu egzersizi kullanan şablonlar varsa oradan da kaldırman gerekir. Git geçmişinde kaydı durur.'}
-        confirmLabel={overridesLibrary ? 'Varsayılana dön' : 'Sil'}
+          ? t.resetBody
+          : t.deleteBody}
+        confirmLabel={overridesLibrary ? common.actions.resetToDefault : common.actions.delete}
         confirmVariant={overridesLibrary ? 'default' : 'destructive'}
         busy={remove.isPending}
         onConfirm={() => remove.mutate()}

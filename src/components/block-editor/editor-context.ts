@@ -7,7 +7,9 @@ import type { ReorderTarget } from '@/lib/reorder';
 import type { blocksHostSchema } from '@/lib/schemas/template';
 import type { SetSpec } from '@/lib/set-plan';
 import type { EditorDevice, IdSource, PickerExercise } from '@/lib/template-edit';
-import { BLOCK_KIND_LABELS, type TemplateBlock, type TemplateRow } from '@/lib/template-plan';
+import { DEFAULT_LOCALE, type Locale } from '@/i18n/locale';
+import { programEditorMessages } from '@/i18n/messages/program-editor';
+import { blockKindLabels, type TemplateBlock, type TemplateRow } from '@/lib/template-plan';
 
 /** Blokları kökte tutan form tipi. Gerçek form başka şekilde olabilir (program); yol öneki `path`'tedir. */
 export type BlocksFormStore = FormStore<typeof blocksHostSchema>;
@@ -172,27 +174,32 @@ export function useEditor(): Editor {
 }
 
 /** Satırın başlığı: egzersizin adı; kütüphanede yoksa "Silinmiş egzersiz". */
-export function rowTitle(row: TemplateRow, exercises: ReadonlyMap<string, PickerExercise>): string {
-  return exercises.get(row.exerciseId)?.title ?? 'Silinmiş egzersiz';
+export function rowTitle(row: TemplateRow, exercises: ReadonlyMap<string, PickerExercise>, locale: Locale = DEFAULT_LOCALE): string {
+  return exercises.get(row.exerciseId)?.title ?? programEditorMessages(locale).editorContext.deletedExercise;
 }
 
 /** Grubun adı: türü ve sırası ("Süperset 2"). */
-export function groupTitle(block: TemplateBlock, blockIndex: number): string {
-  return `${BLOCK_KIND_LABELS[block.kind]} ${blockIndex + 1}`;
+export function groupTitle(block: TemplateBlock, blockIndex: number, locale: Locale = DEFAULT_LOCALE): string {
+  return `${blockKindLabels(locale)[block.kind]} ${blockIndex + 1}`;
 }
 
 /**
  * Öğenin adı (duyurular, toast'lar, düğme adları): satırda hareketin adı, grupta türü ve
  * sırası. Bilinmeyen kimlikte boş.
  */
-export function itemTitle(blocks: readonly TemplateBlock[], itemId: string, exercises: ReadonlyMap<string, PickerExercise>): string {
+export function itemTitle(
+  blocks: readonly TemplateBlock[],
+  itemId: string,
+  exercises: ReadonlyMap<string, PickerExercise>,
+  locale: Locale = DEFAULT_LOCALE,
+): string {
   for (const [blockIndex, block] of blocks.entries()) {
     if (block.id === itemId) {
       const only = block.rows[0];
-      return block.kind === 'single' && only ? rowTitle(only, exercises) : groupTitle(block, blockIndex);
+      return block.kind === 'single' && only ? rowTitle(only, exercises, locale) : groupTitle(block, blockIndex, locale);
     }
     const row = block.rows.find((item) => item.id === itemId);
-    if (row) return rowTitle(row, exercises);
+    if (row) return rowTitle(row, exercises, locale);
   }
   return '';
 }

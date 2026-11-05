@@ -1,4 +1,7 @@
 import { DEFAULT_LOCALE, type Locale } from '../i18n/locale.ts';
+import { programLogMessages } from '../i18n/messages/program-log/index.ts';
+import { lower } from '../i18n/text.ts';
+import { getFormat } from './format.ts';
 import {
   appendLog,
   capChanges,
@@ -14,11 +17,11 @@ import {
 } from './program-plan.ts';
 import { cardioKind } from './cardio.ts';
 import { ptTargetsEdit } from './client-targets.ts';
-import { PROGRESSION_LABELS, RIR_LABELS, type TrackingType } from './progression.ts';
+import { progressionLabels, rirLabels, type TrackingType } from './progression.ts';
 import { sameWeekdays, weekdaysText } from './day-assignments.ts';
 import { amrapIndexes, resizeSets, setShape, setsText, type SetSpec } from './set-plan.ts';
 import {
-  BLOCK_KIND_LABELS,
+  blockKindLabels,
   DEFAULT_TRANSITION_SECONDS,
   formatRest,
   roundsOf,
@@ -55,31 +58,32 @@ function clip(text: string, max: number): string {
   return text.length <= max ? text : `${text.slice(0, max - 1)}…`;
 }
 
-function count(value: number): string {
-  return value.toLocaleString('tr-TR');
+function count(value: number, locale: Locale): string {
+  return getFormat(locale).number(value);
 }
 
 /** "8–12", "8", "30–60 sn", "45 sn". */
-function targetShort(target: TemplateTarget, trackingType: TrackingType): string {
-  const range = target.min === target.max ? count(target.min) : `${count(target.min)}–${count(target.max)}`;
-  return trackingType === 'duration' ? `${range} sn` : range;
+function targetShort(target: TemplateTarget, trackingType: TrackingType, locale: Locale): string {
+  const range = target.min === target.max ? count(target.min, locale) : `${count(target.min, locale)}–${count(target.max, locale)}`;
+  return trackingType === 'duration' ? programLogMessages(locale).diff.seconds(range) : range;
 }
 
 /** Reçete: "3×8–12", "5×5", "3×30–60 sn" (düz setler; set başına biçim `setsText`). */
-export function prescriptionText(sets: number, target: TemplateTarget, trackingType: TrackingType): string {
-  return `${count(sets)}×${targetShort(target, trackingType)}`;
+export function prescriptionText(sets: number, target: TemplateTarget, trackingType: TrackingType, locale: Locale = DEFAULT_LOCALE): string {
+  return `${count(sets, locale)}×${targetShort(target, trackingType, locale)}`;
 }
 
-function restText(seconds: number): string {
-  return seconds <= 0 ? 'yok' : formatRest(seconds);
+function restText(seconds: number, locale: Locale): string {
+  return seconds <= 0 ? programLogMessages(locale).diff.none : formatRest(seconds, locale);
 }
 
-function weeksText(weeks: number | undefined): string {
-  return weeks === undefined ? 'süresiz' : `${count(weeks)} hafta`;
+function weeksText(weeks: number | undefined, locale: Locale): string {
+  const t = programLogMessages(locale).diff;
+  return weeks === undefined ? t.openEnded : t.weeks(weeks, count(weeks, locale));
 }
 
-function kindLower(kind: BlockKind): string {
-  return BLOCK_KIND_LABELS[kind].toLocaleLowerCase('tr');
+function kindLower(kind: BlockKind, locale: Locale): string {
+  return lower(locale, blockKindLabels(locale)[kind]);
 }
 
 type Located = { row: TemplateRow; block: TemplateBlock };
@@ -122,20 +126,22 @@ function amrapOnly(a: readonly SetSpec[], b: readonly SetSpec[]): boolean {
 }
 
 /** AMRAP değişiminin cümlesi: "son set AMRAP", "AMRAP 2., 3. set", "AMRAP kaldırıldı"… */
-function amrapChange(a: readonly SetSpec[], b: readonly SetSpec[]): string {
+function amrapChange(a: readonly SetSpec[], b: readonly SetSpec[], locale: Locale): string {
+  const t = programLogMessages(locale).diff;
   const before = setShape(a).amrap;
   const after = setShape(b).amrap;
   const single = b.length === 1;
-  if (after === 'none') return before === 'last' && !single ? 'son set AMRAP kaldırıldı' : 'AMRAP kaldırıldı';
-  if (after === 'last') return single ? 'AMRAP' : 'son set AMRAP';
-  if (after === 'all') return 'bütün setler AMRAP';
-  return `AMRAP ${amrapIndexes(b)
-    .map((index) => `${index + 1}.`)
-    .join(', ')} set`;
+  if (after === 'none') return before === 'last' && !single ? t.amrapRemovedLast : t.amrapRemoved;
+  if (after === 'last') return single ? t.amrapOne : t.amrapLast;
+  if (after === 'all') return t.amrapAll;
+  return t.amrapSome(amrapIndexes(b).map((index) => index + 1));
 }
 
 /** Bir günün değişiklikleri (kapsamsız cümleler). */
 export function diffDay(before: Pick<ProgramDay, 'blocks'>, after: Pick<ProgramDay, 'blocks'>, ctx: DiffContext): string[] {
+  const locale = ctx.locale ?? DEFAULT_LOCALE;
+  const t = programLogMessages(locale).diff;
+  const kindLabels = blockKindLabels(locale);
   const title = (row: TemplateRow) => ctx.exercises.get(row.exerciseId)?.title ?? row.exerciseId;
   const tt = (row: TemplateRow): TrackingType => ctx.exercises.get(row.exerciseId)?.trackingType ?? 'weight_reps';
   // Yürüyüş/koşuda süre dakikayla yazılır (`cardio.ts`).
@@ -156,11 +162,11 @@ export function diffDay(before: Pick<ProgramDay, 'blocks'>, after: Pick<ProgramD
   for (const block of after.blocks) {
     if (block.kind === 'single') continue;
     const old = beforeBlocks.get(block.id);
-    const label = BLOCK_KIND_LABELS[block.kind];
+    const label = kindLabels[block.kind];
     if (!old || old.kind === 'single') {
-      groupLines.push(`Yeni ${kindLower(block.kind)}: ${names(block)}`);
+      groupLines.push(t.newGroup(kindLower(block.kind, locale), names(block)));
     } else if (old.kind !== block.kind) {
-      groupLines.push(`${BLOCK_KIND_LABELS[old.kind]} → ${kindLower(block.kind)}: ${names(block)}`);
+      groupLines.push(t.groupKindChanged(kindLabels[old.kind], kindLower(block.kind, locale), names(block)));
     } else if (
       !sameOrder(
         old.rows.map((row) => row.id),
@@ -171,23 +177,23 @@ export function diffDay(before: Pick<ProgramDay, 'blocks'>, after: Pick<ProgramD
         return previous !== undefined && previous.block.id !== block.id;
       })
     ) {
-      groupLines.push(`${label} güncellendi: ${names(block)}`);
+      groupLines.push(t.groupUpdated(label, names(block)));
     }
     if (old && old.kind !== 'single') {
       // Tur cümlesi yalnız hareketlerin set sayısı önce de sonra da eşitse; değilse satır cümleleri anlatır.
       const oldRounds = roundsOf(old);
       const newRounds = roundsOf(block);
       if (oldRounds !== newRounds && uniformCount(old) && uniformCount(block)) {
-        groupLines.push(`${label} (${names(block)}): ${count(oldRounds)} → ${count(newRounds)} tur`);
+        groupLines.push(t.groupRounds(label, names(block), count(oldRounds, locale), count(newRounds, locale), newRounds));
         roundsReported.add(block.id);
       }
       if (old.restSeconds !== block.restSeconds) {
-        groupLines.push(`${label} (${names(block)}): tur sonu dinlenme ${restText(old.restSeconds)} → ${restText(block.restSeconds)}`);
+        groupLines.push(t.groupRest(label, names(block), restText(old.restSeconds, locale), restText(block.restSeconds, locale)));
       }
       const oldTransition = old.transitionSeconds ?? DEFAULT_TRANSITION_SECONDS;
       const newTransition = block.transitionSeconds ?? DEFAULT_TRANSITION_SECONDS;
       if (old.kind === 'circuit' && block.kind === 'circuit' && oldTransition !== newTransition) {
-        groupLines.push(`${label} (${names(block)}): istasyon arası ${restText(oldTransition)} → ${restText(newTransition)}`);
+        groupLines.push(t.groupTransition(label, names(block), restText(oldTransition, locale), restText(newTransition, locale)));
       }
     }
   }
@@ -195,7 +201,7 @@ export function diffDay(before: Pick<ProgramDay, 'blocks'>, after: Pick<ProgramD
     if (old.kind === 'single') continue;
     const now = afterBlocks.get(old.id);
     if (now && now.kind !== 'single') continue;
-    if (old.rows.some((row) => afterRows.has(row.id))) groupLines.push(`${BLOCK_KIND_LABELS[old.kind]} dağıtıldı: ${names(old)}`);
+    if (old.rows.some((row) => afterRows.has(row.id))) groupLines.push(t.groupDissolved(kindLabels[old.kind], names(old)));
   }
 
   const rowLines: string[] = [];
@@ -210,63 +216,61 @@ export function diffDay(before: Pick<ProgramDay, 'blocks'>, after: Pick<ProgramD
     // Gruptan çıkan satır (grup aynı türde sürdüğü için grup cümlesi yok): dağıtma değilse yazılır.
     const group = afterBlocks.get(previous.block.id);
     if (previous.block.kind !== 'single' && next.block.kind === 'single' && group && group.kind !== 'single') {
-      rowLines.push(`${name} gruptan çıkarıldı (dinlenme ${restText(next.block.restSeconds)})`);
+      rowLines.push(t.leftGroup(name, restText(next.block.restSeconds, locale)));
     }
 
-    const textA = setsText(a.sets, tt(a), cardioOf(a));
-    const textB = setsText(b.sets, tt(b), cardioOf(b));
+    const textA = setsText(a.sets, tt(a), cardioOf(a), locale);
+    const textB = setsText(b.sets, tt(b), cardioOf(b), locale);
     if (textA !== textB) {
       const roundsOnly =
         roundsReported.has(next.block.id) &&
         previous.block.id === next.block.id &&
-        setsText(resizeSets(a.sets, b.sets.length), tt(a), cardioOf(a)) === textB;
-      if (tt(a) === tt(b) && amrapOnly(a.sets, b.sets)) rowLines.push(`${name}: ${amrapChange(a.sets, b.sets)}`);
+        setsText(resizeSets(a.sets, b.sets.length), tt(a), cardioOf(a), locale) === textB;
+      if (tt(a) === tt(b) && amrapOnly(a.sets, b.sets)) rowLines.push(`${name}: ${amrapChange(a.sets, b.sets, locale)}`);
       else if (!roundsOnly) rowLines.push(`${name} ${textA} → ${textB}`);
     }
 
     if (previous.block.kind === 'single' && next.block.kind === 'single' && previous.block.restSeconds !== next.block.restSeconds) {
-      rowLines.push(`${name} dinlenme ${restText(previous.block.restSeconds)} → ${restText(next.block.restSeconds)}`);
+      rowLines.push(t.rowRest(name, restText(previous.block.restSeconds, locale), restText(next.block.restSeconds, locale)));
     }
 
     if (!sameRule(a.rule, b.rule)) {
       rowLines.push(
         b.rule
-          ? `${name} kuralı: ${PROGRESSION_LABELS[b.rule.scheme]} · ${RIR_LABELS[b.rule.targetRir] ?? `${b.rule.targetRir} tekrar yedekte`}`
-          : `${name} egzersizin kuralına döndü`,
+          ? t.rowRule(name, progressionLabels(locale)[b.rule.scheme], rirLabels(locale)[b.rule.targetRir] ?? t.rirFallback(b.rule.targetRir))
+          : t.rowRuleReset(name),
       );
     }
 
     if (a.deviceId !== b.deviceId) {
-      rowLines.push(
-        b.deviceId ? `${name} cihazı: ${ctx.devices.get(b.deviceId)?.name ?? 'silinmiş cihaz'}` : `${name} egzersizin cihazına döndü`,
-      );
+      rowLines.push(b.deviceId ? t.rowDevice(name, ctx.devices.get(b.deviceId)?.name ?? t.deletedDevice) : t.rowDeviceReset(name));
     }
 
     if ((a.note ?? '') !== (b.note ?? '')) {
-      rowLines.push(b.note ? `${name} notu: “${clip(b.note, NOTE_EXCERPT)}”` : `${name} notu silindi`);
+      rowLines.push(b.note ? t.rowNote(name, clip(b.note, NOTE_EXCERPT)) : t.rowNoteRemoved(name));
     }
   }
 
-  const removed = [...beforeRows.values()].filter(({ row }) => !afterRows.has(row.id)).map(({ row }) => `${title(row)} çıkarıldı`);
-  const added = [...afterRows.values()].filter(({ row }) => !beforeRows.has(row.id)).map(({ row }) => `${title(row)} eklendi`);
+  const removed = [...beforeRows.values()].filter(({ row }) => !afterRows.has(row.id)).map(({ row }) => t.removed(title(row)));
+  const added = [...afterRows.values()].filter(({ row }) => !beforeRows.has(row.id)).map(({ row }) => t.added(title(row)));
 
   const keptAfter = [...afterRows.keys()].filter((id) => beforeRows.has(id));
   const keptBefore = [...beforeRows.keys()].filter((id) => afterRows.has(id));
-  const order = sameOrder(keptBefore, keptAfter) ? [] : ['Hareket sırası değişti'];
+  const order = sameOrder(keptBefore, keptAfter) ? [] : [t.orderChanged];
 
   return [...rowLines, ...groupLines, ...removed, ...added, ...order];
 }
 
 /** "haftada 3 gün". */
-function perWeek(daysPerWeek: number): string {
-  return `haftada ${count(daysPerWeek)} gün`;
+function perWeek(daysPerWeek: number, locale: Locale): string {
+  return programLogMessages(locale).diff.perWeek(daysPerWeek, count(daysPerWeek, locale));
 }
 
 /** Evre özetinin parçaları: süre, sıklık, günler ("2 hafta · haftada 3 gün · Gün A, Gün B"). */
-function phaseParts(phase: ProgramPhase, withDays: boolean): string {
+function phaseParts(phase: ProgramPhase, withDays: boolean, locale: Locale): string {
   return [
-    phase.weeks !== undefined ? weeksText(phase.weeks) : null,
-    phase.daysPerWeek !== undefined ? perWeek(phase.daysPerWeek) : null,
+    phase.weeks !== undefined ? weeksText(phase.weeks, locale) : null,
+    phase.daysPerWeek !== undefined ? perWeek(phase.daysPerWeek, locale) : null,
     withDays ? phase.days.map((day) => day.name).join(', ') : null,
   ]
     .filter((part): part is string => Boolean(part))
@@ -274,16 +278,17 @@ function phaseParts(phase: ProgramPhase, withDays: boolean): string {
 }
 
 /** Sıklık değişimi: evresizde programın, evreli programda evrenin. */
-function frequencyChange(before: number | undefined, after: number | undefined, phaseName: string | null): string | null {
+function frequencyChange(before: number | undefined, after: number | undefined, phaseName: string | null, locale: Locale): string | null {
   if (before === after) return null;
+  const t = programLogMessages(locale).diff;
   if (phaseName === null) {
-    if (before === undefined) return `Sıklık: ${perWeek(after as number)}`;
-    if (after === undefined) return `Sıklık kaldırıldı (önce ${perWeek(before)})`;
-    return `Haftada ${count(before)} → ${count(after)} gün`;
+    if (before === undefined) return t.frequency(perWeek(after as number, locale));
+    if (after === undefined) return t.frequencyRemoved(perWeek(before, locale));
+    return t.frequencyChanged(count(before, locale), count(after, locale), after);
   }
-  if (before === undefined) return `'${phaseName}' sıklığı: ${perWeek(after as number)}`;
-  if (after === undefined) return `'${phaseName}' sıklığı kaldırıldı (önce ${perWeek(before)})`;
-  return `'${phaseName}': haftada ${count(before)} → ${count(after)} gün`;
+  if (before === undefined) return t.phaseFrequency(phaseName, perWeek(after as number, locale));
+  if (after === undefined) return t.phaseFrequencyRemoved(phaseName, perWeek(before, locale));
+  return t.phaseFrequencyChanged(phaseName, count(before, locale), count(after, locale), after);
 }
 
 /**
@@ -294,6 +299,8 @@ function frequencyChange(before: number | undefined, after: number | undefined, 
  * evre değiştirmesi ayrıca yazılmaz. Cümleler kırpılmaz: dosyanın sınırı (300/90) `appendLog`'da.
  */
 export function diffProgram(before: ProgramBody, after: ProgramBody, ctx: DiffContext): ProgramChange[] {
+  const locale = ctx.locale ?? DEFAULT_LOCALE;
+  const t = programLogMessages(locale).diff;
   const changes: ProgramChange[] = [];
   const push = (text: string, scope?: string) => changes.push({ ...(scope ? { scope } : {}), text });
 
@@ -327,85 +334,87 @@ export function diffProgram(before: ProgramBody, after: ProgramBody, ctx: DiffCo
     const scope = phaseScope(phase);
     for (const day of phase.days) {
       const previous = beforeDays.get(day.id)?.day;
-      if (previous && previous.name !== day.name) push(`Gün adı: '${previous.name}' → '${day.name}'`, scope);
+      if (previous && previous.name !== day.name) push(t.dayRenamed(previous.name, day.name), scope);
       if (previous && !sameWeekdays(previous.weekdays, day.weekdays)) {
-        push(`Günleri: ${weekdaysText(previous.weekdays ?? []) || 'yok'} → ${weekdaysText(day.weekdays ?? []) || 'yok'}`, dayScope(phase, day));
+        push(
+          t.dayWeekdays(weekdaysText(previous.weekdays ?? [], locale) || t.none, weekdaysText(day.weekdays ?? [], locale) || t.none),
+          dayScope(phase, day),
+        );
       }
     }
     const old = beforePhases.get(phase.id);
     if (!old) continue;
     for (const day of phase.days) {
       if (beforeDays.has(day.id)) continue;
-      push(day.source ? `${day.name} eklendi ('${day.source.templateName}' şablonundan)` : `${day.name} eklendi`, scope);
+      push(day.source ? t.dayAddedFrom(day.name, day.source.templateName) : t.dayAdded(day.name), scope);
     }
     for (const day of old.days) {
-      if (!afterDays.has(day.id)) push(`${day.name} silindi`, scope);
+      if (!afterDays.has(day.id)) push(t.dayDeleted(day.name), scope);
     }
     const oldIds = new Set(old.days.map((day) => day.id));
     const newIds = new Set(phase.days.map((day) => day.id));
     const keptBefore = old.days.filter((day) => newIds.has(day.id)).map((day) => day.id);
     const keptAfter = phase.days.filter((day) => oldIds.has(day.id)).map((day) => day.id);
-    if (!sameOrder(keptBefore, keptAfter)) push(`Gün sırası: ${phase.days.map((day) => day.name).join(', ')}`, scope);
+    if (!sameOrder(keptBefore, keptAfter)) push(t.dayOrder(phase.days.map((day) => day.name).join(', ')), scope);
   }
   // Silinen evrenin günleri evreyle birlikte yazılır; evreler kaldırılırken silinen gün ayrıca.
   if (toggledOff) {
     for (const phase of before.phases) {
       if (afterPhases.has(phase.id)) continue;
-      for (const day of phase.days) if (!afterDays.has(day.id)) push(`${day.name} silindi`);
+      for (const day of phase.days) if (!afterDays.has(day.id)) push(t.dayDeleted(day.name));
     }
   }
   if (!toggled) {
     for (const phase of after.phases) {
       for (const day of phase.days) {
         const previous = beforeDays.get(day.id);
-        if (previous && previous.phase.id !== phase.id) push(`${day.name} → '${phase.name}' evresine taşındı`);
+        if (previous && previous.phase.id !== phase.id) push(t.dayMoved(day.name, phase.name));
       }
     }
   }
 
   // 3. Evreler.
   if (toggledOn) {
-    push(`Evrelere bölündü: ${after.phases.map((phase) => `'${phase.name}' (${phaseParts(phase, true)})`).join(', ')}`);
+    push(t.phased(after.phases.map((phase) => `'${phase.name}' (${phaseParts(phase, true, locale)})`).join(', ')));
   } else if (toggledOff) {
-    push(`Evreler kaldırıldı; günler tek listede: ${after.phases.flatMap((phase) => phase.days.map((day) => day.name)).join(', ')}`);
+    push(t.unphased(after.phases.flatMap((phase) => phase.days.map((day) => day.name)).join(', ')));
   } else {
     for (const phase of after.phases) {
       const old = beforePhases.get(phase.id);
       if (!old) continue;
-      if (old.name !== phase.name) push(`Evre adı: '${old.name}' → '${phase.name}'`);
-      if (old.weeks !== phase.weeks) push(`'${phase.name}' süresi: ${weeksText(old.weeks)} → ${weeksText(phase.weeks)}`);
+      if (old.name !== phase.name) push(t.phaseRenamed(old.name, phase.name));
+      if (old.weeks !== phase.weeks) push(t.phaseDuration(phase.name, weeksText(old.weeks, locale), weeksText(phase.weeks, locale)));
     }
   }
   if (!toggledOn) {
     for (const phase of after.phases) {
       const old = beforePhases.get(phase.id);
       if (!old) continue;
-      const text = frequencyChange(old.daysPerWeek, phase.daysPerWeek, after.phased ? phase.name : null);
+      const text = frequencyChange(old.daysPerWeek, phase.daysPerWeek, after.phased ? phase.name : null, locale);
       if (text) push(text);
     }
   }
   if (!toggled) {
     for (const phase of after.phases) {
       if (beforePhases.has(phase.id)) continue;
-      const parts = phaseParts(phase, false);
-      push(`Evre '${phase.name}' eklendi${parts ? ` (${parts})` : ''}`);
+      push(t.phaseAdded(phase.name, phaseParts(phase, false, locale)));
     }
     for (const phase of before.phases) {
-      if (!afterPhases.has(phase.id)) push(`Evre '${phase.name}' silindi`);
+      if (!afterPhases.has(phase.id)) push(t.phaseDeleted(phase.name));
     }
     const keptBefore = before.phases.filter((phase) => afterPhases.has(phase.id)).map((phase) => phase.id);
     const keptAfter = after.phases.filter((phase) => beforePhases.has(phase.id)).map((phase) => phase.id);
-    if (!sameOrder(keptBefore, keptAfter)) push(`Evre sırası: ${after.phases.map((phase) => phase.name).join(', ')}`);
+    if (!sameOrder(keptBefore, keptAfter)) push(t.phaseOrder(after.phases.map((phase) => phase.name).join(', ')));
   }
 
   // 4. Şu anki evre (evreler kaldırılırken yazılmaz: tek liste kalır).
   if (!toggledOff && before.currentPhaseId !== after.currentPhaseId) {
     const to = afterPhases.get(after.currentPhaseId)?.name ?? '';
     if (toggledOn) {
-      push(`Şu anki evre: '${to}'`);
+      push(t.currentPhase(to));
     } else {
       const from = beforePhases.get(before.currentPhaseId)?.name ?? '';
-      push(currentPhaseChange(from, to).text);
+      push(currentPhaseChange(from, to, locale).text);
     }
   }
 
@@ -434,15 +443,10 @@ export function formatChangeSummary(changes: readonly ProgramChange[]): string {
  * Commit mesajı: konu satırı özet (en fazla 72 karakter), birden çok değişiklik varsa ya
  * da konu kırpıldıysa gövdede her değişiklik bir satır (kırpılmadan). Git geçmişi tam kayıttır.
  */
-export function commitMessage(kind: LogKind, changes: readonly ProgramChange[], _locale: Locale = DEFAULT_LOCALE): string {
+export function commitMessage(kind: LogKind, changes: readonly ProgramChange[], locale: Locale = DEFAULT_LOCALE): string {
+  const t = programLogMessages(locale).diff;
   const summary = formatChangeSummary(changes);
-  const full = summary
-    ? kind === 'create'
-      ? summary
-      : `Program: ${summary}`
-    : kind === 'create'
-      ? 'Program oluşturuldu'
-      : 'Program güncellendi';
+  const full = summary ? (kind === 'create' ? summary : t.commitProgram(summary)) : kind === 'create' ? t.commitCreated : t.commitUpdated;
   const subject = clip(full, SUBJECT_MAX);
   if (changes.length <= 1 && subject === full) return subject;
   const lines = changes.map((change) => `- ${change.scope ? `${change.scope}: ` : ''}${change.text}`);
@@ -470,6 +474,7 @@ export function applyProgramEdit(
   now: Date,
   note: readonly ProgramChange[] = [],
 ): { program: ProgramState; changes: ProgramChange[] } | null {
+  const locale = ctx.locale ?? DEFAULT_LOCALE;
   const body = keepHiddenPhase(stored, input);
   const storedDays = new Map(stored.phases.flatMap((phase) => phase.days.map((day) => [day.id, day] as const)));
   // Düzenleyici kaynağı göndermediyse kayıttaki kaynak korunur.
@@ -484,7 +489,7 @@ export function applyProgramEdit(
   const at = now.toISOString();
   // Antrenman günleri: gövdenin şu anki evresinin atamalarının birleşimi; danışanın eski katmanı düşer.
   const current = phases.find((phase) => phase.id === body.currentPhaseId) ?? phases[0];
-  const schedule = settleSchedule(stored, current?.days ?? [], at);
+  const schedule = settleSchedule(stored, current?.days ?? [], at, locale);
   const structural = diffProgram(
     { phased: stored.phased, currentPhaseId: stored.current.phaseId, phases: stored.phases },
     { phased: body.phased, currentPhaseId: body.currentPhaseId, phases },
@@ -497,6 +502,7 @@ export function applyProgramEdit(
     titleOf: (exerciseId) => ctx.exercises.get(exerciseId)?.title ?? exerciseId,
     trackingOf: (exerciseId) => ctx.exercises.get(exerciseId)?.trackingType ?? 'weight_reps',
     multiPhase: phases.length > 1,
+    locale,
   });
   const changes = [...diff, ...targets.changes, ...note];
 
@@ -522,7 +528,7 @@ export function applyProgramEdit(
       phases,
       current: currentChanged ? { phaseId: body.currentPhaseId, startedAt: at } : stored.current,
       rotation: currentChanged ? withoutDay : stored.rotation,
-      log: appendLog(stored.log, { at, revision, kind, changes: capChanges(changes) }),
+      log: appendLog(stored.log, { at, revision, kind, changes: capChanges(changes, undefined, locale) }),
     },
     changes,
   };

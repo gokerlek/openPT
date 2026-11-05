@@ -1,4 +1,7 @@
 import * as v from 'valibot';
+import { type Locale } from '../../i18n/locale.ts';
+import { programValidationMessages } from '../../i18n/messages/program-validation/index.ts';
+import { msg } from '../../i18n/valibot.ts';
 import { weekdayConflicts } from '../day-assignments.ts';
 import {
   DAY_ID_PATTERN,
@@ -33,17 +36,20 @@ import {
  * göreli ve `.ts` uzantılıdır.
  */
 
+/** Doğrulama mesajları (`msg`: şemayı ayrıştıran isteğin diliyle). */
+const text = (locale: Locale) => programValidationMessages(locale).ownProgramSchema;
+
 const timestamp = v.pipe(v.string(), v.isoTimestamp());
 const positive = v.pipe(v.number(), v.integer(), v.minValue(1));
 
-export const ownProgramIdSchema = v.pipe(v.string(), v.regex(OWN_PROGRAM_ID_PATTERN, 'Program kimliği geçersiz.'));
+export const ownProgramIdSchema = v.pipe(v.string(), v.regex(OWN_PROGRAM_ID_PATTERN, msg((l) => text(l).idInvalid)));
 
 /** Ad: kırpılır, 1–40 karakter. Benzersizlik ve ayrılmış ad çağıranda (`ownNameProblem`). */
 export const ownProgramNameSchema = v.pipe(
-  v.string('Ad gir.'),
+  v.string(msg((l) => text(l).nameRequired)),
   v.trim(),
-  v.minLength(1, 'Ad gir.'),
-  v.maxLength(OWN_PROGRAM_NAME_MAX, `En fazla ${OWN_PROGRAM_NAME_MAX} karakter.`),
+  v.minLength(1, msg((l) => text(l).nameRequired)),
+  v.maxLength(OWN_PROGRAM_NAME_MAX, msg((l) => text(l).nameMax(OWN_PROGRAM_NAME_MAX))),
 );
 
 /** Günün kopyalandığı PT günü: o anki adıyla; PT günü sonra değişse de kopya değişmez. */
@@ -55,7 +61,7 @@ export const dayCopySchema = v.object({
 
 export const ownProgramDaySchema = v.object({
   id: dayIdSchema,
-  name: v.pipe(v.string('Program adı gir.'), v.trim(), v.minLength(1, 'Program adı gir.'), v.maxLength(L.dayName, `En fazla ${L.dayName} karakter.`)),
+  name: v.pipe(v.string(msg((l) => text(l).dayNameRequired)), v.trim(), v.minLength(1, msg((l) => text(l).dayNameRequired)), v.maxLength(L.dayName, msg((l) => text(l).dayNameMax(L.dayName)))),
   /** Programın atandığı hafta günleri (PT programındaki gibi); yoksa atanmamış. */
   weekdays: v.optional(weekdaysSchema),
   blocks: dayBlocksSchema,
@@ -71,24 +77,24 @@ export const ownProgramPhaseSchema = v.object({
   id: phaseIdSchema,
   name: v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(L.phaseName)),
   daysPerWeek: v.optional(
-    v.pipe(v.number('Sayı gir.'), v.integer('Tam sayı gir.'), v.minValue(1, 'En az 1 gün.'), v.maxValue(L.daysPerWeek, `En fazla ${L.daysPerWeek} gün.`)),
+    v.pipe(v.number(msg((l) => text(l).enterNumber)), v.integer(msg((l) => text(l).enterInteger)), v.minValue(1, msg((l) => text(l).daysPerWeekMin)), v.maxValue(L.daysPerWeek, msg((l) => text(l).daysPerWeekMax(L.daysPerWeek)))),
   ),
   days: v.pipe(
     v.array(ownProgramDaySchema),
-    v.minLength(1, 'Programda en az bir antrenman olmalı.'),
-    v.maxLength(L.daysPerPhase, `Programda en fazla ${L.daysPerPhase} antrenman olur.`),
-    v.check((days) => duplicateNames(days).length === 0, 'Aynı adda iki program var.'),
+    v.minLength(1, msg((l) => text(l).daysMin)),
+    v.maxLength(L.daysPerPhase, msg((l) => text(l).daysMax(L.daysPerPhase))),
+    v.check((days) => duplicateNames(days).length === 0, msg((l) => text(l).dayNames)),
     v.check((days) => weekdayConflicts(days).length === 0, DAY_CONFLICT),
   ),
 });
 
 export const ownProgramPhasesSchema = v.pipe(
   v.array(ownProgramPhaseSchema),
-  v.length(1, 'Kendi programda evre olmaz.'),
-  v.check((phases) => duplicateProgramIds(phases).length === 0, 'Gün, blok ve satır kimlikleri benzersiz olmalı.'),
+  v.length(1, msg((l) => text(l).noPhases)),
+  v.check((phases) => duplicateProgramIds(phases).length === 0, msg((l) => text(l).idsUnique)),
 );
 
-const CURRENT_MISSING = 'Şu anki evre programda yok.';
+const CURRENT_MISSING = msg((l) => text(l).currentMissing);
 const currentExists = (input: { currentPhaseId: string; phases: readonly { id: string }[] }) =>
   input.phases.some((phase) => phase.id === input.currentPhaseId);
 

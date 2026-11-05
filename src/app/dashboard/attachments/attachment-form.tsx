@@ -10,6 +10,9 @@ import { Button } from '@/components/ui/button';
 import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Spinner } from '@/components/ui/spinner';
+import { commonMessages } from '@/i18n/messages/common';
+import { useMessages } from '@/i18n/client';
+import { ptLibraryMessages } from '@/i18n/messages/pt-library';
 import { attachmentImageUrl } from '@/lib/attachment-media';
 import { ApiError, fetchJson } from '@/lib/query/errors';
 import { applyFieldErrors } from '@/lib/query/field-errors';
@@ -22,6 +25,8 @@ import { attachmentFormSchema, type Attachment, type AttachmentInput } from '@/l
  */
 export function AttachmentForm({ editing }: { editing: Attachment | null }) {
   const router = useRouter();
+  const t = useMessages(ptLibraryMessages).attachmentForm;
+  const common = useMessages(commonMessages);
   const form = useForm({ schema: attachmentFormSchema, initialInput: { name: editing?.name ?? '' } });
   const [image, setImage] = useState<ImageChange>(KEEP);
   const [imageError, setImageError] = useState<string | null>(null);
@@ -43,16 +48,16 @@ export function AttachmentForm({ editing }: { editing: Attachment | null }) {
           await fetchJson(`/api/attachments/${id}/image`, { method: 'DELETE' });
         }
       } catch (error) {
-        return { id, imageFailed: error instanceof ApiError ? error.message : 'Fotoğraf yüklenemedi.' };
+        return { id, imageFailed: error instanceof ApiError ? error.message : t.photoFailed };
       }
       return { id, imageFailed: null };
     },
     invalidate: [['attachments'], ['devices'], ['exercises']],
-    notify: { success: editing ? 'Aparat güncellendi.' : 'Aparat eklendi.' },
+    notify: { success: editing ? t.updated : t.added },
     onError: (error) => applyFieldErrors(form as never, error),
     onSuccess: ({ id, imageFailed }) => {
       if (imageFailed) {
-        toast.error(`Aparat kaydedildi ama fotoğraf yüklenemedi: ${imageFailed}`);
+        toast.error(t.savedButPhoto(imageFailed));
         router.push(`/dashboard/attachments/${id}/edit`);
       } else {
         router.push('/dashboard/attachments');
@@ -69,23 +74,23 @@ export function AttachmentForm({ editing }: { editing: Attachment | null }) {
       <FormField of={form} path={['name']}>
         {(field) => (
           <Field data-invalid={Boolean(field.errors) || undefined}>
-            <FieldLabel htmlFor="name">Aparat adı</FieldLabel>
+            <FieldLabel htmlFor="name">{t.nameLabel}</FieldLabel>
             <Input
               {...field.props}
               id="name"
               value={field.input ?? ''}
-              placeholder="Ör. MAG tutamağı"
+              placeholder={t.namePlaceholder}
               onChange={(event) => setInput(form, { path: ['name'], input: event.currentTarget.value })}
             />
-            <FieldDescription>Cihazlarda ve egzersizlerde bu adla görünür.</FieldDescription>
+            <FieldDescription>{t.nameHint}</FieldDescription>
             <FieldError>{field.errors?.[0]}</FieldError>
           </Field>
         )}
       </FormField>
 
       <ImageField
-        label="Fotoğraf"
-        description="Danışan hangisini takacağını görsün diye. PNG, JPG ya da WebP; en fazla 1 MB."
+        label={t.photoLabel}
+        description={t.photoHint}
         currentUrl={currentImageUrl}
         change={image}
         onChange={setImage}
@@ -95,11 +100,11 @@ export function AttachmentForm({ editing }: { editing: Attachment | null }) {
 
       <div className="flex justify-end gap-2 border-t pt-4">
         <Button variant="outline" nativeButton={false} render={<Link href="/dashboard/attachments" />}>
-          Vazgeç
+          {common.actions.cancel}
         </Button>
         <Button type="submit" disabled={save.isPending}>
           {save.isPending ? <Spinner data-icon="inline-start" /> : null}
-          {save.isPending ? 'Kaydediliyor…' : 'Kaydet'}
+          {save.isPending ? common.actions.saving : common.actions.save}
         </Button>
       </div>
     </Form>

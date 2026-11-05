@@ -3,48 +3,65 @@ import { notFound } from 'next/navigation';
 import { cache } from 'react';
 import { PageHeader } from '@/components/page-header';
 import { Card, CardContent } from '@/components/ui/card';
+import { commonMessages } from '@/i18n/messages/common';
+import { getLocale } from '@/i18n/server';
+import type { Locale } from '@/i18n/locale';
+import { ptLibraryMessages } from '@/i18n/messages/pt-library';
 import { listAttachments } from '@/lib/attachments';
-import { getDevice } from '@/lib/devices';
+import { getDevice, listDevices, readCustomDevices } from '@/lib/devices';
 import { DeviceActions } from '../device-actions';
 import { DeviceForm } from '../../device-form';
 import { requirePt } from '@/lib/guards';
 
-/** Sayfa başlığı ile sayfa aynı okumayı paylaşır (istek başına bir kez). */
-const loadDevice = cache((id: string) => getDevice(id));
+/*
+ * HAM: düzenlenen cihaz dil verilmeden okunur (`listDevices(custom)`). Hazır cihazın formu okuyanın dilindeki çeviriyle
+ * dolarsa kaydedince İngilizce metin PT'nin geçersiz kılmasına (override) donardı; form ham (Türkçe) kayıtla dolar.
+ * Başlık ve kırıntı gibi yalnız gösterilen yerler okuyanın dilindeki listeden (`loadShownDevice`).
+ * Sayfa başlığı ile sayfa aynı okumayı paylaşır (istek başına bir kez).
+ */
+const loadCustom = cache(() => readCustomDevices());
+const loadDevice = cache(async (id: string) => getDevice(id, await listDevices(await loadCustom())));
+const loadShownDevice = cache(async (id: string, locale: Locale) => getDevice(id, await listDevices(await loadCustom(), locale)));
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   await requirePt();
-  const device = await loadDevice((await params).id);
-  return { title: device ? `Düzenle: ${device.name}` : 'Cihaz bulunamadı' };
+  const locale = await getLocale();
+  const t = ptLibraryMessages(locale).deviceEdit;
+  const device = await loadShownDevice((await params).id, locale);
+  return { title: device ? t.metaTitle(device.name) : t.notFound };
 }
 
 export default async function EditDevicePage({ params }: { params: Promise<{ id: string }> }) {
   await requirePt();
+  const locale = await getLocale();
+  const t = ptLibraryMessages(locale).deviceEdit;
+  const common = commonMessages(locale);
   const { id } = await params;
-  const [device, attachments] = await Promise.all([loadDevice(id), listAttachments()]);
+  const [device, shown, attachments] = await Promise.all([loadDevice(id), loadShownDevice(id, locale), listAttachments(undefined, locale)]);
   if (!device) notFound();
+  const shownName = (shown ?? device).name;
   const { source: _source, overridesLibrary: _override, ...editable } = device;
 
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
         crumbs={[
-          { label: 'Cihazlar', href: '/dashboard/devices' },
-          { label: device.name, href: `/dashboard/devices/${id}` },
-          { label: 'Düzenle' },
+          { label: t.crumbList, href: '/dashboard/devices' },
+          { label: shownName, href: `/dashboard/devices/${id}` },
+          { label: common.actions.edit },
         ]}
-        title="Cihazı düzenle"
+        title={t.title}
         actions={
           <DeviceActions
             id={id}
-            title={device.name}
+            title={shownName}
             source={device.source}
             overridesLibrary={device.overridesLibrary}
           />
         }
         description={
           device.source === 'library'
-            ? 'Hazır katalogdan bir cihaz: kaydettiğinde yalnız senin kurulumunda geçerli bir sürüm oluşur. İstediğin zaman varsayılana dönebilirsin.'
+            ? t.libraryNote
             : undefined
         }
       />

@@ -1,4 +1,5 @@
 import * as v from 'valibot';
+import type { Locale } from '../i18n/locale.ts';
 import { exposureOf } from './exposure.ts';
 import type { SetSuggestion } from './program-feedback.ts';
 import type { Proposal } from './proposals.ts';
@@ -105,6 +106,9 @@ export function setSuggestionsFor(input: {
   proposals: readonly Pick<Proposal, 'kind' | 'at' | 'exerciseId' | 'sessionId' | 'rowId' | 'status'>[];
   setWeightsOf: (exercise: SuggestionExercise) => Readonly<Partial<Record<string, number>>>;
   sessionId?: string | undefined;
+  /** Gerekçenin dili (öneriyi alan kişinin dili); yoksa Türkçe. */
+  // i18n-followup(T3): `workout-routes.ts` içindeki `setSuggestionsFor` çağrısı danışanın dilini (`locale`) geçirmeli; `recommend.ts` → `setIncreaseCandidates` gerekçeyi henüz çevirmiyor (`locale` yok sayılır).
+  locale?: Locale;
 }): SetSuggestion[] {
   const { day, exercises, now } = input;
   const pendingRows = new Set(
@@ -136,6 +140,7 @@ export function setSuggestionsFor(input: {
     return exercise ? input.setWeightsOf(exercise) : null;
   };
   return setIncreaseCandidates({
+    ...(input.locale ? { locale: input.locale } : {}),
     rows,
     index: input.index,
     now,
