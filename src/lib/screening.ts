@@ -770,9 +770,11 @@ export type ClientScreeningRow = {
 export function clientScreeningRows(
   screening: Pick<Screening, 'tests'>,
   previous: Screening | null,
-  labels: Record<Outcome, string> = OUTCOME_CLIENT_LABELS,
+  labels?: Record<Outcome, string>,
   locale: Locale = DEFAULT_LOCALE,
 ): ClientScreeningRow[] {
+  // Etiket verilmezse danışanın sözcükleri okuyanın dilinde (Türkçede `OUTCOME_CLIENT_LABELS`).
+  const outcomeText = labels ?? outcomeClientLabels(locale);
   const rows: ClientScreeningRow[] = [];
   const sides = sideKeyLabels(locale);
   for (const testId of SCREENING_TEST_IDS) {
@@ -783,7 +785,7 @@ export function clientScreeningRows(
       const compared = compareCell(cell.outcome, previousOutcome(previous, testId, cell.side));
       const change: 'up' | 'down' | null =
         compared?.change === 'up' || compared?.change === 'pain_gone' ? 'up' : compared?.change === 'down' ? 'down' : null;
-      return { side: cell.side, label: sides[cell.side], text: labels[cell.outcome], outcome: cell.outcome, change };
+      return { side: cell.side, label: sides[cell.side], text: outcomeText[cell.outcome], outcome: cell.outcome, change };
     });
     const focusCell = cells.find((cell) => cell.outcome === 'compensated' || cell.outcome === 'easier');
     const focusId = focusCell ? effectiveMissed(testId, focusCell.entry)[0] : undefined;

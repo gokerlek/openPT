@@ -287,6 +287,9 @@ describe('tarama metinleri İngilizce', () => {
       focus: 'keep your heels on the floor',
     });
     assert.equal(screening.protocol, SCREENING_PROTOCOL);
+    // Sağlık sayfası etiket vermeden yalnız dili geçirir: sözcükler yine okuyanın dilinde.
+    assert.equal(clientScreeningRows(screening, null, undefined, 'en')[0]?.sides[0]?.text, 'With compensation');
+    assert.equal(clientScreeningRows(screening, null)[0]?.sides[0]?.text, 'Telafiyle');
   });
 
   test('düzenleyicinin tarama işaretleri', () => {

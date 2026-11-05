@@ -134,14 +134,14 @@ const en: Shape<typeof tr> = {
       readiness: 'readiness',
       check_in: 'pain',
       measurements: 'measurement',
-      screening: 'movement screening',
+      screening: 'movement test',
     },
     parts: {
       conditions: 'limitations',
       readiness: 'readiness',
       check_in: 'pain tracking',
       measurements: 'measurements',
-      screening: 'movement screening',
+      screening: 'movement test',
     },
     outdated: (outdated, continuing) => {
       const first = listText('en', outdated);
@@ -209,7 +209,7 @@ const en: Shape<typeof tr> = {
   health: {
     title: 'Health',
     closed: 'Health page is off',
-    noConsent: { before: "You haven't consented to limitations and movement screening. You can check it in ", link: 'Settings', after: '.' },
+    noConsent: { before: "You haven't consented to limitations and movement tests. You can check it in ", link: 'Settings', after: '.' },
     unavailable: "Your health record can't be opened right now. Let your trainer know.",
     camera: 'Camera measurement',
     cameraText: "Follow the guidance to measure your posture and movement angles. The video isn't saved.",
