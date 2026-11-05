@@ -1,5 +1,6 @@
 import 'server-only';
 import { createAppAuth } from '@octokit/auth-app';
+import { LocalizedError } from '../../i18n/errors';
 import type { Locale } from '../../i18n/locale';
 import { installMessages } from '../../i18n/messages/install';
 import { serverEnv } from '../env';
@@ -27,7 +28,7 @@ const INFO_TTL_MS = 60_000;
 
 function appAccess(): AppAccess {
   const access = serverEnv().githubAccess;
-  if (access.mode !== 'app') throw new GithubError((l) => installMessages(l).github.appMode, 500);
+  if (access.mode !== 'app') throw new LocalizedError((l) => installMessages(l).github.appMode);
   return access;
 }
 
