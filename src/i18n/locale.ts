@@ -50,19 +50,20 @@ export function resolveLocale({ cookie, acceptLanguage }: { cookie?: string | nu
   return isLocale(cookie) ? cookie : negotiateLocale(acceptLanguage);
 }
 
-/** `Cookie` başlığından tek çerezin değeri. */
+/** `Cookie` başlığından tek çerezin değeri. Aynı ad birden çok kez geçerse sonuncusu: Next'in `cookies()`'i gibi. */
 function cookieValue(header: string | null, name: string): string | null {
+  let value: string | null = null;
   for (const pair of (header ?? '').split(';')) {
     const index = pair.indexOf('=');
     if (index < 0 || pair.slice(0, index).trim() !== name) continue;
     const raw = pair.slice(index + 1).trim();
     try {
-      return decodeURIComponent(raw);
+      value = decodeURIComponent(raw);
     } catch {
-      return raw;
+      value = raw;
     }
   }
-  return null;
+  return value;
 }
 
 /** Route handler ve proxy için: isteğin çerezi ve `Accept-Language` başlığı. */

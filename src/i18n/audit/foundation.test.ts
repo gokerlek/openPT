@@ -71,4 +71,35 @@ describe('temel dosyalarda gömülü metin yok', () => {
       rmSync(dir, { recursive: true, force: true });
     }
   });
+
+  test('yardımcı bulur: Türkçe harfsiz Türkçe sözcük, metin alanına yazılmış cümle, bildirim çağrısı; kodlar sayılmaz', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'i18n-audit-'));
+    const file = join(dir, 'ornek.tsx');
+    writeFileSync(
+      file,
+      [
+        "export const metadata = { title: 'Uygulama' };",
+        "const a = ['Kaydet', 'flex gap-2 [--x:var(--y)]'];",
+        "const b = { label: 'kg', error: 'not_found', description: 'Shown to people' };",
+        "toast.success('Saved');",
+        "window.confirm('Delete?');",
+        "const c = { hint: 'Add the band' };",
+      ].join('\n'),
+    );
+    try {
+      assert.deepEqual(
+        findHardcodedText([file]).map(({ line, text }) => ({ line, text })),
+        [
+          { line: 1, text: 'Uygulama' },
+          { line: 2, text: 'Kaydet' },
+          { line: 3, text: 'Shown to people' },
+          { line: 4, text: 'Saved' },
+          { line: 5, text: 'Delete?' },
+          { line: 6, text: 'Add the band' },
+        ],
+      );
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
 });

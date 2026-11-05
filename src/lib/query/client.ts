@@ -1,6 +1,6 @@
 import { MutationCache, QueryCache, QueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { currentClientLocale } from '@/i18n/client';
+import { currentClientLocale } from '@/i18n/client-locale';
 import { commonMessages } from '@/i18n/messages/common';
 import { ApiError } from './errors';
 
