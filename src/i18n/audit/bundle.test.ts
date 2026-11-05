@@ -75,18 +75,46 @@ function walk(dir: string): string[] {
 
 const isClientModule = (file: string) => /^\s*['"]use client['"]/.test(readFileSync(file, 'utf8').slice(0, 200));
 
+/**
+ * Danışanın telefonuna giden paketin girişleri: rota dosyalarından sunucu modülleri boyunca yürünür, varılan her
+ * `'use client'` modülü bir giriştir (orada durulur; ötesi `closure`'ın işi). Sunucu sayfasının doğrudan çizdiği
+ * istemci bileşeni de böylece sayılır (ör. `components/measurements/camera-wizard.tsx`), klasörü ne olursa olsun.
+ */
+function clientEntries(roots: readonly string[]): string[] {
+  const entries = new Set<string>();
+  const seen = new Set<string>();
+  const stack = [...roots];
+  for (let file = stack.pop(); file; file = stack.pop()) {
+    if (seen.has(file)) continue;
+    seen.add(file);
+    if (isClientModule(file)) {
+      entries.add(file);
+      continue;
+    }
+    for (const specifier of importsOf(file)) {
+      const resolved = resolveImport(file, specifier);
+      if (resolved) stack.push(resolved);
+    }
+  }
+  return [...entries];
+}
+
 describe('sözlük paketleri', () => {
   test('danışanın telefonundaki istemci modülleri PT sözlüklerini çekmez', () => {
-    const entries = [
+    // Danışanın rotaları (`/me`, `/giris`, `/join`) ve her sayfayı saran kök dosyalar (`layout`, `error`, `not-found`).
+    const routes = [
       ...walk(join(SRC, 'app', 'me')),
       ...walk(join(SRC, 'app', 'giris')),
       ...walk(join(SRC, 'app', 'join')),
-      ...walk(join(SRC, 'components', 'workout')),
-      ...walk(join(SRC, 'components', 'progress')),
-      ...walk(join(SRC, 'components', 'ui')),
-      ...readdirSync(join(SRC, 'components')).map((name) => join(SRC, 'components', name)),
-    ].filter((file) => /\.tsx?$/.test(file) && !/\.test\./.test(file) && statSync(file).isFile() && isClientModule(file));
+      ...readdirSync(join(SRC, 'app')).map((name) => join(SRC, 'app', name)),
+    ].filter((file) => /\.tsx?$/.test(file) && !/\.test\./.test(file) && statSync(file).isFile());
+    const entries = clientEntries(routes);
     assert.ok(entries.length > 40, `${entries.length} istemci modülü`);
+    // Yalnız bir sunucu sayfasının çizdiği istemci bileşenleri de giriştir.
+    const reached = entries.map((file) => relative(SRC, file));
+    for (const expected of ['components/measurements/camera-wizard.tsx', 'components/program/change-log.tsx', 'components/install/pwa-root.tsx', 'app/error.tsx', 'i18n/locale-switch.tsx']) {
+      assert.ok(reached.includes(expected), expected);
+    }
     const used = namespaces(closure(entries));
     for (const forbidden of ['pt-clients', 'pt-shell', 'install', 'setup', 'pt-library', 'pt-program']) {
       assert.ok(!used.includes(forbidden), `${forbidden} danışan paketine giriyor: ${chainTo(entries, forbidden)}`);
