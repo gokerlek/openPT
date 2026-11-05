@@ -14,6 +14,7 @@ import { canSetPassword } from '@/lib/client-status';
 import { readAppConfig } from '@/lib/config';
 import { CLIENT_ID_PATTERN } from '@/lib/schemas/client';
 import { readClientSession, sessionClient } from '@/lib/session';
+import { ownText } from '@/lib/own-text';
 import { JoinForm } from './join-form';
 import { JoinPasswordStep } from './password-step';
 import { PasswordLoginLink } from './password-login-link';
@@ -44,7 +45,7 @@ export default async function JoinPage({
   const errors: Record<string, string> = { erisim: t.join.sessionClosed };
   const clientId = c && CLIENT_ID_PATTERN.test(c) ? c : null;
   const code = k && /^[\d\s-]{1,12}$/.test(k) ? k : '';
-  let error = errorCode ? (errors[errorCode] ?? t.join.failed) : c && !clientId ? t.join.brokenLink : null;
+  let error = errorCode ? (ownText(errors, errorCode) ?? t.join.failed) : c && !clientId ? t.join.brokenLink : null;
 
   // Adreste kod yoksa açık oturuma bakılır. Hata varsa bakılmaz: /me geçersiz oturumu buraya
   // gönderir, döngü olmasın. PT oturumu engel değil (ayrı çerez). Kodla gelen her zaman birinci

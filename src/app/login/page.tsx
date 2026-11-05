@@ -13,6 +13,7 @@ import { getMessages } from '@/i18n/server';
 import { readAppConfig } from '@/lib/config';
 import { emailLoginEnabled } from '@/lib/env';
 import { githubLoginEnabled } from '@/lib/github-oauth';
+import { ownText } from '@/lib/own-text';
 import { RETURN_PARAM, safeReturnPath } from '@/lib/navigation';
 import { readPtSession } from '@/lib/session';
 import { LoginForm } from './login-form';
@@ -37,8 +38,7 @@ export default async function LoginPage({
   if (await readPtSession()) redirect(next ?? '/dashboard');
 
   const [config, t] = await Promise.all([readAppConfig(), getMessages(authMessages)]);
-  const errors: Record<string, string> = t.trainer.errors;
-  const error = typeof code === 'string' ? (errors[code] ?? t.trainer.failed) : null;
+  const error = typeof code === 'string' ? (ownText(t.trainer.errors, code) ?? t.trainer.failed) : null;
   const githubHref = next ? `/api/auth/github?${RETURN_PARAM}=${encodeURIComponent(next)}` : '/api/auth/github';
   const github = githubLoginEnabled();
   // Yedek yol yalnız PT açıkça istediyse (RESEND_API_KEY) görünür; uçlar da aynı koşula bakar (SPEC §5).
