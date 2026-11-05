@@ -7,6 +7,8 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { LocaleSwitch } from '@/i18n/locale-switch';
+import { authMessages } from '@/i18n/messages/auth';
+import { getMessages } from '@/i18n/server';
 import { clientManifestHref } from '@/lib/client-manifest';
 import { canSetPassword } from '@/lib/client-status';
 import { readAppConfig } from '@/lib/config';
@@ -19,13 +21,9 @@ import { JoinStepLabel } from './step-label';
 
 /** Davetin danışanı biliniyorsa manifest onun kimliğiyle (`lib/client-manifest.ts`): katılırken eklenen uygulama onu tanır. */
 export async function generateMetadata({ searchParams }: { searchParams: Promise<{ c?: string }> }): Promise<Metadata> {
-  const { c } = await searchParams;
-  return { title: 'Katıl', manifest: clientManifestHref(c) };
+  const [{ c }, t] = await Promise.all([searchParams, getMessages(authMessages)]);
+  return { title: t.join.title, manifest: clientManifestHref(c) };
 }
-
-const errors: Record<string, string> = {
-  erisim: 'Oturumun kapandı. Antrenöründen yeni bir kare kod iste.',
-};
 
 /**
  * Kare kodla giriş (SPEC §5), üç adım: (1) kod, (2) şifre belirle, (3) uygulamayı ana ekrana ekle → `/me`
@@ -41,9 +39,12 @@ export default async function JoinPage({
   searchParams: Promise<{ c?: string; k?: string; error?: string }>;
 }) {
   const { c, k, error: errorCode } = await searchParams;
+  const t = await getMessages(authMessages);
+  // `?error=` kodları: şimdilik yalnız `erisim` (oturum kapandı).
+  const errors: Record<string, string> = { erisim: t.join.sessionClosed };
   const clientId = c && CLIENT_ID_PATTERN.test(c) ? c : null;
   const code = k && /^[\d\s-]{1,12}$/.test(k) ? k : '';
-  let error = errorCode ? (errors[errorCode] ?? 'Giriş yapılamadı.') : c && !clientId ? 'Bağlantı bozuk. Kare kodu yeniden okut.' : null;
+  let error = errorCode ? (errors[errorCode] ?? t.join.failed) : c && !clientId ? t.join.brokenLink : null;
 
   // Adreste kod yoksa açık oturuma bakılır. Hata varsa bakılmaz: /me geçersiz oturumu buraya
   // gönderir, döngü olmasın. PT oturumu engel değil (ayrı çerez). Kodla gelen her zaman birinci
@@ -69,7 +70,7 @@ export default async function JoinPage({
         <div className="flex flex-col items-center gap-2 text-center">
           <h1 className="font-heading text-3xl font-semibold tracking-tight">{config.appName}</h1>
           <PulseLine className="h-6 w-40" />
-          <p className="text-muted-foreground">Antrenmanına hoş geldin.</p>
+          <p className="text-muted-foreground">{t.join.welcome}</p>
         </div>
 
         {passwordFor ? (
@@ -81,10 +82,8 @@ export default async function JoinPage({
                 <CardDescription>
                   <JoinStepLabel step={1} />
                 </CardDescription>
-                <CardTitle className="text-xl">Kodunu onayla</CardTitle>
-                <CardDescription>
-                  Kare koddan geldiysen kod hazır. Sonra şifreni belirleyip uygulamayı ana ekrana ekleyeceksin.
-                </CardDescription>
+                <CardTitle className="text-xl">{t.join.confirmTitle}</CardTitle>
+                <CardDescription>{t.join.confirmBody}</CardDescription>
               </CardHeader>
             ) : null}
             <CardContent className="flex flex-col gap-4">
@@ -103,10 +102,8 @@ export default async function JoinPage({
                     <EmptyMedia variant="icon">
                       <QrCode weight="fill" />
                     </EmptyMedia>
-                    <EmptyTitle>Kare kodu okut</EmptyTitle>
-                    <EmptyDescription>
-                      Antrenörünün gösterdiği kare kodu telefonunun kamerasıyla okut ya da gönderdiği bağlantıyı aç.
-                    </EmptyDescription>
+                    <EmptyTitle>{t.join.scanTitle}</EmptyTitle>
+                    <EmptyDescription>{t.join.scanBody}</EmptyDescription>
                   </EmptyHeader>
                 </Empty>
               )}
@@ -117,9 +114,9 @@ export default async function JoinPage({
       </div>
       <div className="flex flex-col items-center gap-1">
         <p className="text-center text-sm text-muted-foreground">
-          Antrenör müsün?{' '}
+          {t.login.trainerPrompt}{' '}
           <Link href="/login" className="inline-flex min-h-11 items-center underline underline-offset-4">
-            Buradan gir
+            {t.login.trainerLink}
           </Link>
         </p>
         <LocaleSwitch />
