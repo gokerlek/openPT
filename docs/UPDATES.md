@@ -52,6 +52,16 @@ git push origin HEAD
 
 `git remote add` yalnız ilk sefer gerekir. `vX.Y.Z` örnektir, gerçek tag değildir. Repo'yu daha önce Vercel Deploy düğmesiyle kopyaladıysan geçmişler ayrı olabilir: ilk birleştirmeyi dikkatle yap, rastgele `--force` push etme.
 
+## Axon Fit adıyla kurulmuş kopyalar
+
+Proje önceden **Axon Fit** adıyla `gokerlek/axon-fit` reposundan yayımlanıyordu. O dönemde kurulan kopyalar sürümleri hâlâ oradan arar, bu yüzden openPT sürümlerini kendiliğinden görmez. openPT'ye bir kez yukarıdaki manuel yolla geç:
+
+1. `git remote add upstream https://github.com/gokerlek/openPT.git` ile openPT'yi ekle (eski `upstream` varsa önce `git remote set-url upstream https://github.com/gokerlek/openPT.git`).
+2. openPT'nin kararlı sürümünü birleştir, test et ve kendi Production dalına push et.
+3. Kod reponda `.github/workflows/axon-update.yml` dosyasının `git fetch https://github.com/gokerlek/openPT.git` satırını içerdiğini kontrol et; hâlâ `gokerlek/axon-fit.git` yazıyorsa düzelt.
+
+Sonraki sürümler Ayarlar → Sürüm ekranındaki otomatik yolla gelir. Ortam değişkenleri (`AXON_CODE_REPO` vb.) ve veri repoları aynı kalır.
+
 ## Sürüm yayımlayan geliştirici
 
 `package.json` ve `axon-release.json` sürümlerini birlikte güncelle. Type/lint/test/build ve test PT kurulumu/güncellemesini doğrula; sonra `vX.Y.Z` tag'ından draft/prerelease olmayan GitHub Release yayımla. Veri migrasyonu varsa `dataMigration:true` ve `automaticUpdate:false` yap. Herkese otomatik güncelleme sunmadan önce gerçek test PT reposunda hazırlık → yayın → Vercel deployment akışını doğrula. Bu işlem gerçek danışan verileriyle test edilmez.

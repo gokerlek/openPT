@@ -7,6 +7,8 @@ test('only stable strictly newer semver releases qualify',()=>{
 });
 test('update target cannot be upstream, another owner, data repo or client repo',()=>{
   assert.equal(codeRepository('coach/app','coach','data'),'coach/app');
+  assert.throws(()=>codeRepository('gokerlek/openPT','gokerlek','data'));
+  assert.throws(()=>codeRepository('gokerlek/openpt','GOKERLEK','data'));
   for(const repo of ['gokerlek/openPT','someone/app','coach/data','coach/client-test','coach/Client-test','coach/..','coach/.','coach/../data',undefined])assert.throws(()=>codeRepository(repo,'coach','data'));
 });
 test('stale, merged or unrelated staging commits never replace the production branch',()=>{

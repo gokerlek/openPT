@@ -54,11 +54,11 @@ Telefon / tarayıcı
         ▼
 Next.js uygulaması (Vercel)
         │ Sunucu tarafında GitHub API
-        ├── openpt-data       → özel: ayarlar, kütüphane, danışan kimlik listesi
+        ├── openpt-data         → özel: ayarlar, kütüphane, danışan kimlik listesi
         ├── client-<kimlik-1>   → özel: danışan profili ve takip kayıtları
         └── client-<kimlik-2>   → özel: diğer danışanın verileri
 
-openpt                       → uygulamanın kaynak kodu (bu repo)
+openpt                         → uygulamanın kaynak kodu (bu repo)
 ```
 
 GitHub erişimi yalnız sunucuda kullanılır; tarayıcı GitHub veri repolarına doğrudan bağlanmaz. İki mod var ve seçim env'den kendiliğinden yapılır:
@@ -161,7 +161,7 @@ cp .env.example .env.local
 npm run dev
 ```
 
-[http://localhost:3000](http://localhost:3000) adresini aç. GitHub ile giriş yap ve ilk kurulum ekranında ad, tema ve görünümü kaydet. Ekranlarda görünen varsayılan adı burada **openPT** veya kendi markan olarak değiştirebilirsin. Bazı iç dosya adları projenin önceki adı olan `PulseCoach` olarak durur; kurulum için bunları değiştirmek gerekmez.
+[http://localhost:3000](http://localhost:3000) adresini aç. GitHub ile giriş yap ve ilk kurulum ekranında ad, tema ve görünümü kaydet. Ekranlarda görünen varsayılan ad **openPT**; burada kendi markanla değiştirebilirsin. Bazı iç adlar projenin önceki adlarıyla durur (`pulsecoach.config.json`, `AXON_*` değişkenleri, `axon-update.yml`, `axon-release.json`); kurulum için bunları değiştirmek gerekmez.
 
 OAuth olmadan yalnız yerelde arayüz geliştirmek için `http://localhost:3000/api/dev/login` geliştirme girişi vardır. Bu uç üretimde 404 döner. Geliştirme girişi veri katmanını taklit etmez: yazma işlemleri tanımladığın GitHub repolarına gider. Yerel testleri ayrı veri reposu/hesabıyla yap.
 

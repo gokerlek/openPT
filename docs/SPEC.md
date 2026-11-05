@@ -25,7 +25,7 @@ Her PT uygulamayı kendi GitHub hesabına kurar, kendi adresinde yayınlar, kend
 | Platform | Web (mobil öncelikli), PWA. Mağaza yayını yok |
 | Arayüz | **shadcn + Base UI** (`base-nova`, preset `b3QvsSZhg`), Tailwind v4, Phosphor ikonları, Outfit + Geist Mono. Renkler temanın `globals.css`'inden; özel renk sistemi yazılmaz |
 
-npm'de boşta: `pulsecoach`, `create-pulsecoach`, `@pulsecoach/app` (ileride gerekirse; bkz. §12 Faz 8).
+npm'de boşta (PulseCoach adı dönemindeki not, tarih için korunuyor): `pulsecoach`, `create-pulsecoach`, `@pulsecoach/app` (ileride gerekirse; bkz. §12 Faz 8).
 
 ---
 

@@ -1266,3 +1266,10 @@ test('betik `node --input-type=module -e` ile yüklenir; AXON_KUR_TEST=1 iken an
   assert.equal(result.stdout, '');
   assert.equal(result.stderr, '');
 });
+
+test('kaynak repo uygulamanın güncelleme kaynağı ve workflow adresiyle aynı', () => {
+  const core = readFileSync(new URL('../src/lib/updates/core.ts', import.meta.url), 'utf8');
+  assert.equal(core.match(/export const UPSTREAM = '([^']+)'/)?.[1], kur.DEFAULT_SOURCE);
+  const workflow = readFileSync(new URL('../.github/workflows/axon-update.yml', import.meta.url), 'utf8');
+  assert.ok(workflow.includes(`git fetch https://github.com/${kur.DEFAULT_SOURCE}.git `), 'workflow yanlış repodan çekiyor');
+});
