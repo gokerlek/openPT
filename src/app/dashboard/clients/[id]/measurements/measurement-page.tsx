@@ -4,8 +4,10 @@ import { notFound } from 'next/navigation';
 import { Info, WarningCircle } from '@phosphor-icons/react/dist/ssr';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
+import { measurementsMessages } from '@/i18n/messages/measurements';
+import { getLocale } from '@/i18n/server';
 import { loadClient } from '@/lib/clients';
-import { MEASUREMENT_LOCK_INFO, type MeasurementLock } from '@/lib/measurement-log';
+import { healthLockInfo, type MeasurementLock } from '@/lib/measurement-log';
 import type { Client } from '@/lib/schemas/client';
 import { CLIENT_ID_PATTERN } from '@/lib/schemas/client';
 
@@ -20,8 +22,10 @@ export async function measurementClient(id: string): Promise<{ ok: true; client:
 }
 
 /** Modül kapalı ya da onay yoksa formun ve grafiklerin yerine: neden ve ne yapılmalı. */
-export function MeasurementLockAlert({ lock, clientId }: { lock: MeasurementLock; clientId: string }) {
-  const info = MEASUREMENT_LOCK_INFO[lock];
+export async function MeasurementLockAlert({ lock, clientId }: { lock: MeasurementLock; clientId: string }) {
+  const locale = await getLocale();
+  const t = measurementsMessages(locale).page;
+  const info = healthLockInfo('measurements', lock, locale);
   // Modülü PT açar (düzenleme sayfası); onay danışanın elinde (danışan sayfasında durumu görünür).
   const byPt = lock === 'off' || lock === 'not_selected';
   return (
@@ -36,7 +40,7 @@ export function MeasurementLockAlert({ lock, clientId }: { lock: MeasurementLock
           className="mt-1"
           nativeButton={false}
           render={<Link href={byPt ? `/dashboard/clients/${clientId}/edit` : `/dashboard/clients/${clientId}`} />}>
-          {byPt ? 'Danışanın düzenleme sayfasına git' : 'Danışanın sayfasına dön'}
+          {byPt ? t.lockEdit : t.lockBack}
         </Button>
       </AlertDescription>
     </Alert>

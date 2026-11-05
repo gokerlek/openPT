@@ -3,18 +3,13 @@ import { ChartLineUp, Plus } from '@/components/line-icons';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { formatDay, formatSignedWithUnit } from '@/lib/format';
+import { measurementsMessages } from '@/i18n/messages/measurements';
+import { getLocale } from '@/i18n/server';
+import { getFormat } from '@/lib/format';
 import type { MeasurementsView } from '@/lib/health';
-import { MEASUREMENT_LOCK_INFO, measurementDays, SIDE_LABELS } from '@/lib/measurement-log';
-import { measurementAlerts, type MeasurementAlert } from '@/lib/measurement-trends';
-import { MEASUREMENTS } from '@/lib/measurements';
-import { UNIT_LABELS } from './measurements/measurement-text';
-
-const ALERT_TEXT: Record<MeasurementAlert['kind'], string> = {
-  declining: 'gerileme',
-  plateau: 'durağan',
-  improving: 'gerçek gelişme',
-};
+import { healthLockInfo, measurementDays } from '@/lib/measurement-log';
+import { measurementAlerts } from '@/lib/measurement-trends';
+import { measurementDefs } from '@/lib/measurements';
 
 /**
  * Danışan sayfasında ölçümlerin özeti: son ölçüm, gün sayısı ve son ölçüme kadarki 4 haftanın kararı
@@ -23,7 +18,7 @@ const ALERT_TEXT: Record<MeasurementAlert['kind'], string> = {
  * `undefined`: GitHub'dan okunamadı. `today`: uygulamanın saat dilimindeki gün; son ölçümü
  * 4 haftadan eski eğilim gösterilmez.
  */
-export function MeasurementsCard({
+export async function MeasurementsCard({
   clientId,
   view,
   today,
@@ -33,24 +28,24 @@ export function MeasurementsCard({
   today: string;
 }) {
   const href = `/dashboard/clients/${clientId}/measurements`;
+  const locale = await getLocale();
+  const messages = measurementsMessages(locale);
+  const t = messages.card;
+  const format = getFormat(locale);
 
   if (!view || view.state !== 'ok') {
-    const description = !view
-      ? 'Ölçümler şu an okunamadı. Sayfayı yenile.'
-      : view.state === 'locked'
-        ? MEASUREMENT_LOCK_INFO[view.lock].title
-        : `Sağlık kaydı okunamadı: ${view.problem}`;
+    const description = !view ? t.unreadable : view.state === 'locked' ? healthLockInfo('measurements', view.lock, locale).title : t.broken(view.problem);
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Ölçümler</CardTitle>
+          <CardTitle>{t.title}</CardTitle>
           <CardDescription>{description}</CardDescription>
         </CardHeader>
         {view ? (
           <CardFooter>
             <Button variant="outline" nativeButton={false} render={<Link href={href} />}>
               <ChartLineUp data-icon="inline-start" />
-              Ayrıntı
+              {t.details}
             </Button>
           </CardFooter>
         ) : null}
@@ -60,35 +55,32 @@ export function MeasurementsCard({
 
   const days = measurementDays(view.record.measurements);
   const last = days[0];
-  const alerts = measurementAlerts(view.record.measurements, today).slice(0, 4);
+  const alerts = measurementAlerts(view.record.measurements, today, locale).slice(0, 4);
+  const defs = measurementDefs(locale);
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Ölçümler</CardTitle>
-        <CardDescription>
-          {last ? `${days.length} ölçüm günü · son ${formatDay(last.date)}` : 'Henüz ölçüm yok. İlk ölçüm başlangıç değerleri olur.'}
-        </CardDescription>
+        <CardTitle>{t.title}</CardTitle>
+        <CardDescription>{last ? t.summary(days.length, format.day(last.date)) : t.empty}</CardDescription>
       </CardHeader>
       {alerts.length > 0 ? (
         <CardContent className="flex flex-col gap-2">
-          <p className="text-xs text-muted-foreground">4 haftalık eğilim, son ölçüme kadar; ölçüm hatası payının altındaki değişim durağan sayılır.</p>
-          <ul className="flex flex-col gap-2 text-sm" aria-label="4 haftalık eğilimler">
+          <p className="text-xs text-muted-foreground">{t.trendNote}</p>
+          <ul className="flex flex-col gap-2 text-sm" aria-label={t.trends}>
             {alerts.map((alert) => {
-              const def = MEASUREMENTS[alert.id];
-              const side = alert.key === 'value' ? '' : ` (${SIDE_LABELS[alert.key].toLocaleLowerCase('tr')})`;
+              const def = defs[alert.id];
               return (
                 <li key={`${alert.id}-${alert.key}`} className="flex items-center justify-between gap-3">
                   <span>
-                    {def.label}
-                    {side}
+                    {t.alertName(def.label, alert.key === 'value' ? null : messages.sides[alert.key])}
                     <span className="text-muted-foreground tabular-nums">
                       {' '}
-                      · {formatSignedWithUnit(Math.round(alert.change * 10) / 10, UNIT_LABELS[def.unit])}
+                      · {format.signedWithUnit(Math.round(alert.change * 10) / 10, messages.units[def.unit])}
                     </span>
                   </span>
                   <Badge variant={alert.kind === 'declining' ? 'destructive' : alert.kind === 'plateau' ? 'outline' : 'default'}>
-                    {ALERT_TEXT[alert.kind]}
+                    {t.alerts[alert.kind]}
                   </Badge>
                 </li>
               );
@@ -99,11 +91,11 @@ export function MeasurementsCard({
       <CardFooter className="flex flex-wrap gap-2">
         <Button variant="outline" nativeButton={false} render={<Link href={href} />}>
           <ChartLineUp data-icon="inline-start" />
-          Grafikler
+          {t.charts}
         </Button>
         <Button variant="outline" nativeButton={false} render={<Link href={`${href}/new`} />}>
           <Plus data-icon="inline-start" />
-          Ölçüm gir
+          {t.add}
         </Button>
       </CardFooter>
     </Card>

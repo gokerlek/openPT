@@ -1,10 +1,12 @@
 'use client';
 import { useEffect, useState, type RefObject } from 'react';
+import { useLocale } from '@/i18n/client';
 import { analyzePose, type Analysis, type Landmark, type PoseTask } from '@/lib/pose/geometry';
 export type Detection = { state: 'loading'|'tracking'|'error'; poses: Landmark[][]; sampledAt:number; width:number; height:number; analysis:Analysis };
 const initial:Detection={state:'loading',sampledAt:0,poses:[],width:0,height:0,analysis:{quality:'no_person',metrics:[]}};
 export function usePoseDetection(videoRef:RefObject<HTMLVideoElement|null>,enabled:boolean,task:PoseTask,stream:MediaStream|null):Detection|null {
   const [detection,setDetection]=useState<{stream:MediaStream|null;task:PoseTask;value:Detection}|null>(null);
+  const locale=useLocale();
   useEffect(()=>{
     if(!enabled) return;
     let disposed=false,ready=false,busy=false,lastFrame=-1;
@@ -45,12 +47,12 @@ export function usePoseDetection(videoRef:RefObject<HTMLVideoElement|null>,enabl
         busy=false;
         clearTimeout(staleTimer);
         staleTimer=setTimeout(()=>{if(!disposed)setDetection({stream,task,value:{...initial,state:'tracking',analysis:{quality:'uncertain',metrics:[]}}});},Math.max(0,1500-(performance.now()-data.timestamp)));
-        setDetection({stream,task,value:{state:'tracking',sampledAt:data.timestamp,poses:data.poses,width:data.width,height:data.height,analysis:performance.now()-data.timestamp>1500 ? {quality:'uncertain',metrics:[]} : analyzePose(data.poses,data.width,data.height,task)}});
+        setDetection({stream,task,value:{state:'tracking',sampledAt:data.timestamp,poses:data.poses,width:data.width,height:data.height,analysis:performance.now()-data.timestamp>1500 ? {quality:'uncertain',metrics:[]} : analyzePose(data.poses,data.width,data.height,task,locale)}});
       }
     };
     worker.postMessage({type:'init'});armWatchdog();
     return()=>{disposed=true;ready=false;clearTimeout(frameTimer);clearTimeout(watchdog);clearTimeout(staleTimer);worker.terminate();};
-  },[enabled,task,videoRef,stream]);
+  },[enabled,task,videoRef,stream,locale]);
   // Old results cannot appear after stopping/restarting or switching tasks.
   return enabled && detection?.stream===stream && detection.task===task?detection.value:null;
 }

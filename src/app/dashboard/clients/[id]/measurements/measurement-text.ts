@@ -1,5 +1,7 @@
 // Göreli ve uzantılı içe aktarma: metinler `node --test` ile de sınanır (`measurement-text.test.ts`).
-import { formatDay, formatDayShort, formatNumber, formatSignedWithUnit, formatWithUnit } from '../../../../../lib/format.ts';
+import { DEFAULT_LOCALE, type Locale } from '../../../../../i18n/locale.ts';
+import { measurementsMessages } from '../../../../../i18n/messages/measurements/index.ts';
+import { getFormat } from '../../../../../lib/format.ts';
 import type {
   ChangeKind,
   LatestChangeVerdict,
@@ -9,33 +11,26 @@ import type {
   TrendVerdict,
   WaistHipIndicator,
 } from '@/lib/measurement-trends';
-import { MEASUREMENT_SLOTS, SIDE_LABELS } from '../../../../../lib/measurement-log.ts';
-import { MEASUREMENT_UNIT_LABELS, MEASUREMENTS, type MeasurementDef } from '../../../../../lib/measurements.ts';
+import { MEASUREMENT_SLOTS } from '../../../../../lib/measurement-log.ts';
+import { MEASUREMENT_UNIT_LABELS, measurementDef, type MeasurementDef } from '../../../../../lib/measurements.ts';
 import { forecastAsOf, type Forecast } from '../../../../../lib/trend.ts';
 
-/** Ölçüm ekranlarının ortak metinleri (PT tarafı). */
+/** Ölçüm ekranlarının ortak metinleri (PT tarafı); hepsi okuyanın dilinde (`locale`, yoksa Türkçe). */
+
+function text(locale: Locale) {
+  return measurementsMessages(locale);
+}
 
 /** Katalog birimi → ekranda görünen ("s" Türkçede "sn"); tek yer `measurements.ts`. */
 export const UNIT_LABELS: Record<MeasurementDef['unit'], string> = MEASUREMENT_UNIT_LABELS;
 
-export const GROUP_INFO: Record<MeasurementDef['group'], { title: string; description: string }> = {
-  anthropometry: {
-    title: 'Antropometri',
-    description: 'Ağırlık, boy ve çevre ölçüleri. Takip ölçümlerini mümkünse hep aynı kişi alır.',
-  },
-  performance: {
-    title: 'Performans',
-    description: 'Otur-kalk ve gövde dayanıklılık testleri, saniye olarak.',
-  },
-  mobility: {
-    title: 'Hareketlilik',
-    description: 'Ayak bileği dorsifleksiyonu; sağ ve sol ayrı ölçülür.',
-  },
-  questionnaire: {
-    title: 'Anketler',
-    description: 'Skoru sen girersin; anketlerin metni lisanslı olabildiği için uygulamada yok.',
-  },
-};
+/** Grupların başlığı ve açıklaması okuyanın dilinde. */
+export function groupInfo(locale: Locale = DEFAULT_LOCALE): Record<MeasurementDef['group'], { title: string; description: string }> {
+  return text(locale).groups;
+}
+
+/** Türkçe gruplar (eski çağrılar); arayüz `groupInfo(locale)` kullanır. */
+export const GROUP_INFO: Record<MeasurementDef['group'], { title: string; description: string }> = groupInfo('tr');
 
 /**
  * Katlanmış bölümün özeti: dolu alan sayısı ve ilk üçü, yazıldığı gibi ("Vücut ağırlığı 81,5 kg ·
@@ -44,68 +39,56 @@ export const GROUP_INFO: Record<MeasurementDef['group'], { title: string; descri
 export function groupSummary(
   group: MeasurementDef['group'],
   slots: Readonly<Record<string, string | undefined>>,
+  locale: Locale = DEFAULT_LOCALE,
 ): { count: number; text: string } {
-  const filled = MEASUREMENT_SLOTS.filter((slot) => MEASUREMENTS[slot.id].group === group && (slots[slot.key] ?? '').trim() !== '');
+  const t = text(locale);
+  const filled = MEASUREMENT_SLOTS.filter((slot) => measurementDef(slot.id).group === group && (slots[slot.key] ?? '').trim() !== '');
   const shown = filled.slice(0, 3).map(({ key, id, side }) => {
-    const def = MEASUREMENTS[id];
-    const name = side ? `${def.label}, ${SIDE_LABELS[side].toLocaleLowerCase('tr')}` : def.label;
-    const text = (slots[key] ?? '').trim();
-    const unit = UNIT_LABELS[def.unit];
-    return `${name} ${unit === '%' ? `%${text}` : `${text} ${unit}`}`;
+    const def = measurementDef(id, locale);
+    const name = t.text.slotName(def.label, side ? t.sides[side] : null);
+    return t.text.slotValue(name, (slots[key] ?? '').trim(), t.units[def.unit]);
   });
-  const rest = filled.length - shown.length;
-  return { count: filled.length, text: shown.join(' · ') + (rest > 0 ? ` ve ${rest} değer daha` : '') };
+  return { count: filled.length, text: t.text.groupSummary(shown, filled.length - shown.length) };
 }
 
-export const CHANGE_LABELS: Record<ChangeKind, string> = {
-  improved: 'Gerçek gelişme',
-  declined: 'Gerileme',
-  increased: 'Gerçek artış',
-  decreased: 'Gerçek azalma',
-  no_real_change: 'Ölçüm hatası içinde',
-};
+/** Değişimin adı okuyanın dilinde. */
+export function changeLabels(locale: Locale = DEFAULT_LOCALE): Record<ChangeKind, string> {
+  return text(locale).text.changes;
+}
+
+export const CHANGE_LABELS: Record<ChangeKind, string> = changeLabels('tr');
 
 /** Eşiğin ekrandaki açıklaması: "2 cm altındaki değişim gerçek sayılmaz (…)". */
-export function describeRule(rule: NoiseRule, unit: string): string {
-  const size = rule.relative ? `%${formatNumber(rule.threshold * 100)}` : formatWithUnit(rule.threshold, unit);
-  const direction =
-    rule.better === 'lower'
-      ? ' Düşüş iyidir.'
-      : rule.better === 'higher'
-        ? ' Artış iyidir.'
-        : ' İyi yön tanımlı değil; gerçek değişim artış ya da azalma diye gösterilir.';
-  return `${size} altındaki değişim ölçüm hatası sayılır (${rule.source}).${direction}`;
+export function describeRule(rule: NoiseRule, unit: string, locale: Locale = DEFAULT_LOCALE): string {
+  const t = text(locale).text;
+  const format = getFormat(locale);
+  const size = rule.relative ? t.percent(format.number(rule.threshold * 100)) : format.withUnit(rule.threshold, unit);
+  return t.rule(size, rule.source, rule.better);
 }
 
-export const NO_RULE_TEXT =
-  'Bu ölçümün hata payı kaynaklarda yok: değişim gösterilir ama gelişme ya da gerileme diye yorumlanmaz.';
-
-export function describeWaistHip(indicator: WaistHipIndicator): string {
-  if (indicator.sex === null) {
-    return 'Bel-kalça oranının eşiği cinsiyete göre; oranı görmek için ölçüm girerken cinsiyeti seç.';
-  }
-  const cutoff = indicator.sex === 'male' ? 'erkekte 0,90' : 'kadında 0,85';
-  return `Bel-kalça oranı ${formatNumber(indicator.ratio)} (${formatDay(indicator.date)}): ${
-    indicator.elevatedRisk ? 'artmış metabolik risk eşiğinde ya da üstünde' : 'artmış metabolik risk eşiğinin altında'
-  } (${cutoff}, WHO).`;
+/** Eşiği olmayan ölçümün notu okuyanın dilinde. */
+export function noRuleText(locale: Locale = DEFAULT_LOCALE): string {
+  return text(locale).text.noRule;
 }
 
-export function describeSitToStand(indicator: SitToStandIndicator): string {
-  const value = formatWithUnit(indicator.seconds, 'sn');
-  switch (indicator.flag) {
-    case 'recurrent_fall_risk':
-      return `Son ölçüm ${value}: 15 sn üstü, tekrarlayan düşme riski işareti. Değerlendirme önerilir.`;
-    case 'fall_risk_assessment':
-      return `Son ölçüm ${value}: 12 sn üstü, düşme riski değerlendirmesi önerilir.`;
-    default:
-      return `Son ölçüm ${value}: 12 sn ve altı, düşme riski işareti yok.`;
-  }
+export const NO_RULE_TEXT = noRuleText('tr');
+
+export function describeWaistHip(indicator: WaistHipIndicator, locale: Locale = DEFAULT_LOCALE): string {
+  const t = text(locale).text;
+  if (indicator.sex === null) return t.waistHipNoSex;
+  const format = getFormat(locale);
+  return t.waistHip(format.number(indicator.ratio), format.day(indicator.date), indicator.elevatedRisk, indicator.sex);
 }
 
-export function describeSideBridge(indicator: SideBridgeIndicator): string {
-  return `Sağ-sol farkı %${formatNumber(indicator.differencePercent)} (${formatDay(indicator.date)}): ${
-    indicator.flagged ? '%25 ölçüm hatası bandını aşıyor, asimetri var.' : '%25 ölçüm hatası bandında, asimetri sayılmaz.'
-  }`;
+export function describeSitToStand(indicator: SitToStandIndicator, locale: Locale = DEFAULT_LOCALE): string {
+  const t = text(locale);
+  const value = getFormat(locale).withUnit(indicator.seconds, t.units.s);
+  return t.text.sitToStand[indicator.flag](value);
+}
+
+export function describeSideBridge(indicator: SideBridgeIndicator, locale: Locale = DEFAULT_LOCALE): string {
+  const format = getFormat(locale);
+  return text(locale).text.sideBridge(format.number(indicator.differencePercent), format.day(indicator.date), indicator.flagged);
 }
 
 const tenth = (value: number) => Math.round(value * 10) / 10;
@@ -138,35 +121,37 @@ const CHANGE_TONES: Record<ChangeKind, VerdictTone> = {
 };
 
 /** Tarih aralığı kısa biçimde; yıllar farklıysa yıllı: "11 Ağu–8 Eyl". */
-function dayRange(from: string, to: string): string {
+function dayRange(from: string, to: string, locale: Locale): string {
   const withYear = from.slice(0, 4) !== to.slice(0, 4);
-  return `${formatDayShort(from, withYear)}–${formatDayShort(to, withYear)}`;
+  const format = getFormat(locale);
+  return `${format.dayShort(from, withYear)}–${format.dayShort(to, withYear)}`;
 }
 
 /** Son iki ölçüm arasındaki fark ve (eşiği varsa) ölçüm hatasına göre hükmü. */
-export function latestChangeView(change: LatestChangeVerdict, unit: string, relative: boolean): VerdictView {
-  const percent =
-    relative && change.ratio !== null ? ` (${change.ratio < 0 ? '−' : '+'}%${formatNumber(Math.abs(Math.round(change.ratio * 100)))})` : '';
-  const amount = `${formatSignedWithUnit(change.delta, unit)}${percent}`;
-  const verdict = change.kind ? CHANGE_LABELS[change.kind].toLocaleLowerCase('tr') : null;
+export function latestChangeView(change: LatestChangeVerdict, unit: string, relative: boolean, locale: Locale = DEFAULT_LOCALE): VerdictView {
+  const t = text(locale).text;
+  const format = getFormat(locale);
+  const percent = relative && change.ratio !== null ? t.signedPercent(change.ratio < 0, format.number(Math.abs(Math.round(change.ratio * 100)))) : '';
+  const amount = `${format.signedWithUnit(change.delta, unit)}${percent}`;
+  const verdict = change.kind ? t.verdictInline(t.changes[change.kind]) : null;
   const withYear = change.previous.date.slice(0, 4) !== change.latest.date.slice(0, 4);
-  const days = `${formatDayShort(change.previous.date, withYear)} → ${formatDayShort(change.latest.date, withYear)}`;
+  const days = `${format.dayShort(change.previous.date, withYear)} → ${format.dayShort(change.latest.date, withYear)}`;
   return {
-    label: 'Son iki ölçüm',
+    label: t.latestLabel,
     amount,
     verdict,
     tone: change.kind ? CHANGE_TONES[change.kind] : 'flat',
-    text: `Son iki ölçüm: ${amount}${verdict ? ` · ${verdict}` : ''}`,
-    detail: change.previousBeforeRange ? `${days} · önceki ölçüm seçili aralıktan önce` : days,
+    text: t.latestText(amount, verdict),
+    detail: change.previousBeforeRange ? t.previousBeforeRange(days) : days,
   };
 }
 
-const TREND_WORDS: Record<TrendVerdict['kind'], { verdict: string; tone: VerdictTone }> = {
-  improving: { verdict: 'gerçek gelişme', tone: 'good' },
-  declining: { verdict: 'gerileme', tone: 'bad' },
-  plateau: { verdict: 'durağan', tone: 'flat' },
-  increased: { verdict: 'gerçek artış', tone: 'up' },
-  decreased: { verdict: 'gerçek azalma', tone: 'down' },
+const TREND_TONES: Record<TrendVerdict['kind'], VerdictTone> = {
+  improving: 'good',
+  declining: 'bad',
+  plateau: 'flat',
+  increased: 'up',
+  decreased: 'down',
 };
 
 /**
@@ -174,23 +159,24 @@ const TREND_WORDS: Record<TrendVerdict['kind'], { verdict: string; tone: Verdict
  * hesaplandığını söyler; seçili aralığın başından önceki ölçümleri de kullanıyorsa bunu yazar
  * (grafik yalnız aralığı çizer). Eşiğin altındaki eğilim "durağan"dır, "gelişme" denmez.
  */
-export function trendView(trend: TrendVerdict, unit: string): VerdictView {
-  const { verdict, tone } = TREND_WORDS[trend.kind];
-  const amount = formatSignedWithUnit(tenth(trend.change), unit);
-  const earlier = trend.beforeRange > 0 ? ` (seçili aralıktan önceki ${trend.beforeRange} ölçüm dahil)` : '';
+export function trendView(trend: TrendVerdict, unit: string, locale: Locale = DEFAULT_LOCALE): VerdictView {
+  const t = text(locale).text;
+  const verdict = t.trendWords[trend.kind];
+  const amount = getFormat(locale).signedWithUnit(tenth(trend.change), unit);
   return {
-    label: '4 haftalık eğilim',
+    label: t.trendLabel,
     amount,
     verdict,
-    tone,
-    text: `4 haftalık eğilim: ${verdict} (${amount})`,
-    detail: `${dayRange(trend.from, trend.to)} arasındaki ${trend.points} ölçümden${earlier}.`,
+    tone: TREND_TONES[trend.kind],
+    text: t.trendText(verdict, amount),
+    detail: t.trendDetail(dayRange(trend.from, trend.to, locale), trend.points, trend.beforeRange),
   };
 }
 
 /** Aralık, birimiyle ve yüzde işareti her sayının başında: "%8–%12", "82,1–86,3 cm". */
-export function formatRange(low: number, high: number, unit: string): string {
-  return unit === '%' ? `%${formatNumber(low)}–%${formatNumber(high)}` : `${formatNumber(low)}–${formatNumber(high)} ${unit}`;
+export function formatRange(low: number, high: number, unit: string, locale: Locale = DEFAULT_LOCALE): string {
+  const format = getFormat(locale);
+  return text(locale).text.range(format.number(low), format.number(high), unit);
 }
 
 /**
@@ -202,34 +188,25 @@ export function formatRange(low: number, high: number, unit: string): string {
  * tahmin yazılmaz (geçmiş bir güne "tahmin" olmaz), son ölçümün kaç gün önce olduğu söylenir; bugün
  * ufkun içindeyse bugünün tahmini de yazılır.
  */
-export function describeForecast(forecast: Forecast, unit: string, today?: string): string {
-  if (!forecast.ok) {
-    return forecast.reason === 'too_few_points'
-      ? 'Tahmin için en az 4 ölçüm gerekir.'
-      : 'Tahmin için ölçümler en az 3 haftaya yayılmalı.';
-  }
-  const trend = `Eğilim haftada ${formatSignedWithUnit(tenth(forecast.slopePerWeek), unit)}.`;
+export function describeForecast(forecast: Forecast, unit: string, today?: string, locale: Locale = DEFAULT_LOCALE): string {
+  const t = text(locale).text.forecast;
+  const format = getFormat(locale);
+  if (!forecast.ok) return forecast.reason === 'too_few_points' ? t.tooFewPoints : t.tooShort;
+  const trend = t.slope(format.signedWithUnit(tenth(forecast.slopePerWeek), unit));
   const view = today ? forecastAsOf(forecast, today) : null;
-  if (view?.kind === 'stale') {
-    return `${trend} Son ölçüm ${view.daysSince} gün önce: tahminin son günü (${formatDay(view.endDate)}) geçti, tahmin yeni ölçümle güncellenir.`;
-  }
+  if (view?.kind === 'stale') return t.stale(trend, view.daysSince, format.day(view.endDate));
   const end = forecast.points.at(-1)!;
   if (forecast.bound) {
     const down = forecast.slopePerWeek < 0;
-    const edge = `${down ? 'alt' : 'üst'} sınıra (${formatWithUnit(forecast.bound.value, unit)})`;
-    if (forecast.bound.days === 0) return `${trend} Çizgi son ölçümde ${edge} ${down ? 'indi' : 'ulaştı'}; ileriye tahmin yazılmaz.`;
-    const when = forecast.bound.days < 7 ? 'bir hafta içinde' : `yaklaşık ${Math.round(forecast.bound.days / 7)} haftada`;
-    return `${trend} Böyle giderse son ölçümden ${when} (${formatDay(end.date)} civarı) ${edge} ${
-      down ? 'iner' : 'ulaşır'
-    }. Tahmin eğilimin süreceğini varsayar.`;
+    const bound = format.withUnit(forecast.bound.value, unit);
+    if (forecast.bound.days === 0) return t.boundNow(trend, down, bound);
+    const weeks = forecast.bound.days < 7 ? null : Math.round(forecast.bound.days / 7);
+    return t.bound(trend, down, bound, weeks, format.day(end.date));
   }
   const estimate = view?.kind === 'current' ? view.today : null;
-  const now = estimate ? `bugün (${formatDay(estimate.date)}) ≈ ${formatWithUnit(tenth(estimate.value), unit)}, ` : '';
+  const now = estimate ? t.today(format.day(estimate.date), format.withUnit(tenth(estimate.value), unit)) : '';
   const weeks = Math.round(forecast.horizonDays / 7);
   const [low, high] = [tenth(end.low), tenth(end.high)];
-  const range = low === high ? '' : `; olası aralık ${formatRange(low, high, unit)}`;
-  return `${trend} Böyle giderse ${now}son ölçümden ${weeks} hafta sonra (${formatDay(end.date)}) ≈ ${formatWithUnit(
-    tenth(end.value),
-    unit,
-  )}${range}. Tahmin eğilimin süreceğini varsayar.`;
+  const range = low === high ? '' : t.range(formatRange(low, high, unit, locale));
+  return t.ahead(trend, now, weeks, format.day(end.date), format.withUnit(tenth(end.value), unit), range);
 }

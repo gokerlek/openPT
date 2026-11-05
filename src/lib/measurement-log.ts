@@ -1,5 +1,6 @@
 import { DEFAULT_LOCALE, type Locale } from '../i18n/locale.ts';
 import { healthMessages } from '../i18n/messages/health/index.ts';
+import { measurementsMessages } from '../i18n/messages/measurements/index.ts';
 import { healthFieldState } from './client-status.ts';
 import { MEASUREMENTS, MEASUREMENT_IDS, type MeasurementId } from './measurements.ts';
 import { healthFieldInfo, type Client, type HealthField } from './schemas/client.ts';
@@ -16,7 +17,8 @@ import type { MeasurementEntry } from './schemas/health.ts';
 
 export const SIDES = ['left', 'right'] as const;
 export type Side = (typeof SIDES)[number];
-export const SIDE_LABELS: Record<Side, string> = { left: 'Sol', right: 'Sağ' };
+/** Türkçe adlar (eski çağrılar); arayüz `sideLabels(locale)` kullanır. */
+export const SIDE_LABELS: Record<Side, string> = measurementsMessages('tr').sides;
 
 /** Bir günün tek değeri; tarih ayrı taşınır. */
 export type MeasurementValue = { id: MeasurementId; value: number; side?: Side | undefined };
@@ -65,31 +67,36 @@ export function slotsFromValues(values: readonly Pick<MeasurementEntry, 'id' | '
  * Sunucu denetimi: taraf kuralı, aralık ve tekrar. Hatalar formdaki alan anahtarıyla döner
  * (sunucu `values.<anahtar>` olarak iletir, alanın altında görünür).
  */
-export function checkValues(values: readonly MeasurementValue[]): { values: MeasurementValue[]; errors: Record<string, string> } {
+export function checkValues(
+  values: readonly MeasurementValue[],
+  locale: Locale = DEFAULT_LOCALE,
+): { values: MeasurementValue[]; errors: Record<string, string> } {
+  const t = measurementsMessages(locale).validation;
+  const common = healthMessages(locale).validation;
   const errors: Record<string, string> = {};
   const seen = new Set<string>();
   const clean: MeasurementValue[] = [];
   for (const { id, value, side } of values) {
     const key = slotKey(id, side);
     if (isSided(id) && !side) {
-      errors[slotKey(id, 'left')] ??= 'Sol ya da sağ taraf belirtilmeli.';
+      errors[slotKey(id, 'left')] ??= t.sideRequired;
       continue;
     }
     if (!isSided(id) && side) {
-      errors[slotKey(id)] ??= 'Bu ölçüm tek değerdir; taraf yok.';
+      errors[slotKey(id)] ??= t.noSide;
       continue;
     }
     if (seen.has(key)) {
-      errors[key] ??= 'Aynı ölçüm iki kez girilmiş.';
+      errors[key] ??= t.duplicate;
       continue;
     }
     seen.add(key);
     if (!Number.isFinite(value) || value < 0) {
-      errors[key] = 'Negatif olamaz.';
+      errors[key] = common.nonNegative;
       continue;
     }
     if (value > valueMax(id)) {
-      errors[key] = `En fazla ${valueMax(id)}.`;
+      errors[key] = common.max(valueMax(id));
       continue;
     }
     clean.push(side ? { id, value, side } : { id, value });
@@ -201,8 +208,7 @@ export const MEASUREMENT_LOCK_INFO: Record<MeasurementLock, { title: string; des
   outdated: healthLockInfo('measurements', 'outdated'),
 };
 
-/* --- dil: imza dondurma (i18n planı §7 F). Sahibi görev çevirir; şimdilik Türkçe döner. --- */
-
-export function sideLabels(_locale: Locale = DEFAULT_LOCALE): Record<Side, string> {
-  return SIDE_LABELS;
+/** Tarafların adları okuyanın dilinde. */
+export function sideLabels(locale: Locale = DEFAULT_LOCALE): Record<Side, string> {
+  return measurementsMessages(locale).sides;
 }

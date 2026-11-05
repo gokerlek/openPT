@@ -49,6 +49,11 @@ class HealthError extends GithubError implements Localizable {
   }
 }
 
+/** Sağlık uçlarının dile göre GitHub hatası (`messageOf` okuyanın dilinde verir). */
+export function healthError(text: LocalizedText, status: number): GithubError {
+  return new HealthError(text, status);
+}
+
 function recordText(locale: Locale) {
   return healthMessages(locale).record;
 }
