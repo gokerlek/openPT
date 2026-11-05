@@ -13,10 +13,7 @@ import { CLIENT_ID_PATTERN } from '@/lib/schemas/client';
 
 /** Ölçüm sayfalarının ortak parçaları (yalnız sunucu). */
 
-/**
- * Danışan kaydı; kimlik geçersiz ya da danışan yoksa 404. Kayıt okunamıyorsa sorunu.
- * i18n-followup(T2): `loadClient`'in `problem` metni (`lib/clients.ts`) Türkçe; dile göre metin ya da kod gerekir.
- */
+/** Danışan kaydı; kimlik geçersiz ya da danışan yoksa 404. Kayıt okunamıyorsa sorunu (okuyanın dilinde, `loadClient`). */
 export async function measurementClient(id: string): Promise<{ ok: true; client: Client } | { ok: false; problem: string }> {
   if (!CLIENT_ID_PATTERN.test(id)) notFound();
   const loaded = await loadClient(id);

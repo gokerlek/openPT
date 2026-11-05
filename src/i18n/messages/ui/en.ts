@@ -65,6 +65,8 @@ const en: Shape<typeof tr> = {
     choose: 'Choose image',
     remove: 'Remove',
     undo: 'Undo',
+    typeUnsupported: 'You can only choose a PNG, JPG or WebP image.',
+    tooBig: (mb: string) => `The image is ${mb} MB; it can be 1 MB at most. Choose a smaller image.`,
   },
   muscleMap: {
     sides: { front: 'Front', back: 'Back' },

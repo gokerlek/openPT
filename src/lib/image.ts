@@ -1,3 +1,6 @@
+import { DEFAULT_LOCALE, intlLocale, type Locale } from '../i18n/locale.ts';
+import { uiMessages } from '../i18n/messages/ui/index.ts';
+
 /**
  * Görsel kuralları — cihaz ve aparat fotoğrafları için ortak (istemci ve sunucu).
  *
@@ -26,12 +29,12 @@ export function sniffImage(bytes: Uint8Array): ImageExtension | null {
   return null;
 }
 
-/** Seçilen dosya kurallara uymuyorsa nedeni; uyuyorsa `null` (tarayıcıda gösterilir). */
-export function imageProblem(file: File): string | null {
-  if (!IMAGE_TYPES[file.type]) return 'Yalnız PNG, JPG ya da WebP seçebilirsin.';
+/** Seçilen dosya kurallara uymuyorsa nedeni, okuyanın dilinde; uyuyorsa `null` (tarayıcıda gösterilir). */
+export function imageProblem(file: File, locale: Locale = DEFAULT_LOCALE): string | null {
+  const t = uiMessages(locale).image;
+  if (!IMAGE_TYPES[file.type]) return t.typeUnsupported;
   if (file.size > IMAGE_MAX_BYTES) {
-    const mb = (file.size / 1024 / 1024).toLocaleString('tr-TR', { maximumFractionDigits: 1 });
-    return `Görsel ${mb} MB; en fazla 1 MB olabilir. Daha küçük bir görsel seç.`;
+    return t.tooBig((file.size / 1024 / 1024).toLocaleString(intlLocale(locale), { maximumFractionDigits: 1 }));
   }
   return null;
 }

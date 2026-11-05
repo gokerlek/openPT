@@ -15,6 +15,8 @@ import {
   type Outcome,
 } from './catalog-actions.ts';
 import { RETIRED_IDS_PATH } from './catalog-store.ts';
+import { GithubError } from './github/errors.ts';
+import { installMessages } from '../i18n/messages/install/index.ts';
 import { fakeRepo, type FakeRepo } from './testing/fake-repo.ts';
 
 /**
@@ -542,5 +544,29 @@ describe('görseller', () => {
     assert.match(String(saved.image), /^media\/attachments\/halat-[0-9a-f]{10}\.jpg$/);
     const missing = await saveAttachmentImage(repo.files, 'yok-boyle', new Uint8Array([1]), 'jpg');
     assert.deepEqual([missing.status, missing.body.error], [404, 'Aparat bulunamadı.']);
+  });
+});
+
+describe('GitHub katmanının hatası okuyanın dilinde', () => {
+  test('yazma çakışması İngilizce istekte İngilizce, Türkçede aynı metin', async () => {
+    const outcomes = await Promise.all(
+      (['en', 'tr'] as const).map((locale) => {
+        const repo = fakeRepo();
+        const files = {
+          ...repo.files,
+          writeJson: async () => {
+            throw new GithubError((l) => installMessages(l).github.conflict(DEV), 409);
+          },
+        };
+        return saveDevice(files, cable('Benim kablo'), locale);
+      }),
+    );
+    assert.deepEqual(
+      outcomes.map(({ status, body }) => [status, body.error]),
+      [
+        [409, `${DEV}: the record changed while you were working.`],
+        [409, `${DEV}: kayıt sen çalışırken değişti.`],
+      ],
+    );
   });
 });

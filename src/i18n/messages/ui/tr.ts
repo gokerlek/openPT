@@ -82,6 +82,9 @@ const tr = {
     choose: 'Görsel seç',
     remove: 'Kaldır',
     undo: 'Geri al',
+    /** Seçilen dosya kurala uymuyor (`lib/image.ts` → `imageProblem`). `mb`: dosyanın boyutu, okuyanın sayı biçiminde. */
+    typeUnsupported: 'Yalnız PNG, JPG ya da WebP seçebilirsin.',
+    tooBig: (mb: string) => `Görsel ${mb} MB; en fazla 1 MB olabilir. Daha küçük bir görsel seç.`,
   },
   /** Kas haritası (`muscle-map/*`). */
   muscleMap: {

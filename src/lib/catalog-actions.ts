@@ -89,8 +89,8 @@ function invalidInput(issues: readonly v.BaseIssue<unknown>[], locale: Locale): 
   return { status: 400, body: { error: text(locale).checkInput, fields } };
 }
 
-// i18n-followup(T2): GitHub katmanının kendi `GithubError` iletileri (`src/lib/github/**`) Türkçe; yerelleşince bu iki
-// yardımcı onları `messageOf` ile zaten o dilde verir (bu dosyanın kendi hataları `LocalizedGithubError`).
+// GitHub katmanının hataları (`GithubError`, `toGithubError`) dile göre metin taşır; bu iki yardımcı onları `messageOf` ile
+// okuyanın dilinde verir (bu dosyanın kendi hataları `LocalizedGithubError`).
 /** Beklenmeyen hata: GitHub'ın nedeni ve durumu, yoksa 502. */
 function failed(error: unknown, fallback: string, locale: Locale): Outcome {
   const failure = error instanceof GithubError ? error : null;

@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { ImageSquare } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
 import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/field';
-import { useMessages } from '@/i18n/client';
+import { useLocale, useMessages } from '@/i18n/client';
 import { uiMessages } from '@/i18n/messages/ui';
 import { imageProblem } from '@/lib/image';
 
@@ -37,7 +37,6 @@ export function usePreview(change: ImageChange): string | null {
   return change.kind === 'upload' && preview?.file === change.file ? preview.url : null;
 }
 
-// i18n-followup(unowned): `imageProblem` (`lib/image.ts`) Türkçe mesaj döndürüyor; sahibi planda yok.
 export function ImageField({
   id = 'image',
   label,
@@ -58,13 +57,14 @@ export function ImageField({
   onError: (error: string | null) => void;
 }) {
   const t = useMessages(uiMessages).image;
+  const locale = useLocale();
   const inputRef = useRef<HTMLInputElement>(null);
   const preview = usePreview(change);
   const shown = change.kind === 'upload' ? preview : change.kind === 'keep' ? currentUrl : null;
 
   function pick(file: File | undefined) {
     if (!file) return;
-    const problem = imageProblem(file);
+    const problem = imageProblem(file, locale);
     if (problem) return onError(problem);
     onError(null);
     onChange({ kind: 'upload', file });
