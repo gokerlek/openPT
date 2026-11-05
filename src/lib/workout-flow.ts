@@ -1,4 +1,6 @@
-import { formatKg, formatNumber } from './format.ts';
+import { DEFAULT_LOCALE, type Locale } from '../i18n/locale.ts';
+import { clientWorkoutMessages } from '../i18n/messages/client-workout/index.ts';
+import { getFormat } from './format.ts';
 import type { EntryStatus, SessionDoc, SessionEntry, SkipReason } from './schemas/session.ts';
 import { normalizeSession, withDeletions } from './session-merge.ts';
 import { isStraight } from './set-plan.ts';
@@ -488,17 +490,19 @@ export function swapRow(day: WorkoutDay, doc: SessionDoc, input: { rowId: string
  * Muadil listesindeki satırın alt metni: "8–12 tekrar · 30 kg ile başla", "3 set · öneri 62,5 kg",
  * "30–60 sn". İlk kezse "ile başla", geçmişi varsa "öneri".
  */
-export function optionText(extra: ExtraRow): string {
+export function optionText(extra: ExtraRow, locale: Locale = DEFAULT_LOCALE): string {
   const { row, template } = extra;
+  const t = clientWorkoutMessages(locale);
+  const f = getFormat(locale);
   const first = template.sets[0];
-  const unit = row.trackingType === 'duration' ? 'sn' : 'tekrar';
+  const unit = (count: number) => (row.trackingType === 'duration' ? t.units.seconds(count) : t.units.reps(count));
   const target =
     first && isStraight(template.sets)
-      ? `${first.min === first.max ? formatNumber(first.min) : `${formatNumber(first.min)}–${formatNumber(first.max)}`} ${unit}`
-      : `${template.sets.length} set`;
+      ? `${first.min === first.max ? f.number(first.min) : `${f.number(first.min)}–${f.number(first.max)}`} ${unit(first.max)}`
+      : `${template.sets.length} ${t.units.sets(template.sets.length)}`;
   if (row.trackingType !== 'weight_reps' || row.plan.topWeightKg <= 0) return target;
-  const kg = formatKg(row.plan.topWeightKg);
-  return `${target} · ${row.plan.reason === 'first_time' ? `${kg} ile başla` : `öneri ${kg}`}`;
+  const kg = f.kg(row.plan.topWeightKg);
+  return `${target} · ${row.plan.reason === 'first_time' ? t.flow.startWith(kg) : t.flow.suggested(kg)}`;
 }
 
 /* --- hareket ekle --- */
@@ -553,14 +557,13 @@ export function removeAdded(doc: SessionDoc, key: string): SessionDoc | null {
 export const FINISH_REASONS = ['no_time', 'tired', 'busy', 'no_equipment', 'other', 'pain'] as const;
 export type FinishReason = (typeof FINISH_REASONS)[number];
 
-export const FINISH_REASON_LABELS: Record<FinishReason, string> = {
-  no_time: 'Zamanım yok',
-  tired: 'Yoruldum',
-  busy: 'Alet dolu',
-  no_equipment: 'Ekipman yok',
-  other: 'Diğer',
-  pain: 'Ağrı',
-};
+/** Nedenlerin adları okuyanın dilinde. */
+export function finishReasonLabels(locale: Locale = DEFAULT_LOCALE): Record<FinishReason, string> {
+  return clientWorkoutMessages(locale).flow.finishReasons;
+}
+
+/** Türkçe adlar (eski çağrılar); arayüz `finishReasonLabels(locale)` kullanır. */
+export const FINISH_REASON_LABELS: Record<FinishReason, string> = finishReasonLabels('tr');
 
 /**
  * Bitişte seçilen neden yapılmayan (geçilen ya da eksik kalan) her harekete yazılır (`skip.reason`).

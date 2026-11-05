@@ -1,3 +1,5 @@
+import { DEFAULT_LOCALE, type Locale } from '../i18n/locale.ts';
+import { clientWorkoutMessages } from '../i18n/messages/client-workout/index.ts';
 import type { LiveSession } from './live-text.ts';
 import type { Program } from './schemas/program.ts';
 import { parseStoredSession, sessionIdOfPath, type SessionDoc } from './schemas/session.ts';
@@ -49,14 +51,21 @@ export function activeSessionOf(raw: unknown): SessionDoc | null {
 }
 
 /** Açık antrenmanın özeti; son yazım pencerenin dışındaysa null. */
-export function liveSessionOf(input: { doc: SessionDoc; program: Pick<Program, 'phases'> | null; committedAt: string; now: Date }): LiveSession | null {
+export function liveSessionOf(input: {
+  doc: SessionDoc;
+  program: Pick<Program, 'phases'> | null;
+  committedAt: string;
+  now: Date;
+  /** Gün adı yoksa yazılan "Antrenman"ın dili (okuyanın); yoksa Türkçe. */
+  locale?: Locale;
+}): LiveSession | null {
   const { doc } = input;
   if (doc.status !== 'active' || !withinLiveWindow(input.committedAt, input.now)) return null;
   const day = dayOf(input.program, doc.program?.dayId);
   const counts = day ? completion(doc, day) : null;
   const lastSetAt = doc.entries.flatMap((entry) => entry.sets.map((set) => set.at)).sort().at(-1) ?? null;
   // Kendi programdan antrenman programın adıyla ("Evde · Gün A").
-  const dayName = doc.program?.dayName ?? 'Antrenman';
+  const dayName = doc.program?.dayName ?? clientWorkoutMessages(input.locale ?? DEFAULT_LOCALE).session.workout;
   return {
     sessionId: doc.id,
     dayName: doc.program?.programName ? `${doc.program.programName} · ${dayName}` : dayName,

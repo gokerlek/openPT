@@ -1,4 +1,7 @@
-import type { Locale } from '../i18n/locale.ts';
+import { localizedLibraryTitle } from '../data/library-titles.ts';
+import { DEFAULT_LOCALE, type Locale } from '../i18n/locale.ts';
+import { clientWorkoutMessages } from '../i18n/messages/client-workout/index.ts';
+import { upperFirst } from '../i18n/text.ts';
 import {
   applyTolerance,
   assessTolerance,
@@ -12,7 +15,7 @@ import {
   type ToleranceResult,
 } from './check-in.ts';
 import { canRecordHealth } from './client-status.ts';
-import { formatKg, formatNumber, formatSignedWithUnit } from './format.ts';
+import { getFormat } from './format.ts';
 import { sessionDayText } from './own-program-text.ts';
 import { percentOfTop, type LoadSpec, type PlannedSet, type SessionPlan, type SetTarget, type SuggestionReason } from './progression.ts';
 import { lightenPlan, type Why } from './recommend.ts';
@@ -95,13 +98,15 @@ export type ReadinessKey = (typeof READINESS_KEYS)[number];
 /** Puan bunun altındaysa "Hacmi hafifletelim mi?" (v1 PRD 4.3: < 60). */
 export const LOW_READINESS = 60;
 
-/** Sorular ve cevapların adı (1 → 5, soldan sağa; dördünde de sağdaki en iyi). */
-export const READINESS_QUESTIONS: Record<ReadinessKey, { question: string; answers: readonly [string, string, string, string, string] }> = {
-  sleep: { question: 'Dün gece nasıl uyudun?', answers: ['Çok kötü', 'Kötü', 'İdare eder', 'İyi', 'Harika'] },
-  energy: { question: 'Enerjin nasıl?', answers: ['Bitkin', 'Düşük', 'Normal', 'Yüksek', 'Çok enerjik'] },
-  soreness: { question: 'Kaslarında ağrı var mı?', answers: ['Çok yoğun', 'Belirgin', 'Orta', 'Hafif', 'Hiç yok'] },
-  stress: { question: 'Stresin nasıl?', answers: ['Çok stresli', 'Yüksek', 'Orta', 'Hafif', 'Sakinim'] },
-};
+export type ReadinessQuestion = { question: string; answers: readonly [string, string, string, string, string] };
+
+/** Sorular ve cevapların adı (1 → 5, soldan sağa; dördünde de sağdaki en iyi), okuyanın dilinde. */
+export function readinessQuestions(locale: Locale = DEFAULT_LOCALE): Record<ReadinessKey, ReadinessQuestion> {
+  return clientWorkoutMessages(locale).check.readiness as Record<ReadinessKey, ReadinessQuestion>;
+}
+
+/** Türkçe sorular (eski çağrılar); arayüz `readinessQuestions(locale)` kullanır. */
+export const READINESS_QUESTIONS: Record<ReadinessKey, ReadinessQuestion> = readinessQuestions('tr');
 
 /** Hazır oluşluk puanı, 20–100 (dosya başı). */
 export function readinessScore(readiness: Readiness): number {
@@ -133,29 +138,29 @@ export function latestReadinessScore(checkIns: readonly Pick<HealthCheckIn, 'dat
 
 /* --- ağrı soruları (danışanın dilinde) --- */
 
-/** NPRS'nin uçları (0–10). */
-export const PAIN_SCALE_ENDS = { low: 'Ağrı yok', high: 'Dayanılmaz' } as const;
+/** NPRS'nin uçları (0–10), okuyanın dilinde. */
+export function painScaleEnds(locale: Locale = DEFAULT_LOCALE): { low: string; high: string } {
+  return clientWorkoutMessages(locale).check.painEnds;
+}
 
-export const DIRECTION_CHOICES: Record<SymptomDirection, string> = {
-  centralizing: 'Azalıyor, merkeze toplanıyor',
-  stable: 'Değişmedi',
-  peripheralizing: 'Kola ya da bacağa yayılıyor',
-};
+export function directionChoices(locale: Locale = DEFAULT_LOCALE): Record<SymptomDirection, string> {
+  return clientWorkoutMessages(locale).check.direction;
+}
 
-export const IRRITABILITY_CHOICES: Record<Irritability, string> = {
-  low: 'Ara ara, zor tetikleniyor',
-  moderate: 'Orta',
-  high: 'Sürekli, kolay tetikleniyor',
-};
+export function irritabilityChoices(locale: Locale = DEFAULT_LOCALE): Record<Irritability, string> {
+  return clientWorkoutMessages(locale).check.irritability;
+}
 
 /** Kırmızı bayrak sorusu (Finucane 2020 çerçevesinden seçilmiş dört yeni belirti; `check-in.ts`). */
-export const RED_FLAG_CHOICES: Record<RedFlagCheck, string> = {
-  none: 'Hayır, hiçbiri',
-  new_neuro_deficit: 'Yeni uyuşma ya da güç kaybı',
-  bladder_bowel_change: 'İdrar ya da dışkılamada değişiklik',
-  night_pain: 'Geceleri uyandıran ağrı',
-  new_trauma: 'Yeni düşme ya da darbe',
-};
+export function redFlagChoices(locale: Locale = DEFAULT_LOCALE): Record<RedFlagCheck, string> {
+  return clientWorkoutMessages(locale).check.redFlag;
+}
+
+/* Türkçe metinler (eski çağrılar); arayüz yukarıdaki erişicileri kullanır. */
+export const PAIN_SCALE_ENDS = painScaleEnds('tr');
+export const DIRECTION_CHOICES: Record<SymptomDirection, string> = directionChoices('tr');
+export const IRRITABILITY_CHOICES: Record<Irritability, string> = irritabilityChoices('tr');
+export const RED_FLAG_CHOICES: Record<RedFlagCheck, string> = redFlagChoices('tr');
 
 /* --- CR-10 --- */
 
@@ -163,26 +168,24 @@ export const RED_FLAG_CHOICES: Record<RedFlagCheck, string> = {
  * Seans zorluğu, CR-10 (0–10). Adı olan basamaklar Borg CR-10'un Foster uyarlaması (Haddad 2017): 0
  * dinlenme, 1 çok çok kolay, 2 kolay, 3 orta, 4 biraz zor, 5 zor, 7 çok zor, 10 maksimal; 6, 8 ve 9 adsız.
  */
-export const CR10_LABELS: Readonly<Partial<Record<number, string>>> = {
-  0: 'Dinlenme',
-  1: 'Çok çok kolay',
-  2: 'Kolay',
-  3: 'Orta',
-  4: 'Biraz zor',
-  5: 'Zor',
-  7: 'Çok zor',
-  10: 'Maksimal',
-};
+export function cr10Labels(locale: Locale = DEFAULT_LOCALE): Readonly<Partial<Record<number, string>>> {
+  return clientWorkoutMessages(locale).check.cr10;
+}
+
+/** Türkçe basamaklar (eski çağrılar); arayüz `cr10Labels(locale)` kullanır. */
+export const CR10_LABELS: Readonly<Partial<Record<number, string>>> = cr10Labels('tr');
 
 /** "7 · Çok zor"; adsız basamakta komşularıyla ("6 · Zor ile çok zor arası"). */
-export function cr10Text(value: number): string {
-  const label = CR10_LABELS[value];
-  if (label) return `${formatNumber(value)} · ${label}`;
-  const below = [...Array(value).keys()].reverse().find((item) => CR10_LABELS[item]);
-  const above = [...Array(11).keys()].find((item) => item > value && CR10_LABELS[item]);
-  const lower = below === undefined ? '' : (CR10_LABELS[below] ?? '');
-  const upper = above === undefined ? '' : (CR10_LABELS[above] ?? '');
-  return `${formatNumber(value)} · ${lower} ile ${upper.toLocaleLowerCase('tr')} arası`;
+export function cr10Text(value: number, locale: Locale = DEFAULT_LOCALE): string {
+  const labels = cr10Labels(locale);
+  const number = getFormat(locale).number(value);
+  const label = labels[value];
+  if (label) return `${number} · ${label}`;
+  const below = [...Array(value).keys()].reverse().find((item) => labels[item]);
+  const above = [...Array(11).keys()].find((item) => item > value && labels[item]);
+  const lower = below === undefined ? '' : (labels[below] ?? '');
+  const upper = above === undefined ? '' : (labels[above] ?? '');
+  return clientWorkoutMessages(locale).check.cr10Between(number, lower, upper);
 }
 
 /* --- antrenman başının girdisi (sunucudan) --- */
@@ -279,8 +282,8 @@ export type StartOutcome = {
   stop: boolean;
 };
 
-/** Cevaplardan karar (onay dışı parçalar yok sayılır). */
-export function evaluateStart(input: { context: CheckContext; answers: StartAnswers }): StartOutcome {
+/** Cevaplardan karar (onay dışı parçalar yok sayılır). `locale`: kuralların gerekçe dili; yoksa Türkçe. */
+export function evaluateStart(input: { context: CheckContext; answers: StartAnswers; locale?: Locale }): StartOutcome {
   const { context, answers } = input;
   const { parts } = context;
   const readiness = parts.readiness ? completeReadiness(answers.readiness) : null;
@@ -297,6 +300,7 @@ export function evaluateStart(input: { context: CheckContext; answers: StartAnsw
     },
     history: context.history,
     mode: context.mode,
+    ...(input.locale ? { locale: input.locale } : {}),
   });
   // Önceki antrenmanın kuralları geçmişsiz değerlendirilir (haftalık artış bugünün kararında).
   const previous = context.previous
@@ -307,6 +311,7 @@ export function evaluateStart(input: { context: CheckContext; answers: StartAnsw
           ...(context.previous.painPeak !== undefined ? { painPeak: context.previous.painPeak } : {}),
         },
         mode: context.mode,
+        ...(input.locale ? { locale: input.locale } : {}),
       })
     : null;
   return {
@@ -331,16 +336,14 @@ export function combineTolerance(results: readonly (ToleranceResult | null)[]): 
   return { action: reasons[0]?.action ?? 'progress', reasons };
 }
 
-const PAINFUL_EXERCISE: ToleranceReason = {
-  code: 'painful_exercise',
-  action: 'hold',
-  message: 'Bu hareket son günlerde ağrı yaptı: artış yok.',
-};
+function painfulExercise(locale: Locale): ToleranceReason {
+  return { code: 'painful_exercise', action: 'hold', message: clientWorkoutMessages(locale).check.painfulExercise };
+}
 
 /** Satırın kararı: bugünün durumu + (satıra düşüyorsa) önceki antrenmanın ağrısı + ağrılı hareket. */
-export function rowTolerance(outcome: StartOutcome, rowId: string): ToleranceResult {
+export function rowTolerance(outcome: StartOutcome, rowId: string, locale: Locale = DEFAULT_LOCALE): ToleranceResult {
   const previousApplies = outcome.previous !== null && (outcome.previousRows.length === 0 || outcome.previousRows.includes(rowId));
-  const painful = outcome.painRows.includes(rowId) ? { action: 'hold' as const, reasons: [PAINFUL_EXERCISE] } : null;
+  const painful = outcome.painRows.includes(rowId) ? { action: 'hold' as const, reasons: [painfulExercise(locale)] } : null;
   return combineTolerance([outcome.today, previousApplies ? outcome.previous : null, painful]);
 }
 
@@ -421,25 +424,22 @@ function tolerate(row: WorkoutRow, sets: readonly SetTarget[], tolerance: Tolera
 }
 
 /** Danışana ağrı gerekçesi (kartın çipinin ayrıntısı): kuralın cümlesi danışanın diliyle. */
-function painCause(reason: ToleranceReason, outcome: StartOutcome, mode: ToleranceMode): string {
+function painCause(reason: ToleranceReason, outcome: StartOutcome, mode: ToleranceMode, locale: Locale): string {
+  const t = clientWorkoutMessages(locale).check.causes;
   switch (reason.code) {
     case 'not_back_to_baseline':
-      return 'geçen antrenmandan sonraki ağrın ertesi sabah her zamanki düzeyine dönmedi';
+      return t.notBackToBaseline;
     case 'peak_over_ceiling':
-      return `geçen antrenmanda ağrın tavanı (${formatNumber(PAIN_CEILING[mode])}/10) aştı`;
+      return t.peakOverCeiling(getFormat(locale).number(PAIN_CEILING[mode]));
     case 'pain_rising_weekly':
-      return 'ağrın bu hafta geçen haftaya göre arttı';
+      return t.painRisingWeekly;
     case 'high_irritability':
-      return 'ağrın kolay tetikleniyor';
+      return t.highIrritability;
     case 'painful_exercise':
-      return 'bu hareket son günlerde ağrı yaptı';
+      return t.painfulExercise;
     default:
-      return outcome.stop ? 'bugün yük verilmiyor' : reason.message;
+      return outcome.stop ? t.noLoad : reason.message;
   }
-}
-
-function sentence(text: string): string {
-  return text ? `${text.charAt(0).toLocaleUpperCase('tr')}${text.slice(1)}` : text;
 }
 
 /** Hafifletilen ya da ağrıya göre ayarlanan satırın çipi ve açıklaması. */
@@ -453,50 +453,38 @@ function whyOf(input: {
   tolerance: ToleranceResult;
   outcome: StartOutcome;
   mode: ToleranceMode;
+  locale: Locale;
 }): Why {
-  const { row, before, after, kind, lastKg, lightened, tolerance } = input;
+  const { row, before, after, kind, lastKg, lightened, tolerance, locale } = input;
+  const t = clientWorkoutMessages(locale).check.why;
+  const f = getFormat(locale);
   const weighted = row.trackingType === 'weight_reps';
-  const causes = [...new Set(tolerance.reasons.map((reason) => painCause(reason, input.outcome, input.mode)))];
-  const cause = sentence(causes.join('; '));
+  const causes = [...new Set(tolerance.reasons.map((reason) => painCause(reason, input.outcome, input.mode, locale)))];
+  const cause = upperFirst(locale, causes.join('; '));
   const fewer = after.sets.length < before.sets.length;
-  const setText = fewer ? `${formatNumber(before.sets.length)} set yerine ${formatNumber(after.sets.length)}` : '';
+  const setText = fewer ? t.fewerSets(f.number(before.sets.length), f.number(after.sets.length), after.sets.length) : '';
   const tone: Why['tone'] = after.topWeightKg < before.topWeightKg || fewer ? 'down' : 'hold';
 
   if (kind === 'reduce') {
     const done = row.lastTime.some((set) => set.kg !== undefined);
-    const delta = formatSignedWithUnit(after.topWeightKg - lastKg, 'kg');
+    const delta = f.signedWithUnit(after.topWeightKg - lastKg, 'kg');
     return {
       tone: 'down',
-      chip: `Ağrı · ${delta}`,
-      detail: `${cause}. Bugün ağırlık ${done ? 'son yaptığın ' : ''}${formatKg(lastKg)} yerine ${formatKg(after.topWeightKg)}${setText ? `, ${setText}` : ''}. Sonraki antrenmanda yoklamana göre yeniden bakılır.`,
+      chip: t.reduceChip(delta),
+      detail: t.reduceDetail(cause, done, f.kg(lastKg), f.kg(after.topWeightKg), setText),
     };
   }
   if (lightened) {
     const delta = after.topWeightKg - before.topWeightKg;
-    const chip = weighted && delta < 0 ? `Hafif gün · ${formatSignedWithUnit(delta, 'kg')}` : fewer ? 'Hafif gün · bir set az' : 'Hafif gün';
-    const parts = [
-      weighted && delta < 0 ? `ağırlık ${formatKg(before.topWeightKg)} yerine ${formatKg(after.topWeightKg)}` : '',
-      setText,
-    ].filter(Boolean);
-    const pain = kind === 'hold' || kind === 'unavailable' ? ` ${cause}: bugün artış yok.` : '';
-    return {
-      tone: 'down',
-      chip,
-      detail: `Bugün hafif bir gün seçtin${parts.length > 0 ? `: ${parts.join(', ')}` : ''}.${pain} Yalnız bugünün planı değişti; sonraki antrenman planın kendi ağırlığıyla.`,
-    };
+    const chip = weighted && delta < 0 ? t.lightChipDelta(f.signedWithUnit(delta, 'kg')) : fewer ? t.lightChipFewer : t.lightChip;
+    const parts = [weighted && delta < 0 ? t.lightWeight(f.kg(before.topWeightKg), f.kg(after.topWeightKg)) : '', setText].filter(Boolean);
+    const pain = kind === 'hold' || kind === 'unavailable' ? t.lightPain(cause) : '';
+    return { tone: 'down', chip, detail: t.lightDetail(parts, pain) };
   }
   if (kind === 'unavailable') {
-    return {
-      tone,
-      chip: row.trackingType === 'duration' ? 'Ağrı · süreyi azalt' : 'Ağrı · tekrarı azalt',
-      detail: `${cause}. ${weighted ? 'Ağırlık zaten en hafif ayarda' : 'Bu harekette azaltılacak ağırlık yok'}: bugün aralığın altında kal, gerekirse bir set az yap.`,
-    };
+    return { tone, chip: t.unavailableChip(row.trackingType === 'duration'), detail: t.unavailableDetail(cause, weighted) };
   }
-  return {
-    tone: 'hold',
-    chip: weighted ? 'Ağrı · aynı ağırlık' : 'Ağrı · aynı hedef',
-    detail: `${cause}. Bugün artış yok: ${weighted ? `${formatKg(after.topWeightKg)} ile` : 'geçen seferki hedefle'} kal.`,
-  };
+  return { tone: 'hold', chip: t.holdChip(weighted), detail: t.holdDetail(cause, weighted ? f.kg(after.topWeightKg) : null) };
 }
 
 export type DayAdjustment = {
@@ -523,6 +511,7 @@ export function adjustDay(
   input: { outcome: StartOutcome; lighten: boolean; mode: ToleranceMode; /** Gerekçelerin dili; yoksa Türkçe. */ locale?: Locale },
 ): DayAdjustment {
   const { outcome, lighten } = input;
+  const locale = input.locale ?? DEFAULT_LOCALE;
   if (outcome.stop) return { day, lighter: false, changed: [] };
   const rows: Record<string, WorkoutRow> = {};
   const changed: string[] = [];
@@ -534,7 +523,7 @@ export function adjustDay(
       rows[rowId] = row;
       continue;
     }
-    const tolerance = rowTolerance(outcome, rowId);
+    const tolerance = rowTolerance(outcome, rowId, locale);
     const tolerated = tolerate(row, sets, tolerance);
     let plan = tolerated.plan;
     // Hafifletme satırda bir şey değiştirmiyorsa (iki setli ağırlıksız hareket) plan ve gerekçe olduğu gibi.
@@ -571,6 +560,7 @@ export function adjustDay(
         tolerance,
         outcome,
         mode: input.mode,
+        locale,
       }),
     };
   }
@@ -686,15 +676,18 @@ export function afterCandidate(index: Pick<SessionIndex, 'items'>, now: Date): S
 }
 
 /** Kart: seans zorluğu henüz yoksa; varsa null (danışan başka cihazda cevapladı). */
-export function afterPromptOf(doc: Pick<SessionDoc, 'id' | 'status' | 'startedAt' | 'finishedAt' | 'effort' | 'entries' | 'program'>): AfterPrompt | null {
+export function afterPromptOf(
+  doc: Pick<SessionDoc, 'id' | 'status' | 'startedAt' | 'finishedAt' | 'effort' | 'entries' | 'program'>,
+  locale: Locale = DEFAULT_LOCALE,
+): AfterPrompt | null {
   if (doc.status !== 'finished' || !doc.finishedAt || doc.effort?.sessionRpe !== undefined) return null;
   const durationMin = durationOf(doc);
   const exercises = doc.entries.flatMap((entry) =>
-    entry.rowId && entry.sets.some((set) => set.type === 'working') ? [{ rowId: entry.rowId, title: entry.title }] : [],
+    entry.rowId && entry.sets.some((set) => set.type === 'working') ? [{ rowId: entry.rowId, title: localizedLibraryTitle(entry.exerciseId, entry.title, locale) }] : [],
   );
   return {
     sessionId: doc.id,
-    ...(doc.program?.dayName ? { dayName: sessionDayText(doc.program) } : {}),
+    ...(doc.program?.dayName ? { dayName: sessionDayText(doc.program, undefined, locale) } : {}),
     finishedAt: doc.finishedAt,
     ...(durationMin !== undefined && durationMin >= 1 ? { durationMin } : {}),
     exercises: exercises.filter((item, position) => exercises.findIndex((other) => other.rowId === item.rowId) === position),

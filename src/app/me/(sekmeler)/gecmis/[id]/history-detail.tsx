@@ -13,14 +13,16 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Spinner } from '@/components/ui/spinner';
-import { formatNumber } from '@/lib/format';
+import { useLocale } from '@/i18n/client';
+import { clientProgressMessages } from '@/i18n/messages/client-progress';
+import { getFormat } from '@/lib/format';
 import { SWIPE, tween } from '@/lib/motion';
 import { fetchJson } from '@/lib/query/errors';
 import { useServiceMutation } from '@/lib/query/use-service';
 import { SESSION_ID_LENGTHS, type SessionDoc } from '@/lib/schemas/session';
-import { DELETE_BODY, DELETE_DETAIL, deleteCopy, deletePatch, sessionDetail, type DeleteTarget, type DetailExercise, type DetailSet } from '@/lib/session-history';
+import { deleteCopy, deletePatch, deleteText, sessionDetail, type DeleteTarget, type DetailExercise, type DetailSet } from '@/lib/session-history';
 import { randomId } from '@/lib/template-plan';
-import { CHANGE_LABELS, type ChangeLine } from '@/lib/workout-summary';
+import { changeLabels, type ChangeLine } from '@/lib/workout-summary';
 import { WORKOUT_KEY } from '../../../workout-overview';
 import { writerId } from '../../../workout-storage';
 
@@ -55,11 +57,14 @@ type PatchResponse = { doc: SessionDoc };
  */
 export function HistoryDetail({ initialDoc, changes, timeZone }: { initialDoc: SessionDoc; changes: ChangeLine[]; timeZone: string }) {
   const router = useRouter();
+  const locale = useLocale();
+  const t = clientProgressMessages(locale).detail;
+  const f = getFormat(locale);
   const [doc, setDoc] = useState(initialDoc);
   const [editing, setEditing] = useState(false);
   // Onayın konusu kapanış animasyonu boyunca kalır (`open` düşer, metin boşalmaz).
   const [dialog, setDialog] = useState<{ open: boolean; target: DeleteTarget; title: string; subject: string } | null>(null);
-  const view = useMemo(() => sessionDetail(doc, timeZone), [doc, timeZone]);
+  const view = useMemo(() => sessionDetail(doc, timeZone, undefined, locale), [doc, timeZone, locale]);
   const close = () => setDialog((current) => (current ? { ...current, open: false } : null));
 
   const remove = useServiceMutation({
@@ -84,7 +89,7 @@ export function HistoryDetail({ initialDoc, changes, timeZone }: { initialDoc: S
     onSuccess: (result) => {
       close();
       if (result === null) {
-        toast.success('Antrenman silindi', { description: 'Rekorların ve "bu hafta" kalan kayıtlara göre yeniden hesaplandı.' });
+        toast.success(t.deletedToast, { description: t.deletedToastText });
         router.replace('/me/gecmis');
         return;
       }
@@ -107,7 +112,7 @@ export function HistoryDetail({ initialDoc, changes, timeZone }: { initialDoc: S
   });
 
   const ask = (target: DeleteTarget) => {
-    const copy = deleteCopy(view, target);
+    const copy = deleteCopy(view, target, locale);
     if (copy && !remove.isPending) setDialog({ open: true, target, ...copy });
   };
 
@@ -122,41 +127,41 @@ export function HistoryDetail({ initialDoc, changes, timeZone }: { initialDoc: S
                 variant="secondary"
                 size="icon"
                 className="size-9"
-                aria-label="Bir bardak su azalt"
+                aria-label={t.waterLess}
                 disabled={view.water === 0 || water.isPending}
                 onClick={() => water.mutate(-1)}>
                 <Minus weight="bold" />
               </Button>
               <span className="inline-flex min-w-14 items-center justify-center gap-1 px-1" aria-live="polite">
                 {water.isPending ? <Spinner className="size-3.5" /> : <Drop className="size-3.5 text-primary-text" aria-hidden />}
-                {formatNumber(view.water)} su
+                {t.water(f.number(view.water), view.water)}
               </span>
-              <Button variant="secondary" size="icon" className="size-9" aria-label="Bir bardak su ekle" disabled={water.isPending} onClick={() => water.mutate(1)}>
+              <Button variant="secondary" size="icon" className="size-9" aria-label={t.waterMore} disabled={water.isPending} onClick={() => water.mutate(1)}>
                 <Plus weight="bold" />
               </Button>
             </span>
           ) : (
-            <span>{formatNumber(view.water)} su</span>
+            <span>{t.water(f.number(view.water), view.water)}</span>
           )}
         </p>
         {view.otherDay || view.unfinished || view.effort ? (
           <div className="flex flex-wrap items-center gap-1.5">
-            {view.otherDay ? <Badge variant="secondary">başka program</Badge> : null}
-            {view.unfinished ? <Badge variant="outline">yarım</Badge> : null}
+            {view.otherDay ? <Badge variant="secondary">{clientProgressMessages(locale).pages.otherProgram}</Badge> : null}
+            {view.unfinished ? <Badge variant="outline">{clientProgressMessages(locale).pages.unfinished}</Badge> : null}
             {view.effort ? <Badge variant="outline">{view.effort}</Badge> : null}
           </div>
         ) : null}
         <div className="flex items-center gap-1">
           <Button variant="ghost" className="-ml-2 h-11 px-2 text-primary-text" nativeButton={false} render={<Link href={`/me/antrenman/ozet/${doc.id}?from=gecmis`} />}>
-            Özeti aç
+            {t.openSummary}
             <CaretRight data-icon="inline-end" weight="bold" />
           </Button>
           <span className="flex-1" />
           <Button variant="ghost" className="h-11 px-3" aria-pressed={editing} onClick={() => setEditing(!editing)}>
-            {editing ? 'Bitti' : 'Düzenle'}
+            {editing ? t.done : t.edit}
           </Button>
           <Button variant="ghost" className="-mr-2 h-11 px-3 text-destructive-text" onClick={() => ask({ kind: 'session' })}>
-            Sil
+            {t.delete}
           </Button>
         </div>
       </div>
@@ -172,17 +177,17 @@ export function HistoryDetail({ initialDoc, changes, timeZone }: { initialDoc: S
           </AnimatePresence>
         </ul>
       </SwipeGroup>
-      {view.exercises.length === 0 ? <p className="text-sm text-muted-foreground">Bu antrenmanda kayıtlı set kalmadı.</p> : null}
+      {view.exercises.length === 0 ? <p className="text-sm text-muted-foreground">{t.noSets}</p> : null}
 
       {changes.length > 0 ? (
         <Card size="sm" className="px-3.5">
-          <p className="text-sm font-medium">Program</p>
+          <p className="text-sm font-medium">{t.program}</p>
           <ul className="flex flex-col gap-2">
             {changes.map((change, position) => (
               <li key={`${change.text}-${position}`} className="flex flex-col text-sm">
                 <span>{change.text}</span>
                 <span className="text-[0.8125rem] text-muted-foreground">
-                  {CHANGE_LABELS[change.state]}
+                  {changeLabels(locale)[change.state]}
                   {change.note ? ` · “${change.note}”` : ''}
                 </span>
               </li>
@@ -196,8 +201,8 @@ export function HistoryDetail({ initialDoc, changes, timeZone }: { initialDoc: S
         onOpenChange={(open) => (open ? undefined : close())}
         title={dialog?.title ?? ''}
         subject={dialog?.subject ?? ''}
-        body={DELETE_BODY}
-        detail={DELETE_DETAIL}
+        body={deleteText(locale).body}
+        detail={deleteText(locale).detail}
         busy={remove.isPending}
         onConfirm={() => (dialog?.open ? remove.mutate(dialog.target) : undefined)}
       />
@@ -206,6 +211,7 @@ export function HistoryDetail({ initialDoc, changes, timeZone }: { initialDoc: S
 }
 
 function HistoryExercise({ exercise, editing, onDelete }: { exercise: DetailExercise; editing: boolean; onDelete: (target: DeleteTarget) => void }) {
+  const t = clientProgressMessages(useLocale()).detail;
   const removeExercise = () => onDelete({ kind: 'entry', entryId: exercise.entryId });
   return (
     <Card size="sm" className="gap-0 py-0">
@@ -215,10 +221,12 @@ function HistoryExercise({ exercise, editing, onDelete }: { exercise: DetailExer
             <span className="font-medium">
               {exercise.title} <span className="text-[0.8125rem] font-normal text-muted-foreground">{exercise.note}</span>
             </span>
-            {exercise.setupNote ? <span className="text-[0.8125rem] text-muted-foreground">Ayar notun: {exercise.setupNote}</span> : null}
+            {exercise.setupNote ? <span className="text-[0.8125rem] text-muted-foreground">
+                {t.setupNote} {exercise.setupNote}
+              </span> : null}
           </div>
           {editing ? (
-            <Button variant="ghost" size="icon" className="size-11 text-destructive-text" aria-label={`${exercise.title} hareketini sil`} onClick={removeExercise}>
+            <Button variant="ghost" size="icon" className="size-11 text-destructive-text" aria-label={t.deleteExercise(exercise.title)} onClick={removeExercise}>
               <Trash />
             </Button>
           ) : null}
@@ -238,14 +246,15 @@ function HistoryExercise({ exercise, editing, onDelete }: { exercise: DetailExer
 }
 
 function HistorySet({ set, title, editing, onDelete }: { set: DetailSet; title: string; editing: boolean; onDelete: () => void }) {
-  const label = set.warmup ? `${title} ısınma setini sil` : `${title} ${set.label}. seti sil`;
+  const t = clientProgressMessages(useLocale()).detail;
+  const label = set.warmup ? t.deleteWarmup(title) : t.deleteSet(title, set.label);
   return (
     <SwipeRow id={set.id} end={[deleteAction(onDelete, { removes: false })]} disabled={!editing}>
       <div className="flex min-h-11 items-center gap-3 pr-1 pl-3.5 text-sm tabular-nums">
         <span className={set.warmup ? 'w-14 text-[0.8125rem] text-muted-foreground' : 'w-5 text-muted-foreground'}>{set.label}</span>
         <span className="min-w-0 flex-1 font-medium">
           {set.text}
-          {set.extra ? <span className="ml-1.5 text-[0.8125rem] font-normal text-muted-foreground">fazladan</span> : null}
+          {set.extra ? <span className="ml-1.5 text-[0.8125rem] font-normal text-muted-foreground">{t.extra}</span> : null}
         </span>
         {set.effort ? <span className="text-[0.8125rem] text-muted-foreground">{set.effort}</span> : null}
         {editing ? (

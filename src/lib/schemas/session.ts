@@ -1,4 +1,6 @@
 import * as v from 'valibot';
+import { clientWorkoutMessages } from '../../i18n/messages/client-workout/index.ts';
+import { msg } from '../../i18n/valibot.ts';
 import { CARDIO_LIMITS } from '../cardio.ts';
 import { EFFORTS } from '../progression.ts';
 import { DAY_ID_PATTERN, OWN_PROGRAM_ID_PATTERN, OWN_PROGRAM_NAME_MAX, PHASE_ID_PATTERN } from '../program-plan.ts';
@@ -84,21 +86,24 @@ export type RotationChoice = (typeof ROTATION_CHOICES)[number];
 export const NOTICE_KINDS = ['other_day', 'program_update', 'proposal', 'overload', 'unfinished', 'lighter'] as const;
 export type NoticeKind = (typeof NOTICE_KINDS)[number];
 
-const id = (pattern: RegExp, message: string) => v.pipe(v.string(), v.regex(pattern, message));
-export const sessionIdSchema = id(SESSION_ID_PATTERN, 'Antrenman kimliği geçersiz.');
-export const entryIdSchema = id(ENTRY_ID_PATTERN, 'Hareket kaydı kimliği geçersiz.');
-export const setIdSchema = id(SET_ID_PATTERN, 'Set kimliği geçersiz.');
-export const writerIdSchema = id(WRITER_ID_PATTERN, 'Cihaz kimliği geçersiz.');
-const tapIdSchema = id(WATER_TAP_ID_PATTERN, 'Su kaydı kimliği geçersiz.');
-const rowIdSchema = id(ROW_ID_PATTERN, 'Satır kimliği geçersiz.');
-const blockIdSchema = id(BLOCK_ID_PATTERN, 'Blok kimliği geçersiz.');
+type ValidationKey = keyof ReturnType<typeof clientWorkoutMessages>['validation'];
+/** Şemanın mesajı isteğin dilinde (`langConfig`; istemcide genel dil). */
+const text = (key: ValidationKey) => msg((locale) => clientWorkoutMessages(locale).validation[key]);
+const id = (pattern: RegExp, key: ValidationKey) => v.pipe(v.string(), v.regex(pattern, text(key)));
+export const sessionIdSchema = id(SESSION_ID_PATTERN, 'sessionId');
+export const entryIdSchema = id(ENTRY_ID_PATTERN, 'entryId');
+export const setIdSchema = id(SET_ID_PATTERN, 'setId');
+export const writerIdSchema = id(WRITER_ID_PATTERN, 'deviceId');
+const tapIdSchema = id(WATER_TAP_ID_PATTERN, 'waterId');
+const rowIdSchema = id(ROW_ID_PATTERN, 'rowId');
+const blockIdSchema = id(BLOCK_ID_PATTERN, 'blockId');
 /** Egzersiz ve cihaz kimlikleriyle aynı biçim. */
-const slugSchema = v.pipe(v.string(), v.regex(/^[a-z0-9-]{2,60}$/, 'Kimlik yalnız küçük harf, rakam ve tire içerebilir.'));
+const slugSchema = v.pipe(v.string(), v.regex(/^[a-z0-9-]{2,60}$/, text('idChars')));
 /** Öneri gerekçesi ve aşama: motorun yeni değerleri (`confirm_increase`, `calibrate`, aşamalar) eski şemayı bozmasın. */
 const codeSchema = v.pipe(v.string(), v.regex(/^[a-z_]{1,32}$/));
 
-const timestamp = v.pipe(v.string(), v.isoTimestamp('Zaman ISO biçiminde olmalı.'));
-const isoDate = v.pipe(v.string(), v.isoDate('Tarih YYYY-AA-GG olmalı.'));
+const timestamp = v.pipe(v.string(), v.isoTimestamp(text('isoTime')));
+const isoDate = v.pipe(v.string(), v.isoDate(text('day')));
 const int = (min: number, max: number) => v.pipe(v.number(), v.integer(), v.minValue(min), v.maxValue(max));
 const kg = v.pipe(v.number(), v.minValue(0), v.maxValue(SESSION_LIMITS.kg));
 
@@ -136,7 +141,7 @@ export const sessionSetSchema = v.pipe(
     editedAt: v.optional(timestamp),
     by: v.optional(writerIdSchema),
   }),
-  v.check((set) => (set.reps === undefined) !== (set.seconds === undefined), 'Sette ya tekrar ya süre olmalı.'),
+  v.check((set) => (set.reps === undefined) !== (set.seconds === undefined), text('repsOrSeconds')),
 );
 export type SessionSet = v.InferOutput<typeof sessionSetSchema>;
 
@@ -202,21 +207,21 @@ export type SessionEffortRecord = v.InferOutput<typeof sessionEffortSchema>;
 
 export const sessionProgramSchema = v.object({
   revision: int(1, Number.MAX_SAFE_INTEGER),
-  phaseId: v.optional(id(PHASE_ID_PATTERN, 'Evre kimliği geçersiz.')),
-  dayId: id(DAY_ID_PATTERN, 'Gün kimliği geçersiz.'),
+  phaseId: v.optional(id(PHASE_ID_PATTERN, 'phaseId')),
+  dayId: id(DAY_ID_PATTERN, 'dayId'),
   dayName: v.pipe(v.string(), v.minLength(1), v.maxLength(SESSION_LIMITS.dayName)),
   /**
    * Antrenmanın gününe atanmış program (Faz 3; bitişte sunucu seansın tarihinden yeniden yazar); `dayId`'den farklıysa
    * danışan başka program seçti (`other_day`). Eski kayıtlarda dönüşte sıradaki gündü.
    */
-  plannedDayId: v.optional(id(DAY_ID_PATTERN, 'Gün kimliği geçersiz.')),
+  plannedDayId: v.optional(id(DAY_ID_PATTERN, 'dayId')),
   /** Planlanan programın o günkü adı, yalnız başkası yapıldıysa: PT'nin bildirimi ("Alt vücut yerine Üst vücut yapıldı"). */
   plannedDayName: v.optional(v.pipe(v.string(), v.minLength(1), v.maxLength(SESSION_LIMITS.dayName))),
   /**
    * Danışanın kendi programı (`docs/design/kendi-program.md` §5.4): yoksa PT'nin programı. Başlangıçta yazılır,
    * sunucu ilk yazımda günü o programda arar; sonra sabittir (birleştirmede farklıysa 400).
    */
-  programId: v.optional(id(OWN_PROGRAM_ID_PATTERN, 'Program kimliği geçersiz.')),
+  programId: v.optional(id(OWN_PROGRAM_ID_PATTERN, 'programId')),
   /** Kendi programın o günkü adı (anlık görüntü): Geçmiş ve PT'nin Antrenmanlar'ı program silinse de okur. */
   programName: v.optional(v.pipe(v.string(), v.minLength(1), v.maxLength(OWN_PROGRAM_NAME_MAX))),
 });
@@ -263,8 +268,8 @@ export const sessionDocSchema = v.pipe(
     notices: v.pipe(v.array(sessionNoticeSchema), v.maxLength(SESSION_LIMITS.notices)),
     effort: v.optional(sessionEffortSchema),
   }),
-  v.check((doc) => (doc.status === 'finished') === (doc.finishedAt !== undefined), 'Bitiş anı yalnız bitmiş antrenmanda olur.'),
-  v.check((doc) => uniqueIds(doc), 'Aynı kimlik iki kez kullanılmış.'),
+  v.check((doc) => (doc.status === 'finished') === (doc.finishedAt !== undefined), text('finishedOnly')),
+  v.check((doc) => uniqueIds(doc), text('duplicateId')),
 );
 export type SessionDoc = v.InferOutput<typeof sessionDocSchema>;
 
@@ -329,10 +334,10 @@ export const sessionIndexRowSchema = v.object({
   startedAt: v.optional(timestamp),
   /** Yoksa antrenman hâlâ etkin (yarım). */
   finishedAt: v.optional(timestamp),
-  dayId: v.optional(id(DAY_ID_PATTERN, 'Gün kimliği geçersiz.')),
+  dayId: v.optional(id(DAY_ID_PATTERN, 'dayId')),
   dayName: v.optional(v.pipe(v.string(), v.maxLength(SESSION_LIMITS.dayName))),
   /** Kendi programdan antrenman: programın kimliği ve o günkü adı (yoksa PT'nin programı). */
-  programId: v.optional(id(OWN_PROGRAM_ID_PATTERN, 'Program kimliği geçersiz.')),
+  programId: v.optional(id(OWN_PROGRAM_ID_PATTERN, 'programId')),
   programName: v.optional(v.pipe(v.string(), v.maxLength(OWN_PROGRAM_NAME_MAX))),
   otherDay: v.boolean(),
   unfinished: v.boolean(),
@@ -350,10 +355,13 @@ export const sessionIndexRowSchema = v.object({
   progress: v.optional(
     v.object({ done: int(0, SESSION_LIMITS.entries * SESSION_LIMITS.setsPerEntry), planned: int(0, SESSION_LIMITS.entries * SESSION_LIMITS.setsPerEntry) }),
   ),
-  /** Onaylanmış aşırı yük: hareket başına en ağır set ve planın ağırlığı ("Bench Press 85 kg (hedef 62,5)"). */
+  /**
+   * Onaylanmış aşırı yük: hareket başına en ağır set ve planın ağırlığı ("Bench Press 85 kg (hedef 62,5)"). `exerciseId`
+   * sonradan eklendi (bildirimde ad okuyanın dilinde); eski satırlarda yok.
+   */
   overloads: v.optional(
     v.pipe(
-      v.array(v.object({ title: v.pipe(v.string(), v.maxLength(SESSION_LIMITS.title)), kg, plannedKg: v.optional(kg) })),
+      v.array(v.object({ title: v.pipe(v.string(), v.maxLength(SESSION_LIMITS.title)), exerciseId: v.optional(slugSchema), kg, plannedKg: v.optional(kg) })),
       v.maxLength(SESSION_LIMITS.entries),
     ),
   ),
@@ -426,7 +434,7 @@ export const feedbackDecisionSchema = v.object({
   entryId: entryIdSchema,
   /** Programın satırı; eklenen harekette yok. */
   rowId: v.optional(rowIdSchema),
-  dayId: id(DAY_ID_PATTERN, 'Gün kimliği geçersiz.'),
+  dayId: id(DAY_ID_PATTERN, 'dayId'),
   /** Satırın (muadilde asıl satırın) hareketi. */
   exerciseId: slugSchema,
   title: titleSchema,
@@ -481,7 +489,7 @@ export const patchBodySchema = v.pipe(
   }),
   v.check(
     (body) => Boolean(body.deleteSetIds?.length || body.deleteEntryIds?.length || body.addSets?.length || body.effort || body.waterTaps?.length),
-    'Değişiklik yok.',
+    text('noChange'),
   ),
 );
 export type PatchBody = v.InferOutput<typeof patchBodySchema>;

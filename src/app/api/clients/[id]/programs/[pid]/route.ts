@@ -42,7 +42,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
 
   try {
     if (!(await readClient(id))) return NextResponse.json({ error: t.clientNotFound }, { status: 404 });
-    const result = saveResponse(await ptSaveOwnProgram(id, pid, parsed.output), 'pt', locale);
+    const result = saveResponse(await ptSaveOwnProgram(id, pid, parsed.output, locale), 'pt', locale);
     return NextResponse.json(result.body, { status: result.status });
   } catch (error) {
     const { message, status } = failureOf(error, t.programSaveFailed, locale);

@@ -1,4 +1,8 @@
 import * as v from 'valibot';
+import { messageOf } from '../i18n/errors.ts';
+import { DEFAULT_LOCALE, type Locale } from '../i18n/locale.ts';
+import { clientHomeMessages } from '../i18n/messages/client-home/index.ts';
+import { langConfig } from '../i18n/valibot.ts';
 import { originGuard, postGuard } from './client-auth-routes.ts';
 import { canRecordHealth } from './client-status.ts';
 import { constraintsOf, CONSTRAINT_ID_PATTERN, ConstraintError, editReport, reportBetter, reportConstraint, reportWorse, withdrawReport } from './constraints.ts';
@@ -25,8 +29,17 @@ import { randomId } from './template-plan.ts';
  */
 
 const HEALTH_PATH = 'health.json';
-const FORBIDDEN: SessionRouteResult = { status: 403, body: { error: 'Kısıt bildirmek için sağlık onayın yok.', reason: 'consent' } };
-const BROKEN: SessionRouteResult = { status: 500, body: { error: 'Sağlık kaydın şu an açılamıyor. Antrenörüne haber ver.', reason: 'broken' } };
+function forbidden(locale: Locale): SessionRouteResult {
+  return { status: 403, body: { error: clientHomeMessages(locale).routes.noConstraintConsent, reason: 'consent' } };
+}
+
+function broken(locale: Locale): SessionRouteResult {
+  return { status: 500, body: { error: clientHomeMessages(locale).routes.healthBroken, reason: 'broken' } };
+}
+
+function missing(locale: Locale): SessionRouteResult {
+  return { status: 404, body: { error: clientHomeMessages(locale).routes.constraintMissing } };
+}
 
 function fieldsOf(issues: readonly v.BaseIssue<unknown>[]): Record<string, string> {
   const fields: Record<string, string> = {};
@@ -62,13 +75,13 @@ async function write(
     const file = await readHealthFile(repo);
     if (file === 'broken') {
       deps.log(`[kısıt] ${clientId}: ${HEALTH_PATH} bozuk, yazılmadı.`);
-      return BROKEN;
+      return broken(deps.locale ?? DEFAULT_LOCALE);
     }
     let next: HealthRecord;
     try {
       next = change(prepareForWrite(file?.record ?? { version: 2, checkIns: [], measurements: [] }, 'conditions'));
     } catch (error) {
-      if (error instanceof ConstraintError) return { status: error.status, body: { error: error.message } };
+      if (error instanceof ConstraintError) return { status: error.status, body: { error: messageOf(error, deps.locale ?? DEFAULT_LOCALE) ?? error.message } };
       throw error;
     }
     try {
@@ -84,12 +97,14 @@ async function write(
 }
 
 export function reportPostRoute(deps: SessionRouteDeps, headers: Headers, origin: string, input: unknown): Promise<SessionRouteResult> {
-  const blocked = postGuard(headers, origin);
+  const locale = deps.locale ?? DEFAULT_LOCALE;
+  const t = clientHomeMessages(locale);
+  const blocked = postGuard(headers, origin, locale);
   if (blocked) return Promise.resolve(blocked);
   return run(deps, null, 'constraint-report', async ({ client, repo }) => {
-    if (!canRecordHealth(client, 'conditions')) return FORBIDDEN;
-    const parsed = v.safeParse(reportSchema, input);
-    if (!parsed.success) return { status: 400, body: { error: 'Bilgileri kontrol et.', fields: fieldsOf(parsed.issues) } };
+    if (!canRecordHealth(client, 'conditions')) return forbidden(locale);
+    const parsed = v.safeParse(reportSchema, input, langConfig(locale));
+    if (!parsed.success) return { status: 400, body: { error: t.routes.check, fields: fieldsOf(parsed.issues) } };
     const now = deps.now();
     const today = todayIn(await deps.timeZone(), now);
     return write(
@@ -98,22 +113,24 @@ export function reportPostRoute(deps: SessionRouteDeps, headers: Headers, origin
       client.id,
       (record) => {
         const id = randomId('k', 6, new Set(constraintsOf(record).map((item) => item.id)));
-        return reportConstraint(record, parsed.output, { id, now: now.toISOString(), today });
+        return reportConstraint(record, parsed.output, { id, now: now.toISOString(), today, locale });
       },
-      'Kısıt bildirildi',
+      t.commits.reported,
       201,
     );
   });
 }
 
 export function reportPatchRoute(deps: SessionRouteDeps, headers: Headers, origin: string, id: string, input: unknown): Promise<SessionRouteResult> {
-  const blocked = postGuard(headers, origin);
+  const locale = deps.locale ?? DEFAULT_LOCALE;
+  const t = clientHomeMessages(locale);
+  const blocked = postGuard(headers, origin, locale);
   if (blocked) return Promise.resolve(blocked);
-  if (!CONSTRAINT_ID_PATTERN.test(id)) return Promise.resolve({ status: 404, body: { error: 'Kısıt bulunamadı.' } });
+  if (!CONSTRAINT_ID_PATTERN.test(id)) return Promise.resolve(missing(locale));
   return run(deps, null, 'constraint-update', async ({ client, repo }) => {
-    if (!canRecordHealth(client, 'conditions')) return FORBIDDEN;
-    const parsed = v.safeParse(reportPatchSchema, input);
-    if (!parsed.success) return { status: 400, body: { error: 'Bilgileri kontrol et.', fields: fieldsOf(parsed.issues) } };
+    if (!canRecordHealth(client, 'conditions')) return forbidden(locale);
+    const parsed = v.safeParse(reportPatchSchema, input, langConfig(locale));
+    if (!parsed.success) return { status: 400, body: { error: t.routes.check, fields: fieldsOf(parsed.issues) } };
     const now = deps.now();
     const today = todayIn(await deps.timeZone(), now);
     const body = parsed.output;
@@ -123,21 +140,22 @@ export function reportPatchRoute(deps: SessionRouteDeps, headers: Headers, origi
       client.id,
       (record) =>
         body.action === 'edit'
-          ? editReport(record, id, body.report, { now: now.toISOString(), today })
+          ? editReport(record, id, body.report, { now: now.toISOString(), today, locale })
           : body.action === 'worse'
-            ? reportWorse(record, id, body.severity, { now: now.toISOString() })
-            : reportBetter(record, id, { now: now.toISOString() }),
-      body.action === 'edit' ? 'Kısıt bildirimi düzeltildi' : 'Kısıt güncellendi',
+            ? reportWorse(record, id, body.severity, { now: now.toISOString(), locale })
+            : reportBetter(record, id, { now: now.toISOString(), locale }),
+      body.action === 'edit' ? t.commits.reportEdited : t.commits.updated,
     );
   });
 }
 
 export function reportDeleteRoute(deps: SessionRouteDeps, headers: Headers, origin: string, id: string): Promise<SessionRouteResult> {
-  const blocked = originGuard(headers, origin);
+  const locale = deps.locale ?? DEFAULT_LOCALE;
+  const blocked = originGuard(headers, origin, locale);
   if (blocked) return Promise.resolve(blocked);
-  if (!CONSTRAINT_ID_PATTERN.test(id)) return Promise.resolve({ status: 404, body: { error: 'Kısıt bulunamadı.' } });
+  if (!CONSTRAINT_ID_PATTERN.test(id)) return Promise.resolve(missing(locale));
   return run(deps, null, 'constraint-withdraw', async ({ client, repo }) => {
-    if (!canRecordHealth(client, 'conditions')) return FORBIDDEN;
-    return write(deps, repo, client.id, (record) => withdrawReport(record, id, { now: deps.now().toISOString() }), 'Kısıt bildirimi geri çekildi');
+    if (!canRecordHealth(client, 'conditions')) return forbidden(locale);
+    return write(deps, repo, client.id, (record) => withdrawReport(record, id, { now: deps.now().toISOString(), locale }), clientHomeMessages(locale).commits.withdrawn);
   });
 }

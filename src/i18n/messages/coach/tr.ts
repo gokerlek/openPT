@@ -396,7 +396,7 @@ const tr = {
   /** Danışanın koç tercihleri (`CoachPreferenceForm`). */
   preferences: {
     title: 'AI koç tercihleri',
-    // i18n-followup(T3): metin "AI değerlendirmesi" (İlerleme) ve "AI ile program öner" (Programlar) düğmelerini adıyla anar; T3 düğme etiketlerini aynı İngilizce adlarla çevirmeli.
+    // Metin "AI değerlendirmesi" (İlerleme) ve "AI ile program öner" (Programlar) düğmelerini adıyla anar: `client-progress`, `client-programs`.
     description:
       'Antrenörün AI desteğini açtıysa AI koça İlerleme\'deki “AI değerlendirmesi” ve Program\'daki “AI ile program öner” düğmelerinden ulaşırsın. Otomatik mesajlar da o zaman tercihlerine göre gösterilir. Sağlık kayıtları mevcut sağlık izninin kapsamıyla sınırlıdır; bu mesajlar için Gemini çağrısı yapılmaz.',
     loading: 'Tercihler açılıyor…',

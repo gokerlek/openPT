@@ -9,21 +9,24 @@ import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui
 import { Drawer, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle } from '@/components/ui/drawer';
 import { Spinner } from '@/components/ui/spinner';
 import { Textarea } from '@/components/ui/textarea';
+import { useLocale } from '@/i18n/client';
+import { clientHomeMessages } from '@/i18n/messages/client-home';
+import { lower } from '@/i18n/text';
 import {
   CONSTRAINT_LIMITS,
   CONSTRAINT_REGIONS,
   CONSTRAINT_TYPES,
   isPaired,
-  ONSET_CHOICE_LABELS,
   ONSET_CHOICES,
-  REGION_LABELS,
-  REPORT_SAFETY,
+  onsetChoiceLabels,
+  regionLabels,
+  reportSafety,
   SEVERITIES,
-  SEVERITY_DESCRIPTIONS,
-  SEVERITY_LABELS,
-  TRIGGER_LABELS,
+  severityDescriptions,
+  severityLabels,
+  triggerLabels,
   TRIGGERS,
-  TYPE_CLIENT_LABELS,
+  typeClientLabels,
   type ConstraintRegion,
   type ConstraintSide,
   type ConstraintType,
@@ -45,11 +48,7 @@ export type ReportDraft = {
   note: string;
 };
 
-const SIDE_CHOICES: { value: ConstraintSide; label: string }[] = [
-  { value: 'left', label: 'Sol' },
-  { value: 'right', label: 'Sağ' },
-  { value: 'both', label: 'İkisi' },
-];
+const SIDES: ConstraintSide[] = ['left', 'right', 'both'];
 
 /**
  * "Antrenörüne bildir" (tasarım `kisit-tarama.md` §2.4): tek, kaydırılan sheet. Başta acil metin (yoklamanın
@@ -94,6 +93,10 @@ function ReportBody({
 }) {
   const [draft, setDraft] = useState<ReportDraft>(initial);
   const [error, setError] = useState<string | null>(null);
+  const locale = useLocale();
+  const t = clientHomeMessages(locale).report;
+  const safety = reportSafety(locale);
+  const severityText = severityLabels(locale);
   const set = <K extends keyof ReportDraft>(key: K, value: ReportDraft[K]) => {
     setDraft((current) => ({ ...current, [key]: value }));
     setError(null);
@@ -117,13 +120,13 @@ function ReportBody({
         : fetchJson<{ ok: true }>('/api/me/constraints', { method: 'POST', body: JSON.stringify(report) });
     },
     notify: 'none',
-    onError: (failure) => setError(failure.status === 0 ? 'Bağlantı yok; bildirimin gönderilmedi. Bağlanınca yeniden dene.' : (Object.values(failure.fields)[0] ?? failure.message)),
+    onError: (failure) => setError(failure.status === 0 ? t.offline : (Object.values(failure.fields)[0] ?? failure.message)),
     onSuccess: () => onSent(draft),
   });
 
   const submit = () => {
     if (typeof navigator !== 'undefined' && !navigator.onLine) {
-      setError('Bağlantı yok; bildirimin gönderilmedi. Bağlanınca yeniden dene.');
+      setError(t.offline);
       return;
     }
     send.mutate();
@@ -133,92 +136,96 @@ function ReportBody({
     <>
       <DrawerHeader className="gap-1 pt-5 pb-2">
         <DrawerTitle ref={titleRef} tabIndex={-1} className="text-lg font-semibold outline-none">
-          {editing ? 'Bildirimini düzelt' : 'Antrenörüne bildir'}
+          {editing ? t.editTitle : t.title}
         </DrawerTitle>
-        <DrawerDescription>Antrenörün programını buna göre ayarlar.</DrawerDescription>
+        <DrawerDescription>{t.text}</DrawerDescription>
       </DrawerHeader>
       <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto overscroll-contain px-4 pb-4">
         <Alert variant="destructive">
           <WarningCircle weight="fill" />
-          <AlertDescription className="text-sm font-medium">{REPORT_SAFETY.urgent}</AlertDescription>
+          <AlertDescription className="text-sm font-medium">{safety.urgent}</AlertDescription>
         </Alert>
 
         <Field>
-          <FieldLabel id="report-region">Nerede?</FieldLabel>
+          <FieldLabel id="report-region">{t.where}</FieldLabel>
           <ChoiceChips
             labelledBy="report-region"
             value={draft.region}
-            options={CONSTRAINT_REGIONS.map((region) => ({ value: region, label: REGION_LABELS[region] }))}
+            options={CONSTRAINT_REGIONS.map((region) => ({ value: region, label: regionLabels(locale)[region] }))}
             onChange={(region) => set('region', region)}
           />
         </Field>
         {paired ? (
           <Field>
-            <FieldLabel id="report-side">Hangi taraf?</FieldLabel>
-            <ChoiceChips labelledBy="report-side" value={draft.side} options={SIDE_CHOICES} onChange={(side) => set('side', side)} itemClassName="flex-1" />
+            <FieldLabel id="report-side">{t.side}</FieldLabel>
+            <ChoiceChips
+              labelledBy="report-side"
+              value={draft.side}
+              options={SIDES.map((side) => ({ value: side, label: t.sides[side] }))}
+              onChange={(side) => set('side', side)} itemClassName="flex-1" />
           </Field>
         ) : null}
         <Field>
-          <FieldLabel id="report-type">Ne oldu?</FieldLabel>
+          <FieldLabel id="report-type">{t.what}</FieldLabel>
           <ChoiceChips
             labelledBy="report-type"
             value={draft.type}
-            options={CONSTRAINT_TYPES.map((type) => ({ value: type, label: TYPE_CLIENT_LABELS[type] }))}
+            options={CONSTRAINT_TYPES.map((type) => ({ value: type, label: typeClientLabels(locale)[type] }))}
             onChange={(type) => set('type', type)}
             className="flex-col items-stretch"
             itemClassName="h-auto min-h-11 justify-start whitespace-normal text-left"
           />
         </Field>
         <Field>
-          <FieldLabel id="report-severity">Ne kadar etkiliyor?</FieldLabel>
+          <FieldLabel id="report-severity">{t.severity}</FieldLabel>
           <ChoiceChips
             labelledBy="report-severity"
             value={draft.severity}
-            options={SEVERITIES.map((severity) => ({ value: severity, label: SEVERITY_LABELS[severity] }))}
+            options={SEVERITIES.map((severity) => ({ value: severity, label: severityText[severity] }))}
             onChange={(severity) => set('severity', severity)}
             itemClassName="flex-1"
           />
           {draft.severity ? (
             <FieldDescription>
-              {SEVERITY_LABELS[draft.severity]}: {SEVERITY_DESCRIPTIONS[draft.severity].toLocaleLowerCase('tr')}
+              {severityText[draft.severity]}: {lower(locale, severityDescriptions(locale)[draft.severity])}
             </FieldDescription>
           ) : null}
         </Field>
         <Field>
-          <FieldLabel id="report-since">Ne zamandan beri?</FieldLabel>
+          <FieldLabel id="report-since">{t.since}</FieldLabel>
           <ChoiceChips
             labelledBy="report-since"
             value={draft.since}
-            options={ONSET_CHOICES.map((choice) => ({ value: choice, label: ONSET_CHOICE_LABELS[choice] }))}
+            options={ONSET_CHOICES.map((choice) => ({ value: choice, label: onsetChoiceLabels(locale)[choice] }))}
             onChange={(since) => set('since', since)}
           />
         </Field>
         <Field>
-          <FieldLabel id="report-triggers">Neler zorluyor? (isteğe bağlı)</FieldLabel>
+          <FieldLabel id="report-triggers">{t.triggers}</FieldLabel>
           <MultiChips
             labelledBy="report-triggers"
             value={draft.triggers}
-            options={TRIGGERS.map((trigger) => ({ value: trigger, label: TRIGGER_LABELS[trigger] }))}
+            options={TRIGGERS.map((trigger) => ({ value: trigger, label: triggerLabels(locale)[trigger] }))}
             onChange={(triggers) => set('triggers', triggers)}
             itemClassName="h-auto min-h-11 whitespace-normal"
           />
-          <FieldDescription>Seçtiklerin antrenörün bakana kadar hareket kartlarında dikkat notu olur.</FieldDescription>
+          <FieldDescription>{t.triggersHint}</FieldDescription>
         </Field>
         <Field>
-          <FieldLabel htmlFor="report-note">Not (isteğe bağlı)</FieldLabel>
+          <FieldLabel htmlFor="report-note">{t.note}</FieldLabel>
           <Textarea
             id="report-note"
             maxLength={CONSTRAINT_LIMITS.reportNote}
-            placeholder="Merdiven inerken ağrıyor."
+            placeholder={t.notePlaceholder}
             value={draft.note}
             onChange={(event) => set('note', event.currentTarget.value)}
           />
         </Field>
-        <p className="text-sm text-muted-foreground">{REPORT_SAFETY.other}</p>
+        <p className="text-sm text-muted-foreground">{safety.other}</p>
         {error ? <FieldError>{error}</FieldError> : null}
         <Button className="h-14 w-full text-base" disabled={!ready || send.isPending} onClick={submit}>
           {send.isPending ? <Spinner data-icon="inline-start" /> : null}
-          {editing ? 'Kaydet' : 'Gönder'}
+          {editing ? t.save : t.send}
         </Button>
       </div>
     </>

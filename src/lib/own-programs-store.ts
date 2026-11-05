@@ -11,6 +11,7 @@ import { todayIn } from './format';
 import { readOwnProgram, readOwnState, saveOwnProgram, type OwnGuard, type OwnProgramRead, type OwnSaveResult, type OwnState } from './own-program-files';
 import type { OwnRouteDeps } from './own-program-routes';
 import { programDiffContext, readProgramFile, type ProgramFile } from './programs';
+import type { Locale } from '../i18n/locale';
 import type { Client } from './schemas/client';
 import type { OwnProgramSaveBody } from './schemas/own-program';
 import type { SessionIndex } from './schemas/session';
@@ -25,12 +26,12 @@ import { clientTemplate, pickerDevices, pickerExercises } from './templates';
  * PT'nin kaydı. Her yazım tek commit (`session-files.ts` → `commitFiles`) ve PT'nin bildirim özetini düşürür.
  */
 
-/** Kütüphane denetimi ve geçmişin cümleleri: hazır kütüphane + PT'nin kayıtları. */
-export async function ownLibrary(): Promise<Awaited<ReturnType<OwnRouteDeps['library']>>> {
-  const [exercises, devices] = await Promise.all([listExercises(), listDevices()]);
+/** Kütüphane denetimi ve geçmişin cümleleri: hazır kütüphane + PT'nin kayıtları; adlar `locale`'de (yoksa Türkçe). */
+export async function ownLibrary(locale?: Locale): Promise<Awaited<ReturnType<OwnRouteDeps['library']>>> {
+  const [exercises, devices] = await Promise.all([listExercises(undefined, locale), listDevices(undefined, locale)]);
   return {
     library: { exercises: new Map(exercises.map((exercise) => [exercise.id, exercise])), deviceIds: new Set(devices.map((device) => device.id)) },
-    ctx: programDiffContext(exercises, devices),
+    ctx: programDiffContext(exercises, devices, locale),
   };
 }
 
@@ -56,7 +57,8 @@ export async function ownGuard(client: Client): Promise<OwnGuard | null> {
 
 /** Danışan uçlarının ortamı: oturum, kayıt, depo, saat dilimi, kütüphane ve kısıt denetimi. */
 export async function ownRouteDeps(): Promise<OwnRouteDeps> {
-  return { ...(await sessionRouteDeps()), library: ownLibrary, guard: ownGuard };
+  const deps = await sessionRouteDeps();
+  return { ...deps, library: () => ownLibrary(deps.locale), guard: ownGuard };
 }
 
 export type OwnOverview = {
@@ -85,9 +87,9 @@ export async function readOwnOverview(clientId: string): Promise<OwnOverview> {
  * `caution` ("Kısıtına uymayabilir", engel değil; tasarım `kisit-tarama.md` §3.7). Yasaklılar listede kalır: kopyayla
  * gelen satır adıyla çizilsin. Onay yoksa sağlık kaydı okunmaz (`loadCareInput`).
  */
-export async function ownEditorLibrary(client: Client): Promise<{ exercises: PickerExercise[]; devices: EditorDevice[] }> {
-  const [exercises, devices, config] = await Promise.all([listExercises(), listDevices(), readAppConfig()]);
-  const care = await loadCareInput(client, todayIn(config.timeZone, new Date()));
+export async function ownEditorLibrary(client: Client, locale?: Locale): Promise<{ exercises: PickerExercise[]; devices: EditorDevice[] }> {
+  const [exercises, devices, config] = await Promise.all([listExercises(undefined, locale), listDevices(undefined, locale), readAppConfig()]);
+  const care = await loadCareInput(client, todayIn(config.timeZone, new Date()), locale);
   const flags = care ? exerciseCaution(exercises, care) : null;
   return {
     exercises: pickerExercises(exercises).map((exercise) =>
@@ -108,9 +110,17 @@ export async function readOwnProgramOf(clientId: string, programId: string): Pro
 
 /**
  * PT'nin kaydı (`PUT /api/clients/[id]/programs/[pid]`): dosya dalın ucunda okunur, paylaşılmamışsa `forbidden`;
- * aynı uçla commit, çakışmada paylaşım yeniden denetlenir (`saveOwnProgram`, `by: 'pt'`).
+ * aynı uçla commit, çakışmada paylaşım yeniden denetlenir (`saveOwnProgram`, `by: 'pt'`). `locale`: PT'nin dili (commit ve
+ * program geçmişinin cümleleri, kütüphane adları); yoksa Türkçe.
  */
-export async function ptSaveOwnProgram(clientId: string, programId: string, body: OwnProgramSaveBody): Promise<OwnSaveResult> {
-  const { library, ctx } = await ownLibrary();
-  return saveOwnProgram(sessionRepo(clientId), { id: programId, body: { ...body, name: undefined }, by: 'pt', library, ctx, now: new Date() });
+export async function ptSaveOwnProgram(clientId: string, programId: string, body: OwnProgramSaveBody, locale?: Locale): Promise<OwnSaveResult> {
+  const { library, ctx } = await ownLibrary(locale);
+  return saveOwnProgram(sessionRepo(clientId), {
+    id: programId,
+    body: { ...body, name: undefined },
+    by: 'pt',
+    library,
+    ctx: locale ? { ...ctx, locale } : ctx,
+    now: new Date(),
+  });
 }

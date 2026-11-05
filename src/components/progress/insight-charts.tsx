@@ -5,7 +5,10 @@ import { WarningCircle } from '@phosphor-icons/react';
 import { ProgressBars } from '@/components/progress-bars';
 import { ProgressChart, type ProgressSeries } from '@/components/progress-chart';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
-import { formatDay, formatKg, formatNumber } from '@/lib/format';
+import { useLocale } from '@/i18n/client';
+import type { Locale } from '@/i18n/locale';
+import { clientProgressMessages } from '@/i18n/messages/client-progress';
+import { getFormat } from '@/lib/format';
 import type { WeekView } from '@/lib/progress';
 import type { Gated, ProgressInsights } from '@/lib/progress-insights';
 import { adherenceText, progressCopy, recentAverage, waterSummary, weekLabel, type ProgressViewer } from '@/lib/progress-text';
@@ -37,25 +40,27 @@ function Unavailable({ text }: { text: string }) {
   );
 }
 
-const weekName = (weeks: readonly Pick<WeekView, 'weekStart' | 'weekEnd'>[]) => {
-  const labels = new Map(weeks.map((week) => [week.weekStart, weekLabel(week.weekStart, week.weekEnd)]));
-  return (date: string) => labels.get(date) ?? formatDay(date);
+const weekName = (weeks: readonly Pick<WeekView, 'weekStart' | 'weekEnd'>[], locale: Locale) => {
+  const labels = new Map(weeks.map((week) => [week.weekStart, weekLabel(week.weekStart, week.weekEnd, locale)]));
+  return (date: string) => labels.get(date) ?? getFormat(locale).day(date);
 };
 
 type LoadMetric = 'volume' | 'sets';
 
 /** Haftalık yük: toplam ağırlık ya da çalışma seti, son 12 hafta; bu hafta sürüyor. */
 export function WeeklyLoadCard({ viewer, weeks, today }: Audience & { weeks: WeekView[]; today: string }) {
-  const copy = progressCopy(viewer);
+  const locale = useLocale();
+  const t = clientProgressMessages(locale).charts;
+  const copy = progressCopy(viewer, undefined, locale);
   const [metric, setMetric] = useState<LoadMetric>('volume');
   const current = weeks.at(-1);
   if (!current) return null;
   const lifted = weeks.some((week) => week.volumeKg > 0);
   const bars = weeks.map((week) => ({ date: week.weekStart, value: metric === 'volume' ? week.volumeKg : week.sets, partial: week.weekEnd >= today }));
-  const label = metric === 'volume' ? 'Toplam ağırlık' : 'Çalışma seti';
+  const label = metric === 'volume' ? t.totalWeight : t.workingSets;
 
   return (
-    <ProgressCard viewer={viewer} title="Haftalık yük" description={copy.weeklyLoadIntro}>
+    <ProgressCard viewer={viewer} title={t.weeklyLoad} description={copy.weeklyLoadIntro}>
       <ToggleGroup
         variant="outline"
         spacing={0}
@@ -64,37 +69,31 @@ export function WeeklyLoadCard({ viewer, weeks, today }: Audience & { weeks: Wee
           const next = value[0] as LoadMetric | undefined;
           if (next) setMetric(next);
         }}
-        aria-label="Grafikte ne gösterilsin"
+        aria-label={t.chartPick}
         className="w-full">
         <ToggleGroupItem value="volume" className="h-11 flex-1">
-          Toplam ağırlık
+          {t.totalWeight}
         </ToggleGroupItem>
         <ToggleGroupItem value="sets" className="h-11 flex-1">
-          Çalışma seti
+          {t.workingSets}
         </ToggleGroupItem>
       </ToggleGroup>
       {weeks.length < MIN_POINTS ? (
-        <Note>
-          Bu hafta {current.sessions} antrenman · {current.sets} set{current.volumeKg > 0 ? ` · ${formatKg(current.volumeKg)}` : ''}. Grafik
-          ikinci haftadan sonra çizilir.
-        </Note>
+        <Note>{t.firstWeek(current.sessions, current.sets, current.volumeKg > 0 ? getFormat(locale).kg(current.volumeKg) : '')}</Note>
       ) : metric === 'volume' && !lifted ? (
-        <Note>Henüz ağırlıklı set yok; vücut ağırlığı ve süreli setler bu toplama girmez. Çalışma setine bakabilirsin.</Note>
+        <Note>{t.noWeighted}</Note>
       ) : (
         <ProgressBars
-          title={`Haftalık ${label.toLocaleLowerCase('tr')}`}
-          unit={metric === 'volume' ? 'kg' : 'set'}
+          title={t.weekly(label)}
+          unit={metric === 'volume' ? 'kg' : t.setUnit}
           bars={bars}
-          dateLabel={weekName(weeks)}
-          pointNoun="hafta"
+          dateLabel={weekName(weeks, locale)}
+          pointNoun={t.weekNoun}
           yAxisWidth={metric === 'volume' ? 48 : 32}
         />
       )}
       <p className="text-xs text-muted-foreground">
-        {metric === 'volume'
-          ? 'Toplam ağırlık: her çalışma setinin ağırlığı × tekrarı. Set sayısıyla da artar; güç gelişimini Gelişim bölümü gösterir.'
-          : copy.workingSetsNote}{' '}
-        Bu hafta sürüyor: soluk sütun.
+        {metric === 'volume' ? t.volumeNote : copy.workingSetsNote} {t.partialWeek}
       </p>
     </ProgressCard>
   );
@@ -102,28 +101,27 @@ export function WeeklyLoadCard({ viewer, weeks, today }: Audience & { weeks: Wee
 
 /** Antrenman düzeni: haftada antrenman günü ve plan (kesikli çizgi). */
 export function AdherenceCard({ viewer, adherence }: Audience & { adherence: ProgressInsights['adherence'] }) {
-  const copy = progressCopy(viewer);
+  const locale = useLocale();
+  const t = clientProgressMessages(locale).charts;
+  const copy = progressCopy(viewer, undefined, locale);
   const weeks = adherence.weeks;
   if (weeks.length === 0) return null;
-  const target = adherence.planned === null ? undefined : { value: adherence.planned, label: `Plan: haftada ${adherence.planned} gün` };
+  const target = adherence.planned === null ? undefined : { value: adherence.planned, label: t.plan(adherence.planned) };
   return (
-    <ProgressCard viewer={viewer} title="Antrenman düzeni" description={copy.adherenceIntro}>
-      {adherence.recent ? <p className="text-sm font-medium tabular-nums">{adherenceText(adherence.recent)}</p> : null}
+    <ProgressCard viewer={viewer} title={t.adherence} description={copy.adherenceIntro}>
+      {adherence.recent ? <p className="text-sm font-medium tabular-nums">{adherenceText(adherence.recent, locale)}</p> : null}
       {weeks.length < MIN_POINTS ? (
-        <Note>
-          Bu hafta {weeks.at(-1)!.days} gün{adherence.planned ? ` (plan ${adherence.planned})` : ''}. Grafik ikinci haftadan sonra
-          çizilir.
-        </Note>
+        <Note>{t.firstAdherence(weeks.at(-1)!.days, adherence.planned)}</Note>
       ) : (
         <ProgressBars
-          title="Haftada antrenman günü"
-          unit="gün"
+          title={t.daysPerWeek}
+          unit={t.dayUnit}
           bars={weeks.map((week) => ({ date: week.weekStart, value: week.days, partial: week.current }))}
-          dateLabel={weekName(weeks)}
+          dateLabel={weekName(weeks, locale)}
           target={target}
-          pointNoun="hafta"
+          pointNoun={t.weekNoun}
           showValues
-          valueLabel={(value) => `${formatNumber(value)} gün`}
+          valueLabel={(value) => t.days(getFormat(locale).number(value), value)}
           yAxisWidth={24}
         />
       )}
@@ -140,62 +138,63 @@ function healthNote<T>(section: Gated<T>, text: string): React.ReactNode | null 
 
 /** Hazır oluşluk puanı (20–100), onay varsa. */
 export function ReadinessCard({ viewer, readiness, today, low }: Audience & { readiness: ProgressInsights['readiness']; today: string; low: number }) {
-  const copy = progressCopy(viewer);
+  const locale = useLocale();
+  const t = clientProgressMessages(locale).charts;
+  const copy = progressCopy(viewer, undefined, locale);
   if (readiness.state === 'off') return null;
   const points = readiness.state === 'ok' ? readiness.points : [];
   const recent = recentAverage(points, today);
   return (
-    <ProgressCard
-      viewer={viewer}
-      title="Hazır oluşluk"
-      description="Antrenman başındaki dört sorudan (uyku, enerji, kas ağrısı, stres) puan: 20 en düşük, 100 en iyi.">
+    <ProgressCard viewer={viewer} title={t.readiness} description={t.readinessIntro}>
       {healthNote(readiness, copy.unavailable(copy.readinessWhat)) ??
         (points.length < MIN_POINTS ? (
-          <Note>Grafik iki cevaptan sonra çizilir{points.length === 1 ? `; ${copy.readinessFirst(points[0]!.value)}` : ''}.</Note>
+          <Note>{t.readinessEmpty(points.length === 1 ? copy.readinessFirst(points[0]!.value) : '')}</Note>
         ) : (
           <>
             {recent ? (
               <p className="text-sm tabular-nums">
-                Son 4 haftada ortalama <span className="font-medium">{formatNumber(recent.average)}</span> ({recent.count} cevap).
+                {t.averageLead} <span className="font-medium">{getFormat(locale).number(recent.average)}</span> {t.answers(recent.count)}
               </p>
             ) : null}
             <ProgressChart
-              title="Hazır oluşluk puanı"
-              unit="puan"
-              series={[{ key: 'value', label: 'Hazır oluşluk', points }]}
+              title={t.readinessScore}
+              unit={t.pointsUnit}
+              series={[{ key: 'value', label: t.readiness, points }]}
               minSpan={40}
-              pointNoun="antrenman günü"
+              pointNoun={t.workoutDayNoun}
             />
           </>
         ))}
-      <p className="text-xs text-muted-foreground">Düşük gün sınırı {low}: altında o günün antrenmanını hafifletmek önerilir.</p>
+      <p className="text-xs text-muted-foreground">{t.lowLimit(low)}</p>
     </ProgressCard>
   );
 }
 
 /** Ağrı (0–10): antrenman öncesi son 24 saat ve antrenmandaki en yüksek; onay varsa. */
 export function PainCard({ viewer, name, pain }: Audience & { pain: ProgressInsights['pain'] }) {
-  const copy = progressCopy(viewer, name);
+  const locale = useLocale();
+  const t = clientProgressMessages(locale).charts;
+  const copy = progressCopy(viewer, name, locale);
   if (pain.state === 'off') return null;
   const before = pain.state === 'ok' ? pain.before : [];
   const peak = pain.state === 'ok' ? pain.peak : [];
   const series = [
-    ...(before.length > 0 ? [{ key: 'before', label: 'Antrenman öncesi', points: before }] : []),
-    ...(peak.length > 0 ? [{ key: 'peak', label: 'Antrenmanda en yüksek', points: peak }] : []),
+    ...(before.length > 0 ? [{ key: 'before', label: t.painBefore, points: before }] : []),
+    ...(peak.length > 0 ? [{ key: 'peak', label: t.painPeak, points: peak }] : []),
   ] as ProgressSeries[];
   const enough = before.length >= MIN_POINTS || peak.length >= MIN_POINTS;
   return (
-    <ProgressCard viewer={viewer} title="Ağrı" description={copy.painIntro}>
+    <ProgressCard viewer={viewer} title={t.pain} description={copy.painIntro}>
       {healthNote(pain, copy.unavailable(copy.painWhat)) ??
         (!enough || series.length === 0 ? (
-          <Note>Ağrı soruları antrenman başında ve sonunda sorulur; grafik iki cevaptan sonra çizilir.</Note>
+          <Note>{t.painEmpty}</Note>
         ) : (
           <ProgressChart
-            title="Ağrı"
-            unit="puan"
+            title={t.pain}
+            unit={t.pointsUnit}
             series={series.length === 2 ? [series[0]!, series[1]!] : [series[0]!]}
             minSpan={4}
-            pointNoun="antrenman günü"
+            pointNoun={t.workoutDayNoun}
           />
         ))}
       <p className="text-xs text-muted-foreground">{copy.painFootnote}</p>
@@ -205,25 +204,27 @@ export function PainCard({ viewer, name, pain }: Audience & { pain: ProgressInsi
 
 /** Seans zorluğu (CR-10): antrenman verisi, onaya bağlı değil. */
 export function EffortCard({ viewer, name, rpe, today }: Audience & { rpe: ProgressInsights['rpe']; today: string }) {
-  const copy = progressCopy(viewer, name);
+  const locale = useLocale();
+  const t = clientProgressMessages(locale).charts;
+  const copy = progressCopy(viewer, name, locale);
   const recent = recentAverage(rpe, today);
   return (
-    <ProgressCard viewer={viewer} title="Antrenman zorluğu" description="Antrenmandan yaklaşık 10 dakika sonra sorulan zorluk: 0 dinlenme, 10 en zor.">
+    <ProgressCard viewer={viewer} title={t.effort} description={t.effortIntro}>
       {rpe.length < MIN_POINTS ? (
         <Note>{copy.effortEmpty}</Note>
       ) : (
         <>
           {recent ? (
             <p className="text-sm tabular-nums">
-              Son 4 haftada ortalama <span className="font-medium">{formatNumber(recent.average)}</span> / 10 ({recent.count} antrenman).
+              {t.averageLead} <span className="font-medium">{getFormat(locale).number(recent.average)}</span> {t.effortTail(recent.count)}
             </p>
           ) : null}
           <ProgressChart
-            title="Antrenman zorluğu"
-            unit="puan"
-            series={[{ key: 'value', label: 'Zorluk', points: rpe }]}
+            title={t.effort}
+            unit={t.pointsUnit}
+            series={[{ key: 'value', label: t.effortLabel, points: rpe }]}
             minSpan={4}
-            pointNoun="antrenman günü"
+            pointNoun={t.workoutDayNoun}
           />
         </>
       )}
@@ -233,11 +234,14 @@ export function EffortCard({ viewer, name, rpe, today }: Audience & { rpe: Progr
 
 /** Su: son 30 gün, günde bardak; bugün sürüyor. */
 export function WaterCard({ viewer, name, water, today }: Audience & { water: ProgressInsights['water']; today: string }) {
-  const copy = progressCopy(viewer, name);
+  const locale = useLocale();
+  const t = clientProgressMessages(locale).charts;
+  const f = getFormat(locale);
+  const copy = progressCopy(viewer, name, locale);
   const days = water.state === 'ok' ? water.days : [];
   const summary = waterSummary(days);
   return (
-    <ProgressCard viewer={viewer} title="Su" description={copy.waterIntro}>
+    <ProgressCard viewer={viewer} title={t.water} description={copy.waterIntro}>
       {water.state === 'unavailable' ? (
         <Unavailable text={copy.unavailable(copy.waterWhat)} />
       ) : summary.recorded === 0 ? (
@@ -245,15 +249,15 @@ export function WaterCard({ viewer, name, water, today }: Audience & { water: Pr
       ) : (
         <>
           <p className="text-sm tabular-nums">
-            {copy.waterDays(summary.recorded)} <span className="font-medium">{formatNumber(summary.average ?? 0)} bardak</span>.
+            {copy.waterDays(summary.recorded)} <span className="font-medium">{t.glasses(f.number(summary.average ?? 0), summary.average ?? 0)}</span>.
           </p>
           <ProgressBars
-            title="Günlük su"
-            unit="bardak"
+            title={t.dailyWater}
+            unit={t.glassUnit}
             bars={days.map((day) => ({ date: day.date, value: day.glasses, partial: day.date === today }))}
-            dateLabel={formatDay}
-            pointNoun="gün"
-            valueLabel={(value) => `${formatNumber(value)} bardak`}
+            dateLabel={f.day}
+            pointNoun={t.dayNoun}
+            valueLabel={(value) => t.glasses(f.number(value), value)}
             yAxisWidth={24}
           />
         </>

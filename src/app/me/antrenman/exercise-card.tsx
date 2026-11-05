@@ -9,11 +9,13 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { SwipeGroup } from '@/components/swipe/swipe-row';
+import { useLocale } from '@/i18n/client';
+import { clientWorkoutMessages } from '@/i18n/messages/client-workout';
 import { rowCareText } from '@/lib/constraint-filter';
 import { minutesOf } from '@/lib/cardio';
-import { formatNumber } from '@/lib/format';
+import { getFormat } from '@/lib/format';
 import { DURATION, EASE, tween, WORKOUT } from '@/lib/motion';
-import { REASON_LABELS, type SuggestionReason } from '@/lib/progression';
+import { reasonLabels, type SuggestionReason } from '@/lib/progression';
 import type { Why } from '@/lib/recommend';
 import { SESSION_LIMITS } from '@/lib/schemas/session';
 import { isStraight } from '@/lib/set-plan';
@@ -70,23 +72,15 @@ function Chip({
   );
 }
 
-const MEMBER_STATUS_TEXT: Record<GroupMemberStatus, string> = {
-  done: 'bu turda yapıldı',
-  current: 'şimdi',
-  pending: 'sırada',
-  finished: 'setleri bitti, bu turda yok',
-  skipped: 'geçildi',
-};
-
 /** Grubun başı (tasarım §2.4 "Gruplar"): "Süperset · Tur 2/3" ve üyeler; şu anki üye vurgulu. */
 function GroupHeader({ group }: { group: GroupView }) {
+  const t = clientWorkoutMessages(useLocale()).card;
+  const statusText: Record<GroupMemberStatus, string> = t.memberStatus;
   return (
     <div className="flex flex-col gap-1 px-2 pt-2.5 pb-1">
       <div className="flex h-6 items-center gap-2 px-1 text-[0.8125rem] text-muted-foreground tabular-nums">
         <Badge className="bg-primary/15 text-primary">{group.label}</Badge>
-        <span className="flex-1">
-          Tur {group.round + 1}/{group.rounds}
-        </span>
+        <span className="flex-1">{t.round(group.round + 1, group.rounds)}</span>
       </div>
       <ul className="flex flex-col">
         {group.members.map((member) => (
@@ -108,7 +102,7 @@ function GroupHeader({ group }: { group: GroupView }) {
             <span className="text-[0.8125rem] whitespace-nowrap text-muted-foreground tabular-nums">{member.status === 'finished' ? '—' : member.text}</span>
             <span className="grid place-items-center text-primary [&_svg]:size-4">
               {member.status === 'done' ? <Check weight="bold" aria-hidden /> : member.status === 'current' ? <Play weight="fill" aria-hidden /> : member.status === 'skipped' ? <ArrowBendUpRight aria-hidden className="text-muted-foreground" /> : null}
-              <span className="sr-only">{MEMBER_STATUS_TEXT[member.status]}</span>
+              <span className="sr-only">{statusText[member.status]}</span>
             </span>
           </li>
         ))}
@@ -119,17 +113,18 @@ function GroupHeader({ group }: { group: GroupView }) {
 
 /** Isınma satırı (tasarım §2.4): "Isınma 20×10 · 40×5" ve her set için ✓ (dokununca yapıldı / geri al). */
 function WarmupRow({ warmups, onToggle }: { warmups: readonly WarmupView[]; onToggle: (index: number, done: boolean) => void }) {
+  const locale = useLocale();
+  const t = clientWorkoutMessages(locale).card;
+  const f = getFormat(locale);
   return (
     <div className="flex min-h-11 items-center gap-1 border-t pr-1.5 pl-3 text-sm tabular-nums">
-      <span className="min-w-0 flex-1 truncate text-muted-foreground">
-        Isınma {warmups.map((warmup) => `${formatNumber(warmup.kg)}×${warmup.reps}`).join(' · ')}
-      </span>
+      <span className="min-w-0 flex-1 truncate text-muted-foreground">{t.warmups(warmups.map((warmup) => `${f.number(warmup.kg)}×${warmup.reps}`).join(' · '))}</span>
       {warmups.map((warmup) => (
         <button
           key={warmup.index}
           type="button"
           aria-pressed={Boolean(warmup.logged)}
-          aria-label={`Isınma ${warmup.index + 1}, ${formatNumber(warmup.kg)} kg × ${warmup.reps}`}
+          aria-label={t.warmupSet(warmup.index + 1, f.number(warmup.kg), warmup.reps)}
           onClick={() => onToggle(warmup.index, !warmup.logged)}
           className="grid size-11 shrink-0 place-items-center rounded-full outline-none focus-visible:ring-3 focus-visible:ring-ring/50">
           <span
@@ -147,6 +142,7 @@ function WarmupRow({ warmups, onToggle }: { warmups: readonly WarmupView[]; onTo
 
 /** Ayar notunu düzeltme: tek satır, Kaydet; boş bırakmak notu siler. */
 function SetupNoteForm({ note, onSave }: { note: string | undefined; onSave: (text: string) => void }) {
+  const t = clientWorkoutMessages(useLocale()).card;
   const [text, setText] = useState(note ?? '');
   return (
     <form
@@ -156,7 +152,7 @@ function SetupNoteForm({ note, onSave }: { note: string | undefined; onSave: (te
         onSave(text);
       }}>
       <label htmlFor="setup-note" className="text-[0.8125rem] text-muted-foreground">
-        Ayar notun: sehpa, koltuk, delik… Sonraki sefer de burada.
+        {t.setupHint}
       </label>
       <div className="flex gap-2">
         <Input
@@ -164,13 +160,13 @@ function SetupNoteForm({ note, onSave }: { note: string | undefined; onSave: (te
           value={text}
           maxLength={SESSION_LIMITS.setupNote}
           onChange={(event) => setText(event.target.value)}
-          placeholder="Ör. Sehpa 3. delik"
+          placeholder={t.setupPlaceholder}
           autoComplete="off"
           enterKeyHint="done"
           className="h-11 min-w-0 flex-1 text-base"
         />
         <Button type="submit" variant="secondary" className="h-11 px-4">
-          Kaydet
+          {t.save}
         </Button>
       </div>
     </form>
@@ -263,6 +259,8 @@ export function WorkoutExerciseCard({
   /** Danışanın kilosu (ölçüm onayıyla): yürüyüş/koşu setinin kalorisi; yoksa kalori yok, kartta not. */
   bodyMassKg?: number | undefined;
 }) {
+  const locale = useLocale();
+  const t = clientWorkoutMessages(locale).card;
   const [open, setOpen] = useState<'reason' | 'note' | 'setup' | 'care' | null>(null);
   const [warmOpen, setWarmOpen] = useState(false);
   // Grupta üye değişince (ya da hareket muadille değişince) açık çip kapanır (her hareketin kendi notu var).
@@ -287,7 +285,7 @@ export function WorkoutExerciseCard({
   const shown = sets.map((set, index) => {
     const entry = entries[index];
     const logged = set.logged;
-    const text = (value: number | undefined) => (value !== undefined ? formatNumber(value) : '');
+    const text = (value: number | undefined) => (value !== undefined ? getFormat(locale).number(value) : '');
     const value = logged ? (logged.reps ?? logged.seconds) : entry?.value;
     return {
       kg: text(logged ? logged.kg : (entry?.kg ?? waitingKg(set))),
@@ -308,17 +306,18 @@ export function WorkoutExerciseCard({
     ...(walk ? [boxColumn(shown.map((item) => item.incline), 3)] : []),
     '2.75rem',
   ].join(' ');
-  const valueHead = walk ? 'Dk' : row.trackingType === 'duration' ? 'Süre' : 'Tekrar';
+  const valueHead = walk ? t.minutesHead : row.trackingType === 'duration' ? t.durationHead : t.repsHead;
   const reason = row.plan.reason as SuggestionReason;
   // Öneri katmanının gerekçesi (§5.7): kısa çip ve tamamı; eski anlık görüntüde gerekçenin genel metni.
-  const reasonChip = row.why?.chip ?? REASON_LABELS[reason] ?? '';
+  const reasons = reasonLabels(locale);
+  const reasonChip = row.why?.chip ?? reasons[reason] ?? '';
   // Kutular geçen seferkiyle dolu: öneri (artış, iniş) yalnız burada, danışan isterse kendisi uygular.
-  const reasonDetail = `${row.why?.detail ?? REASON_LABELS[reason] ?? ''}${carriesLastTime(row) ? ' Kutularda geçen seferki değerler var; öneriyi istersen kendin uygula.' : ''}`;
+  const reasonDetail = t.reasonDetail(row.why?.detail ?? reasons[reason] ?? '', carriesLastTime(row));
   const reasonUp = row.why ? row.why.tone === 'up' : UP.has(reason);
   const warmDone = warmups.length > 0 && warmups.every((warmup) => warmup.logged);
   const toggle = (chip: 'reason' | 'note' | 'setup' | 'care') => setOpen(open === chip ? null : chip);
   // Danışanın kısıtından not (tasarım `kisit-tarama.md` §3.5): tanı adı yok, bölge ve taraf var.
-  const care = row.care ? rowCareText(row.care) : null;
+  const care = row.care ? rowCareText(row.care, locale) : null;
 
   // Şu anki (ya da düzenlenen) satır panelin üstünde görünür kalsın (4+ sette, grupta tablo kayar).
   useEffect(() => {
@@ -350,7 +349,7 @@ export function WorkoutExerciseCard({
                   onToggle={() => toggle('care')}
                   tone={row.care?.kind === 'avoid' ? 'up' : 'plain'}
                   icon={<Bandaids />}
-                  label={`${care.title}. Aç`}
+                  label={t.openCare(care.title)}
                   className="my-1.5 w-fit max-w-full">
                   {care.title}
                 </Chip>
@@ -362,7 +361,7 @@ export function WorkoutExerciseCard({
                     <Button className="h-11 w-fit" onClick={onSwap}>
                       {/* ⋯ menüsündeki "Muadil seç" ile aynı ikon: aynı iş. */}
                       <Swap data-icon="inline-start" />
-                      Değiştir
+                      {t.swap}
                     </Button>
                   ) : null}
                 </div>
@@ -372,7 +371,7 @@ export function WorkoutExerciseCard({
                   {reasonChip}
                 </Chip>
                 {setupNote ? (
-                  <Chip open={open === 'setup'} onToggle={() => toggle('setup')} tone="plain" icon={<Wrench />} label={`Ayar notun: ${setupNote}. Düzelt`} className="max-w-[45%]">
+                  <Chip open={open === 'setup'} onToggle={() => toggle('setup')} tone="plain" icon={<Wrench />} label={t.setupNamed(setupNote)} className="max-w-[45%]">
                     {setupNote}
                   </Chip>
                 ) : null}
@@ -382,16 +381,16 @@ export function WorkoutExerciseCard({
                   </Chip>
                 ) : null}
                 {warmDone && !warmOpen ? (
-                  <Chip open={false} onToggle={() => setWarmOpen(true)} tone="muted" icon={<Check weight="bold" />} className="shrink-0" label="Isınma yapıldı. Göster">
-                    Isınma
+                  <Chip open={false} onToggle={() => setWarmOpen(true)} tone="muted" icon={<Check weight="bold" />} className="shrink-0" label={t.warmupDone}>
+                    {t.warmup}
                   </Chip>
                 ) : null}
                 {setupNote ? null : (
-                  <Chip open={open === 'setup'} onToggle={() => toggle('setup')} tone="muted" icon={<Plus weight="bold" />} label="Ayar notu ekle" className="shrink-0 px-2" />
+                  <Chip open={open === 'setup'} onToggle={() => toggle('setup')} tone="muted" icon={<Plus weight="bold" />} label={t.addSetup} className="shrink-0 px-2" />
                 )}
               </div>
               {open === 'reason' ? <p className="text-[0.8125rem] text-muted-foreground">{reasonDetail}</p> : null}
-              {open === 'note' ? <p className="text-[0.8125rem] text-muted-foreground">{ownProgram ? 'Not' : 'Antrenörünün notu'}: {row.note ?? ''}</p> : null}
+              {open === 'note' ? <p className="text-[0.8125rem] text-muted-foreground">{ownProgram ? t.ownNote(row.note ?? '') : t.ptNote(row.note ?? '')}</p> : null}
               {open === 'setup' ? (
                 <SetupNoteForm
                   note={setupNote}
@@ -409,23 +408,23 @@ export function WorkoutExerciseCard({
                 (48) + kg (en az 48) + tekrar (en az 56) + 44; kutulu sütunlar içlerindeki en uzun değer kadar genişler ("102,5" 70 px).
                 Kardiyoda kg yerine süreden sonra mesafe ve yürüyüş/koşuda eğim; "Önceki" iki satıra sarar. Başlık ve satırlar aynı
                 şablonu paylaşır. */}
-            <div role="table" aria-label={`${row.title} setleri`} className="text-sm tabular-nums">
+            <div role="table" aria-label={t.table(row.title)} className="text-sm tabular-nums">
               <div role="rowgroup">
                 <div role="row" style={{ gridTemplateColumns: columns }} className="grid h-6 items-center border-t">
                   <span role="columnheader" className="pl-3 text-xs font-medium text-muted-foreground">
-                    Set
+                    {t.setHead}
                   </span>
                   <span role="columnheader" className="px-2 text-xs font-medium text-muted-foreground">
-                    Önceki
+                    {t.previousHead}
                   </span>
                   {showTarget ? (
                     <span role="columnheader" className="px-2 text-xs font-medium text-muted-foreground">
-                      Hedef
+                      {t.targetHead}
                     </span>
                   ) : null}
                   {weighted ? (
                     <span role="columnheader" className="px-2 text-xs font-medium text-muted-foreground">
-                      kg
+                      {t.kgHead}
                     </span>
                   ) : null}
                   <span role="columnheader" className="px-2 text-xs font-medium text-muted-foreground">
@@ -433,16 +432,16 @@ export function WorkoutExerciseCard({
                   </span>
                   {cardio ? (
                     <span role="columnheader" className="px-2 text-xs font-medium text-muted-foreground">
-                      Metre
+                      {t.metersHead}
                     </span>
                   ) : null}
                   {walk ? (
                     <span role="columnheader" className="px-2 text-xs font-medium text-muted-foreground">
-                      Eğim %
+                      {t.inclineHead}
                     </span>
                   ) : null}
                   <span role="columnheader">
-                    <span className="sr-only">Durum</span>
+                    <span className="sr-only">{t.statusHead}</span>
                   </span>
                 </div>
               </div>
@@ -481,12 +480,12 @@ export function WorkoutExerciseCard({
               </SwipeGroup>
             </div>
             {walk && bodyMassKg === undefined ? (
-              <p className="border-t px-3 py-2 text-xs text-muted-foreground">Kalori, antrenörünün girdiği vücut ağırlığından hesaplanır.</p>
+              <p className="border-t px-3 py-2 text-xs text-muted-foreground">{t.kcalNote}</p>
             ) : null}
             {onAddSet ? (
               <Button variant="ghost" className="h-11 w-full justify-start gap-2 rounded-none border-t px-3 text-primary hover:text-primary" onClick={onAddSet}>
                 <Plus data-icon="inline-start" weight="bold" />
-                {group ? 'Tur ekle' : 'Set ekle'}
+                {group ? t.addRound : t.addSet}
               </Button>
             ) : null}
           </motion.div>

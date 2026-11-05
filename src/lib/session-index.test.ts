@@ -32,7 +32,7 @@ describe('index satırı: PT bildirimlerinin ayrıntısı', () => {
     const row = indexRowOf(doc, 'f'.repeat(40));
     assert.equal(row.plannedDayName, 'Gün A');
     assert.deepEqual(row.progress, { done: 4, planned: 9 });
-    assert.deepEqual(row.overloads, [{ title: 'Bench Press', kg: 85, plannedKg: 62.5 }]);
+    assert.deepEqual(row.overloads, [{ title: 'Bench Press', exerciseId: 'bench-press', kg: 85, plannedKg: 62.5 }]);
   });
 
   test('planlanan program yapıldıysa ad yazılmaz; bildirim yoksa ayrıntı da yok', () => {

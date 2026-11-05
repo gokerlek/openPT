@@ -1,5 +1,7 @@
 import { DEFAULT_LOCALE, type Locale } from '../i18n/locale.ts';
-import { formatDayShort, formatNumber } from './format.ts';
+import { clientProgramsMessages } from '../i18n/messages/client-programs/index.ts';
+import { clientWorkoutMessages } from '../i18n/messages/client-workout/index.ts';
+import { getFormat } from './format.ts';
 import type { LogKind } from './program-plan.ts';
 import type { SessionIndex } from './schemas/session.ts';
 import { normalizeWeekdays, weekdaysText } from './training-days.ts';
@@ -14,8 +16,12 @@ import { normalizeWeekdays, weekdaysText } from './training-days.ts';
  * silinse de kalır), PT'nin programında yalnız gün; gün adı yoksa `fallback`. Geçmiş, özet, antrenman sonrası kart ve
  * PT'nin ekranları aynı metni kullanır.
  */
-export function sessionDayText(program: { dayName?: string | undefined; programName?: string | undefined } | undefined, fallback = 'Antrenman'): string {
-  const day = program?.dayName || fallback;
+export function sessionDayText(
+  program: { dayName?: string | undefined; programName?: string | undefined } | undefined,
+  fallback?: string,
+  locale: Locale = DEFAULT_LOCALE,
+): string {
+  const day = program?.dayName || (fallback ?? clientWorkoutMessages(locale).session.workout);
   return program?.programName ? `${program.programName} · ${day}` : day;
 }
 
@@ -27,15 +33,17 @@ export function sessionDayText(program: { dayName?: string | undefined; programN
 export function programLine(
   input: { days: number; weekdays: readonly number[]; daysPerWeek?: number | undefined },
   lastDate?: string | undefined,
-  _locale: Locale = DEFAULT_LOCALE,
+  locale: Locale = DEFAULT_LOCALE,
 ): string {
-  const weekdays = weekdaysText(input.weekdays);
+  const f = getFormat(locale);
+  const t = clientProgramsMessages(locale).line;
+  const weekdays = weekdaysText(input.weekdays, locale);
   const perWeek = weekdays ? normalizeWeekdays(input.weekdays).length : input.daysPerWeek;
   return [
-    `${formatNumber(input.days)} antrenman`,
-    ...(perWeek !== undefined ? [`haftada ${formatNumber(perWeek)}`] : []),
-    ...(weekdays ? [weekdays] : perWeek === undefined ? ['gün atanmadı'] : []),
-    ...(lastDate ? [`son: ${formatDayShort(lastDate)}`] : []),
+    t.workouts(f.number(input.days), input.days),
+    ...(perWeek !== undefined ? [t.perWeek(f.number(perWeek))] : []),
+    ...(weekdays ? [weekdays] : perWeek === undefined ? [t.noDays] : []),
+    ...(lastDate ? [t.last(f.dayShort(lastDate))] : []),
   ].join(' · ');
 }
 
@@ -73,18 +81,19 @@ export function ptUpdatedSince(program: { createdAt: string; updatedAt: string }
 }
 
 /** Geçmiş kaydının etiketi, görene göre (§7.3). */
-export function ownLogLabel(entry: { kind: LogKind; by?: 'pt' | undefined }, viewer: 'client' | 'pt', _locale: Locale = DEFAULT_LOCALE): string {
+export function ownLogLabel(entry: { kind: LogKind; by?: 'pt' | undefined }, viewer: 'client' | 'pt', locale: Locale = DEFAULT_LOCALE): string {
+  const t = clientProgramsMessages(locale).log;
   switch (entry.kind) {
     case 'create':
-      return viewer === 'client' ? 'Oluşturuldu' : 'Danışan oluşturdu';
+      return viewer === 'client' ? t.created : t.clientCreated;
     case 'edit':
-      if (entry.by === 'pt') return viewer === 'client' ? 'Antrenörün düzenledi' : 'Düzenledin';
-      return viewer === 'client' ? 'Düzenledin' : 'Danışan düzenledi';
+      if (entry.by === 'pt') return viewer === 'client' ? t.ptEdited : t.youEdited;
+      return viewer === 'client' ? t.youEdited : t.clientEdited;
     case 'client':
-      return viewer === 'client' ? 'Antrenmandan' : 'Danışan güncelledi';
+      return viewer === 'client' ? t.fromWorkout : t.clientUpdated;
     case 'share':
-      return 'Paylaşım';
+      return t.share;
     case 'phase':
-      return 'Evre geçişi';
+      return t.phase;
   }
 }

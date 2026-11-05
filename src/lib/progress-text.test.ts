@@ -33,6 +33,8 @@ import {
   weekLabel,
 } from './progress-text.ts';
 import { forecast } from './trend.ts';
+import { uiMessages } from '../i18n/messages/ui/index.ts';
+import { clientProgressMessages } from '../i18n/messages/client-progress/index.ts';
 
 const point = (date: string, fields: Partial<ExercisePoint> = {}): ExercisePoint => ({ date, volumeKg: 0, totalReps: 0, totalSeconds: 0, sets: 3, ...fields });
 
@@ -348,5 +350,42 @@ describe('kime yazıldığı: danışan ve PT', () => {
     assert.equal(achievementDetail({ id: 'first_workout', achievedOn: null, current: 0, target: 1 }, 1, 'pt'), 'İlk antrenmanını bitirince.');
     assert.equal(achievementDetail({ id: 'first_record', achievedOn: null, current: 0, target: 1 }, 1, 'pt'), 'Bir harekette en iyisini geçince.');
     assert.equal(achievementDetail({ id: 'workouts_25', achievedOn: null, current: 12, target: 25 }, 3, 'pt'), '12/25 antrenman');
+  });
+});
+
+describe('İlerleme metinleri İngilizce (en)', () => {
+  const weekly = (values: number[], start = '2026-08-03') =>
+    values.map((value, i) => ({ date: new Date(Date.parse(`${start}T00:00:00Z`) + i * 7 * 86_400_000).toISOString().slice(0, 10), value }));
+
+  test('hafta etiketi en-GB biçiminde', () => {
+    assert.equal(weekLabel('2026-09-28', '2026-10-04', 'en'), '28 Sept–4 Oct');
+    assert.equal(weekLabel('2026-12-28', '2027-01-03', 'en'), '28 Dec 2026–3 Jan 2027');
+  });
+
+  test('seri: gün ve hafta çoğulu', () => {
+    assert.equal(streakText({ current: 0, best: 0, thisWeek: 1, target: 3 }, 'en'), 'This week 1/3 days');
+    assert.equal(streakText({ current: 0, best: 5, thisWeek: 0, target: 3 }, 'en'), 'This week 0/3 days · longest streak 5 weeks');
+    assert.equal(streakText({ current: 1, best: 1, thisWeek: 1, target: 1 }, 'en'), '1 week in a row · this week 1/1 day');
+    assert.equal(streakText({ current: 2, best: 6, thisWeek: 3, target: 3 }, 'en'), '2 weeks in a row · longest 6 weeks · this week 3/3 days');
+  });
+
+  test('eğilim ve süre', () => {
+    assert.equal(describeTrend(forecast(weekly([60, 62.5, 65])), 'kg', '2026-08-20', 'en'), 'A forecast needs at least 4 workouts.');
+    assert.equal(describeTrend(forecast(weekly([70, 67.5, 65, 62.5, 60])), 'kg', '2026-09-01', 'en'), 'Trend: −2.5 kg a week.');
+    assert.equal(formatSeconds(90, 'en'), '1 min 30 s');
+  });
+});
+
+describe('grafiğin ekran okuyucu özeti: sayı ve ad', () => {
+  test('İngilizcede ad sayıya göre tekil ya da çoğul; Türkçe değişmez', () => {
+    const en = uiMessages('en').charts;
+    const nouns = clientProgressMessages('en').charts;
+    assert.equal(en.countLine('Bench Press', 1, '1', nouns.workoutDayNoun), 'Bench Press: 1 workout day.');
+    assert.equal(en.countLine('Bench Press', 12, '12', nouns.workoutDayNoun), 'Bench Press: 12 workout days.');
+    assert.equal(en.countLine('Weekly volume', 1, '1', nouns.weekNoun), 'Weekly volume: 1 week.');
+    assert.equal(en.countLine('Weight', 2, '2', en.defaultNoun), 'Weight: 2 measurement days.');
+    const tr = uiMessages('tr').charts;
+    assert.equal(tr.countLine('Bench Press', 12, '12', clientProgressMessages('tr').charts.workoutDayNoun), 'Bench Press: 12 antrenman günü.');
+    assert.equal(tr.countLine('Kilo', 1, '1', tr.defaultNoun), 'Kilo: 1 ölçüm günü.');
   });
 });

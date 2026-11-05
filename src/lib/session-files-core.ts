@@ -1,3 +1,5 @@
+import type { Locale } from '../i18n/locale.ts';
+import { clientWorkoutMessages } from '../i18n/messages/client-workout/index.ts';
 import * as v from 'valibot';
 import { canRecordHealth } from './client-status.ts';
 import { GithubError } from './github/errors.ts';
@@ -22,7 +24,7 @@ import { PROPOSALS_PATH } from './proposals.ts';
 import { allowedHealth, applyPatch, BROKEN_HEALTH, BROKEN_PROPOSALS, planFinish, planPut, type FinishPlan } from './session-finish.ts';
 import { indexRowOf, isDeletedInIndex, removeIndexRow, repairIndex, upsertIndexRow, type RepairResult } from './session-index.ts';
 import { tombstoneOf } from './session-merge.ts';
-import { DELETE_MESSAGE } from './session-messages.ts';
+import { deleteMessage } from './session-messages.ts';
 import { readinessFromHealth } from './set-suggestions.ts';
 
 /**
@@ -80,7 +82,8 @@ export type SessionReader = Pick<SessionRepo, 'head' | 'read' | 'readBlob' | 'li
 /** Kendi programları da okuyan taraf (`own-program-files.ts`). */
 export type OwnReader = SessionReader & Pick<SessionRepo, 'listFolder'>;
 
-export type SessionContext = { now: Date; timeZone: string };
+/** Yazımın anı ve saat dilimi; `locale`: commit mesajlarının ve program geçmişinin dili (yazanın), yoksa Türkçe. */
+export type SessionContext = { now: Date; timeZone: string; locale?: Locale | undefined };
 
 function isConflict(error: unknown): boolean {
   return error instanceof GithubError && error.status === 409;
@@ -137,7 +140,8 @@ export async function withRetry<T>(run: () => Promise<T>): Promise<T> {
     try {
       return await run();
     } catch (second) {
-      if (isConflict(second)) throw new GithubError('Kayıt şu an başka bir yazmayla çakıştı; biraz sonra tekrar denenecek.', 409, { retryAfter: 5 });
+      // `.message` Türkçe (günlük); yanıt `session-routes`'ta okuyanın dilinde (`localized`).
+      if (isConflict(second)) throw new GithubError((locale) => clientWorkoutMessages(locale).errors.conflict, 409, { retryAfter: 5 });
       throw second;
     }
   }
@@ -298,6 +302,7 @@ export async function finishSession(
       client: ctx.client,
       now: ctx.now,
       timeZone: ctx.timeZone,
+      ...(ctx.locale ? { locale: ctx.locale } : {}),
     });
     if (plan.health === 'broken') repo.log(`[seans] ${id}: health.json okunamadı; sağlık ayrıntısı yazılmadı.`);
     if (plan.proposalsBroken) repo.log(`[seans] ${id}: proposals.json okunamadı; öneriler yazılmadı.`);
@@ -326,7 +331,7 @@ async function patchActive(repo: SessionRepo, ctx: SessionContext, id: string, b
     if (!stored) return { status: 'missing' };
     if (stored.status === 'deleted') return { status: 'deleted' };
     if (stored.status === 'finished') return 'finished';
-    const next = applyPatch(stored, body, ctx.now);
+    const next = applyPatch(stored, body, ctx.now, ctx.locale);
     if (!next.changed) return { status: 'unchanged', doc: stored, remaining: null };
     assertWritable(next.doc);
     try {
@@ -351,7 +356,7 @@ export async function patchSession(repo: SessionRepo, ctx: SessionContext, id: s
     const stored = parseFile(file, id);
     if (!stored) return { status: 'missing' };
     if (stored.status === 'deleted') return { status: 'deleted' };
-    const next = applyPatch(stored, body, ctx.now);
+    const next = applyPatch(stored, body, ctx.now, ctx.locale);
     if (!next.changed) return { status: 'unchanged', doc: stored, remaining: null };
     assertWritable(next.doc);
     const { index } = await repairedIndexAt(repo, head, new Map([[path, file?.content]]));
@@ -392,7 +397,7 @@ export async function deleteSession(repo: SessionRepo, ctx: SessionContext, id: 
         { path, content: tombstoneOf(id, ctx.now) },
         { path: SESSIONS_INDEX_PATH, content: removeIndexRow(index, id, ctx.now) },
       ],
-      message: DELETE_MESSAGE,
+      message: deleteMessage(ctx.locale),
     });
     return { status: 'deleted' };
   });

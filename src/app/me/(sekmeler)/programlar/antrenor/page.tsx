@@ -1,11 +1,13 @@
 import type { Metadata } from 'next';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { clientProgramsMessages } from '@/i18n/messages/client-programs';
+import { getLocale } from '@/i18n/server';
 import { withClientTargets } from '@/lib/client-targets';
 import { readAppConfig } from '@/lib/config';
 import { listExercises } from '@/lib/exercises';
 import { currentClient } from '@/lib/guards';
 import { lastDateByDay, programLine } from '@/lib/own-program-text';
-import { OWN_PROGRAM_LIMITS, PT_PROGRAM_NAME } from '@/lib/own-programs';
+import { OWN_PROGRAM_LIMITS, ptProgramName } from '@/lib/own-programs';
 import { readOwnOverview } from '@/lib/own-programs-store';
 import { todayIn } from '@/lib/format';
 import { currentPhaseOf, phaseStatus } from '@/lib/program-plan';
@@ -15,7 +17,9 @@ import { CopyDaySheet } from '../copy-day-sheet';
 import { MakeActiveButton } from '../program-actions';
 import { ProgramDays } from '../program-days';
 
-export const metadata: Metadata = { title: PT_PROGRAM_NAME };
+export async function generateMetadata(): Promise<Metadata> {
+  return { title: ptProgramName(await getLocale()) };
+}
 
 /**
  * Antrenörünün programı, salt okuma (`docs/design/kendi-program.md` §2.2): şu anki evrenin programları atandıkları
@@ -23,9 +27,12 @@ export const metadata: Metadata = { title: PT_PROGRAM_NAME };
  * altında "Kendi programına kopyala". Kalıcı seçim kendi programsa "Bugün'ün programı yap". Programın değişiklik geçmişi danışana gösterilmez.
  */
 export default async function PtProgramPage() {
-  const [client, config, exercises] = await Promise.all([currentClient(), readAppConfig(), listExercises()]);
+  const locale = await getLocale();
+  const [client, config, exercises] = await Promise.all([currentClient(), readAppConfig(), listExercises(undefined, locale)]);
+  const t = clientProgramsMessages(locale).pages;
+  const PT_PROGRAM_NAME = ptProgramName(locale);
   const overview = await readOwnOverview(client.id).catch(() => null);
-  const back = { href: '/me/programlar', label: 'Program' };
+  const back = { href: '/me/programlar', label: t.title };
   const program = overview?.pt?.program ?? null;
   const phase = program ? currentPhaseOf(program)?.phase : undefined;
 
@@ -34,8 +41,8 @@ export default async function PtProgramPage() {
       <main className="flex flex-col gap-6">
         <ClientHeader client={client} appName={config.appName} title={PT_PROGRAM_NAME} back={back} />
         <Alert>
-          <AlertTitle>{overview?.pt === null ? 'Antrenörün henüz program hazırlamadı.' : 'Antrenörünün programı şu an açılamıyor.'}</AlertTitle>
-          {overview?.pt === null ? null : <AlertDescription>Biraz sonra yeniden dene; sürerse antrenörüne haber ver.</AlertDescription>}
+          <AlertTitle>{overview?.pt === null ? t.ptNone : t.ptUnavailable}</AlertTitle>
+          {overview?.pt === null ? null : <AlertDescription>{t.tryLaterTell}</AlertDescription>}
         </Alert>
       </main>
     );
@@ -58,12 +65,12 @@ export default async function PtProgramPage() {
       <div className="flex flex-col gap-2">
         <ClientHeader client={client} appName={config.appName} title={PT_PROGRAM_NAME} back={back} />
         <p className="text-sm text-muted-foreground tabular-nums">
-          {programLine({ days: phase.days.length, weekdays: effectiveSchedule(program).weekdays, daysPerWeek: phase.daysPerWeek })}
+          {programLine({ days: phase.days.length, weekdays: effectiveSchedule(program).weekdays, daysPerWeek: phase.daysPerWeek }, undefined, locale)}
         </p>
         {program.phased ? (
           <p className="text-sm text-muted-foreground tabular-nums">
-            Evre: {phase.name}
-            {phase.weeks !== undefined ? ` · ${Math.min(status.week, phase.weeks)}. hafta / ${phase.weeks}` : ''}
+            {t.phase(phase.name)}
+            {phase.weeks !== undefined ? t.phaseWeek(Math.min(status.week, phase.weeks), phase.weeks) : ''}
           </p>
         ) : null}
         {active ? <MakeActiveButton programId={null} name={PT_PROGRAM_NAME} className="h-11 self-start" /> : null}
@@ -74,8 +81,8 @@ export default async function PtProgramPage() {
       {others.map((other) => (
         <details key={other.id} className="group flex flex-col gap-3">
           <summary className="flex min-h-11 cursor-pointer items-center text-sm font-medium text-muted-foreground">
-            {program.phases.indexOf(other) > program.phases.indexOf(phase) ? 'Sonraki evre' : 'Önceki evre'}: {other.name}
-            {other.weeks !== undefined ? ` · ${other.weeks} hafta` : ''}
+            {program.phases.indexOf(other) > program.phases.indexOf(phase) ? t.nextPhase : t.previousPhase}: {other.name}
+            {other.weeks !== undefined ? t.phaseWeeks(other.weeks) : ''}
           </summary>
           <ProgramDays days={withTargets(other.days)} exercises={byId} todayId={null} lastByDay={lastByDay} action={copy} />
         </details>

@@ -107,14 +107,14 @@ export function durationOf(
 
 /**
  * Onaylanmış aşırı yük (PT'nin bildirimi): hareket başına en ağır aşırı yük seti ve o setin planı.
- * Hareketin adı o günkü hâliyle (`title`).
+ * Hareketin adı o günkü hâliyle (`title`); kimliği (`exerciseId`) bildirimde adı okuyanın diline çevirmek için.
  */
-export function overloadsOf(doc: Pick<SessionDoc, 'entries'>): { title: string; kg: number; plannedKg?: number }[] {
+export function overloadsOf(doc: Pick<SessionDoc, 'entries'>): { title: string; exerciseId: string; kg: number; plannedKg?: number }[] {
   return doc.entries.flatMap((entry) => {
     const sets = working(entry).filter((set) => set.overload && set.kg !== undefined);
     const top = sets.reduce<(typeof sets)[number] | undefined>((best, set) => (!best || (set.kg ?? 0) > (best.kg ?? 0) ? set : best), undefined);
     if (!top || top.kg === undefined) return [];
-    return [{ title: entry.title, kg: top.kg, ...(top.plannedKg !== undefined ? { plannedKg: top.plannedKg } : {}) }];
+    return [{ title: entry.title, exerciseId: entry.exerciseId, kg: top.kg, ...(top.plannedKg !== undefined ? { plannedKg: top.plannedKg } : {}) }];
   });
 }
 

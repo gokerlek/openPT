@@ -22,34 +22,32 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Spinner } from '@/components/ui/spinner';
-import {
-  afterReportText,
-  REPORT_SAFETY,
-  SEVERITIES,
-  SEVERITY_LABELS,
-  type ClientConstraintView,
-  type Severity,
-} from '@/lib/constraints';
-import { formatDayShort } from '@/lib/format';
+import { useLocale } from '@/i18n/client';
+import type { Locale } from '@/i18n/locale';
+import { clientHomeMessages } from '@/i18n/messages/client-home';
+import { lower } from '@/i18n/text';
+import { afterReportText, reportSafety, SEVERITIES, severityLabels, type ClientConstraintView, type Severity } from '@/lib/constraints';
+import { getFormat } from '@/lib/format';
 import { fetchJson } from '@/lib/query/errors';
 import { useServiceMutation } from '@/lib/query/use-service';
 import { ReportSheet, type ReportDraft } from '../../report-sheet';
 
 const EMPTY: ReportDraft = { triggers: [], note: '' };
 
-function stateLine(view: ClientConstraintView): string {
-  const day = formatDayShort(view.at.slice(0, 10));
+function stateLine(view: ClientConstraintView, locale: Locale): string {
+  const t = clientHomeMessages(locale).health;
+  const day = getFormat(locale).dayShort(view.at.slice(0, 10));
   switch (view.state) {
     case 'pending':
-      return 'Antrenörüne iletildi · bekliyor';
+      return t.pending;
     case 'confirmed':
-      return `Antrenörün onayladı · ${day}`;
+      return t.confirmed(day);
     case 'seen':
-      return `Antrenörün gördü · ${day}`;
+      return t.seen(day);
     case 'declined':
-      return `Antrenörün kısıt olarak almadı · ${day}`;
+      return t.declined(day);
     default:
-      return `Kapandı · ${day}`;
+      return t.resolved(day);
   }
 }
 
@@ -71,38 +69,38 @@ function useReportAction(id: string, success: string) {
  */
 function WorseButton({ view, onWorse }: { view: ClientConstraintView; onWorse: (text: string) => void }) {
   const [severity, setSeverity] = useState<Severity | undefined>(undefined);
-  const worse = useReportAction(view.id, 'Antrenörüne iletildi.');
+  const locale = useLocale();
+  const t = clientHomeMessages(locale).health;
+  const worse = useReportAction(view.id, t.sent);
   const rank = view.severity ? SEVERITIES.indexOf(view.severity) : -1;
   const choices = SEVERITIES.filter((_item, index) => index > rank);
   if (choices.length === 0) return null;
   return (
     <AlertDialog>
-      <AlertDialogTrigger render={<Button variant="outline" className="h-11 flex-1" />}>Kötüleşti</AlertDialogTrigger>
+      <AlertDialogTrigger render={<Button variant="outline" className="h-11 flex-1" />}>{t.worse}</AlertDialogTrigger>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>{view.title}: ne kadar etkiliyor?</AlertDialogTitle>
-          <AlertDialogDescription>
-            Antrenörüne hemen iletilir. Yeni uyuşma ya da güç kaybı varsa beklemeden acil servise başvur. {REPORT_SAFETY.other}
-          </AlertDialogDescription>
+          <AlertDialogTitle>{t.worseQuestion(view.title)}</AlertDialogTitle>
+          <AlertDialogDescription>{t.worseText(reportSafety(locale).other)}</AlertDialogDescription>
         </AlertDialogHeader>
         <ChoiceChips
-          label="Şiddet"
+          label={t.severity}
           value={severity}
-          options={choices.map((item) => ({ value: item, label: SEVERITY_LABELS[item] }))}
+          options={choices.map((item) => ({ value: item, label: severityLabels(locale)[item] }))}
           onChange={setSeverity}
           itemClassName="flex-1"
         />
         <AlertDialogFooter>
-          <AlertDialogCancel className="h-11">Vazgeç</AlertDialogCancel>
+          <AlertDialogCancel className="h-11">{t.cancel}</AlertDialogCancel>
           <AlertDialogAction
             className="h-11"
             disabled={!severity || worse.isPending}
             onClick={() =>
-              severity && worse.mutate({ action: 'worse', severity }, { onSuccess: () => onWorse(afterReportText({ severity, type: view.typeId })) })
+              severity && worse.mutate({ action: 'worse', severity }, { onSuccess: () => onWorse(afterReportText({ severity, type: view.typeId }, locale)) })
             }
           >
             {worse.isPending ? <Spinner data-icon="inline-start" /> : null}
-            Gönder
+            {t.send}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
@@ -111,30 +109,32 @@ function WorseButton({ view, onWorse }: { view: ClientConstraintView; onWorse: (
 }
 
 function BetterButton({ view }: { view: ClientConstraintView }) {
-  const better = useReportAction(view.id, 'Antrenörüne iletildi.');
+  const t = clientHomeMessages(useLocale()).health;
+  const better = useReportAction(view.id, t.sent);
   return (
     <Button variant="outline" className="h-11 flex-1" disabled={better.isPending} onClick={() => better.mutate({ action: 'better' })}>
       {better.isPending ? <Spinner data-icon="inline-start" /> : <CheckCircle data-icon="inline-start" />}
-      Düzeldi
+      {t.better}
     </Button>
   );
 }
 
 function WithdrawButton({ view }: { view: ClientConstraintView }) {
-  const withdraw = useReportAction(view.id, 'Bildirim geri çekildi.');
+  const t = clientHomeMessages(useLocale()).health;
+  const withdraw = useReportAction(view.id, t.withdrawn);
   const [open, setOpen] = useState(false);
   return (
     <>
       <Button size="sm" variant="ghost" className="min-h-11 flex-1" onClick={() => setOpen(true)}>
         <X data-icon="inline-start" />
-        Geri çek
+        {t.withdraw}
       </Button>
       <ConfirmDeleteDialog
         open={open}
         onOpenChange={setOpen}
-        title="Bildirimini geri çekmek istiyor musun?"
-        body="Antrenörün bu bildirimi artık görmez; zorlayan hareketlerdeki notlar da kalkar."
-        confirmLabel="Geri çek"
+        title={t.withdrawQuestion}
+        body={t.withdrawText}
+        confirmLabel={t.withdraw}
         confirmVariant="default"
         busy={withdraw.isPending}
         onConfirm={() => withdraw.mutate(null)}
@@ -152,7 +152,9 @@ function ConstraintCard({
   onEdit: (view: ClientConstraintView) => void;
   onWorse: (text: string) => void;
 }) {
-  const meta = [view.type, view.severity ? SEVERITY_LABELS[view.severity].toLocaleLowerCase('tr') : null].filter(Boolean).join(' · ');
+  const locale = useLocale();
+  const t = clientHomeMessages(locale).health;
+  const meta = [view.type, view.severity ? lower(locale, severityLabels(locale)[view.severity]) : null].filter(Boolean).join(' · ');
   return (
     <Card size="sm">
       <CardHeader>
@@ -164,16 +166,24 @@ function ConstraintCard({
       </CardHeader>
       <CardContent className="flex flex-col gap-1.5 text-sm">
         {view.clientNote ? <p>“{view.clientNote}”</p> : null}
-        {view.reportNote ? <p className="text-muted-foreground">Notun: “{view.reportNote}”</p> : null}
-        {view.declinedNote ? <p>Antrenörün: “{view.declinedNote}”</p> : null}
-        <p className="text-muted-foreground">{stateLine(view)}</p>
-        {view.change === 'better' ? <p className="text-muted-foreground">Düzeldi dedin; antrenörün bakınca kapanır.</p> : null}
-        {view.change === 'worse' ? <p className="text-muted-foreground">Kötüleşti dedin; antrenörüne iletildi.</p> : null}
+        {view.reportNote ? (
+          <p className="text-muted-foreground">
+            {t.yourNote} “{view.reportNote}”
+          </p>
+        ) : null}
+        {view.declinedNote ? (
+          <p>
+            {t.trainerNote} “{view.declinedNote}”
+          </p>
+        ) : null}
+        <p className="text-muted-foreground">{stateLine(view, locale)}</p>
+        {view.change === 'better' ? <p className="text-muted-foreground">{t.saidBetter}</p> : null}
+        {view.change === 'worse' ? <p className="text-muted-foreground">{t.saidWorse}</p> : null}
       </CardContent>
       {view.state === 'pending' ? (
         <CardFooter className="gap-2">
           <Button variant="outline" className="h-11 flex-1" onClick={() => onEdit(view)}>
-            Düzelt
+            {t.correct}
           </Button>
           <WithdrawButton view={view} />
         </CardFooter>
@@ -196,6 +206,8 @@ export function HealthConstraints({ open, closed }: { open: ClientConstraintView
   const router = useRouter();
   const [sheet, setSheet] = useState<{ editing: string | null; initial: ReportDraft } | null>(null);
   const [after, setAfter] = useState<string | null>(null);
+  const locale = useLocale();
+  const t = clientHomeMessages(locale).health;
 
   const edit = (view: ClientConstraintView) =>
     setSheet({
@@ -214,9 +226,9 @@ export function HealthConstraints({ open, closed }: { open: ClientConstraintView
     <section aria-labelledby="constraints-heading" className="flex flex-col gap-3">
       <div className="flex flex-col gap-1">
         <h2 id="constraints-heading" className="font-heading text-lg font-semibold">
-          Kısıtların
+          {t.constraints}
         </h2>
-        <p className="text-sm text-muted-foreground">Antrenörün programını bunlara göre yazar.</p>
+        <p className="text-sm text-muted-foreground">{t.constraintsText}</p>
       </div>
       {after ? (
         <Alert>
@@ -225,23 +237,27 @@ export function HealthConstraints({ open, closed }: { open: ClientConstraintView
         </Alert>
       ) : null}
       {open.length === 0 ? (
-        <p className="text-sm text-muted-foreground">Kayıtlı kısıtın yok. Bir sakatlık ya da rahatsızlığın varsa bildir.</p>
+        <p className="text-sm text-muted-foreground">{t.noConstraints}</p>
       ) : (
         open.map((view) => <ConstraintCard key={view.id} view={view} onEdit={edit} onWorse={setAfter} />)
       )}
       <Button variant="outline" className="h-11 w-full" onClick={() => setSheet({ editing: null, initial: EMPTY })}>
         <Plus data-icon="inline-start" />
-        Yeni bir şey bildir
+        {t.reportNew}
       </Button>
       {closed.length > 0 ? (
         <details className="rounded-lg border p-3 text-sm">
-          <summary className="flex min-h-11 cursor-pointer items-center font-medium">Kapananlar ({closed.length})</summary>
+          <summary className="flex min-h-11 cursor-pointer items-center font-medium">{t.closedList(closed.length)}</summary>
           <ul className="mt-2 flex flex-col gap-2">
             {closed.map((view) => (
               <li key={view.id} className="flex flex-col">
                 <span>{view.title}</span>
-                <span className="text-muted-foreground">{stateLine(view)}</span>
-                {view.declinedNote ? <span className="text-muted-foreground">Antrenörün: “{view.declinedNote}”</span> : null}
+                <span className="text-muted-foreground">{stateLine(view, locale)}</span>
+                {view.declinedNote ? (
+                  <span className="text-muted-foreground">
+                    {t.trainerNote} “{view.declinedNote}”
+                  </span>
+                ) : null}
               </li>
             ))}
           </ul>
@@ -253,10 +269,11 @@ export function HealthConstraints({ open, closed }: { open: ClientConstraintView
         editing={sheet?.editing ?? null}
         initial={sheet?.initial ?? EMPTY}
         onSent={(draft) => {
-          const text = draft.severity && draft.type ? afterReportText({ severity: draft.severity, type: draft.type, ...(draft.since ? { since: draft.since } : {}) }) : 'Antrenörüne iletildi.';
+          const text =
+            draft.severity && draft.type ? afterReportText({ severity: draft.severity, type: draft.type, ...(draft.since ? { since: draft.since } : {}) }, locale) : t.sent;
           setSheet(null);
-          setAfter(sheet?.editing ? 'Bildirimin düzeltildi.' : text);
-          toast.success(sheet?.editing ? 'Bildirimin düzeltildi.' : 'Antrenörüne iletildi.');
+          setAfter(sheet?.editing ? t.corrected : text);
+          toast.success(sheet?.editing ? t.corrected : t.sent);
           router.refresh();
         }}
       />

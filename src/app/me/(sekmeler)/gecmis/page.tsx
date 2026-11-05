@@ -4,13 +4,17 @@ import type { Metadata } from 'next';
 import { ClockCounterClockwise } from '@phosphor-icons/react/dist/ssr';
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
+import { clientProgressMessages } from '@/i18n/messages/client-progress';
+import { getLocale, getMessages } from '@/i18n/server';
 import { readAppConfig } from '@/lib/config';
 import { currentClient } from '@/lib/guards';
 import { loadHistory } from '@/lib/history-store';
 import { ProgressHeader } from '../../progress-header';
 import { HistoryList } from './history-list';
 
-export const metadata: Metadata = { title: 'Geçmiş' };
+export async function generateMetadata(): Promise<Metadata> {
+  return { title: (await getMessages(clientProgressMessages)).pages.history };
+}
 
 /**
  * Danışanın İlerleme sekmesinin Geçmiş'i (tasarım §2.10; adres `/me/gecmis` yerinde kalır): başlık "İlerleme",
@@ -21,8 +25,9 @@ export const metadata: Metadata = { title: 'Geçmiş' };
  * (`/me/gecmis/[id]`: setler, silme). Sayfa yetkiyi kendisi denetler (SPEC §5).
  */
 export default async function HistoryPage() {
-  const [client, config] = await Promise.all([currentClient(), readAppConfig()]);
-  const list = await loadHistory(client.id, config.timeZone).catch(() => null);
+  const [client, config, locale] = await Promise.all([currentClient(), readAppConfig(), getLocale()]);
+  const t = clientProgressMessages(locale).pages;
+  const list = await loadHistory(client.id, config.timeZone, locale).catch(() => null);
 
   return (
     <main className="flex flex-col gap-6">
@@ -33,8 +38,8 @@ export default async function HistoryPage() {
       {list === null ? (
         <Card>
           <CardHeader>
-            <CardTitle>Geçmişin şu an açılamıyor</CardTitle>
-            <CardDescription>Bağlantında ya da kayıt deposunda bir sorun var. Biraz sonra yeniden dene.</CardDescription>
+            <CardTitle>{t.historyUnavailable}</CardTitle>
+            <CardDescription>{t.connectionProblem}</CardDescription>
           </CardHeader>
         </Card>
       ) : list.count === 0 ? (
@@ -43,11 +48,8 @@ export default async function HistoryPage() {
             <EmptyMedia variant="icon">
               <ClockCounterClockwise weight="fill" />
             </EmptyMedia>
-            <EmptyTitle>Henüz antrenman yok</EmptyTitle>
-            <EmptyDescription>
-              Bitirdiğin antrenmanlar burada tarih sırasıyla görünür: süresi, set sayısı, kaldırdığın toplam ağırlık ve
-              rekorların. Birine dokunup setlerini açabilir, istemediğin kaydı silebilirsin.
-            </EmptyDescription>
+            <EmptyTitle>{t.historyEmpty}</EmptyTitle>
+            <EmptyDescription>{t.historyEmptyText}</EmptyDescription>
           </EmptyHeader>
         </Empty>
       ) : (

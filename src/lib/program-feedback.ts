@@ -1,5 +1,7 @@
+import { DEFAULT_LOCALE, type Locale } from '../i18n/locale.ts';
+import { clientWorkoutMessages } from '../i18n/messages/client-workout/index.ts';
 import { locateRow, plainSets, setClientTarget, sameSets, targetLabel } from './client-targets.ts';
-import { formatKg, formatNumber } from './format.ts';
+import { getFormat } from './format.ts';
 import { appendLog, capChanges, type ClientTargets, type ProgramChange, type ProgramLogEntry, type ProgramPhase } from './program-plan.ts';
 import { gridOf, isOverload, type SuggestionReason, type TrackingType } from './progression.ts';
 import { parseProposals, serializeProposals, upsertProposals, type ProposalInput, type ProposalKind } from './proposals.ts';
@@ -11,7 +13,6 @@ import type {
   SessionDoc,
   SessionEntry,
   SessionSet,
-  SkipReason,
 } from './schemas/session.ts';
 import { setsText, SET_LIMITS, type SetSpec } from './set-plan.ts';
 import { FALLBACK_REST_SECONDS, TEMPLATE_LIMITS, type TemplateRow } from './template-plan.ts';
@@ -75,13 +76,6 @@ export type FeedbackItem = Omit<FeedbackDecision, 'apply'> & {
 /** Öneri katmanının set artışı (§5.6; `recommend.ts`): bitişte "Antrenörüne öner: Bench Press 3 → 4 set". */
 export type SetSuggestion = { rowId: string; from: number; to: number; why: string };
 
-const SKIP_REASON_LABELS: Record<SkipReason, string> = {
-  busy: 'Alet dolu',
-  no_equipment: 'Ekipman yok',
-  no_time: 'Zamanım yok',
-  tired: 'Yoruldum',
-  other: 'Diğer',
-};
 
 function working(entry: Pick<SessionEntry, 'sets'>): SessionSet[] {
   return entry.sets.filter((set) => set.type === 'working');
@@ -92,10 +86,10 @@ function valueOf(set: Pick<SessionSet, 'reps' | 'seconds'>): number {
 }
 
 /** Hedefin kısa anlatımı: "10–14 tekrar", "40–60 sn"; düz olmayanda setlerin kısa biçimi. */
-function targetPhrase(sets: readonly SetSpec[], trackingType: TrackingType): string {
-  if (!plainSets(sets)) return setsText(sets, trackingType);
-  const label = targetLabel(sets, trackingType);
-  return trackingType === 'duration' ? label : `${label} tekrar`;
+function targetPhrase(sets: readonly SetSpec[], trackingType: TrackingType, locale: Locale): string {
+  if (!plainSets(sets)) return setsText(sets, trackingType, null, locale);
+  const label = targetLabel(sets, trackingType, locale);
+  return trackingType === 'duration' ? label : clientWorkoutMessages(locale).feedback.repsTarget(label);
 }
 
 /**
@@ -126,6 +120,7 @@ type RowContext = {
   plan: WorkoutRow;
   entry: SessionEntry;
   doc: SessionDoc;
+  locale: Locale;
 };
 
 /** Kendi programın günü mü (`docs/design/kendi-program.md` §3.4): bütün maddeler doğrudan yazılır. */
@@ -133,8 +128,6 @@ function ownDay(day: Pick<WorkoutDay, 'source'>): boolean {
   return day.source === 'own';
 }
 
-/** Kendi programda işaretsiz maddenin ipucu. */
-const OWN_HINT = 'İşaretsiz: program aynı kalır';
 
 function base(context: RowContext): Pick<FeedbackItem, 'entryId' | 'rowId' | 'dayId' | 'exerciseId' | 'title' | 'trackingType' | 'row'> {
   return {
@@ -157,6 +150,8 @@ function plannedCount(sets: readonly SessionSet[], row: TemplateRow): number {
 
 function weightItem(context: RowContext): FeedbackItem | null {
   const { plan, entry, doc } = context;
+  const t = clientWorkoutMessages(context.locale).feedback;
+  const f = getFormat(context.locale);
   const grid = plan.trackingType === 'weight_reps' ? gridOf(plan.spec) : null;
   const top = plan.plan.topWeightKg;
   if (!grid || top <= 0 || WEIGHT_SKIP_REASONS.has(plan.plan.reason) || doc.adjust === 'lighter' || entry.oneOff || entry.lighter) return null;
@@ -175,8 +170,8 @@ function weightItem(context: RowContext): FeedbackItem | null {
       mode: 'direct',
       checked: !overload,
       kg: { from: top, to: heaviest, ...(overload ? { overload: true } : {}) },
-      text: `${plan.title}: bundan sonra ${formatKg(heaviest)}`,
-      hint: `İşaretsiz: bir defalık (${formatKg(top)} kalır)`,
+      text: t.weightFromNow(plan.title, f.kg(heaviest)),
+      hint: t.weightUpHint(f.kg(top)),
     };
   }
   const below = grid.below(top, top);
@@ -188,8 +183,8 @@ function weightItem(context: RowContext): FeedbackItem | null {
       mode: 'direct',
       checked: true,
       kg: { from: top, to: heaviest },
-      text: `${plan.title}: bundan sonra ${formatKg(heaviest)}`,
-      hint: `İşaretsiz: bu seferlik (${formatKg(top)} kalır)`,
+      text: t.weightFromNow(plan.title, f.kg(heaviest)),
+      hint: t.weightDownHint(f.kg(top)),
     };
   }
   return null;
@@ -231,7 +226,8 @@ function targetItem(context: RowContext): FeedbackItem | null {
   if (sameSets(to, sets)) return null;
   // Kendi programda piramit, back-off ve AMRAP'ta da doğrudan satıra yazılır (§3.4).
   const direct = plainSets(sets) || ownDay(context.day);
-  const unit = plan.trackingType === 'duration' ? `${margin} sn` : `${margin} tekrar`;
+  const t = clientWorkoutMessages(context.locale).feedback;
+  const unit = t.margin(margin, plan.trackingType === 'duration');
   return {
     ...base(context),
     key: `target:${row.id}`,
@@ -239,9 +235,9 @@ function targetItem(context: RowContext): FeedbackItem | null {
     mode: direct ? 'direct' : 'proposal',
     checked: true,
     target: { from: sets.map((set) => ({ ...set })), to },
-    text: `${plan.title}: hedef ${targetPhrase(to, plan.trackingType)}`,
-    hint: direct ? 'İşaretsiz: hedef aynı kalır' : 'Antrenörüne öner',
-    why: direction === 'up' ? `2 antrenmandır bütün setlerde hedefin en az ${unit} üstü` : '2 antrenmandır bütün setlerde hedefin altı',
+    text: t.target(plan.title, targetPhrase(to, plan.trackingType, context.locale)),
+    hint: direct ? t.targetHint : t.propose,
+    why: direction === 'up' ? t.targetUpWhy(unit) : t.targetDownWhy,
   };
 }
 
@@ -259,6 +255,8 @@ function setsItem(context: RowContext, previous: RowPrevious | undefined): Feedb
   const to = now === 'up' ? Math.min(done, previous.done, SET_LIMITS.perRow) : Math.max(done, previous.done, 1);
   if (to === from) return null;
   const own = ownDay(context.day);
+  const t = clientWorkoutMessages(context.locale).feedback;
+  const f = getFormat(context.locale);
   return {
     ...base(context),
     key: `sets:${row.id}`,
@@ -266,9 +264,9 @@ function setsItem(context: RowContext, previous: RowPrevious | undefined): Feedb
     mode: own ? 'direct' : 'proposal',
     checked: true,
     count: { from, to },
-    text: `${plan.title}: ${formatNumber(from)} → ${formatNumber(to)} set`,
-    hint: own ? OWN_HINT : 'Antrenörüne öner',
-    why: done === previous.done ? `2 antrenmandır ${formatNumber(done)} set yapıldı` : `Son 2 antrenmanda ${formatNumber(previous.done)} ve ${formatNumber(done)} set yapıldı`,
+    text: t.sets(plan.title, f.number(from), f.number(to), to),
+    hint: own ? t.ownHint : t.propose,
+    why: done === previous.done ? t.setsSameWhy(f.number(done), done) : t.setsWhy(f.number(previous.done), f.number(done)),
   };
 }
 
@@ -287,15 +285,16 @@ function removeItem(context: RowContext): FeedbackItem | null {
   const reason = entry.skip?.reason;
   // Kendi programda satır silinir: geri dönüşsüz görünen iş kendiliğinden yapılmaz, seçili gelmez (§3.4).
   const own = ownDay(context.day);
+  const t = clientWorkoutMessages(context.locale).feedback;
   return {
     ...base(context),
     key: `remove:${context.row.id}`,
     kind: 'remove',
     mode: own ? 'direct' : 'proposal',
     checked: !own,
-    text: own ? `${plan.title}: programdan çıkar` : `${plan.title}: çıkar ya da değiştir`,
-    hint: own ? OWN_HINT : 'Antrenörüne öner',
-    why: `2 antrenmandır geçildi${reason ? ` (${SKIP_REASON_LABELS[reason]})` : ''}`,
+    text: own ? t.removeOwn(plan.title) : t.remove(plan.title),
+    hint: own ? t.ownHint : t.propose,
+    why: t.removeWhy(reason ? t.skipReasons[reason] : null),
   };
 }
 
@@ -304,8 +303,18 @@ function removeItem(context: RowContext): FeedbackItem | null {
  * olmadan), `extras` muadil ve eklenen hareketlerin planları. Önce doğrudan maddeler, sonra öneriler;
  * satır sırasıyla.
  */
-export function feedbackItems(input: { day: WorkoutDay; doc: SessionDoc; extras: ExtraRows; suggestions?: readonly SetSuggestion[] }): FeedbackItem[] {
+export function feedbackItems(input: {
+  day: WorkoutDay;
+  doc: SessionDoc;
+  extras: ExtraRows;
+  suggestions?: readonly SetSuggestion[];
+  /** Maddelerin dili (danışanın; öneriyle antrenöre giden gerekçe de bu dilde); yoksa Türkçe. */
+  locale?: Locale;
+}): FeedbackItem[] {
   const { day, doc } = input;
+  const locale = input.locale ?? DEFAULT_LOCALE;
+  const t = clientWorkoutMessages(locale).feedback;
+  const f = getFormat(locale);
   const own = ownDay(day);
   const direct: FeedbackItem[] = [];
   const proposals: FeedbackItem[] = [];
@@ -319,7 +328,7 @@ export function feedbackItems(input: { day: WorkoutDay; doc: SessionDoc; extras:
       const plan = day.rows[row.id];
       const entry = plan ? entryForRow(doc.entries, row.id) : undefined;
       if (!plan || !entry) continue;
-      const context: RowContext = { day, row, plan, entry, doc };
+      const context: RowContext = { day, row, plan, entry, doc, locale };
       const sets = working(entry);
       if (entry.swappedFrom === row.id) {
         if (sets.length === 0 || entry.exerciseId === row.exerciseId) continue;
@@ -332,9 +341,9 @@ export function feedbackItems(input: { day: WorkoutDay; doc: SessionDoc; extras:
           mode: own ? 'direct' : 'proposal',
           checked: false,
           swap: { exerciseId: entry.exerciseId, title: entry.title, ...(swapSets ? { sets: swapSets } : {}) },
-          text: `${plan.title} yerine ${entry.title}`,
-          hint: own ? OWN_HINT : 'Antrenörüne öner: bundan sonra bu',
-          why: `Bu antrenmanda ${entry.title} yapıldı`,
+          text: t.swap(plan.title, entry.title),
+          hint: own ? t.ownHint : t.swapHint,
+          why: t.swapWhy(entry.title),
         });
         continue;
       }
@@ -369,9 +378,9 @@ export function feedbackItems(input: { day: WorkoutDay; doc: SessionDoc; extras:
       title: entry.title,
       trackingType,
       add: { sets: sets.slice(0, SET_LIMITS.perRow), restSeconds: extra?.restSeconds ?? FALLBACK_REST_SECONDS },
-      text: `${entry.title} ekle`,
-      hint: own ? OWN_HINT : 'Antrenörüne öner: programa ekle',
-      why: 'Bu antrenmanda eklendi',
+      text: t.add(entry.title),
+      hint: own ? t.ownHint : t.addHint,
+      why: t.addWhy,
     });
   }
 
@@ -394,8 +403,8 @@ export function feedbackItems(input: { day: WorkoutDay; doc: SessionDoc; extras:
       title: plan.title,
       trackingType: plan.trackingType,
       count: { from: suggestion.from, to: suggestion.to },
-      text: `${plan.title}: ${formatNumber(suggestion.from)} → ${formatNumber(suggestion.to)} set`,
-      hint: own ? OWN_HINT : 'Antrenörüne öner',
+      text: t.sets(plan.title, f.number(suggestion.from), f.number(suggestion.to), suggestion.to),
+      hint: own ? t.ownHint : t.propose,
       why: suggestion.why,
       ...(row ? { row: { exerciseId: row.exerciseId, sets: row.sets.map((set) => ({ ...set })) } } : {}),
     });
@@ -468,28 +477,31 @@ export function feedbackSummary(items: readonly FeedbackItem[], checked: Readonl
 export function feedbackMessage(
   outcome: FeedbackOutcome,
   own?: { name: string } | null,
+  locale: Locale = DEFAULT_LOCALE,
 ): { title: string; description: string; open?: true } | null {
+  const t = clientWorkoutMessages(locale).feedback;
+  const f = getFormat(locale);
   if (own) {
     const stale = outcome.stale ?? 0;
     if (stale > 0) {
       return {
-        title: `${own.name} o arada değişti; ${stale > 1 ? `${formatNumber(stale)} değişiklik` : 'bu değişiklik'} yazılmadı.`,
-        description: outcome.direct > 0 ? `Öteki ${formatNumber(outcome.direct)} değişiklik programa yazıldı.` : 'Programını açıp yeniden düzenleyebilirsin.',
+        title: t.ownStale(own.name, stale, f.number(stale)),
+        description: outcome.direct > 0 ? t.ownOthers(f.number(outcome.direct), outcome.direct) : t.ownReopen,
         open: true,
       };
     }
     if (outcome.direct === 0) return null;
-    return { title: `${own.name} güncellendi`, description: `${formatNumber(outcome.direct)} değişiklik programa yazıldı.` };
+    return { title: t.ownUpdated(own.name), description: t.written(f.number(outcome.direct), outcome.direct) };
   }
   if (outcome.direct === 0 && outcome.proposals === 0) return null;
-  if (outcome.converted > 0) return { title: 'Program o arada değişti; önerin antrenörüne gönderildi.', description: 'Antrenörün onaylayınca programına yazılır.' };
+  if (outcome.converted > 0) return { title: t.converted, description: t.afterApproval };
   if (outcome.direct > 0) {
     return {
-      title: 'Programın güncellendi',
-      description: outcome.proposals > 0 ? `${formatNumber(outcome.proposals)} öneri antrenörünün onayında` : 'Antrenörüne bildirildi',
+      title: t.updated,
+      description: outcome.proposals > 0 ? t.pending(f.number(outcome.proposals), outcome.proposals) : t.notified,
     };
   }
-  return { title: 'Önerin antrenörüne gönderildi', description: 'Antrenörün onaylayınca programına yazılır.' };
+  return { title: t.sent, description: t.afterApproval };
 }
 
 /* --- sunucu: kararları programa ve önerilere yazmak --- */
@@ -554,21 +566,26 @@ export function consistent(decision: FeedbackDecision, doc: SessionDoc): Session
 }
 
 /** Önerinin metni (PT'nin kartı, bildirim): "Leg Press 3 → 4 set", "Bench Press yerine Dumbbell Press". */
-export function proposalText(decision: Pick<FeedbackDecision, 'kind' | 'title' | 'trackingType' | 'count' | 'target' | 'swap'> & { entryTitle?: string }): string {
+export function proposalText(
+  decision: Pick<FeedbackDecision, 'kind' | 'title' | 'trackingType' | 'count' | 'target' | 'swap'> & { entryTitle?: string },
+  locale: Locale = DEFAULT_LOCALE,
+): string {
+  const t = clientWorkoutMessages(locale).feedback;
+  const f = getFormat(locale);
   switch (decision.kind) {
     case 'sets':
     case 'algo_sets':
-      return `${decision.title} ${formatNumber(decision.count?.from ?? 0)} → ${formatNumber(decision.count?.to ?? 0)} set`;
+      return t.proposalSets(decision.title, f.number(decision.count?.from ?? 0), f.number(decision.count?.to ?? 0), decision.count?.to ?? 0);
     case 'target':
       return decision.target
-        ? `${decision.title} ${setsText(decision.target.from, decision.trackingType)} → ${setsText(decision.target.to, decision.trackingType)}`
+        ? `${decision.title} ${setsText(decision.target.from, decision.trackingType, null, locale)} → ${setsText(decision.target.to, decision.trackingType, null, locale)}`
         : decision.title;
     case 'swap':
-      return `${decision.title} yerine ${decision.swap?.title ?? decision.entryTitle ?? ''}`.trim();
+      return t.swap(decision.title, decision.swap?.title ?? decision.entryTitle ?? '').trim();
     case 'remove':
-      return `${decision.title}: çıkar ya da değiştir`;
+      return t.remove(decision.title);
     case 'add':
-      return `${decision.entryTitle ?? decision.title} ekle`;
+      return t.add(decision.entryTitle ?? decision.title);
     default:
       return decision.title;
   }
@@ -589,8 +606,13 @@ export function planProgramFeedback(input: {
   proposals: unknown;
   now: Date;
   random?: (n: number) => Uint8Array;
+  /** Program geçmişinin ve önerinin cümlelerinin dili (yazanın, danışanın); yoksa Türkçe. */
+  locale?: Locale;
 }): ProgramFeedbackPlan {
   const { doc, program } = input;
+  const locale = input.locale ?? DEFAULT_LOCALE;
+  const t = clientWorkoutMessages(locale).feedback;
+  const f = getFormat(locale);
   const at = doc.finishedAt ?? input.now.toISOString();
   const outcome: FeedbackOutcome = { direct: 0, proposals: 0, converted: 0 };
   const empty: ProgramFeedbackPlan = { program: null, proposals: null, changes: [], outcome, notices: [] };
@@ -622,7 +644,7 @@ export function planProgramFeedback(input: {
       ...(decision.target ? { target: decision.target } : {}),
       ...(decision.swap ? { swap: decision.swap } : {}),
       ...(decision.add ? { add: decision.add } : {}),
-      text: clip(proposalText({ ...decision, entryTitle: entry.title }), 300),
+      text: clip(proposalText({ ...decision, entryTitle: entry.title }, locale), 300),
       ...(why ? { why: clip(why, 300) } : {}),
     });
   };
@@ -634,7 +656,7 @@ export function planProgramFeedback(input: {
       case 'weight_up':
       case 'weight_down': {
         const kg = decision.kg as NonNullable<FeedbackDecision['kg']>;
-        line(decision.rowId, `${decision.title}: çalışma ağırlığı ${formatNumber(kg.from)} → ${formatKg(kg.to)}`);
+        line(decision.rowId, t.workingWeight(decision.title, f.number(kg.from), f.kg(kg.to)));
         outcome.direct += 1;
         break;
       }
@@ -647,12 +669,12 @@ export function planProgramFeedback(input: {
             : null;
         if (result && result.status !== 'conflict') {
           targets = result.clientTargets;
-          line(decision.rowId, `${decision.title} ${setsText(target.from, decision.trackingType)} → ${setsText(target.to, decision.trackingType)}`);
+          line(decision.rowId, `${decision.title} ${setsText(target.from, decision.trackingType, null, locale)} → ${setsText(target.to, decision.trackingType, null, locale)}`);
           outcome.direct += 1;
           break;
         }
         if (direct) outcome.converted += 1;
-        propose({ ...decision, kind: 'target' }, entry, direct ? 'Program o arada değişti; danışanın hedef önerisi' : undefined);
+        propose({ ...decision, kind: 'target' }, entry, direct ? t.convertedWhy : undefined);
         outcome.proposals += 1;
         break;
       }
@@ -674,7 +696,7 @@ export function planProgramFeedback(input: {
   let nextProgram: Record<string, unknown> | null = null;
   if (lines.length > 0 && program && input.rawProgram && !applied) {
     const { clientTargets: _previous, ...raw } = input.rawProgram;
-    const log = appendLog(program.log, { at, revision: program.revision, kind: 'client', sessionId: doc.id, changes: capChanges(lines) });
+    const log = appendLog(program.log, { at, revision: program.revision, kind: 'client', sessionId: doc.id, changes: capChanges(lines, undefined, locale) });
     nextProgram = { ...raw, ...(targets ? { clientTargets: targets } : {}), log };
   }
 

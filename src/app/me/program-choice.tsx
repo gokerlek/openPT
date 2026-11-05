@@ -12,8 +12,10 @@ import { Field, FieldContent, FieldDescription, FieldLabel, FieldTitle } from '@
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Drawer, DrawerContent, DrawerDescription, DrawerFooter, DrawerHeader, DrawerTitle } from '@/components/ui/drawer';
 import { Spinner } from '@/components/ui/spinner';
-import { formatDayShort } from '@/lib/format';
-import { PT_PROGRAM_NAME } from '@/lib/own-programs';
+import { useLocale } from '@/i18n/client';
+import { clientHomeMessages } from '@/i18n/messages/client-home';
+import { getFormat } from '@/lib/format';
+import { ptProgramName } from '@/lib/own-programs';
 import { fetchJson } from '@/lib/query/errors';
 import { useUnseenPtEdit } from './(sekmeler)/programlar/program-actions';
 import { WORKOUT_KEY } from './workout-overview';
@@ -34,11 +36,12 @@ export type ProgramChoice = { id: string | null; name: string; lastDate?: string
 function useSelectActive(clientId: string) {
   const router = useRouter();
   const queryClient = useQueryClient();
+  const t = clientHomeMessages(useLocale()).choice;
   return async (programId: string | null, name: string) => {
     await fetchJson('/api/me/programs/active', { method: 'POST', body: JSON.stringify({ programId }) });
     clearWorkoutCache(clientId);
     void queryClient.invalidateQueries({ queryKey: WORKOUT_KEY });
-    toast.success(programId ? `Bugün ${name} ile açılır` : 'Bugün antrenörünün programıyla açılır');
+    toast.success(programId ? t.activeOwn(name) : t.activePt);
     router.replace('/me');
     router.refresh();
   };
@@ -59,12 +62,14 @@ export function ProgramChip({
   oneOff: boolean;
 }) {
   const router = useRouter();
+  const locale = useLocale();
+  const t = clientHomeMessages(locale).choice;
   const select = useSelectActive(clientId);
   const [open, setOpen] = useState(false);
   const [picked, setPicked] = useState<string | null | undefined>(undefined);
   const [busy, setBusy] = useState(false);
   const current = choices.find((choice) => choice.id === shown);
-  const name = current?.name ?? PT_PROGRAM_NAME;
+  const name = current?.name ?? ptProgramName(locale);
   const value = picked === undefined ? shown : picked;
   const pickedChoice = choices.find((choice) => choice.id === value);
 
@@ -75,10 +80,10 @@ export function ProgramChip({
   const always = async () => {
     setBusy(true);
     try {
-      await select(value ?? null, pickedChoice?.name ?? PT_PROGRAM_NAME);
+      await select(value ?? null, pickedChoice?.name ?? ptProgramName(locale));
       setOpen(false);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Seçilemedi.');
+      toast.error(error instanceof Error ? error.message : t.selectFailed);
     } finally {
       setBusy(false);
     }
@@ -87,16 +92,16 @@ export function ProgramChip({
   return (
     <>
       <Button variant="outline" className="h-11 max-w-full justify-start self-start px-3" onClick={() => setOpen(true)} aria-haspopup="dialog">
-        <span className="truncate">{oneOff ? `Bugün: ${name}` : name}</span>
+        <span className="truncate">{oneOff ? t.todayOnly(name) : name}</span>
         <CaretDown data-icon="inline-end" />
       </Button>
       <Drawer open={open} onOpenChange={(next) => (busy ? undefined : setOpen(next))} onOpenChangeComplete={(isOpen) => (isOpen ? undefined : setPicked(undefined))}>
         <DrawerContent showCloseButton={false} className="gap-0" data-base-ui-swipe-ignore={busy || undefined}>
           <DrawerHeader className="gap-1.5 pt-5">
             <DrawerTitle id="program-choice-title" className="text-lg font-semibold">
-              Hangi programla çalışacaksın?
+              {t.title}
             </DrawerTitle>
-            <DrawerDescription>Sıra ve günler her programda ayrı sürer.</DrawerDescription>
+            <DrawerDescription>{t.text}</DrawerDescription>
           </DrawerHeader>
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4">
             <RadioGroup aria-labelledby="program-choice-title" value={value ?? 'pt'} onValueChange={(next) => setPicked(next === 'pt' ? null : String(next))}>
@@ -107,7 +112,7 @@ export function ProgramChip({
                     <Field orientation="horizontal" className="min-h-14">
                       <FieldContent>
                         <FieldTitle className="break-words">{choice.name}</FieldTitle>
-                        <FieldDescription>{choice.lastDate ? `son antrenman: ${formatDayShort(choice.lastDate)}` : 'henüz antrenman yok'}</FieldDescription>
+                        <FieldDescription>{choice.lastDate ? t.lastWorkout(getFormat(locale).dayShort(choice.lastDate)) : t.noWorkout}</FieldDescription>
                       </FieldContent>
                       <RadioGroupItem value={choice.id ?? 'pt'} id={id} />
                     </Field>
@@ -118,16 +123,16 @@ export function ProgramChip({
           </div>
           <DrawerFooter className="pt-4">
             <Button size="lg" className="h-11 w-full" disabled={busy} onClick={onlyToday}>
-              Yalnız bugün
+              {t.onlyToday}
             </Button>
             {value !== active ? (
               <Button variant="outline" size="lg" className="h-11 w-full" disabled={busy} onClick={() => void always()}>
                 {busy ? <Spinner data-icon="inline-start" /> : null}
-                Bundan sonra hep bu
+                {t.always}
               </Button>
             ) : null}
             <Button variant="ghost" className="h-11 w-full text-muted-foreground" disabled={busy} onClick={() => setOpen(false)}>
-              Vazgeç
+              {t.cancel}
             </Button>
           </DrawerFooter>
         </DrawerContent>
@@ -164,6 +169,8 @@ function readLater(clientId: string): string | null {
 /** Kalıcı seçim kendi programken PT'nin programı o arada oluşturulduysa ya da kaydedildiyse (§2.6). */
 export function NewPtProgramBanner({ clientId, version }: { clientId: string; version: string }) {
   const select = useSelectActive(clientId);
+  const locale = useLocale();
+  const t = clientHomeMessages(locale).choice;
   const [busy, setBusy] = useState(false);
   // Sunucu çiziminde gösterilmez: [Sonra] telefonda (hidrasyondan sonra okunur).
   const later = useSyncExternalStore(
@@ -184,9 +191,9 @@ export function NewPtProgramBanner({ clientId, version }: { clientId: string; ve
   const work = async () => {
     setBusy(true);
     try {
-      await select(null, PT_PROGRAM_NAME);
+      await select(null, ptProgramName(locale));
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Seçilemedi.');
+      toast.error(error instanceof Error ? error.message : t.selectFailed);
     } finally {
       setBusy(false);
     }
@@ -194,14 +201,14 @@ export function NewPtProgramBanner({ clientId, version }: { clientId: string; ve
 
   return (
     <Alert>
-      <AlertTitle>Antrenörün yeni bir program hazırladı</AlertTitle>
+      <AlertTitle>{t.newPt}</AlertTitle>
       <AlertDescription className="flex flex-wrap justify-end gap-2 pt-1">
         <Button variant="ghost" className="h-11" disabled={busy} onClick={dismiss}>
-          Sonra
+          {t.later}
         </Button>
         <Button className="h-11" disabled={busy} onClick={() => void work()}>
           {busy ? <Spinner data-icon="inline-start" /> : null}
-          Onunla çalış
+          {t.useIt}
         </Button>
       </AlertDescription>
     </Alert>
@@ -211,14 +218,15 @@ export function NewPtProgramBanner({ clientId, version }: { clientId: string; ve
 /** "Antrenörün Evde programını düzenledi · 26 Eyl" [Gör]: telefonda görülmediyse. */
 export function PtEditLine({ clientId, programId, name, editedAt, dateText }: { clientId: string; programId: string; name: string; editedAt: string; dateText: string }) {
   const unseen = useUnseenPtEdit(clientId, programId, editedAt);
+  const t = clientHomeMessages(useLocale()).choice;
   if (!unseen) return null;
   return (
     <div className="flex items-center justify-between gap-3 rounded-lg border px-3 py-1.5 text-sm" role="status">
       <span className="min-w-0 break-words text-muted-foreground">
-        Antrenörün {name} programını düzenledi · {dateText}
+        {t.ptEdited(name, dateText)}
       </span>
       <Button variant="outline" className="h-11 shrink-0" nativeButton={false} render={<Link href={`/me/programlar/${programId}`} />}>
-        Gör
+        {t.see}
       </Button>
     </div>
   );

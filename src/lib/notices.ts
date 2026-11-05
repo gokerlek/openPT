@@ -1,3 +1,4 @@
+import { localizedLibraryTitle } from '../data/library-titles.ts';
 import { DEFAULT_LOCALE, type Locale } from '../i18n/locale.ts';
 import { ptShellMessages } from '../i18n/messages/pt-shell/index.ts';
 import { getFormat } from './format.ts';
@@ -97,9 +98,11 @@ export function sessionNotices(
     if (row.notices.includes('overload')) {
       const items = row.overloads ?? [];
       if (items.length === 0) push('overload', t.overloadNone(day));
-      items.forEach((item, position) =>
-        push('overload', t.overloadRow(item.title, format.kg(item.kg), item.plannedKg !== undefined ? format.number(item.plannedKg) : null), `:${position}`),
-      );
+      items.forEach((item, position) => {
+        // Kütüphane hareketinin adı okuyanın dilinde; kimliksiz eski satırda kaydedilen ad.
+        const title = item.exerciseId ? localizedLibraryTitle(item.exerciseId, item.title, locale) : item.title;
+        push('overload', t.overloadRow(title, format.kg(item.kg), item.plannedKg !== undefined ? format.number(item.plannedKg) : null), `:${position}`);
+      });
     }
     const detail = bySession.get(row.id);
     if (row.notices.includes('lighter')) {

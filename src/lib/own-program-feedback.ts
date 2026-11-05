@@ -1,5 +1,8 @@
+import { DEFAULT_LOCALE, type Locale } from '../i18n/locale.ts';
+import { clientProgramsMessages } from '../i18n/messages/client-programs/index.ts';
+import { clientWorkoutMessages } from '../i18n/messages/client-workout/index.ts';
 import { locateRow, sameSets } from './client-targets.ts';
-import { formatKg, formatNumber } from './format.ts';
+import { getFormat } from './format.ts';
 import type { OwnProgram, OwnProgramPhase } from './own-programs.ts';
 import { consistent, proposalText, type FeedbackOutcome } from './program-feedback.ts';
 import { appendLog, capChanges, programIdSource, type ProgramChange, type ProgramPhase } from './program-plan.ts';
@@ -71,16 +74,19 @@ function asProposal(decision: FeedbackDecision & { kind: ProposalKind }, doc: Se
 }
 
 /** Programa yazılan maddenin cümlesi (geçmiş ve commit mesajı). */
-function ownChangeText(decision: FeedbackDecision, entryTitle: string): string {
+function ownChangeText(decision: FeedbackDecision, entryTitle: string, locale: Locale): string {
+  const t = clientProgramsMessages(locale).changes;
   switch (decision.kind) {
     case 'target':
-      return decision.target ? `${decision.title} ${setsText(decision.target.from, decision.trackingType)} → ${setsText(decision.target.to, decision.trackingType)}` : decision.title;
+      return decision.target
+        ? `${decision.title} ${setsText(decision.target.from, decision.trackingType, null, locale)} → ${setsText(decision.target.to, decision.trackingType, null, locale)}`
+        : decision.title;
     case 'remove':
-      return `${decision.title} çıkarıldı`;
+      return t.removed(decision.title);
     case 'add':
-      return `${entryTitle} eklendi`;
+      return t.added(entryTitle);
     default:
-      return proposalText({ ...decision, entryTitle });
+      return proposalText({ ...decision, entryTitle }, locale);
   }
 }
 
@@ -90,8 +96,11 @@ export function planOwnFeedback(input: {
   program: OwnProgram;
   now: Date;
   random?: (n: number) => Uint8Array;
+  /** Program geçmişinin cümlelerinin dili (yazanın); yoksa Türkçe. */
+  locale?: Locale;
 }): OwnFeedbackPlan {
   const { doc, program } = input;
+  const locale = input.locale ?? DEFAULT_LOCALE;
   const at = doc.finishedAt ?? input.now.toISOString();
   const outcome: FeedbackOutcome = { direct: 0, proposals: 0, converted: 0, stale: 0 };
   const empty: OwnFeedbackPlan = { program: null, rowsChanged: false, changes: [], outcome, notices: [] };
@@ -116,7 +125,8 @@ export function planOwnFeedback(input: {
     if (!entry) continue;
     if (decision.kind === 'weight_up' || decision.kind === 'weight_down') {
       const kg = decision.kg as NonNullable<FeedbackDecision['kg']>;
-      line(scopeOf(decision.rowId, decision.dayId), `${decision.title}: çalışma ağırlığı ${formatNumber(kg.from)} → ${formatKg(kg.to)}`);
+      const f = getFormat(locale);
+      line(scopeOf(decision.rowId, decision.dayId), clientWorkoutMessages(locale).feedback.workingWeight(decision.title, f.number(kg.from), f.kg(kg.to)));
       outcome.direct += 1;
       continue;
     }
@@ -127,13 +137,13 @@ export function planOwnFeedback(input: {
     }
     // Cümlenin kapsamı yazmadan önce (çıkarılan satırın günü sonra bulunamaz).
     const scope = scopeOf(decision.rowId, decision.dayId);
-    const applied = applyProposal({ phases: phases as ProgramPhase[] }, asProposal(decision as FeedbackDecision & { kind: ProposalKind }, doc, at), ids);
+    const applied = applyProposal({ phases: phases as ProgramPhase[] }, asProposal(decision as FeedbackDecision & { kind: ProposalKind }, doc, at), ids, locale);
     if (applied.status === 'stale') {
       outcome.stale = (outcome.stale ?? 0) + 1;
       continue;
     }
     phases = applied.phases as OwnProgramPhase[];
-    line(scope, ownChangeText(decision, entry.title));
+    line(scope, ownChangeText(decision, entry.title, locale));
     outcome.direct += 1;
   }
 
@@ -143,7 +153,7 @@ export function planOwnFeedback(input: {
   const next: OwnProgram = {
     ...program,
     ...(rowsChanged ? { phases, revision, updatedAt: at } : {}),
-    log: appendLog(program.log, { at, revision, kind: 'client', sessionId: doc.id, changes: capChanges(lines) }),
+    log: appendLog(program.log, { at, revision, kind: 'client', sessionId: doc.id, changes: capChanges(lines, undefined, locale) }),
   };
   return { program: next, rowsChanged, changes: lines, outcome, notices: outcome.direct > 0 ? ['program_update'] : [] };
 }

@@ -1,3 +1,5 @@
+import { DEFAULT_LOCALE, type Locale } from '../i18n/locale.ts';
+import { clientWorkoutMessages } from '../i18n/messages/client-workout/index.ts';
 import {achievementBaseline,type AchievementBaseline} from './workout-achievements.ts';
 import type { AlternativeCandidate } from './alternatives.ts';
 import { cardioKind, withoutCardio, type CardioKind } from './cardio.ts';
@@ -156,6 +158,8 @@ export type WorkoutInsight = {
   index: Pick<SessionIndex, 'items'>;
   now: Date;
   experience?: TrainingExperience | undefined;
+  /** Önerinin gerekçe dili; yoksa Türkçe. */
+  locale?: Locale | undefined;
 };
 
 /** Hareket kaydına yazılan planın özeti (§4.2): üst ağırlık, gerekçe, aşama. */
@@ -402,6 +406,7 @@ export function workoutRowFor(input: {
         ...only,
         exercise,
         exposure: exposureOf(row.exerciseId, insight.index, insight.now, { experience: insight.experience }),
+        ...(insight.locale ? { locale: insight.locale } : {}),
       })
     : null;
   const plan = recommended?.plan ?? planSession({ spec, rule, sets, history: results, rowId: row.id, ...only });
@@ -678,14 +683,15 @@ export type WeekCount = {
  * uygulamanın saat diliminde; y `programWeekTarget` (atanmış gün sayısı, yoksa şu anki evrenin sıklığı): İlerleme'nin
  * seri hedefi ve haftalık hedeflerin dondurulması da aynı kuraldan.
  */
-export function weekOf(index: SessionIndex, program: PlanProgram | null, now: Date, timeZone: string): WeekCount {
+export function weekOf(index: SessionIndex, program: PlanProgram | null, now: Date, timeZone: string, locale: Locale = DEFAULT_LOCALE): WeekCount {
   const today = todayIn(timeZone, now);
   const start = mondayOf(today);
   const rows = index.items
     .filter((row) => row.finishedAt && row.date >= start && row.date <= today)
     .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : time(a.startedAt) - time(b.startedAt)));
   const days = [...new Set(rows.map((row) => row.date))].sort();
-  const sessions = rows.map((row) => ({ date: row.date, dayName: row.dayName || 'Antrenman' }));
+  const fallback = clientWorkoutMessages(locale).session.workout;
+  const sessions = rows.map((row) => ({ date: row.date, dayName: row.dayName || fallback }));
   return { done: days.length, target: (program ? programWeekTarget(program) : undefined) ?? null, days, start, sessions };
 }
 
@@ -710,12 +716,12 @@ export function afterFinish<
     water: { file: number; sessions: number };
     active: Pick<SessionDoc, 'id'> | null;
   },
->(data: T, doc: Pick<SessionDoc, 'id' | 'date' | 'waterTaps'> & Partial<Pick<SessionDoc, 'program'>>): T {
+>(data: T, doc: Pick<SessionDoc, 'id' | 'date' | 'waterTaps'> & Partial<Pick<SessionDoc, 'program'>>, locale: Locale = DEFAULT_LOCALE): T {
   const thisWeek = mondayOf(doc.date) === data.week.start && doc.date <= data.today;
   const counted = thisWeek && !data.week.days.includes(doc.date);
   const days = counted ? [...data.week.days, doc.date].sort() : data.week.days;
   const previous = data.week.sessions ?? [];
-  const dayName = doc.program?.dayName || 'Antrenman';
+  const dayName = doc.program?.dayName || clientWorkoutMessages(locale).session.workout;
   const repeated = previous.filter((session) => session.date === doc.date).at(-1)?.dayName === dayName;
   const sessions = (repeated ? [...previous] : [...previous, { date: doc.date, dayName }]).sort((a, b) =>
     a.date < b.date ? -1 : a.date > b.date ? 1 : 0,

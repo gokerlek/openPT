@@ -5,7 +5,9 @@ import Link from 'next/link';
 import { CaretRight, Trophy } from '@phosphor-icons/react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { formatNumber } from '@/lib/format';
+import { useLocale } from '@/i18n/client';
+import { clientProgressMessages } from '@/i18n/messages/client-progress';
+import { getFormat } from '@/lib/format';
 import { firstHistoryRows, HISTORY_PAGE, type HistoryMonth, type HistoryRow } from '@/lib/session-history';
 
 /**
@@ -13,6 +15,8 @@ import { firstHistoryRows, HISTORY_PAGE, type HistoryMonth, type HistoryRow } fr
  * Satır 64 px'ten yüksek, bütünü bağlantı (detay). Rekor, "başka program" ve "yarım" rozetleri metinle.
  */
 export function HistoryList({ months }: { months: HistoryMonth[] }) {
+  const locale = useLocale();
+  const t = clientProgressMessages(locale).pages;
   const [count, setCount] = useState(HISTORY_PAGE);
   const total = months.reduce((sum, month) => sum + month.rows.length, 0);
   const shown = firstHistoryRows(months, count);
@@ -34,7 +38,7 @@ export function HistoryList({ months }: { months: HistoryMonth[] }) {
       ))}
       {total > count ? (
         <Button variant="ghost" className="h-11 self-center text-muted-foreground" onClick={() => setCount(count + HISTORY_PAGE)}>
-          Daha fazla göster ({formatNumber(total - count)})
+          {t.showMore(getFormat(locale).number(total - count))}
         </Button>
       ) : null}
     </div>
@@ -42,6 +46,8 @@ export function HistoryList({ months }: { months: HistoryMonth[] }) {
 }
 
 function HistoryItem({ row }: { row: HistoryRow }) {
+  const locale = useLocale();
+  const t = clientProgressMessages(locale).pages;
   return (
     <Link
       href={`/me/gecmis/${row.id}`}
@@ -59,11 +65,11 @@ function HistoryItem({ row }: { row: HistoryRow }) {
           {row.prs > 0 ? (
             <Badge className="bg-primary/15 text-primary-text">
               <Trophy weight="fill" data-icon="inline-start" />
-              {formatNumber(row.prs)} rekor
+              {t.recordCount(getFormat(locale).number(row.prs), row.prs)}
             </Badge>
           ) : null}
-          {row.otherDay ? <Badge variant="secondary">başka program</Badge> : null}
-          {row.unfinished ? <Badge variant="outline">yarım</Badge> : null}
+          {row.otherDay ? <Badge variant="secondary">{t.otherProgram}</Badge> : null}
+          {row.unfinished ? <Badge variant="outline">{t.unfinished}</Badge> : null}
         </span>
         <span className="text-[0.8125rem] text-muted-foreground tabular-nums">{row.meta}</span>
       </span>

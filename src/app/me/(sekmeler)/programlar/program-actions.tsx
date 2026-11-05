@@ -11,6 +11,8 @@ import { Button } from '@/components/ui/button';
 import { Drawer, DrawerContent, DrawerDescription, DrawerFooter, DrawerHeader, DrawerTitle } from '@/components/ui/drawer';
 import { Spinner } from '@/components/ui/spinner';
 import { Switch } from '@/components/ui/switch';
+import { useMessages } from '@/i18n/client';
+import { clientProgramsMessages } from '@/i18n/messages/client-programs';
 import { fetchJson } from '@/lib/query/errors';
 import { ownProgramDraftKey } from '@/lib/unsaved-changes';
 import { clearLocalWorkout, clearWorkoutCache } from '../../workout-storage';
@@ -30,15 +32,16 @@ const TOAST_BUTTONS = { actionButton: 'touch:min-h-11 touch:px-3! touch:text-sm!
 /** "Bugün'ün programı yap" (kalıcı seçim): PT'ye bildirilir; `programId` null PT'nin programı. */
 export function MakeActiveButton({ programId, name, className }: { programId: string | null; name: string; className?: string }) {
   const router = useRouter();
+  const t = useMessages(clientProgramsMessages).actions;
   const [busy, setBusy] = useState(false);
   const select = async () => {
     setBusy(true);
     try {
       await fetchJson('/api/me/programs/active', { method: 'POST', body: JSON.stringify({ programId }) });
-      toast.success(programId ? `Bugün ${name} ile açılır` : 'Bugün antrenörünün programıyla açılır');
+      toast.success(programId ? t.activeOwn(name) : t.activePt);
       router.refresh();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Seçilemedi.');
+      toast.error(error instanceof Error ? error.message : t.selectFailed);
     } finally {
       setBusy(false);
     }
@@ -46,7 +49,7 @@ export function MakeActiveButton({ programId, name, className }: { programId: st
   return (
     <Button variant="outline" className={className ?? 'h-11'} disabled={busy} onClick={() => void select()}>
       {busy ? <Spinner data-icon="inline-start" /> : <Check data-icon="inline-start" />}
-      Bugün&apos;ün programı yap
+      {t.makeActive}
     </Button>
   );
 }
@@ -58,6 +61,7 @@ export function MakeActiveButton({ programId, name, className }: { programId: st
  */
 export function ShareSwitch({ programId, name, shared: initial }: { programId: string; name: string; shared: boolean }) {
   const router = useRouter();
+  const t = useMessages(clientProgramsMessages).actions;
   const [shared, setShared] = useState(initial);
   const [asking, setAsking] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -79,14 +83,14 @@ export function ShareSwitch({ programId, name, shared: initial }: { programId: s
       toast.dismiss(current.toast);
       const failed = () => {
         setShared(true);
-        toast.error('Paylaşım kapatılamadı; yeniden dene.');
+        toast.error(t.unshareFailed);
       };
       post(false, keepalive).then((response) => {
         if (!response.ok) failed();
         else if (!keepalive) router.refresh();
       }, failed);
     },
-    [post, router],
+    [post, router, t],
   );
 
   useEffect(() => {
@@ -118,12 +122,12 @@ export function ShareSwitch({ programId, name, shared: initial }: { programId: s
 
   const unshare = () => {
     setShared(false);
-    const id = toast('Paylaşım kapatılıyor', {
-      description: `${name} antrenörünün listesinden kalkar.`,
+    const id = toast(t.unsharing, {
+      description: t.unsharingText(name),
       duration: UNSHARE_DELAY_MS,
       classNames: TOAST_BUTTONS,
       action: {
-        label: 'Geri al',
+        label: t.undo,
         onClick: () => {
           cancelPending();
         },
@@ -141,10 +145,10 @@ export function ShareSwitch({ programId, name, shared: initial }: { programId: s
       if (!response.ok) throw new Error();
       setShared(true);
       setAsking(false);
-      toast.success('Antrenörünle paylaşıldı');
+      toast.success(t.sharedToast);
       router.refresh();
     } catch {
-      toast.error('Paylaşılamadı; yeniden dene.');
+      toast.error(t.shareFailed);
     } finally {
       setBusy(false);
     }
@@ -154,37 +158,37 @@ export function ShareSwitch({ programId, name, shared: initial }: { programId: s
     <>
       <label className="flex min-h-11 cursor-pointer items-center justify-between gap-3">
         <span className="flex flex-col gap-0.5">
-          <span className="font-medium">Antrenörünle paylaş</span>
-          <span className="text-sm text-muted-foreground">{shared ? 'Antrenörün görür ve düzenleyebilir.' : 'Antrenörün programı görmez.'}</span>
+          <span className="font-medium">{t.share}</span>
+          <span className="text-sm text-muted-foreground">{shared ? t.sharedOn : t.sharedOff}</span>
         </span>
         {/* Anahtar küçük: dokunma alanı satırın tamamı (44 px). Kapatma beklerken açmak "Geri al"dır (sunucu hâlâ paylaşımlı). */}
         <Switch
           checked={shared}
           disabled={busy}
           onCheckedChange={(checked) => (checked ? cancelPending() || setAsking(true) : unshare())}
-          aria-label="Antrenörünle paylaş"
+          aria-label={t.share}
         />
       </label>
       <Drawer open={asking} onOpenChange={(open) => (busy ? undefined : setAsking(open))}>
         <DrawerContent showCloseButton={false} className="gap-0" data-base-ui-swipe-ignore={busy || undefined}>
           <DrawerHeader className="gap-1.5 pt-5">
-            <DrawerTitle className="text-lg font-semibold">{name} antrenörünle paylaşılsın mı?</DrawerTitle>
+            <DrawerTitle className="text-lg font-semibold">{t.shareQuestion(name)}</DrawerTitle>
             <DrawerDescription render={<div />} className="flex flex-col gap-3">
               <ul className="flex list-disc flex-col gap-1 pl-5">
-                <li>Antrenörün programı görür ve düzenleyebilir.</li>
-                <li>Her değişiklik programın geçmişine kimin yaptığıyla yazılır; öteki taraf haberdar olur.</li>
-                <li>Paylaşımı istediğin an kapatırsın.</li>
+                {t.sharePoints.map((point) => (
+                  <li key={point}>{point}</li>
+                ))}
               </ul>
-              <span>Paylaşmasan da yaptığın antrenmanları antrenörün görür. Programların antrenörünün veri deposunda durur.</span>
+              <span>{t.shareNote}</span>
             </DrawerDescription>
           </DrawerHeader>
           <DrawerFooter className="pt-4">
             <Button size="lg" className="h-11 w-full" disabled={busy} onClick={() => void share()}>
               {busy ? <Spinner data-icon="inline-start" /> : null}
-              Paylaş
+              {t.shareConfirm}
             </Button>
             <Button variant="outline" size="lg" className="h-11 w-full" autoFocus disabled={busy} onClick={() => setAsking(false)}>
-              Vazgeç
+              {t.cancel}
             </Button>
           </DrawerFooter>
         </DrawerContent>
@@ -214,6 +218,7 @@ export function DeleteOwnProgram({
   shared: boolean;
 }) {
   const router = useRouter();
+  const t = useMessages(clientProgramsMessages).actions;
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [state, setState] = useState<DeleteState>({ kind: 'confirm' });
@@ -228,14 +233,14 @@ export function DeleteOwnProgram({
         setState({ kind: 'session', sessionId: body.sessionId });
         return;
       }
-      if (!response.ok && response.status !== 404) throw new Error(body?.error ?? 'Program silinemedi.');
+      if (!response.ok && response.status !== 404) throw new Error(body?.error ?? t.deleteFailed);
       discardDraft(ownProgramDraftKey(clientId, programId));
       setOpen(false);
-      toast.success('Program silindi');
+      toast.success(t.deleted);
       router.replace('/me/programlar');
       router.refresh();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Program silinemedi.');
+      toast.error(error instanceof Error ? error.message : t.deleteFailed);
     } finally {
       setBusy(false);
     }
@@ -248,10 +253,10 @@ export function DeleteOwnProgram({
       // Telefondaki kopya (bu antrenmansa) ve saklanan plan da düşer (antrenman ekranı açılmasın).
       clearLocalWorkout(clientId, sessionId);
       clearWorkoutCache(clientId);
-      setNote('Yarım antrenman silindi. Programı şimdi silebilirsin.');
+      setNote(t.sessionDeleted);
       setState({ kind: 'confirm' });
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Yarım antrenman silinemedi.');
+      toast.error(error instanceof Error ? error.message : t.sessionDeleteFailed);
     } finally {
       setBusy(false);
     }
@@ -268,29 +273,19 @@ export function DeleteOwnProgram({
           setNote(null);
           setOpen(true);
         }}>
-        Programı sil
+        {t.deleteProgram}
       </Button>
       <ConfirmDeleteDialog
         open={open}
         onOpenChange={setOpen}
-        title={sessionStep ? 'Yarım antrenman silinsin mi?' : `${name} silinsin mi?`}
+        title={sessionStep ? t.deleteSessionTitle : t.deleteTitle(name)}
         body={
           sessionStep
-            ? 'Kaydettiğin setler uygulamadan kalkar, geri getirilemez. Antrenörünün veri deposunun geçmişinde kalır.'
-            : [
-                'Program uygulamadan kalkar, geri getirilemez. Antrenörünün veri deposunun geçmişinde kalır.',
-                active ? 'Bugün yeniden antrenörünün programıyla açılır.' : null,
-                shared ? 'Antrenörüne bildirilir.' : null,
-              ]
-                .filter(Boolean)
-                .join(' ')
+            ? t.deleteSessionBody
+            : [t.deleteBody, active ? t.deleteActive : null, shared ? t.deleteShared : null].filter(Boolean).join(' ')
         }
-        detail={
-          sessionStep
-            ? null
-            : "Yaptığın antrenmanlar silinmez; Geçmiş ve İlerleme'de program adıyla kalır. Deponun eski sürümleri ve kayıt notları da silinmez."
-        }
-        confirmLabel={state.kind === 'confirm' ? 'Programı sil' : 'Yarım antrenmanı sil'}
+        detail={sessionStep ? null : t.deleteDetail}
+        confirmLabel={state.kind === 'confirm' ? t.deleteProgram : t.deleteSession}
         busy={busy}
         onConfirm={() => {
           if (state.kind === 'session') setState({ kind: 'sessionConfirm', sessionId: state.sessionId });
@@ -299,7 +294,7 @@ export function DeleteOwnProgram({
         }}>
         {state.kind === 'session' ? (
           <p className="rounded-lg bg-muted p-3 text-left text-sm" role="status">
-            Yarım antrenmanın bu programdan; önce bitir ya da sil.
+            {t.activeSession}
           </p>
         ) : null}
         {note && !sessionStep ? (
@@ -365,5 +360,6 @@ export function MarkPtEditSeen({ clientId, programId, editedAt }: { clientId: st
 /** Program'daki "Antrenörün düzenledi" rozeti: görülmediyse. */
 export function PtEditBadge({ clientId, programId, editedAt }: { clientId: string; programId: string; editedAt: string | undefined }) {
   const unseen = useUnseenPtEdit(clientId, programId, editedAt);
-  return unseen ? <Badge>Antrenörün düzenledi</Badge> : null;
+  const t = useMessages(clientProgramsMessages).actions;
+  return unseen ? <Badge>{t.ptEdited}</Badge> : null;
 }

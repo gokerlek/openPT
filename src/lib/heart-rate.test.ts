@@ -241,3 +241,11 @@ describe('deneme nabzı (yalnız geliştirmede)', () => {
     assert.ok(bpm >= 60 && bpm < 100, `dinlenmede sakinleşmeli: ${bpm}`);
   });
 });
+
+describe('nabız metinleri İngilizce (en)', () => {
+  test('dinlenmenin "inince devam" metni ve uyarı: Türkçe ek yok', () => {
+    assert.equal(calmText(120, 'en'), 'Continue once your heart rate drops to 120');
+    assert.equal(calmText(90, 'en'), 'Continue once your heart rate drops to 90');
+    assert.equal(heartAlertText(175, 'en'), 'Your heart rate is very high (175). Slow down and rest.');
+  });
+});

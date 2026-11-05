@@ -1,5 +1,6 @@
 import 'server-only';
 import { revalidateTag } from 'next/cache';
+import { getLocale } from '@/i18n/server';
 import { readAppConfig } from './config';
 import { listDevices } from './devices';
 import { listExercises } from './exercises';
@@ -42,9 +43,13 @@ export function sessionRepo(clientId: string): SessionRepo {
   };
 }
 
-/** İsteğin ortamı: oturum (çerezden), kayıtla doğrulama, depo, uygulamanın saat dilimi. */
+/**
+ * İsteğin ortamı: oturum (çerezden), kayıtla doğrulama, depo, uygulamanın saat dilimi ve dil (çerez, yoksa
+ * `Accept-Language`: yanıt mesajları, commit mesajları ve program geçmişi bu dilde).
+ */
 export async function sessionRouteDeps(): Promise<SessionRouteDeps> {
   return {
+    locale: await getLocale(),
     session: await readClientSession(),
     loadClient: sessionClient,
     repo: sessionRepo,
@@ -60,10 +65,12 @@ export async function sessionRouteDeps(): Promise<SessionRouteDeps> {
  * aileleri (muadil sıralaması) ve setin kaslara payı (set artışı önerisinin haftalık kesirli seti).
  */
 export async function workoutRouteDeps(): Promise<WorkoutRouteDeps> {
+  const deps = await sessionRouteDeps();
   return {
-    ...(await sessionRouteDeps()),
+    ...deps,
     catalog: async () => {
-      const [exercises, devices] = await Promise.all([listExercises(), listDevices()]);
+      // Hazır kütüphanenin adları okuyanın dilinde (set kaydının ad kopyası da; geçmiş `localizedLibraryTitle` ile okunur).
+      const [exercises, devices] = await Promise.all([listExercises(undefined, deps.locale), listDevices(undefined, deps.locale)]);
       return { exercises, devices };
     },
     familyOf,

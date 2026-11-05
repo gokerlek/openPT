@@ -1,3 +1,6 @@
+import { localizedLibraryTitle } from '../data/library-titles.ts';
+import { DEFAULT_LOCALE, type Locale } from '../i18n/locale.ts';
+import { clientHomeMessages } from '../i18n/messages/client-home/index.ts';
 import type { MovementPattern } from './alternatives.ts';
 import { CONSTRAINT_LIMITS, type CareTags, type ConstraintRegion, type Trigger } from './constraints.ts';
 import type { Constraint, HealthCheckIn } from './schemas/health.ts';
@@ -140,13 +143,13 @@ export type PainReportOffer = {
   note: string;
 };
 
-function listText(items: readonly RepeatedPain[]): string[] {
-  return items.map((item) => `${item.title} (${item.sessions} antrenmanda)`);
+function exerciseTexts(items: readonly RepeatedPain[], locale: Locale): string[] {
+  return items.map((item) => clientHomeMessages(locale).painReport.exercise(localizedLibraryTitle(item.exerciseId, item.title, locale), item.sessions));
 }
 
-/** Bildirimin hazır notu: hareket adları ekle çekimlenmez (kesme işareti ve ünlü uyumu yok). */
-export function painReportNote(items: readonly RepeatedPain[]): string {
-  const text = `Ağrı yüzünden geçtiğim: ${listText(items).join(', ')}.`;
+/** Bildirimin hazır notu (danışanın dilinde): hareket adları ekle çekimlenmez (kesme işareti ve ünlü uyumu yok). */
+export function painReportNote(items: readonly RepeatedPain[], locale: Locale = DEFAULT_LOCALE): string {
+  const text = clientHomeMessages(locale).painReport.note(exerciseTexts(items, locale));
   return text.length > CONSTRAINT_LIMITS.reportNote ? `${text.slice(0, CONSTRAINT_LIMITS.reportNote - 1)}…` : text;
 }
 
@@ -158,6 +161,7 @@ export function painReportOffers(
   repeated: readonly RepeatedPain[],
   tagsOf: (exerciseId: string) => Pick<CareTags, 'pattern' | 'contractionType'> | undefined,
   open: readonly Pick<Constraint, 'region'>[],
+  locale: Locale = DEFAULT_LOCALE,
 ): PainReportOffer[] {
   const known = new Set(open.map((item) => item.region));
   const groups = new Map<ConstraintRegion | null, { items: RepeatedPain[]; triggers: Set<Trigger> }>();
@@ -172,7 +176,7 @@ export function painReportOffers(
   return [...groups.entries()].slice(0, PAIN_REPORT_MAX_OFFERS).map(([region, group]) => ({
     region,
     triggers: [...group.triggers],
-    exercises: listText(group.items),
-    note: painReportNote(group.items),
+    exercises: exerciseTexts(group.items, locale),
+    note: painReportNote(group.items, locale),
   }));
 }

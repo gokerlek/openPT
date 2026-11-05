@@ -9,17 +9,19 @@ import { Field, FieldContent, FieldDescription, FieldLabel, FieldTitle } from '@
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Drawer, DrawerContent, DrawerDescription, DrawerFooter, DrawerHeader, DrawerTitle } from '@/components/ui/drawer';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useLocale } from '@/i18n/client';
+import type { Locale } from '@/i18n/locale';
+import { clientHomeMessages } from '@/i18n/messages/client-home';
 import { dayOnWeekday, weekdayNames } from '@/lib/day-assignments';
-import { formatDayShort } from '@/lib/format';
+import { getFormat } from '@/lib/format';
 import {
   assignedWeek,
   dayShortName,
   isoWeekdayOf,
-  WEEKDAY_NAMES,
-  WEEKDAY_SHORT,
+  weekdayLabels,
   weekdayNamesText,
+  weekdayShortLabels,
   type WeekDay,
-  type WeekDayState,
 } from '@/lib/training-days';
 import { cn } from '@/lib/utils';
 import type { WorkoutResponse } from '@/lib/workout-routes';
@@ -40,15 +42,14 @@ import { clearWorkoutCache, readWorkoutCache } from './workout-storage';
  *   farklıysa (PT programı değiştirdi) saklanan plan atılır, "Antrenmana başla" güncel planı açar.
  */
 
-const STATE_TEXT: Record<WeekDayState, string> = { done: 'yapıldı', missed: 'kaçtı', planned: 'antrenman günü', rest: 'dinlenme' };
-
 /**
  * Halkanın altındaki kelime ve ekran okuyucu satırındaki karşılığı. Seçili günün "dinlenme" durumu yalnız geçmişte,
  * pencereden (`since`) önceki yapılmamış atanmış günde olur (soluk halka): "antrenman günü, geçti".
  */
-function stateText(day: WeekDay, today: string): string {
-  if (day.state === 'rest' && day.selected && day.date < today) return 'antrenman günü, geçti';
-  return STATE_TEXT[day.state];
+function stateText(day: WeekDay, today: string, locale: Locale): string {
+  const t = clientHomeMessages(locale).week;
+  if (day.state === 'rest' && day.selected && day.date < today) return t.passed;
+  return t.states[day.state];
 }
 
 /**
@@ -56,9 +57,9 @@ function stateText(day: WeekDay, today: string): string {
  * "Çarşamba, dinlenme". `assigned` false ise (programda hiç atanmış gün yok) boş gün "dinlenme" demez: her gün
  * dinlenme değil, danışan istediği gün yapar ("Çarşamba", "Perşembe, bugün").
  */
-function dayLabel(day: WeekDay, today: string, assigned: boolean): string {
-  const state = day.state === 'rest' && !assigned ? null : stateText(day, today);
-  return [WEEKDAY_NAMES[day.weekday], day.today ? 'bugün' : null, day.label && state ? `${state}: ${day.label}` : state].filter(Boolean).join(', ');
+function dayLabel(day: WeekDay, today: string, assigned: boolean, locale: Locale): string {
+  const state = day.state === 'rest' && !assigned ? null : stateText(day, today, locale);
+  return [weekdayLabels(locale)[day.weekday], day.today ? clientHomeMessages(locale).week.today : null, day.label && state ? `${state}: ${day.label}` : state].filter(Boolean).join(', ');
 }
 
 /**
@@ -71,6 +72,7 @@ function dayLabel(day: WeekDay, today: string, assigned: boolean): string {
  */
 export function WeekStrip({ clientId }: { clientId: string }) {
   const { data, isPending, fetchStatus } = useWorkoutOverview(clientId);
+  const locale = useLocale();
   if (isPending && fetchStatus === 'paused') return null;
   // İskelet gerçek şeritle aynı yükseklikte: sütun 81 px (py-1.5 12 + text-xs 16 + gap 6 + halka 28 + gap 6 + ad 13);
   // altında satır ya da düğme yok.
@@ -88,19 +90,19 @@ export function WeekStrip({ clientId }: { clientId: string }) {
   });
 
   return (
-    <ol className="grid grid-cols-7 gap-1" aria-label="Bu haftanın günleri">
+    <ol className="grid grid-cols-7 gap-1" aria-label={clientHomeMessages(locale).week.days}>
       {days.map((day) => {
         // Bugünün planlısı kalın halkalı ve kalın adlı: kartın başlığındaki programla aynı gün.
         const strong = day.state === 'planned' && day.today;
         // Seçili, geçmiş ve yapılmamış: kaçan ya da pencereden (`since`) önceki gün; ikisi de soluk halka (gelecekteki
         // planlı gün gibi görünmez), yalnız kaçan "kaçtı" der.
         const faded = day.selected && !day.done && day.date < data.today;
-        const short = day.state === 'missed' ? stateText(day, data.today) : day.label ? dayShortName(day.label) : null;
+        const short = day.state === 'missed' ? stateText(day, data.today, locale) : day.label ? dayShortName(day.label) : null;
         return (
           <li key={day.date} className={cn('flex min-w-0 flex-col items-center gap-1.5 rounded-lg py-1.5', day.today && 'bg-muted')}>
-            <span className="sr-only">{dayLabel(day, data.today, assigned)}</span>
+            <span className="sr-only">{dayLabel(day, data.today, assigned, locale)}</span>
             <span aria-hidden className={cn('text-xs', day.today ? 'font-semibold text-foreground' : 'text-muted-foreground')}>
-              {WEEKDAY_SHORT[day.weekday]}
+              {weekdayShortLabels(locale)[day.weekday]}
             </span>
             <span
               aria-hidden
@@ -143,6 +145,8 @@ export function OtherProgramButton({ clientId, initial }: { clientId: string; in
   const router = useRouter();
   const { data } = useWorkoutOverview(clientId);
   const program = useWorkoutProgram();
+  const locale = useLocale();
+  const t = clientHomeMessages(locale).week;
   const [open, setOpen] = useState(false);
   const [picked, setPicked] = useState<string | null>(null);
   const days = data?.program?.days ?? [];
@@ -156,19 +160,19 @@ export function OtherProgramButton({ clientId, initial }: { clientId: string; in
   const own = data.program?.source === 'own';
   return (
     <>
-      <Button variant="ghost" className="h-11 w-full text-muted-foreground" aria-label="Antrenmanı değiştir" onClick={() => setOpen(true)}>
-        Değiştir
+      <Button variant="ghost" className="h-11 w-full text-muted-foreground" aria-label={t.change} onClick={() => setOpen(true)}>
+        {t.changeShort}
       </Button>
       <Drawer open={open} onOpenChange={setOpen} onOpenChangeComplete={(isOpen) => (isOpen ? undefined : setPicked(null))}>
         <DrawerContent showCloseButton={false} className="gap-0">
           <DrawerHeader className="gap-1.5 pt-5">
             <DrawerTitle id="other-program-title" className="text-lg font-semibold">
-              Başka antrenman seç
+              {t.pickOther}
             </DrawerTitle>
             {/* Bildirim yalnız PT programında ve bugüne atanmış program varken (kendi programda yok,
                 `docs/design/kendi-program.md` §3.4). */}
             <DrawerDescription>
-              {!own && todayDay ? `Bugün ${todayDay.name} planlı; başka birini seçersen antrenörüne bildirilir.` : 'Bugün için bir program seç.'}
+              {!own && todayDay ? t.plannedToday(todayDay.name) : t.pickToday}
             </DrawerDescription>
           </DrawerHeader>
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4">
@@ -180,8 +184,8 @@ export function OtherProgramButton({ clientId, initial }: { clientId: string; in
                       <FieldTitle>{day.name}</FieldTitle>
                       <FieldDescription>
                         {[
-                          day.id === todayId ? 'bugün' : weekdayNamesText(day.weekdays ?? []) || null,
-                          day.lastDate ? `son: ${formatDayShort(day.lastDate)}` : 'henüz yapılmadı',
+                          day.id === todayId ? t.today : weekdayNamesText(day.weekdays ?? [], locale) || null,
+                          day.lastDate ? t.last(getFormat(locale).dayShort(day.lastDate)) : t.notYet,
                         ]
                           .filter(Boolean)
                           .join(' · ')}
@@ -204,7 +208,7 @@ export function OtherProgramButton({ clientId, initial }: { clientId: string; in
                 const query = [`day=${encodeURIComponent(selected)}`, ...(program ? [`program=${encodeURIComponent(program)}`] : [])].join('&');
                 router.push(`/me/antrenman?${query}`);
               }}>
-              Bu antrenmanla başla
+              {t.startThis}
             </Button>
           </DrawerFooter>
         </DrawerContent>

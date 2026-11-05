@@ -1,5 +1,7 @@
 import type { Metadata } from 'next';
 import { InstallHelper } from '@/components/install/install-helper';
+import { clientHomeMessages } from '@/i18n/messages/client-home';
+import { getLocale, getMessages } from '@/i18n/server';
 import { loadTodayCare } from '@/lib/client-care';
 import { canRecordHealth, canSetPassword, healthConsentState, outdatedHealthFields } from '@/lib/client-status';
 import { readAppConfig } from '@/lib/config';
@@ -16,7 +18,9 @@ import { ProposalOutcomes } from '../proposal-outcomes';
 import { RememberClient } from '../remember-client';
 import { TodayWorkout, WaterCard, WorkoutProgramProvider } from '../today-workout';
 
-export const metadata: Metadata = { title: 'Bugün' };
+export async function generateMetadata(): Promise<Metadata> {
+  return { title: (await getMessages(clientHomeMessages)).home.title };
+}
 
 /**
  * Danışanın Bugün sekmesi (dock'ta ilk sekme; kabuk `layout.tsx`). PT ekranlarıyla hiçbir adres
@@ -30,9 +34,9 @@ export const metadata: Metadata = { title: 'Bugün' };
  * (tasarım `2026-11-05-mobil-uygulama-ve-kolay-kurulum-design.md`, Paket A).
  */
 export default async function MePage({ searchParams }: { searchParams: Promise<{ program?: string | string[] }> }) {
-  const [client, config, session, query] = await Promise.all([currentClient(), readAppConfig(), readClientSession(), searchParams]);
+  const [client, config, session, query, locale] = await Promise.all([currentClient(), readAppConfig(), readClientSession(), searchParams, getLocale()]);
   // Kısıtlar: gün planının damgası ve Bugün önizlemesinin kısıt satırları (sağlık dosyası bir kez okunur).
-  const care = await loadTodayCare(client, todayIn(config.timeZone));
+  const care = await loadTodayCare(client, todayIn(config.timeZone), locale);
   // "Yalnız bugün" (docs/design/kendi-program.md §2.6): `?program=op_…|pt`; hiçbir şey yazmaz, sekmeden çıkınca düşer.
   const program = typeof query.program === 'string' && (query.program === 'pt' || isOwnProgramId(query.program)) ? query.program : null;
   const health = healthConsentState(client);
@@ -42,7 +46,7 @@ export default async function MePage({ searchParams }: { searchParams: Promise<{
   return (
     <main className="flex flex-col gap-6">
       <RememberClient id={client.id} />
-      <ClientHeader client={client} appName={config.appName} title={`Merhaba, ${firstName}`} />
+      <ClientHeader client={client} appName={config.appName} title={clientHomeMessages(locale).home.greeting(firstName)} />
 
       {/* Onay bekliyorsa ilk iş o: karar verilmeden sağlık ekranları açılmaz. */}
       {asking ? (

@@ -107,7 +107,6 @@ export function setSuggestionsFor(input: {
   setWeightsOf: (exercise: SuggestionExercise) => Readonly<Partial<Record<string, number>>>;
   sessionId?: string | undefined;
   /** Gerekçenin dili (öneriyi alan kişinin dili); yoksa Türkçe. */
-  // i18n-followup(T3): `workout-routes.ts` içindeki `setSuggestionsFor` çağrısı danışanın dilini (`locale`) geçirmeli; `recommend.ts` → `setIncreaseCandidates` gerekçeyi henüz çevirmiyor (`locale` yok sayılır).
   locale?: Locale;
 }): SetSuggestion[] {
   const { day, exercises, now } = input;

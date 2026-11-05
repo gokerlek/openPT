@@ -1,5 +1,7 @@
 import type { Metadata } from 'next';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { clientProgramsMessages } from '@/i18n/messages/client-programs';
+import { getLocale, getMessages } from '@/i18n/server';
 import { readAppConfig } from '@/lib/config';
 import { currentClient } from '@/lib/guards';
 import { defaultOwnName, OWN_PROGRAM_LIMITS } from '@/lib/own-programs';
@@ -8,7 +10,9 @@ import { clientTemplate, clientTemplates } from '@/lib/templates';
 import { ClientHeader } from '../../../client-header';
 import { NewProgramFlow } from './new-program-flow';
 
-export const metadata: Metadata = { title: 'Yeni program' };
+export async function generateMetadata(): Promise<Metadata> {
+  return { title: (await getMessages(clientProgramsMessages)).pages.newTitle };
+}
 
 /**
  * Yeni kendi program (`docs/design/kendi-program.md` §2.4): ad ve başlangıç, sonra düzenleyici (tek adres, iki adım;
@@ -17,17 +21,18 @@ export const metadata: Metadata = { title: 'Yeni program' };
  * 5 programda sayfa açılmaz, nedenini söyler.
  */
 export default async function NewOwnProgramPage({ searchParams }: { searchParams: Promise<{ gunler?: string | string[]; sablon?: string | string[] }> }) {
-  const [client, config, query] = await Promise.all([currentClient(), readAppConfig(), searchParams]);
-  const back = { href: '/me/programlar', label: 'Program' };
+  const [client, config, query, locale] = await Promise.all([currentClient(), readAppConfig(), searchParams, getLocale()]);
+  const t = clientProgramsMessages(locale).pages;
+  const back = { href: '/me/programlar', label: t.title };
   const overview = await readOwnOverview(client.id).catch(() => null);
 
   if (!overview) {
     return (
       <main className="flex flex-col gap-6">
-        <ClientHeader client={client} appName={config.appName} title="Yeni program" back={back} />
+        <ClientHeader client={client} appName={config.appName} title={t.newTitle} back={back} />
         <Alert>
-          <AlertTitle>Programların şu an açılamıyor</AlertTitle>
-          <AlertDescription>Biraz sonra yeniden dene.</AlertDescription>
+          <AlertTitle>{t.listUnavailable}</AlertTitle>
+          <AlertDescription>{t.tryLater}</AlertDescription>
         </Alert>
       </main>
     );
@@ -37,10 +42,10 @@ export default async function NewOwnProgramPage({ searchParams }: { searchParams
   if (state.index.items.length + state.unreadable.length >= OWN_PROGRAM_LIMITS.programs) {
     return (
       <main className="flex flex-col gap-6">
-        <ClientHeader client={client} appName={config.appName} title="Yeni program" back={back} />
+        <ClientHeader client={client} appName={config.appName} title={t.newTitle} back={back} />
         <Alert>
-          <AlertTitle>En fazla {OWN_PROGRAM_LIMITS.programs} program</AlertTitle>
-          <AlertDescription>Yenisi için kendi programlarından birini sil.</AlertDescription>
+          <AlertTitle>{t.limitTitle(OWN_PROGRAM_LIMITS.programs)}</AlertTitle>
+          <AlertDescription>{t.limitText}</AlertDescription>
         </Alert>
       </main>
     );
@@ -56,7 +61,7 @@ export default async function NewOwnProgramPage({ searchParams }: { searchParams
   const templateParam = one(query.sablon);
 
   const [library, templates, wantedTemplate] = await Promise.all([
-    ownEditorLibrary(client),
+    ownEditorLibrary(client, locale),
     clientTemplates().catch(() => []),
     templateParam ? clientTemplate(templateParam).catch(() => null) : Promise.resolve(null),
   ]);
@@ -64,7 +69,7 @@ export default async function NewOwnProgramPage({ searchParams }: { searchParams
 
   return (
     <main className="flex flex-col gap-6">
-      <ClientHeader client={client} appName={config.appName} title="Yeni program" back={back} />
+      <ClientHeader client={client} appName={config.appName} title={t.newTitle} back={back} />
       <NewProgramFlow
         form={{
           clientId: client.id,
@@ -75,7 +80,7 @@ export default async function NewOwnProgramPage({ searchParams }: { searchParams
           otherNames: names,
           timeZone: config.timeZone,
         }}
-        defaultName={defaultOwnName(names)}
+        defaultName={defaultOwnName(names, locale)}
         otherNames={names}
         ptProgram={ptProgram ? { phases: ptProgram.phases, clientTargets: ptProgram.clientTargets } : null}
         ptCurrentPhaseId={ptProgram?.current.phaseId ?? null}

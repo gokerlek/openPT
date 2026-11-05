@@ -4,6 +4,8 @@ import { redirect } from 'next/navigation';
 import { ClockCounterClockwise } from '@phosphor-icons/react/dist/ssr';
 import { Button } from '@/components/ui/button';
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
+import { clientWorkoutMessages } from '@/i18n/messages/client-workout';
+import { getLocale, getMessages } from '@/i18n/server';
 import { coachAccess } from '@/lib/ai/coach-contract';
 import { readAppConfig } from '@/lib/config';
 import { currentClient } from '@/lib/guards';
@@ -13,7 +15,9 @@ import { loadSummary } from '@/lib/history-store';
 import { loadPainReport } from '@/lib/pain-report-store';
 import { SummaryCarousel } from './summary-carousel';
 
-export const metadata: Metadata = { title: 'Özet' };
+export async function generateMetadata(): Promise<Metadata> {
+  return { title: (await getMessages(clientWorkoutMessages)).summaryScreen.title };
+}
 
 /**
  * Antrenman özeti (tasarım §2.8): bitişten hemen sonra ve geçmişten ("Özeti aç", `?from=gecmis`) açılır.
@@ -30,7 +34,8 @@ export default async function SummaryPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const [client, config, { id }, query] = await Promise.all([currentClient(), readAppConfig(), params, searchParams]);
+  const [client, config, { id }, query, locale] = await Promise.all([currentClient(), readAppConfig(), params, searchParams, getLocale()]);
+  const t = clientWorkoutMessages(locale).summaryScreen;
   const from = query.from === 'gecmis' ? 'history' : 'finish';
   const [loaded, painOffers] = await Promise.all([
     loadSummary(client.id, id, config.timeZone, {
@@ -39,8 +44,9 @@ export default async function SummaryPage({
         const record = await readHealthIfAllowed(client, ['measurements']);
         return record ? bodyMassOn(record.measurements, date) : undefined;
       },
+      locale,
     }),
-    from === 'finish' ? loadPainReport(client, id) : Promise.resolve([]),
+    from === 'finish' ? loadPainReport(client, id, locale) : Promise.resolve([]),
   ]);
   if (loaded.status === 'active') redirect('/me/antrenman');
   if (loaded.status !== 'ok') {
@@ -51,14 +57,12 @@ export default async function SummaryPage({
             <EmptyMedia variant="icon">
               <ClockCounterClockwise weight="fill" />
             </EmptyMedia>
-            <EmptyTitle>{loaded.status === 'deleted' ? 'Bu antrenman silinmiş' : 'Antrenman bulunamadı'}</EmptyTitle>
-            <EmptyDescription>
-              {loaded.status === 'deleted' ? 'Silinen antrenmanın özeti açılamaz.' : 'Adres yanlış olabilir ya da antrenman henüz kaydedilmemiş.'}
-            </EmptyDescription>
+            <EmptyTitle>{loaded.status === 'deleted' ? t.deleted : t.notFound}</EmptyTitle>
+            <EmptyDescription>{loaded.status === 'deleted' ? t.deletedText : t.notFoundText}</EmptyDescription>
           </EmptyHeader>
           <EmptyContent>
             <Button className="h-11" nativeButton={false} render={<Link href={from === 'history' ? '/me/gecmis' : '/me'} />}>
-              {from === 'history' ? 'Geçmişe dön' : "Bugün'e dön"}
+              {from === 'history' ? t.backToHistory : t.backToToday}
             </Button>
           </EmptyContent>
         </Empty>

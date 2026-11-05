@@ -5,7 +5,10 @@ import { X } from '@/components/line-icons';
 import { Button } from '@/components/ui/button';
 import { Drawer, DrawerContent, DrawerDescription, DrawerFooter, DrawerHeader, DrawerTitle } from '@/components/ui/drawer';
 import { Spinner } from '@/components/ui/spinner';
-import { HEART_LIMIT_SOURCE_TEXT, heartAlertText, heartZone, type HeartLimits, type HeartZone } from '@/lib/heart-rate';
+import { useLocale } from '@/i18n/client';
+import type { Locale } from '@/i18n/locale';
+import { clientWorkoutMessages } from '@/i18n/messages/client-workout';
+import { heartAlertText, heartLimitSourceText, heartZone, type HeartLimits, type HeartZone } from '@/lib/heart-rate';
 import { cn } from '@/lib/utils';
 import {
   connectHeartRate,
@@ -30,7 +33,6 @@ const ZONE_CLASS: Record<HeartZone | 'none', string> = {
   none: 'bg-muted text-muted-foreground',
 };
 
-const ZONE_LABEL: Record<HeartZone, string> = { calm: 'toparlanmış', work: 'çalışma bölgesinde', high: 'çok yüksek' };
 
 function linked(heart: HeartRateState): boolean {
   return heart.status === 'connected' || heart.status === 'lost' || heart.status === 'connecting';
@@ -41,23 +43,24 @@ function linked(heart: HeartRateState): boolean {
  * sade "Nabız" düğmesi. Dokununca bağlantı paneli.
  */
 export function HeartBadge({ heart, limits, onOpen }: { heart: HeartRateState; limits: HeartLimits; onOpen: () => void }) {
+  const t = clientWorkoutMessages(useLocale()).heart;
   if (!linked(heart)) {
     return (
-      <Button variant="ghost" className="-mr-2 h-8 shrink-0 gap-1 px-2 text-[0.8125rem] text-muted-foreground" onClick={onOpen} aria-label="Nabız bandı bağla">
+      <Button variant="ghost" className="-mr-2 h-8 shrink-0 gap-1 px-2 text-[0.8125rem] text-muted-foreground" onClick={onOpen} aria-label={t.connectBand}>
         <Heart data-icon="inline-start" weight="regular" />
-        Nabız
+        {t.short}
       </Button>
     );
   }
   const zone = heart.bpm !== null && heart.status === 'connected' ? heartZone(heart.bpm, limits) : null;
   const label =
     heart.status === 'connecting'
-      ? 'Nabız bandına bağlanıyor'
+      ? t.connecting
       : heart.status === 'lost'
-        ? 'Nabız bandı koptu, yeniden deneniyor'
+        ? t.lost
         : heart.bpm === null || !zone
-          ? 'Nabız ölçülemiyor'
-          : `Nabız ${heart.bpm}, ${ZONE_LABEL[zone]}`;
+          ? t.noReading
+          : t.badge(heart.bpm, t.zones[zone]);
   return (
     <Button
       variant="ghost"
@@ -73,18 +76,19 @@ export function HeartBadge({ heart, limits, onOpen }: { heart: HeartRateState; l
 }
 
 /** Panelin üst metni: duruma göre ne olduğu ve ne yapılacağı. */
-function statusText(heart: HeartRateState): string {
+function statusText(heart: HeartRateState, locale: Locale): string {
+  const t = clientWorkoutMessages(locale).heart;
   switch (heart.status) {
     case 'unsupported':
-      return "Bu tarayıcı nabız bandına bağlanamıyor. Android'de Chrome kullan; iPhone'da şimdilik yok.";
+      return t.unsupported;
     case 'idle':
-      return 'Göğüs bandını ya da nabzı yayınlayan saatini bağla: dinlenme nabzın inene kadar uzar, nabzın çok yükselirse uyarırız.';
+      return t.idle;
     case 'connecting':
-      return 'Bağlanıyor… Açılan listeden bandını seç.';
+      return t.connectingPick;
     case 'connected':
-      return `${heart.device ?? 'Nabız bandı'} bağlı.`;
+      return t.connected(heart.device ?? t.band);
     case 'lost':
-      return `${heart.device ?? 'Nabız bandı'} ile bağlantı koptu; yeniden deneniyor… Bu arada dinlenme sayacı süreyle çalışır.`;
+      return t.lostText(heart.device ?? t.band);
   }
 }
 
@@ -105,12 +109,14 @@ export function HeartSheet({
 }) {
   const live = heart.status === 'connected' && heart.bpm !== null ? heart.bpm : null;
   const zone = live !== null ? heartZone(live, limits) : null;
+  const locale = useLocale();
+  const t = clientWorkoutMessages(locale).heart;
   return (
     <Drawer open={open} onOpenChange={onOpenChange}>
       <DrawerContent className="mx-auto max-w-lg">
         <DrawerHeader>
-          <DrawerTitle>Nabız bandı</DrawerTitle>
-          <DrawerDescription>{statusText(heart)}</DrawerDescription>
+          <DrawerTitle>{t.title}</DrawerTitle>
+          <DrawerDescription>{statusText(heart, locale)}</DrawerDescription>
         </DrawerHeader>
         <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overscroll-contain px-4">
           {heart.status === 'connected' ? (
@@ -120,30 +126,30 @@ export function HeartSheet({
               </span>
               <span className="flex flex-col">
                 <span className="font-heading text-3xl leading-none font-semibold tabular-nums">
-                  {live ?? '—'} <span className="text-base font-medium text-muted-foreground">bpm</span>
+                  {live ?? '—'} <span className="text-base font-medium text-muted-foreground">{t.bpm}</span>
                 </span>
-                <span className="text-sm text-muted-foreground">{zone ? `Nabzın ${ZONE_LABEL[zone]}` : 'Ölçüm bekleniyor; bant tenine değsin.'}</span>
+                <span className="text-sm text-muted-foreground">{zone ? t.yourZone(t.zones[zone]) : t.waiting}</span>
               </span>
             </p>
           ) : null}
 
           <section aria-labelledby="heart-limits-title" className="flex flex-col gap-2">
             <h3 id="heart-limits-title" className="text-sm font-semibold">
-              Sınırların
+              {t.limits}
             </h3>
             <dl className="grid grid-cols-2 gap-2">
               <div className="rounded-lg border p-3">
-                <dt className="text-[0.8125rem] text-muted-foreground">Toparlanma</dt>
-                <dd className="text-lg font-semibold tabular-nums">{limits.recovery} bpm</dd>
-                <dd className="text-xs text-muted-foreground">Dinlenme nabzın buna inene kadar uzar.</dd>
+                <dt className="text-[0.8125rem] text-muted-foreground">{t.recovery}</dt>
+                <dd className="text-lg font-semibold tabular-nums">{limits.recovery} {t.bpm}</dd>
+                <dd className="text-xs text-muted-foreground">{t.recoveryText}</dd>
               </div>
               <div className="rounded-lg border p-3">
-                <dt className="text-[0.8125rem] text-muted-foreground">Uyarı</dt>
-                <dd className="text-lg font-semibold tabular-nums">{limits.alert} bpm</dd>
-                <dd className="text-xs text-muted-foreground">Üstünde kalırsa uyarırız.</dd>
+                <dt className="text-[0.8125rem] text-muted-foreground">{t.alert}</dt>
+                <dd className="text-lg font-semibold tabular-nums">{limits.alert} {t.bpm}</dd>
+                <dd className="text-xs text-muted-foreground">{t.alertText}</dd>
               </div>
             </dl>
-            <p className="text-[0.8125rem] text-muted-foreground">{HEART_LIMIT_SOURCE_TEXT[limits.source]}</p>
+            <p className="text-[0.8125rem] text-muted-foreground">{heartLimitSourceText(locale)[limits.source]}</p>
           </section>
 
           {heart.problem ? (
@@ -151,7 +157,7 @@ export function HeartSheet({
               {heart.problem}
             </p>
           ) : null}
-          <p className="text-[0.8125rem] text-muted-foreground">Tıbbi cihaz değildir. Nabız kaydedilmez.</p>
+          <p className="text-[0.8125rem] text-muted-foreground">{t.notMedical}</p>
 
           {FAKE_HEART_RATE ? <FakeControls heart={heart} /> : null}
         </div>
@@ -159,20 +165,20 @@ export function HeartSheet({
           {heart.status === 'idle' ? (
             <Button size="lg" className="h-12 text-base" onClick={() => void connectHeartRate()}>
               <Bluetooth data-icon="inline-start" />
-              Bağlan
+              {t.connect}
             </Button>
           ) : heart.status === 'connecting' ? (
             <Button size="lg" className="h-12 text-base" disabled>
               <Spinner data-icon="inline-start" />
-              Bağlanıyor…
+              {t.connectingButton}
             </Button>
           ) : heart.status === 'connected' || heart.status === 'lost' ? (
             <Button size="lg" variant="outline" className="h-12 text-base" onClick={disconnectHeartRate}>
-              Bağlantıyı kes
+              {t.disconnect}
             </Button>
           ) : null}
           <Button variant="ghost" className="h-11" onClick={() => onOpenChange(false)}>
-            Kapat
+            {t.close}
           </Button>
         </DrawerFooter>
       </DrawerContent>
@@ -182,9 +188,10 @@ export function HeartSheet({
 
 /** Yalnız yerel geliştirmede: bant olmadan denemek için yapay nabız (sette yükselir, dinlenmede iner). */
 function FakeControls({ heart }: { heart: HeartRateState }) {
+  const t = clientWorkoutMessages(useLocale()).heart;
   return (
     <div className="flex flex-col gap-2 rounded-lg border border-dashed p-3">
-      <p className="text-[0.8125rem] text-muted-foreground">Yalnız geliştirmede: bant olmadan dene. Sette yükselir, dinlenmede iner.</p>
+      <p className="text-[0.8125rem] text-muted-foreground">{t.devOnly}</p>
       {heart.fake ? (
         <div className="flex flex-wrap gap-2">
           <Button variant="secondary" className="h-10 tabular-nums" onClick={() => nudgeFakeHeartRate(-15)}>
@@ -194,13 +201,13 @@ function FakeControls({ heart }: { heart: HeartRateState }) {
             +15
           </Button>
           <Button variant="secondary" className="h-10" disabled={heart.status === 'lost'} onClick={dropFakeHeartRate}>
-            Kopmayı dene
+            {t.tryDrop}
           </Button>
         </div>
       ) : (
         <Button variant="secondary" className="h-10 self-start" onClick={startFakeHeartRate}>
           <Heartbeat data-icon="inline-start" />
-          Deneme nabzı
+          {t.fake}
         </Button>
       )}
     </div>
@@ -212,11 +219,12 @@ function FakeControls({ heart }: { heart: HeartRateState }) {
  * inince kendiliğinden kalkar. Titreşim ve ses ekrandan.
  */
 export function HeartAlertBanner({ bpm, onDismiss }: { bpm: number; onDismiss: () => void }) {
+  const locale = useLocale();
   return (
     <div role="alert" className="flex min-h-12 shrink-0 items-center gap-2 border-b border-destructive/40 bg-destructive/15 pr-1 pl-4 text-destructive-text">
       <Heartbeat weight="fill" className="size-5 shrink-0" aria-hidden />
-      <p className="min-w-0 flex-1 py-2 text-sm leading-snug font-semibold">{heartAlertText(bpm)}</p>
-      <Button variant="ghost" className="size-11 shrink-0 p-0 text-destructive-text hover:bg-destructive/15" aria-label="Uyarıyı kapat" onClick={onDismiss}>
+      <p className="min-w-0 flex-1 py-2 text-sm leading-snug font-semibold">{heartAlertText(bpm, locale)}</p>
+      <Button variant="ghost" className="size-11 shrink-0 p-0 text-destructive-text hover:bg-destructive/15" aria-label={clientWorkoutMessages(locale).heart.dismissAlert} onClick={onDismiss}>
         <X className="size-5" />
       </Button>
     </div>

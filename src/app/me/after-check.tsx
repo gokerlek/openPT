@@ -7,11 +7,14 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Spinner } from '@/components/ui/spinner';
 import { Stepper } from '@/components/ui/stepper';
+import { useLocale } from '@/i18n/client';
+import type { Locale } from '@/i18n/locale';
+import { clientHomeMessages } from '@/i18n/messages/client-home';
 import type { CheckInResponse } from '@/lib/check-in-routes';
-import { formatNumber, formatRecent } from '@/lib/format';
+import { getFormat } from '@/lib/format';
 import { DURATION, EASE, tween } from '@/lib/motion';
 import { ApiError, fetchJson } from '@/lib/query/errors';
-import { afterState, CR10_LABELS, cr10Text, PAIN_SCALE_ENDS } from '@/lib/session-check';
+import { afterState, cr10Labels, cr10Text, painScaleEnds } from '@/lib/session-check';
 import { afterDismissed, dismissAfter, fetchCheckContext, flushCheckIns, queueCheckIn, readCheckCache } from './check-in-storage';
 import { ScaleField } from './check-scale';
 import { writerId } from './workout-storage';
@@ -20,8 +23,9 @@ const ELEVEN = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10] as const;
 /** Süre sınırı: seans şemasıyla aynı (`sessionEffortSchema`). */
 const MINUTES = { min: 1, max: 600 } as const;
 
-function painText(value: number): string {
-  return value === 0 ? `0 · ${PAIN_SCALE_ENDS.low}` : value === 10 ? `10 · ${PAIN_SCALE_ENDS.high}` : `${formatNumber(value)}/10`;
+function painText(value: number, locale: Locale): string {
+  const ends = painScaleEnds(locale);
+  return value === 0 ? `0 · ${ends.low}` : value === 10 ? `10 · ${ends.high}` : `${getFormat(locale).number(value)}/10`;
 }
 
 /**
@@ -45,6 +49,8 @@ export function AfterCheck({ clientId }: { clientId: string }) {
   const [rows, setRows] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [closed, setClosed] = useState<string | null>(null);
+  const locale = useLocale();
+  const t = clientHomeMessages(locale).after;
 
   useEffect(() => {
     const cached = readCheckCache(clientId);
@@ -94,9 +100,9 @@ export function AfterCheck({ clientId }: { clientId: string }) {
       // Telefondaki girdi tazelenene kadar kart yeniden çıkmasın.
       dismissAfter(clientId, prompt.sessionId);
       setClosed(prompt.sessionId);
-      toast.success('Kaydedildi. Teşekkürler!');
+      toast.success(t.saved);
     } catch (error) {
-      toast.error(error instanceof ApiError ? error.message : 'Kaydedilemedi. Tekrar dene.');
+      toast.error(error instanceof ApiError ? error.message : t.saveFailed);
     } finally {
       setBusy(false);
     }
@@ -121,25 +127,28 @@ export function AfterCheck({ clientId }: { clientId: string }) {
           <Card>
             <CardHeader>
               <CardDescription>
-                {prompt.dayName ?? 'Antrenman'} · {formatRecent(prompt.finishedAt, data?.timeZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone)} bitti
+                {t.finished(
+                  prompt.dayName ?? t.workout,
+                  getFormat(locale).recent(prompt.finishedAt, data?.timeZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone),
+                )}
               </CardDescription>
-              <CardTitle className="text-xl">Antrenman ne kadar zordu?</CardTitle>
-              <CardDescription>Bütün antrenmanı düşün: 0 dinlenme, 10 yapabileceğinin en zoru.</CardDescription>
+              <CardTitle className="text-xl">{t.question}</CardTitle>
+              <CardDescription>{t.hint}</CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-5">
               <ScaleField
                 id="after-rpe"
-                label="Zorluk"
+                label={t.effort}
                 values={ELEVEN}
                 columns={6}
                 value={rpe}
                 onChange={setRpe}
-                describe={cr10Text}
-                ends={[`0 · ${CR10_LABELS[0]}`, `10 · ${CR10_LABELS[10]}`]}
+                describe={(value) => cr10Text(value, locale)}
+                ends={[`0 · ${cr10Labels(locale)[0]}`, `10 · ${cr10Labels(locale)[10]}`]}
               />
               <div className="flex items-center justify-between gap-3">
                 <p id="after-minutes" className="text-[0.9375rem] font-medium">
-                  Süre
+                  {t.duration}
                 </p>
                 <Stepper
                   value={duration}
@@ -147,29 +156,29 @@ export function AfterCheck({ clientId }: { clientId: string }) {
                   min={MINUTES.min}
                   max={MINUTES.max}
                   step={5}
-                  unit="dk"
-                  aria-label="Süre, dakika"
-                  decrementLabel="Süreyi azalt"
-                  incrementLabel="Süreyi artır"
+                  unit={t.minutesUnit}
+                  aria-label={t.durationLabel}
+                  decrementLabel={t.durationLess}
+                  incrementLabel={t.durationMore}
                 />
               </div>
               {data?.parts.pain ? (
                 <>
                   <ScaleField
                     id="after-pain"
-                    label="Antrenmanda ağrın en çok ne kadardı?"
-                    hint="İsteğe bağlı. Sonraki antrenmanın planı buna göre ayarlanır."
+                    label={t.pain}
+                    hint={t.painHint}
                     values={ELEVEN}
                     columns={6}
                     value={peak}
                     onChange={setPeak}
-                    describe={painText}
-                    ends={[painText(0), painText(10)]}
+                    describe={(value) => painText(value, locale)}
+                    ends={[painText(0, locale), painText(10, locale)]}
                   />
                   {peak !== undefined && peak > 0 && prompt.exercises.length > 0 ? (
                     <div role="group" aria-labelledby="after-rows" className="flex flex-col gap-2">
                       <p id="after-rows" className="text-[0.9375rem] font-medium">
-                        Hangi harekette? <span className="font-normal text-muted-foreground">(isteğe bağlı)</span>
+                        {t.where} <span className="font-normal text-muted-foreground">{t.optional}</span>
                       </p>
                       <div className="flex flex-wrap gap-2">
                         {prompt.exercises.map((item) => (
@@ -191,10 +200,10 @@ export function AfterCheck({ clientId }: { clientId: string }) {
             <CardFooter className="flex flex-col items-stretch gap-2">
               <Button size="lg" className="h-12 w-full" disabled={rpe === undefined || busy} onClick={() => void save()}>
                 {busy ? <Spinner data-icon="inline-start" /> : null}
-                Kaydet
+                {t.save}
               </Button>
               <Button variant="ghost" className="h-11 w-full text-muted-foreground" onClick={later}>
-                Şimdi değil
+                {t.notNow}
               </Button>
             </CardFooter>
           </Card>

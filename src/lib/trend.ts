@@ -1,4 +1,5 @@
 import { DEFAULT_LOCALE, type Locale } from '../i18n/locale.ts';
+import { clientProgressMessages } from '../i18n/messages/client-progress/index.ts';
 
 /**
  * Eğilim, tahmin ve plato — ölçüm ve kuvvet grafiklerinin ortak hesabı.
@@ -317,24 +318,22 @@ export function trendStatus(
 }
 
 /** Grafik süzgecinin hazır aralıkları; adreste `?aralik=` ile taşınır. */
-export const RANGE_PRESETS = {
-  '4h': { label: 'Son 4 hafta', days: 28 },
-  '3a': { label: 'Son 3 ay', days: 91 },
-  '6a': { label: 'Son 6 ay', days: 182 },
-  '1y': { label: 'Son 1 yıl', days: 365 },
-  tumu: { label: 'Tümü', days: null },
-} as const;
-export type RangePreset = keyof typeof RANGE_PRESETS;
+const RANGE_DAYS = { '4h': 28, '3a': 91, '6a': 182, '1y': 365, tumu: null } as const;
+export type RangePreset = keyof typeof RANGE_DAYS;
+/** Türkçe adlar (eski çağrılar); arayüz `rangePresets(locale)` kullanır. */
+export const RANGE_PRESETS: Record<RangePreset, { label: string; days: number | null }> = rangePresets('tr');
 
 /** Hazır aralığın başlangıç tarihi (bugün dahil); "tümü" için undefined. */
 export function rangeStart(preset: RangePreset, today: string): string | undefined {
-  const days = RANGE_PRESETS[preset].days;
+  const days = RANGE_DAYS[preset];
   return days === null ? undefined : dateOf(dayNumber(today) - days);
 }
 
-/* --- dil: imza dondurma (i18n planı §7 F). Sahibi görev çevirir; şimdilik Türkçe döner. --- */
-
 /** Hazır aralıkların adları okuyanın dilinde (`RANGE_PRESETS`). */
-export function rangePresets(_locale: Locale = DEFAULT_LOCALE): typeof RANGE_PRESETS {
-  return RANGE_PRESETS;
+export function rangePresets(locale: Locale = DEFAULT_LOCALE): Record<RangePreset, { label: string; days: number | null }> {
+  const labels = clientProgressMessages(locale).ranges;
+  return Object.fromEntries((Object.keys(RANGE_DAYS) as RangePreset[]).map((key) => [key, { label: labels[key], days: RANGE_DAYS[key] }])) as Record<
+    RangePreset,
+    { label: string; days: number | null }
+  >;
 }

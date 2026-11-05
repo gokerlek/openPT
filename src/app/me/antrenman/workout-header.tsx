@@ -5,6 +5,8 @@ import { DotsThree, Spinner } from '@/components/line-icons';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Progress } from '@/components/ui/progress';
+import { useMessages } from '@/i18n/client';
+import { clientWorkoutMessages } from '@/i18n/messages/client-workout';
 import { cn } from '@/lib/utils';
 
 /**
@@ -84,6 +86,7 @@ export function WorkoutHeader({
   onPause: () => void;
   onRetry: () => void;
 }) {
+  const t = useMessages(clientWorkoutMessages).header;
   return (
     <header className="shrink-0 border-b pt-[env(safe-area-inset-top)]">
       {/* Yan sütunlar eşit ve sabit: başlık ekranın ortasında kalır ("‹ Liste" görünse de görünmese de). Orta sütun daralır:
@@ -92,7 +95,7 @@ export function WorkoutHeader({
         {onList ? (
           <Button variant="ghost" className="h-11 justify-self-start px-2" onClick={onList}>
             <CaretLeft data-icon="inline-start" weight="bold" />
-            Liste
+            {t.list}
           </Button>
         ) : (
           <span aria-hidden />
@@ -112,43 +115,43 @@ export function WorkoutHeader({
         </p>
         <div className="flex items-center justify-self-end">
           <Button variant="ghost" className="h-11 px-3" onClick={onFinish}>
-            Bitir
+            {t.finish}
           </Button>
           <DropdownMenu>
-            <DropdownMenuTrigger render={<Button variant="ghost" className="size-11 p-0" aria-label="Antrenman menüsü" />}>
+            <DropdownMenuTrigger render={<Button variant="ghost" className="size-11 p-0" aria-label={t.menu} />}>
               <DotsThree weight="bold" className="size-5" />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="min-w-56">
               {focusActions ? (
                 <>
-                  <ActionItem action={focusActions.swap} icon={<Swap />} label="Muadil seç" />
-                  <ActionItem action={focusActions.skip} icon={<ArrowBendDownRight />} label="Bu hareketi atla" />
-                  {focusActions.remove ? <ActionItem action={focusActions.remove} icon={<Trash />} label="Hareketi sil" /> : null}
+                  <ActionItem action={focusActions.swap} icon={<Swap />} label={t.swap} />
+                  <ActionItem action={focusActions.skip} icon={<ArrowBendDownRight />} label={t.skip} />
+                  {focusActions.remove ? <ActionItem action={focusActions.remove} icon={<Trash />} label={t.remove} /> : null}
                   <DropdownMenuSeparator />
                 </>
               ) : null}
               <DropdownMenuItem className="min-h-11" disabled={busy} onClick={onSwitch}>
                 <ArrowsLeftRight />
-                Antrenmanı değiştir
+                {t.switch}
               </DropdownMenuItem>
               <DropdownMenuItem className="min-h-11" onClick={onPause}>
                 <Pause />
-                Ara ver
+                {t.pause}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
       </div>
       <div className="flex h-11 items-center gap-3 px-4">
-        <Progress value={sets.planned > 0 ? (sets.done / sets.planned) * 100 : 0} aria-label="Antrenmanın ilerlemesi" className="min-w-8 flex-1" />
+        <Progress value={sets.planned > 0 ? (sets.done / sets.planned) * 100 : 0} aria-label={t.progress} className="min-w-8 flex-1" />
         <span className="text-[0.8125rem] whitespace-nowrap text-muted-foreground tabular-nums">
-          Hareket {unit.index}/{unit.total} · {sets.done}/{sets.planned} set
+          {t.counts(unit.index, unit.total, sets.done, sets.planned)}
         </span>
         {water > 0 ? (
           <span className="inline-flex items-center gap-0.5 text-[0.8125rem] text-muted-foreground tabular-nums">
             <Drop className="size-3.5 text-primary" aria-hidden />
             <span aria-hidden>{water}</span>
-            <span className="sr-only">Su: {water} bardak</span>
+            <span className="sr-only">{t.water(water)}</span>
           </span>
         ) : null}
         {heart}
@@ -165,7 +168,7 @@ export function WorkoutHeader({
           <span className="min-w-0 flex-1">{status.text}</span>
           {status.retry ? (
             <Button variant="ghost" className="-mr-2 h-11 px-2" onClick={onRetry}>
-              Tekrar dene
+              {t.retry}
             </Button>
           ) : null}
         </div>

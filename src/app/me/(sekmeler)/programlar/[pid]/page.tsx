@@ -6,11 +6,13 @@ import { ChangeLog } from '@/components/program/change-log';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
+import { clientProgramsMessages } from '@/i18n/messages/client-programs';
+import { getLocale, getMessages } from '@/i18n/server';
 import { loadCareInput } from '@/lib/client-care';
 import { readAppConfig } from '@/lib/config';
 import { programConflicts } from '@/lib/constraint-filter';
 import { listExercises } from '@/lib/exercises';
-import { formatNumber, todayIn } from '@/lib/format';
+import { getFormat, todayIn } from '@/lib/format';
 import { currentClient } from '@/lib/guards';
 import { activeProgramId } from '@/lib/own-program-index';
 import { lastDateByDay, programLine } from '@/lib/own-program-text';
@@ -21,7 +23,9 @@ import { ClientHeader } from '../../../client-header';
 import { DeleteOwnProgram, MakeActiveButton, MarkPtEditSeen, ShareSwitch } from '../program-actions';
 import { ProgramDays } from '../program-days';
 
-export const metadata: Metadata = { title: 'Kendi programın' };
+export async function generateMetadata(): Promise<Metadata> {
+  return { title: (await getMessages(clientProgramsMessages)).pages.ownTitle };
+}
 
 /** Değişikliklerin ilk gösterilen kayıt sayısı (§2.3). */
 const LOG_INITIAL = 5;
@@ -34,24 +38,25 @@ const LOG_INITIAL = 5;
  * yok, gün ve hareket.
  */
 export default async function OwnProgramPage({ params }: { params: Promise<{ pid: string }> }) {
-  const [client, config, { pid }] = await Promise.all([currentClient(), readAppConfig(), params]);
+  const [client, config, { pid }, locale] = await Promise.all([currentClient(), readAppConfig(), params, getLocale()]);
+  const t = clientProgramsMessages(locale).pages;
   if (!isOwnProgramId(pid)) notFound();
-  const [read, overview, exercises] = await Promise.all([readOwnProgramOf(client.id, pid), readOwnOverview(client.id).catch(() => null), listExercises()]);
-  const back = { href: '/me/programlar', label: 'Program' };
+  const [read, overview, exercises] = await Promise.all([readOwnProgramOf(client.id, pid), readOwnOverview(client.id).catch(() => null), listExercises(undefined, locale)]);
+  const back = { href: '/me/programlar', label: t.title };
   if (read.status === 'missing') notFound();
 
   const active = activeProgramId(overview?.state.index) === pid;
 
   if (read.status === 'invalid') {
-    const name = read.name ?? 'Adı okunamayan program';
+    const name = read.name ?? t.unreadableName;
     return (
       <main className="flex flex-col gap-6">
         <ClientHeader client={client} appName={config.appName} title={name} back={back} />
         <Alert>
-          <AlertTitle>Bu program şu an açılamıyor</AlertTitle>
-          <AlertDescription>Dosyası beklenen biçimde değil. Silebilir ya da antrenörüne haber verebilirsin.</AlertDescription>
+          <AlertTitle>{t.programUnavailable}</AlertTitle>
+          <AlertDescription>{t.invalidFile}</AlertDescription>
         </Alert>
-        <DeleteOwnProgram clientId={client.id} programId={pid} name={read.name ?? 'Bu program'} active={active} shared={false} />
+        <DeleteOwnProgram clientId={client.id} programId={pid} name={read.name ?? t.thisProgram} active={active} shared={false} />
       </main>
     );
   }
@@ -62,7 +67,7 @@ export default async function OwnProgramPage({ params }: { params: Promise<{ pid
   const byId = new Map(exercises.map((exercise) => [exercise.id, exercise]));
   const lastByDay = overview ? lastDateByDay(overview.sessions) : new Map<string, string>();
   const today = todayIn(config.timeZone);
-  const careInput = await loadCareInput(client, today);
+  const careInput = await loadCareInput(client, today, locale);
   const conflicts = careInput ? programConflicts(program, byId, careInput, today) : [];
 
   return (
@@ -70,11 +75,11 @@ export default async function OwnProgramPage({ params }: { params: Promise<{ pid
       <MarkPtEditSeen clientId={client.id} programId={pid} editedAt={item?.ptEditedAt} />
       <div className="flex flex-col gap-2">
         <ClientHeader client={client} appName={config.appName} title={program.name} back={back} />
-        <p className="text-sm text-muted-foreground tabular-nums">{programLine(ownSummaryOf(program))}</p>
+        <p className="text-sm text-muted-foreground tabular-nums">{programLine(ownSummaryOf(program), undefined, locale)}</p>
         {active ? (
           <p className="flex items-center gap-1.5 text-sm font-medium">
             <CheckCircle weight="fill" className="size-4 text-primary-text" />
-            Bugün&apos;ün programı
+            {t.todaysProgram}
           </p>
         ) : (
           <MakeActiveButton programId={pid} name={program.name} className="h-11 self-start" />
@@ -84,10 +89,10 @@ export default async function OwnProgramPage({ params }: { params: Promise<{ pid
       {conflicts.length > 0 ? (
         <Alert>
           <Bandaids weight="fill" />
-          <AlertTitle>Kısıtın nedeniyle sana önerilmeyen {formatNumber(conflicts.length)} hareket</AlertTitle>
+          <AlertTitle>{t.conflicts(getFormat(locale).number(conflicts.length), conflicts.length)}</AlertTitle>
           <AlertDescription>
             <p>{conflicts.map((conflict) => `${conflict.dayName} · ${conflict.title}`).join(' · ')}</p>
-            <p>Antrenmanda &apos;Değiştir&apos;den bir muadil seçebilir ya da programı düzenleyebilirsin. Emin değilsen antrenörüne sor.</p>
+            <p>{t.conflictsHelp}</p>
           </AlertDescription>
         </Alert>
       ) : null}
@@ -96,7 +101,7 @@ export default async function OwnProgramPage({ params }: { params: Promise<{ pid
 
       <Button variant="outline" size="lg" className="h-11 w-full" nativeButton={false} render={<Link href={`/me/programlar/${pid}/duzenle`} />}>
         <PencilSimple data-icon="inline-start" />
-        Düzenle
+        {t.edit}
       </Button>
 
       <ShareSwitch programId={pid} name={program.name} shared={Boolean(program.shared)} />
@@ -105,7 +110,7 @@ export default async function OwnProgramPage({ params }: { params: Promise<{ pid
 
       <section className="flex flex-col gap-3" aria-labelledby="own-log">
         <h2 id="own-log" className="font-heading text-lg font-semibold">
-          Değişiklikler
+          {t.changes}
         </h2>
         <ChangeLog entries={program.log} timeZone={config.timeZone} initial={LOG_INITIAL} step={LOG_INITIAL} viewer="client" />
       </section>

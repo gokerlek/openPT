@@ -10,23 +10,23 @@ import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from '@/co
 import { Drawer, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle } from '@/components/ui/drawer';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Spinner } from '@/components/ui/spinner';
+import { useLocale } from '@/i18n/client';
+import { LOCALES } from '@/i18n/locale';
+import { clientWorkoutMessages } from '@/i18n/messages/client-workout';
 import { searchExercises } from '@/lib/exercise-search';
-import { familyOf, summarizeMuscles } from '@/lib/muscles';
+import { muscleSearchNames } from '@/lib/muscle-names';
+import { summarizeMuscles } from '@/lib/muscles';
 import { fetchJson } from '@/lib/query/errors';
 import { useServiceQuery } from '@/lib/query/use-service';
-import { EQUIPMENT_LABELS, MUSCLE_GROUPS, MUSCLE_LABELS, type Equipment, type Muscle } from '@/lib/schemas/exercise';
+import { equipmentLabels, type Equipment, type Muscle } from '@/lib/schemas/exercise';
 import type { LibraryItem, LibraryResponse } from '@/lib/workout-routes';
 
 /** Kütüphanede en çok bu kadar sonuç; gerisi için arama daraltılır. */
 const RESULT_LIMIT = 50;
 
-const GROUP_OF = new Map<string, string>(MUSCLE_GROUPS.flatMap((group) => group.muscles.map((muscle) => [muscle, group.label] as const)));
-
-/** Aramada bir kasın adları: kendi adı, ailesi ("Kanat"), bölgesi ("Sırt"). */
+/** Aramada bir kasın adları: kendi adı, ailesi ("Kanat"), bölgesi ("Sırt"); iki dilde de bulunur. */
 function muscleNames(muscle: string): string[] {
-  const family = familyOf(muscle);
-  const names = [MUSCLE_LABELS[muscle as Muscle] ?? muscle, family === muscle ? '' : family, GROUP_OF.get(muscle) ?? ''];
-  return [...new Set(names.filter(Boolean))];
+  return muscleSearchNames(muscle, LOCALES);
 }
 
 /**
@@ -50,10 +50,12 @@ export function AddExerciseSheet({
   onPick: (item: LibraryItem) => void;
 }) {
   const title = useRef<HTMLHeadingElement>(null);
+  const locale = useLocale();
+  const t = clientWorkoutMessages(locale).add;
   const [search, setSearch] = useState('');
   const deferred = useDeferredValue(search);
   const query = useServiceQuery<LibraryResponse>({
-    key: ['me', 'workout', 'library'],
+    key: ['me', 'workout', 'library', locale],
     fn: ({ signal }) => fetchJson('/api/me/workout/exercises', { signal }),
     enabled: open,
     notify: 'none',
@@ -65,9 +67,9 @@ export function AddExerciseSheet({
       <DrawerContent showCloseButton={false} className="h-[calc(100dvh-max(1rem,env(safe-area-inset-top)))] gap-0" initialFocus={title}>
         <DrawerHeader className="gap-1 pt-5 pb-3">
           <DrawerTitle ref={title} tabIndex={-1} className="text-lg font-semibold outline-none">
-            Hareket ekle
+            {t.title}
           </DrawerTitle>
-          <DrawerDescription>Yalnız bu antrenmana eklenir; bitişte antrenörüne önerebilirsin.</DrawerDescription>
+          <DrawerDescription>{t.text}</DrawerDescription>
           <InputGroup className="mt-2 h-11">
             <InputGroupAddon>
               <MagnifyingGlass />
@@ -80,8 +82,8 @@ export function AddExerciseSheet({
               onKeyDown={(event) => {
                 if (event.key === 'Enter' && !event.nativeEvent.isComposing) event.preventDefault();
               }}
-              placeholder="Hareket ya da kas ara"
-              aria-label="Hareket ya da kas ara"
+              placeholder={t.search}
+              aria-label={t.search}
               autoComplete="off"
               enterKeyHint="search"
             />
@@ -91,7 +93,7 @@ export function AddExerciseSheet({
           {query.isPending ? (
             <div className="flex flex-col gap-2" aria-busy="true">
               <span role="status" className="sr-only">
-                Kütüphane yükleniyor…
+                {t.loading}
               </span>
               <Skeleton className="h-12 w-full" />
               <Skeleton className="h-12 w-full" />
@@ -101,35 +103,35 @@ export function AddExerciseSheet({
             <div role="alert" className="flex flex-col items-start gap-2 text-sm">
               <p className="flex items-center gap-2 text-destructive-text">
                 <WarningCircle weight="fill" className="size-4.5 shrink-0" />
-                {query.error.status === 0 ? 'Bağlantı yok; kütüphane açılamadı.' : query.error.message}
+                {query.error.status === 0 ? t.offline : query.error.message}
               </p>
               <Button variant="outline" className="h-11" onClick={() => void query.refetch()}>
-                Tekrar dene
+                {t.retry}
               </Button>
             </div>
           ) : results.length === 0 ? (
             <Empty className="border-0 p-4">
               <EmptyHeader>
-                <EmptyTitle>Sonuç yok</EmptyTitle>
-                <EmptyDescription>Başka bir ad ya da kas dene.</EmptyDescription>
+                <EmptyTitle>{t.noResults}</EmptyTitle>
+                <EmptyDescription>{t.tryAnother}</EmptyDescription>
               </EmptyHeader>
             </Empty>
           ) : (
-            <div role="list" aria-label="Hareketler">
+            <div role="list" aria-label={t.list}>
               {results.map((item) => {
-                const muscles = summarizeMuscles(item.primaryMuscles as Muscle[]).join(', ');
-                const equipment = EQUIPMENT_LABELS[item.equipment as Equipment] ?? item.equipment;
+                const muscles = summarizeMuscles(item.primaryMuscles as Muscle[], locale).join(', ');
+                const equipment = equipmentLabels(locale)[item.equipment as Equipment] ?? item.equipment;
                 return (
                   <div role="listitem" key={item.id}>
                     <Item
                       size="sm"
                       className="min-h-14 flex-nowrap rounded-none border-0 border-t border-border px-0 text-left hover:bg-muted"
-                      render={<button type="button" aria-label={`${item.title} ekle${item.care ? ` · ${item.care}` : ''}`} disabled={busyId !== null} onClick={() => onPick(item)} />}>
+                      render={<button type="button" aria-label={t.addNamed(item.title, item.care ?? null)} disabled={busyId !== null} onClick={() => onPick(item)} />}>
                       <ItemContent className="min-w-0">
                         <ItemTitle className="w-full truncate text-[0.9375rem]">{item.title}</ItemTitle>
                         <ItemDescription className="truncate text-[0.8125rem]">
                           {muscles} · {equipment}
-                          {todayIds.has(item.id) ? ' · bugün var' : ''}
+                          {todayIds.has(item.id) ? t.today : ''}
                         </ItemDescription>
                         {/* Kısıtta dikkat ("Muadil seç"teki gibi); yasaklılar listede yok. */}
                         {item.care ? <ItemDescription className="truncate text-[0.8125rem] text-primary-text">{item.care}</ItemDescription> : null}

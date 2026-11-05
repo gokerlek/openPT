@@ -71,8 +71,8 @@ export function ProgressBars({
   dateLabel: (date: string) => string;
   /** Kesikli hedef çizgisi ve adı ("Plan: 3 gün"). */
   target?: { value: number; label: string } | undefined;
-  /** Özette dönemlerin adı: "12 hafta", "30 gün". */
-  pointNoun: string;
+  /** Özette dönemlerin adı, sayıya göre tekil/çoğul: "12 hafta", "30 gün" ("1 week", "12 weeks"). */
+  pointNoun: { one: string; other: string };
   /** Küçük tam sayılarda (gün) değer sütunun üstünde de yazılır. */
   showValues?: boolean;
   /** Değerin metni (ipucu, tablo); varsayılan birimli sayı. */
@@ -96,7 +96,7 @@ export function ProgressBars({
   const last = rows.at(-1);
   const average = complete.length > 0 ? complete.reduce((sum, row) => sum + row.value, 0) / complete.length : null;
   const summary = [
-    t.countLine(title, number(rows.length), pointNoun),
+    t.countLine(title, rows.length, number(rows.length), pointNoun),
     last ? t.barLast(last.label, format(last.value), Boolean(last.partial)) : '',
     average !== null ? t.barAverage(format(Math.round(average * 10) / 10)) : '',
     target ? `${target.label}.` : '',

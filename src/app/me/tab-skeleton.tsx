@@ -1,4 +1,8 @@
+'use client';
+
 import { Skeleton } from '@/components/ui/skeleton';
+import { useMessages } from '@/i18n/client';
+import { clientHomeMessages } from '@/i18n/messages/client-home';
 import { ProgressTabsSlot } from './progress-tabs';
 
 /**
@@ -9,10 +13,11 @@ import { ProgressTabsSlot } from './progress-tabs';
  * sayfa geldiğinde içerik yerinden oynamaz.
  */
 export function TabSkeleton() {
+  const t = useMessages(clientHomeMessages);
   return (
     <div className="flex flex-col gap-6" aria-busy="true">
       <span role="status" className="sr-only">
-        Sayfa yükleniyor…
+        {t.pageLoading}
       </span>
       <div className="flex flex-col gap-4">
         <div className="flex items-start justify-between gap-3">

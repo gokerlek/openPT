@@ -59,10 +59,12 @@ export function loadProgress(
   return loadProgressWith<ExerciseWithSource>(
     {
       repo: sessionRepo(client.id),
+      // Özet yalnız veri (adlar anlık görüntü); dilsiz önbelleklenir, metin `buildProgressView` ile dile göre kurulur.
       digest: (row, read) =>
         unstable_cache(read, ['progress-digest', String(DIGEST_VERSION), repoName, row.sha], { tags: [`session:${row.id}`] })(),
       catalog: async () => {
-        const [exercises, devices] = await Promise.all([listExercises(), listDevices()]);
+        // Katalog önbelleğin dışında: adlar okuyanın dilinde.
+        const [exercises, devices] = await Promise.all([listExercises(undefined, options.locale), listDevices(undefined, options.locale)]);
         return { exercises, deviceNames: new Map(devices.map((device) => [device.id, device.name])) };
       },
       weeklyGoals: (index,target)=>freezeWeeklyGoals(sessionRepo(client.id),index,target),

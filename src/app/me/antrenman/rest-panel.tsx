@@ -7,10 +7,12 @@ import { Check } from '@/components/line-icons';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Stepper } from '@/components/ui/stepper';
-import { formatKg } from '@/lib/format';
+import { useLocale } from '@/i18n/client';
+import { clientWorkoutMessages } from '@/i18n/messages/client-workout';
+import { getFormat } from '@/lib/format';
 import { calmText } from '@/lib/heart-rate';
 import { DURATION, EASE, tween, WORKOUT } from '@/lib/motion';
-import { EFFORT_LABELS } from '@/lib/progression';
+import { effortLabels } from '@/lib/progression';
 import { SESSION_LIMITS } from '@/lib/schemas/session';
 import { WaterGlass } from '@/components/water-glass';
 import { cn } from '@/lib/utils';
@@ -57,10 +59,11 @@ function RestRing({ endsAt, total, view, bpm }: { endsAt: number; total: number;
 
   const ended = view.state === 'ended';
   const hold = view.state === 'hold';
+  const t = clientWorkoutMessages(useLocale()).rest;
   return (
     <motion.div
       role="timer"
-      aria-label={hold ? 'Dinlenme nabız için uzuyor' : 'Kalan dinlenme'}
+      aria-label={hold ? t.holding : t.remainingLabel}
       animate={{ scale: ended ? [1, 1.06, 1] : 1 }}
       transition={tween(DURATION.slow)}
       className="relative shrink-0"
@@ -89,18 +92,18 @@ function RestRing({ endsAt, total, view, bpm }: { endsAt: number; total: number;
             view.state === 'warn' && 'text-primary',
           )}>
           {hold ? <Heart weight="fill" className="size-7 text-destructive" aria-hidden /> : null}
-          {ended ? 'Hazırsın' : hold ? (bpm ?? '—') : clockText(view.seconds)}
+          {ended ? t.ready : hold ? (bpm ?? '—') : clockText(view.seconds)}
         </span>
         <span className="max-w-[9.5rem] text-[0.8125rem] text-muted-foreground">
           {ended
             ? view.alarmPending
-              ? 'dokununca alarm susar'
+              ? t.tapToSilence
               : ''
             : hold
-              ? `nabız · +${clockText(view.seconds)}`
+              ? t.heartExtra(clockText(view.seconds))
               : view.state === 'warn'
-                ? 'az kaldı'
-                : 'kalan'}
+                ? t.almost
+                : t.remaining}
         </span>
       </div>
     </motion.div>
@@ -122,6 +125,8 @@ export type EffortPromptView = {
 export function EffortPrompt({ view, onAnswer }: { view: EffortPromptView; onAnswer: (entryId: string, effort: EffortChoice) => void }) {
   // Cevap bir an seçili görünür, sonra (grupta) sıradaki üyenin sorusu kayarak gelir.
   const [pinned, setPinned] = useState<EffortQuestion | null>(null);
+  const locale = useLocale();
+  const t = clientWorkoutMessages(locale).rest;
   const timer = useRef<number | undefined>(undefined);
   useEffect(() => () => window.clearTimeout(timer.current), []);
   const question = pinned ?? view.question;
@@ -145,7 +150,7 @@ export function EffortPrompt({ view, onAnswer }: { view: EffortPromptView; onAns
             exit={{ opacity: 0, x: -WORKOUT.groupSlidePx, transition: tween(DURATION.fast, EASE.exit) }}
             className="flex flex-col gap-2 py-1">
             <p id={`effort-${question.entryId}`} className="truncate text-[0.9375rem] font-semibold">
-              {question.title} nasıldı?
+              {t.effortQuestion(question.title)}
             </p>
             <div className="grid grid-cols-3 gap-2">
               {EFFORT_CHOICES.map((effort) => (
@@ -155,7 +160,7 @@ export function EffortPrompt({ view, onAnswer }: { view: EffortPromptView; onAns
                   aria-pressed={question.answer === effort}
                   className="h-14 text-base font-semibold"
                   onClick={() => answer(question.entryId, effort)}>
-                  {EFFORT_LABELS[effort]}
+                  {effortLabels(locale)[effort]}
                 </Button>
               ))}
             </div>
@@ -167,7 +172,7 @@ export function EffortPrompt({ view, onAnswer }: { view: EffortPromptView; onAns
             animate={{ opacity: 1, transition: tween(DURATION.fast) }}
             className="flex min-h-11 items-center gap-1.5 text-sm font-medium text-primary">
             <Check weight="bold" className="size-4" />
-            Kaydedildi; bir sonraki öneri buna göre.
+            {t.effortSaved}
           </motion.p>
         ) : null}
       </AnimatePresence>
@@ -177,11 +182,12 @@ export function EffortPrompt({ view, onAnswer }: { view: EffortPromptView; onAns
 
 /** AMRAP setinden sonra: "Kaç tekrar yaptın?" (tekrar stepper'ı set bittikten sonra da açık). */
 export function AmrapReps({ reps, onChange }: { reps: number; onChange: (reps: number) => void }) {
+  const t = clientWorkoutMessages(useLocale()).rest;
   return (
     <div className="flex min-h-14 shrink-0 items-center gap-3">
       <p className="min-w-0 flex-1 text-sm leading-snug">
-        <span className="font-semibold">Kaç tekrar yaptın?</span>
-        <span className="block text-[0.8125rem] text-muted-foreground">AMRAP: yapabildiğin kadar</span>
+        <span className="font-semibold">{t.amrapQuestion}</span>
+        <span className="block text-[0.8125rem] text-muted-foreground">{t.amrapHint}</span>
       </p>
       <Stepper
         size="lg"
@@ -191,9 +197,9 @@ export function AmrapReps({ reps, onChange }: { reps: number; onChange: (reps: n
         }}
         min={0}
         max={SESSION_LIMITS.reps}
-        aria-label="Yaptığın tekrar"
-        decrementLabel="Tekrarı azalt"
-        incrementLabel="Tekrarı artır"
+        aria-label={t.amrapLabel}
+        decrementLabel={t.repsLess}
+        incrementLabel={t.repsMore}
       />
     </div>
   );
@@ -263,6 +269,8 @@ export function RestPanel({
   onTouch: () => void;
 }) {
   const ended = view.state === 'ended';
+  const locale = useLocale();
+  const t = clientWorkoutMessages(locale).rest;
   return (
     <div onPointerDownCapture={onTouch} className="flex h-full flex-col">
       {/* Gövde kayar; "Sıradaki / Sonraki sete geç" altta sabit (Safari çubuklarıyla 680 px'te de başparmak bölgesinde). */}
@@ -275,22 +283,23 @@ export function RestPanel({
               </span>
             ) : null}
             <span className="min-w-0 truncate">
-              <span className="font-semibold text-foreground">{summary.title}</span> · {summary.done}/{summary.planned} set
-              {summary.finished ? ' · bitti' : ''}
+              <span className="font-semibold text-foreground">{summary.title}</span>
+              {t.summarySets(summary.done, summary.planned)}
+              {summary.finished ? t.summaryDone : ''}
             </span>
           </p>
         ) : null}
 
         <div className="flex min-h-12 shrink-0 items-center gap-1">
           <h2 id="rest-title" tabIndex={-1} className="flex-1 font-heading text-lg font-semibold outline-none">
-            Dinlenme
+            {t.title}
           </h2>
           <Button variant="ghost" className="h-11 px-2 text-muted-foreground" onClick={onMinimize}>
             <CaretDown data-icon="inline-start" />
-            Küçült
+            {t.minimize}
           </Button>
-          <Button variant="ghost" className="-mr-2 h-11 px-3" onClick={onSkip} aria-label="Dinlenmeyi atla">
-            Atla
+          <Button variant="ghost" className="-mr-2 h-11 px-3" onClick={onSkip} aria-label={t.skipLabel}>
+            {t.skip}
             <CaretRight data-icon="inline-end" />
           </Button>
         </div>
@@ -302,7 +311,7 @@ export function RestPanel({
             </span>
             <span className="min-w-0 flex-1 truncate">{saved.text}</span>
             <Button variant="ghost" className="-mr-2 h-11 px-3" onClick={() => onEditSaved(saved.setId)}>
-              Düzenle
+              {t.edit}
             </Button>
           </div>
         ) : null}
@@ -312,7 +321,7 @@ export function RestPanel({
         {lockWarning ? (
           <Alert className="my-1 shrink-0">
             <LockSimple />
-            <AlertDescription>Ekranı kilitleme; kilitlenirse dinlenme bitişi çalmayabilir.</AlertDescription>
+            <AlertDescription>{t.lockWarning}</AlertDescription>
           </Alert>
         ) : null}
 
@@ -325,30 +334,31 @@ export function RestPanel({
             className="my-1 h-11 shrink-0 self-start rounded-full px-4"
             onClick={onEasy}>
             {easy.taken ? <Check data-icon="inline-start" weight="bold" /> : <ArrowUp data-icon="inline-start" weight="bold" />}
-            {easy.taken ? `Sonraki set ${formatKg(easy.kg)}` : `Kolaydı · sonraki set ${formatKg(easy.kg)}`}
+            {easy.taken ? t.easyTaken(getFormat(locale).kg(easy.kg)) : t.easy(getFormat(locale).kg(easy.kg))}
           </Button>
         ) : null}
 
         <div className="mt-2.5 mb-1.5 grid shrink-0 grid-cols-[1fr_auto_1fr] items-center justify-items-center">
-          <Button variant="secondary" className="size-14 flex-col gap-0 rounded-full text-base leading-none tabular-nums" onClick={() => onAdjust(-15)} aria-label="Dinlenmeyi 15 saniye kısalt">
+          <Button variant="secondary" className="size-14 flex-col gap-0 rounded-full text-base leading-none tabular-nums" onClick={() => onAdjust(-15)} aria-label={t.shorter}>
             −15
-            <span className="text-[0.6875rem] font-medium text-muted-foreground">sn</span>
+            <span className="text-[0.6875rem] font-medium text-muted-foreground">{t.secondsUnit}</span>
           </Button>
           <RestRing endsAt={endsAt} total={total} view={view} bpm={heart?.bpm ?? null} />
-          <Button variant="secondary" className="size-14 flex-col gap-0 rounded-full text-base leading-none tabular-nums" onClick={() => onAdjust(15)} aria-label="Dinlenmeyi 15 saniye uzat">
+          <Button variant="secondary" className="size-14 flex-col gap-0 rounded-full text-base leading-none tabular-nums" onClick={() => onAdjust(15)} aria-label={t.longer}>
             +15
-            <span className="text-[0.6875rem] font-medium text-muted-foreground">sn</span>
+            <span className="text-[0.6875rem] font-medium text-muted-foreground">{t.secondsUnit}</span>
           </Button>
         </div>
         <p className="min-h-5.5 shrink-0 text-center text-[0.9375rem] font-medium text-primary tabular-nums">
           {view.state === 'hold' && heart ? (
-            calmText(heart.recovery)
+            calmText(heart.recovery, locale)
           ) : ended && view.heartHigh ? (
             <>
-              <span className="text-destructive-text">Nabız hâlâ yüksek</span> · {clockText(view.seconds)} önce bitti
+              <span className="text-destructive-text">{t.heartHigh}</span>
+              {t.endedAgo(clockText(view.seconds))}
             </>
           ) : ended ? (
-            `Dinlenme ${clockText(view.seconds)} önce bitti`
+            t.restEndedAgo(clockText(view.seconds))
           ) : (
             ''
           )}
@@ -358,7 +368,7 @@ export function RestPanel({
           <Button variant="secondary" className="h-28 w-full gap-3 border border-sky-500/25 bg-sky-500/10 text-base text-sky-700 hover:bg-sky-500/20 dark:text-sky-300" onClick={onWater}>
             <WaterGlass count={water} className="h-24 w-20" />
             <span>
-              Su içtim ·{' '}
+              {t.drankWater}{' '}
               <motion.b key={water} initial={{ scale: 1.15 }} animate={{ scale: 1 }} transition={tween(DURATION.fast)} className="inline-block font-semibold tabular-nums">
                 {water}
               </motion.b>
@@ -373,7 +383,7 @@ export function RestPanel({
                 transition={tween(DURATION.fast)}
                 className="mt-2 text-right">
                 <Button variant="outline" className="h-10 px-3 text-[0.8125rem]" onClick={onUndoWater}>
-                  +1 · Geri al
+                  {t.undoWater}
                 </Button>
               </motion.div>
             ) : null}
@@ -384,11 +394,11 @@ export function RestPanel({
       <div className="flex min-h-14 shrink-0 items-center justify-center px-4 pt-2 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
         {ended ? (
           <Button size="lg" className="h-14 w-full text-base" onClick={onSkip}>
-            Sonraki sete geç
+            {t.nextSet}
           </Button>
         ) : next ? (
           <p className="px-2 text-center text-[0.9375rem] text-balance text-muted-foreground tabular-nums">
-            <span className="mr-1 font-semibold text-foreground">Sıradaki:</span>
+            <span className="mr-1 font-semibold text-foreground">{t.next}</span>
             {/* Satır parçaların arasında kırılır, içinde değil ("10–12" bölünmez). */}
             {next.split(' · ').map((part, index) => (
               <span key={index}>
@@ -410,18 +420,19 @@ export function RestPanel({
 export function RestStrip({ view, bpm, onExpand, onSkip }: { view: RestView; bpm: number | null; onExpand: () => void; onSkip: () => void }) {
   const ended = view.state === 'ended';
   const hold = view.state === 'hold';
+  const t = clientWorkoutMessages(useLocale()).rest;
   return (
     <div className="flex h-12 items-center gap-1 border-t bg-primary/10 pr-1 pl-4 tabular-nums">
-      <span className="flex-1 text-sm text-muted-foreground">{hold ? 'Nabız bekleniyor' : 'Dinlenme'}</span>
+      <span className="flex-1 text-sm text-muted-foreground">{hold ? t.waitingHeart : t.title}</span>
       <b className={cn('inline-flex min-w-14 items-center gap-1 text-lg font-semibold', view.state !== 'running' && 'text-primary')}>
         {hold ? <Heart weight="fill" className="size-4 text-destructive" aria-hidden /> : null}
         {hold ? (bpm ?? '—') : ended ? `+${clockText(view.seconds)}` : clockText(view.seconds)}
       </b>
       <Button variant="ghost" className="h-11 px-3" onClick={onExpand}>
-        Büyüt
+        {t.expand}
       </Button>
       <Button variant="ghost" className="h-11 px-3 text-muted-foreground" onClick={onSkip}>
-        Atla
+        {t.skip}
       </Button>
     </div>
   );

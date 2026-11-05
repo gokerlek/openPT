@@ -13,24 +13,29 @@ import {
 import { Button } from '@/components/ui/button';
 import { Drawer, DrawerContent, DrawerDescription, DrawerFooter, DrawerHeader, DrawerTitle } from '@/components/ui/drawer';
 import { Spinner } from '@/components/ui/spinner';
-import { formatKg, formatNumber } from '@/lib/format';
+import { useLocale } from '@/i18n/client';
+import { clientWorkoutMessages } from '@/i18n/messages/client-workout';
+import { getFormat } from '@/lib/format';
 import { cn } from '@/lib/utils';
-import { FINISH_REASON_LABELS, FINISH_REASONS, type FinishReason } from '@/lib/workout-flow';
+import { finishReasonLabels, FINISH_REASONS, type FinishReason } from '@/lib/workout-flow';
 import type { EffortChoice, WorkoutSummary } from '@/lib/workout-session';
 import { AmrapReps, EffortPrompt, type EffortPromptView } from './rest-panel';
 
 /** "Neden? (isteğe bağlı)": kapalı gelir; tek seçim, yeniden dokunmak kaldırır. "Ağrı" yalnız sağlık onayı varken. */
 function ReasonPicker({ pain, value, onChange }: { pain: boolean; value: FinishReason | null; onChange: (reason: FinishReason | null) => void }) {
+  const locale = useLocale();
+  const t = clientWorkoutMessages(locale).sheets;
+  const labels = finishReasonLabels(locale);
   const [open, setOpen] = useState(value !== null);
   const reasons = FINISH_REASONS.filter((reason) => reason !== 'pain' || pain);
   return (
     <div className="flex flex-col gap-2">
       <Button variant="ghost" className="-mx-2 h-11 justify-between px-2 font-normal text-muted-foreground" aria-expanded={open} aria-controls="finish-reasons" onClick={() => setOpen(!open)}>
-        Neden? (isteğe bağlı)
+        {t.why}
         <CaretDown data-icon="inline-end" className={cn('transition-transform duration-160', open && 'rotate-180')} />
       </Button>
       {open ? (
-        <div id="finish-reasons" role="group" aria-label="Neden" className="flex flex-col gap-2">
+        <div id="finish-reasons" role="group" aria-label={t.whyGroup} className="flex flex-col gap-2">
           <div className="flex flex-wrap gap-2">
             {reasons.map((reason) => (
               <Button
@@ -39,11 +44,11 @@ function ReasonPicker({ pain, value, onChange }: { pain: boolean; value: FinishR
                 aria-pressed={value === reason}
                 className="h-11 px-4"
                 onClick={() => onChange(value === reason ? null : reason)}>
-                {FINISH_REASON_LABELS[reason]}
+                {labels[reason]}
               </Button>
             ))}
           </div>
-          {value === 'pain' ? <p className="text-[0.8125rem] text-muted-foreground">Ağrı yalnız sağlık kaydına yazılır; antrenman kaydında &quot;diğer&quot; görünür.</p> : null}
+          {value === 'pain' ? <p className="text-[0.8125rem] text-muted-foreground">{t.painNote}</p> : null}
         </div>
       ) : null}
     </div>
@@ -95,6 +100,8 @@ export function FinishSheet({
   onFinish: (reason: FinishReason | null) => void;
   onCancelWorkout: () => void;
 }) {
+  const locale = useLocale();
+  const t = clientWorkoutMessages(locale).sheets;
   const none = summary.sets === 0;
   const all = !none && summary.allDone;
   const skipped = summary.remaining.filter((item) => item.skipped);
@@ -113,14 +120,14 @@ export function FinishSheet({
         <DrawerHeader className="gap-1.5 pt-5">
           {all ? <CheckCircle className="mb-1 size-10 text-primary" /> : null}
           <DrawerTitle className="text-lg font-semibold">
-            {none ? 'Henüz set yok' : all ? 'Antrenman tamamlandı, bitirelim mi?' : 'Antrenmanı bitir?'}
+            {none ? t.noSets : all ? t.allDone : t.finishEarly}
           </DrawerTitle>
           <DrawerDescription className="tabular-nums">
             {none
-              ? 'Kaydedilmiş set olmadığı için silinecek bir şey de yok.'
+              ? t.nothingToDelete
               : all
-                ? `${summary.exercises} hareket · ${summary.sets} set · ${formatKg(Math.round(summary.volumeKg))} · ${summary.minutes} dk`
-                : `${summary.doneSets}/${summary.plannedSets} set yapıldı. Yapılmayanlar:`}
+                ? t.totals(summary.exercises, summary.sets, getFormat(locale).kg(Math.round(summary.volumeKg)), summary.minutes)
+                : t.partial(summary.doneSets, summary.plannedSets)}
           </DrawerDescription>
         </DrawerHeader>
         <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto overscroll-contain px-4">
@@ -129,7 +136,7 @@ export function FinishSheet({
               {summary.remaining.map((item) => (
                 <li key={item.rowId} className="flex justify-between gap-3">
                   <span className="min-w-0 truncate">{item.title}</span>
-                  <span className="shrink-0 text-muted-foreground">{item.skipped ? 'geçildi' : `${item.done}/${item.planned} set`}</span>
+                  <span className="shrink-0 text-muted-foreground">{item.skipped ? t.skipped : t.setsOf(item.done, item.planned)}</span>
                 </li>
               ))}
             </ul>
@@ -137,10 +144,10 @@ export function FinishSheet({
           {all && skipped.length > 0 ? (
             <div className="flex flex-col gap-2">
               <p className="text-sm">
-                {skipped.length} hareket geçildi: <span className="font-medium">{skipped.map((item) => item.title).join(', ')}</span>
+                {t.skippedCount(skipped.length)} <span className="font-medium">{skipped.map((item) => item.title).join(', ')}</span>
               </p>
               <Button variant="outline" className="h-11 w-full" onClick={onDoSkipped}>
-                Geçileni yap
+                {t.doSkipped}
               </Button>
             </div>
           ) : null}
@@ -156,10 +163,10 @@ export function FinishSheet({
           {none ? (
             <>
               <Button ref={primary} size="lg" className="h-14 w-full text-base" onClick={() => onOpenChange(false)}>
-                Kalanlara dön
+                {t.backToRest}
               </Button>
               <Button variant="outline" className="h-11 w-full" disabled={busy} onClick={onCancelWorkout}>
-                Antrenmanı iptal et
+                {t.cancelWorkout}
               </Button>
             </>
           ) : (
@@ -171,10 +178,10 @@ export function FinishSheet({
                 disabled={busy}
                 onClick={() => onFinish(asks ? reason : null)}>
                 {busy ? <Spinner data-icon="inline-start" /> : null}
-                Bitir
+                {t.finish}
               </Button>
               <Button variant="outline" className="h-11 w-full" onClick={() => onOpenChange(false)}>
-                {all ? 'Devam et (set ya da hareket ekle)' : 'Kalanlara dön'}
+                {all ? t.keepGoing : t.backToRest}
               </Button>
             </>
           )}
@@ -196,20 +203,22 @@ export function FinishedElsewhereDialog({
   onAdd: () => void;
   onSkip: () => void;
 }) {
+  const locale = useLocale();
+  const t = clientWorkoutMessages(locale).sheets;
   return (
     <AlertDialog open={count !== null}>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Bu antrenman başka bir cihazda bitirildi</AlertDialogTitle>
-          <AlertDialogDescription>Bu telefondaki {formatNumber(count ?? 0)} set eklensin mi?</AlertDialogDescription>
+          <AlertDialogTitle>{t.elsewhereTitle}</AlertDialogTitle>
+          <AlertDialogDescription>{t.elsewhereText(getFormat(locale).number(count ?? 0), count ?? 0)}</AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
           <Button variant="outline" className="h-11" disabled={busy} onClick={onSkip}>
-            Ekleme
+            {t.skip}
           </Button>
           <Button className="h-11" disabled={busy} onClick={onAdd}>
             {busy ? <Spinner data-icon="inline-start" /> : null}
-            Ekle
+            {t.add}
           </Button>
         </AlertDialogFooter>
       </AlertDialogContent>
@@ -226,21 +235,22 @@ export function FinishedElsewhereDialog({
  * kapanmayı reddeder (FinishSheet'in düzeni).
  */
 export function PauseDialog({ open, busy, onContinue, onPause }: { open: boolean; busy: boolean; onContinue: () => void; onPause: () => void }) {
+  const t = clientWorkoutMessages(useLocale()).sheets;
   const stay = useRef<HTMLButtonElement>(null);
   return (
     <AlertDialog open={open} onOpenChange={(next) => (next || busy ? undefined : onContinue())}>
       <AlertDialogContent initialFocus={stay}>
         <AlertDialogHeader>
-          <AlertDialogTitle>Ara verilsin mi?</AlertDialogTitle>
-          <AlertDialogDescription>Antrenmanın telefonunda kalır; Bugün&apos;den devam edersin.</AlertDialogDescription>
+          <AlertDialogTitle>{t.pauseTitle}</AlertDialogTitle>
+          <AlertDialogDescription>{t.pauseText}</AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
           <Button ref={stay} className="h-11" disabled={busy} onClick={onContinue}>
-            Devam et
+            {t.continue}
           </Button>
           <Button variant="outline" className="h-11" disabled={busy} onClick={onPause}>
             {busy ? <Spinner data-icon="inline-start" /> : null}
-            Ara ver
+            {t.pause}
           </Button>
         </AlertDialogFooter>
       </AlertDialogContent>

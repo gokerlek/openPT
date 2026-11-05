@@ -1,4 +1,5 @@
 import { DEFAULT_LOCALE, type Locale } from '../i18n/locale.ts';
+import { clientProgressMessages } from '../i18n/messages/client-progress/index.ts';
 import {epley} from './personal-records.ts';
 import { classifyChange, measurementTrends, type ChangeKind, type LineKey } from './measurement-trends.ts';
 import type { MeasurementId } from './measurements.ts';
@@ -25,20 +26,19 @@ import { daysBetween, FORECAST_MIN_POINTS, FORECAST_MIN_SPAN_DAYS, shiftDay, slo
  * uyumu da gücü artırır); çevre ölçümü onaylıysa yanında ayrıca yazılır.
  */
 
-/** Seçilebilen pencereler; varsayılan 8 hafta **[sentez]**. */
-export const STRENGTH_WINDOWS = {
-  '4h': { label: '4 hafta', days: 28 },
-  '8h': { label: '8 hafta', days: 56 },
-  '12h': { label: '12 hafta', days: 84 },
-  tumu: { label: 'Tümü', days: null },
-} as const;
-export type StrengthWindow = keyof typeof STRENGTH_WINDOWS;
+const WINDOW_DAYS = { '4h': 28, '8h': 56, '12h': 84, tumu: null } as const;
+export type StrengthWindow = keyof typeof WINDOW_DAYS;
+/** Pencerenin adı (düğme), dönemi ("Son 4 hafta") ve "dönemde"si ("Son 4 haftada"). */
+export type StrengthWindowInfo = { label: string; period: string; periodIn: string; days: number | null };
+
+/** Seçilebilen pencereler; varsayılan 8 hafta **[sentez]**. Türkçe (eski çağrılar); arayüz `strengthWindows(locale)`. */
+export const STRENGTH_WINDOWS: Record<StrengthWindow, StrengthWindowInfo> = strengthWindows('tr');
 export const STRENGTH_WINDOW_KEYS = Object.keys(STRENGTH_WINDOWS) as StrengthWindow[];
 export const DEFAULT_STRENGTH_WINDOW: StrengthWindow = '8h';
 
 /** Pencerenin ilk günü (dahil); "tümü" için undefined. */
 export function strengthWindowStart(window: StrengthWindow, today: string): string | undefined {
-  const days = STRENGTH_WINDOWS[window].days;
+  const days = WINDOW_DAYS[window];
   return days === null ? undefined : shiftDay(today, -days);
 }
 
@@ -358,9 +358,11 @@ export function circumferenceByWindow(entries: readonly MeasurementEntry[], toda
   ) as Record<StrengthWindow, CircumferenceChange[]>;
 }
 
-/* --- dil: imza dondurma (i18n planı §7 F). Sahibi görev çevirir; şimdilik Türkçe döner. --- */
-
 /** Pencerelerin adları okuyanın dilinde (`STRENGTH_WINDOWS`). */
-export function strengthWindows(_locale: Locale = DEFAULT_LOCALE): typeof STRENGTH_WINDOWS {
-  return STRENGTH_WINDOWS;
+export function strengthWindows(locale: Locale = DEFAULT_LOCALE): Record<StrengthWindow, StrengthWindowInfo> {
+  const text = clientProgressMessages(locale).windows;
+  return Object.fromEntries((Object.keys(WINDOW_DAYS) as StrengthWindow[]).map((key) => [key, { ...text[key], days: WINDOW_DAYS[key] }])) as Record<
+    StrengthWindow,
+    StrengthWindowInfo
+  >;
 }

@@ -1,10 +1,14 @@
 import type { Metadata } from 'next';
+import { clientWorkoutMessages } from '@/i18n/messages/client-workout';
+import { getMessages } from '@/i18n/server';
 import { currentClient } from '@/lib/guards';
 import { resolveHeartLimits } from '@/lib/heart-rate';
 import { isOwnProgramId } from '@/lib/own-programs';
 import { WorkoutScreen } from './workout-screen';
 
-export const metadata: Metadata = { title: 'Antrenman' };
+export async function generateMetadata(): Promise<Metadata> {
+  return { title: (await getMessages(clientWorkoutMessages)).session.workout };
+}
 
 /**
  * Etkin antrenman (docs/design/antrenman-ekrani.md §0, §2.4): tam ekran, dock ve avatar menüsü yok;

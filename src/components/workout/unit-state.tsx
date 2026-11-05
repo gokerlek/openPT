@@ -1,4 +1,6 @@
 import { ArrowBendDownRightIcon, CheckCircleIcon, CircleIcon, PlayCircleIcon } from '@phosphor-icons/react/dist/ssr';
+import { DEFAULT_LOCALE, type Locale } from '@/i18n/locale';
+import { clientWorkoutMessages } from '@/i18n/messages/client-workout';
 import type { ListState } from '@/lib/workout-flow';
 import { cn } from '@/lib/utils';
 
@@ -12,7 +14,13 @@ import { cn } from '@/lib/utils';
  *   silik kalır, `line-icons.tsx` gibi).
  */
 
-export const UNIT_STATE_TEXT: Record<ListState, string> = { done: 'bitti', current: 'şu an', pending: 'sırada', skipped: 'atlandı' };
+/** Durumun ekran okuyucu sözcüğü okuyanın dilinde. */
+export function unitStateText(locale: Locale = DEFAULT_LOCALE): Record<ListState, string> {
+  return clientWorkoutMessages(locale).unitState;
+}
+
+/** Türkçe sözcükler (eski çağrılar); arayüz `unitStateText(locale)` kullanır. */
+export const UNIT_STATE_TEXT: Record<ListState, string> = unitStateText('tr');
 
 /** Durum ikonu: varsayılan `size-5`, bitti ve şu an vurgu renginde, sırada ve atlandı soluk. `className` üstüne yazar. */
 export function UnitStateIcon({ state, className }: { state: ListState; className?: string }) {

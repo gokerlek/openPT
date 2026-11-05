@@ -10,16 +10,19 @@ import { MuscleMap } from '@/components/muscle-map/muscle-map';
 import { loadMapProps } from '@/lib/muscle-tiers';
 import { Button } from '@/components/ui/button';
 import { Carousel, CarouselContent, CarouselItem, type CarouselApi } from '@/components/ui/carousel';
-import { formatNumber } from '@/lib/format';
+import { useLocale } from '@/i18n/client';
+import { clientWorkoutMessages } from '@/i18n/messages/client-workout';
+import { getFormat } from '@/lib/format';
 import { DURATION, EASE, tween, WORKOUT } from '@/lib/motion';
 import type { PainReportOffer } from '@/lib/pain-report';
 import type { Trend } from '@/lib/session-records';
 import { cn } from '@/lib/utils';
-import { CHANGE_LABELS, type SessionSummary } from '@/lib/workout-summary';
+import { changeLabels, type SessionSummary } from '@/lib/workout-summary';
 import { vibrate } from '@/lib/haptics';
 import { PainReportCallout } from './pain-report-callout';
 
-const CARDS = ['Antrenman tamamlandı', 'Rekorlar ve gelişim', 'Çalışan kaslar', 'Hareketler'] as const;
+/** Kartların sırası; adları sözlükte (`summaryScreen.cards`). */
+const CARDS = ['first', 'records', 'muscles', 'exercises'] as const;
 
 /**
  * Sayı 0'dan değerine sayarak gelir (`WORKOUT.countUpMs`); hareket azaltmada son değerle başlar. Sunucu
@@ -28,7 +31,8 @@ const CARDS = ['Antrenman tamamlandı', 'Rekorlar ve gelişim', 'Çalışan kasl
 function CountUp({ value }: { value: number }) {
   const reduced = useReducedMotion();
   const count = useMotionValue(value);
-  const text = useTransform(count, (current) => formatNumber(current === value ? value : Math.round(current)));
+  const f = getFormat(useLocale());
+  const text = useTransform(count, (current) => f.number(current === value ? value : Math.round(current)));
   useLayoutEffect(() => {
     if (reduced) return;
     count.set(0);
@@ -38,7 +42,7 @@ function CountUp({ value }: { value: number }) {
   return (
     <>
       <motion.span aria-hidden>{text}</motion.span>
-      <span className="sr-only">{formatNumber(value)}</span>
+      <span className="sr-only">{f.number(value)}</span>
     </>
   );
 }
@@ -63,11 +67,11 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
   return <h3 className="mt-1 text-xs font-semibold tracking-wide text-muted-foreground uppercase">{children}</h3>;
 }
 
-const TRENDS: Record<Trend, { icon: React.ReactNode; label: string; className: string }> = {
-  up: { icon: <ArrowUp weight="bold" />, label: 'arttı', className: 'bg-primary/15 text-primary-text' },
-  down: { icon: <ArrowDown weight="bold" />, label: 'azaldı', className: 'bg-destructive/15 text-destructive-text' },
-  same: { icon: <Equals weight="bold" />, label: 'aynı', className: 'bg-muted text-muted-foreground' },
-  first: { icon: <Sparkle weight="fill" />, label: 'ilk kez', className: 'bg-muted text-muted-foreground' },
+const TRENDS: Record<Trend, { icon: React.ReactNode; className: string }> = {
+  up: { icon: <ArrowUp weight="bold" />, className: 'bg-primary/15 text-primary-text' },
+  down: { icon: <ArrowDown weight="bold" />, className: 'bg-destructive/15 text-destructive-text' },
+  same: { icon: <Equals weight="bold" />, className: 'bg-muted text-muted-foreground' },
+  first: { icon: <Sparkle weight="fill" />, className: 'bg-muted text-muted-foreground' },
 };
 
 /** Liste satırı: ad solda (kırpılır), değer sağda. */
@@ -110,7 +114,8 @@ export function SummaryCarousel({
   const [api, setApi] = useState<CarouselApi>();
   const [index, setIndex] = useState(0);
   const footer = useRef<HTMLDivElement>(null);
-  const home = from === 'history' ? { href: `/me/gecmis/${summary.id}`, label: 'Geçmişe dön' } : { href: '/me', label: "Bugün'e dön" };
+  const t = clientWorkoutMessages(useLocale()).summaryScreen;
+  const home = from === 'history' ? { href: `/me/gecmis/${summary.id}`, label: t.backToHistory } : { href: '/me', label: t.backToToday };
   const last = index === CARDS.length - 1;
 
   // "Sonraki ›" son kartta "Bugün'e dön"e döner: emin olmak için ikinci kez basmak sayfadan çıkarmasın.
@@ -159,20 +164,20 @@ export function SummaryCarousel({
     <ExercisesCard key="exercises" summary={summary} />,
   ];
   // Kartın okunan adı görünen başlıkla aynı: yarım bırakılan antrenmanın ilk kartı "kaydedildi" der.
-  const titles = CARDS.map((card, position) => (position === 0 && summary.unfinished ? 'Antrenman kaydedildi' : card));
+  const titles = t.cards.map((card, position) => (position === 0 && summary.unfinished ? t.saved : card));
 
   return (
     <div className="mx-auto flex h-dvh w-full max-w-md flex-col overflow-hidden bg-background">
       <header className="shrink-0 pt-[env(safe-area-inset-top)]">
         <div className="flex h-13 items-center gap-1 pr-4 pl-1">
           {from === 'history' ? (
-            <Button variant="ghost" size="icon" className="size-11" nativeButton={false} render={<Link href={home.href} aria-label="Geçmiş detayına dön" />}>
+            <Button variant="ghost" size="icon" className="size-11" nativeButton={false} render={<Link href={home.href} aria-label={t.backToDetail} />}>
               <CaretLeft weight="bold" className="size-5" />
             </Button>
           ) : (
             <span className="w-3" />
           )}
-          <h1 className="flex-1 font-heading text-[1.0625rem] font-semibold">Özet</h1>
+          <h1 className="flex-1 font-heading text-[1.0625rem] font-semibold">{t.title}</h1>
           <span className="text-sm text-muted-foreground tabular-nums" aria-hidden>
             {index + 1}/{CARDS.length}
           </span>
@@ -182,7 +187,7 @@ export function SummaryCarousel({
       <Carousel
         setApi={setApi}
         opts={{ align: 'start', duration: 22 }}
-        aria-label="Antrenman özeti"
+        aria-label={t.carousel}
         tabIndex={0}
         className="min-h-0 flex-1 outline-none focus-visible:ring-3 focus-visible:ring-ring/50 [&>[data-slot=carousel-content]]:h-full">
         <CarouselContent className="h-full">
@@ -209,12 +214,12 @@ export function SummaryCarousel({
           </Button>
         ) : (
           <Button size="lg" className="h-14 w-full text-base" onClick={() => api?.scrollNext(reduced)}>
-            Sonraki
+            {t.next}
             <CaretRight data-icon="inline-end" weight="bold" />
           </Button>
         )}
         {last && coach ? (
-          <CoachButton variant="ghost" label="AI koça sor" detail={{ autoReview: true }} className="h-11 self-center text-muted-foreground" />
+          <CoachButton variant="ghost" label={t.askCoach} detail={{ autoReview: true }} className="h-11 self-center text-muted-foreground" />
         ) : (
           <Button variant="ghost" className={cn('h-11 self-center text-muted-foreground', last && 'invisible')} nativeButton={false} render={<Link href={home.href} tabIndex={last ? -1 : undefined} />}>
             {home.label}
@@ -236,19 +241,21 @@ function FirstCard({
   celebrate: boolean;
   painOffers: readonly PainReportOffer[];
 }) {
+  const locale = useLocale();
+  const t = clientWorkoutMessages(locale).summaryScreen;
   return (
     <>
-      <Eyebrow>{summary.unfinished ? 'Antrenman kaydedildi' : 'Antrenman tamamlandı'}</Eyebrow>
-      <h2 className="-mt-2 font-heading text-2xl leading-tight font-semibold">Harika iş, {firstName}!</h2>
+      <Eyebrow>{summary.unfinished ? t.saved : t.cards[0]}</Eyebrow>
+      <h2 className="-mt-2 font-heading text-2xl leading-tight font-semibold">{t.greeting(firstName)}</h2>
       <p className="-mt-1 text-sm text-muted-foreground tabular-nums">
         {summary.dayName} · {summary.when}
       </p>
       <div className="grid grid-cols-2 gap-2.5">
-        <Tile value={summary.minutes} unit="dk" label="süre" />
-        <Tile value={summary.volumeKg} unit="kg" label="toplam ağırlık" />
-        <Tile value={summary.sets} label="set" />
-        <Tile value={summary.muscles} label="kas çalıştı" />
-        {summary.kcal > 0 ? <Tile value={summary.kcal} unit="kcal" label="yürüyüş/koşu, tahmini" wide /> : null}
+        <Tile value={summary.minutes} unit={t.minutesUnit} label={t.duration} />
+        <Tile value={summary.volumeKg} unit="kg" label={t.totalWeight} />
+        <Tile value={summary.sets} label={t.sets(summary.sets)} />
+        <Tile value={summary.muscles} label={t.muscles(summary.muscles)} />
+        {summary.kcal > 0 ? <Tile value={summary.kcal} unit="kcal" label={t.walkKcal} wide /> : null}
       </div>
       {summary.prs > 0 || summary.versusLast ? (
         <div className="flex flex-wrap items-center gap-2 text-sm">
@@ -259,7 +266,7 @@ function FirstCard({
               transition={{ ...tween(DURATION.fast), delay: 0.4 }}
               className="inline-flex items-center gap-1.5 rounded-full bg-primary/15 px-2.5 py-1.5 font-semibold text-primary-text">
               <Trophy weight="fill" className="size-4" aria-hidden />
-              {formatNumber(summary.prs)} rekor
+              {t.records(getFormat(locale).number(summary.prs), summary.prs)}
             </motion.span>
           ) : null}
           {summary.versusLast ? <span className="text-muted-foreground tabular-nums">{summary.versusLast}</span> : null}
@@ -272,9 +279,10 @@ function FirstCard({
 }
 
 function RecordsCard({ summary }: { summary: SessionSummary }) {
+  const t = clientWorkoutMessages(useLocale()).summaryScreen;
   return (
     <>
-      <Eyebrow>Rekorlar ve gelişim</Eyebrow>
+      <Eyebrow>{t.cards[1]}</Eyebrow>
       {summary.records.length > 0 ? (
         <ul className="flex flex-col gap-2">
           {summary.records.map((record, position) => (
@@ -291,17 +299,17 @@ function RecordsCard({ summary }: { summary: SessionSummary }) {
           ))}
         </ul>
       ) : (
-        <p className="text-sm text-muted-foreground">Bu antrenmanda rekor yok. Aynı yükte düzenli kalmak da ilerlemedir.</p>
+        <p className="text-sm text-muted-foreground">{t.noRecords}</p>
       )}
       {summary.compare.length > 0 ? (
         <section className="flex flex-col">
-          <SectionTitle>Geçen sefere göre</SectionTitle>
+          <SectionTitle>{t.versusLast}</SectionTitle>
           <ul>
             {summary.compare.map((item, position) => (
               <Line
                 key={`${item.title}-${position}`}
                 lead={
-                  <span role="img" aria-label={TRENDS[item.trend].label} className={cn('grid size-6 shrink-0 place-items-center rounded-md [&_svg]:size-3.5', TRENDS[item.trend].className)}>
+                  <span role="img" aria-label={t.trends[item.trend]} className={cn('grid size-6 shrink-0 place-items-center rounded-md [&_svg]:size-3.5', TRENDS[item.trend].className)}>
                     {TRENDS[item.trend].icon}
                   </span>
                 }
@@ -314,7 +322,7 @@ function RecordsCard({ summary }: { summary: SessionSummary }) {
       ) : null}
       {summary.next ? (
         <section className="flex flex-col">
-          <SectionTitle>Gelecek sefer</SectionTitle>
+          <SectionTitle>{t.nextTime}</SectionTitle>
           <ul>
             {summary.next.map((item, position) => (
               <Line key={`${item.title}-${position}`} name={item.title} value={item.text} />
@@ -331,33 +339,39 @@ function RecordsCard({ summary }: { summary: SessionSummary }) {
  * olarak çalışan kaslar, aileler tek ad; yalnız dengeleyici olan kas ne sayılır ne listelenir ne boyanır.
  */
 function MusclesCard({ summary }: { summary: SessionSummary }) {
+  const locale = useLocale();
+  const t = clientWorkoutMessages(locale).summaryScreen;
   return (
     <>
-      <Eyebrow>Çalışan kaslar</Eyebrow>
-      <h2 className="-mt-2 font-heading text-2xl font-semibold tabular-nums">{formatNumber(summary.muscles)} kas çalıştı</h2>
-      {summary.topMuscle ? <p className="-mt-1 text-sm text-muted-foreground">En çok: {summary.topMuscle.toLocaleLowerCase('tr-TR')}</p> : null}
+      <Eyebrow>{t.cards[2]}</Eyebrow>
+      <h2 className="-mt-2 font-heading text-2xl font-semibold tabular-nums">{t.musclesWorked(getFormat(locale).number(summary.muscles), summary.muscles)}</h2>
+      {summary.topMuscle ? <p className="-mt-1 text-sm text-muted-foreground">{t.topMuscle(summary.topMuscle)}</p> : null}
       {summary.worked.length > 0 ? (
         <MuscleMap
           layout="split"
           bodyClassName="h-60"
-          {...loadMapProps(summary.load, 'session', 'Bu antrenmanın kas yükü', {
-            rows: summary.worked.map((item) => ({ key: item.label, label: item.label, sets: item.sets })),
-          })}
+          {...loadMapProps(
+            summary.load,
+            'session',
+            t.mapLabel,
+            { rows: summary.worked.map((item) => ({ key: item.label, label: item.label, sets: item.sets })) },
+            locale,
+          )}
         />
       ) : (
-        <p className="text-sm text-muted-foreground">Bu antrenmanda sayılan kas yükü yok.</p>
+        <p className="text-sm text-muted-foreground">{t.noLoad}</p>
       )}
-      <p className="text-[0.8125rem] text-muted-foreground">
-        Sayılar kesirli set: hedef kas 1, yardımcı kas 0,5, dengeleyici 0,25. Yalnız dengeleyici olarak çalışan kas sayılmaz.
-      </p>
+      <p className="text-[0.8125rem] text-muted-foreground">{t.loadNote}</p>
     </>
   );
 }
 
 function ExercisesCard({ summary }: { summary: SessionSummary }) {
+  const locale = useLocale();
+  const t = clientWorkoutMessages(locale).summaryScreen;
   return (
     <>
-      <Eyebrow>Hareketler</Eyebrow>
+      <Eyebrow>{t.cards[3]}</Eyebrow>
       <h2 className="-mt-2 font-heading text-2xl font-semibold tabular-nums">{summary.totals}</h2>
       <ul>
         {summary.exercises.map((line, position) => (
@@ -366,13 +380,13 @@ function ExercisesCard({ summary }: { summary: SessionSummary }) {
       </ul>
       {summary.changes.length > 0 ? (
         <section className="flex flex-col">
-          <SectionTitle>Program</SectionTitle>
+          <SectionTitle>{t.program}</SectionTitle>
           <ul>
             {summary.changes.map((change, position) => (
               <li key={`${change.text}-${position}`} className="flex flex-col gap-0.5 border-t py-2 text-sm first:border-t-0">
                 <span>{change.text}</span>
                 <span className="text-[0.8125rem] text-muted-foreground">
-                  {CHANGE_LABELS[change.state]}
+                  {changeLabels(locale)[change.state]}
                   {change.note ? ` · “${change.note}”` : ''}
                 </span>
               </li>

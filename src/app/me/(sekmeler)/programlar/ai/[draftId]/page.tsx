@@ -25,8 +25,7 @@ export default async function AIDraftPage({ params }: { params: Promise<{ draftI
   const draft = store.drafts.find(d => d.id === draftId && d.permissionHash === permissionHash(deps, client));
   if (!draft) notFound();
   if (draft.status === 'saved') redirect(draft.savedBy === 'client' ? `/me/programlar/${draft.programId}` : '/me/programlar/antrenor');
-  // i18n-followup(T3): `ownEditorLibrary` hazır egzersiz ve cihaz adlarını dilsiz (Türkçe) okur; `locale` alıp `listExercises`/`listDevices`'a vermeli.
-  const [overview, library, templates] = await Promise.all([readOwnOverview(client.id), ownEditorLibrary(client), clientTemplates().catch(() => [])]);
+  const [overview, library, templates] = await Promise.all([readOwnOverview(client.id), ownEditorLibrary(client, locale), clientTemplates().catch(() => [])]);
   // Gün başına atamadan önceki taslak (program düzeyinde `weekdays`) okunan eski dosya gibi atanır: form o alanı okumaz.
   const body = bodyWithAssignments(draft.body);
   return <main className="flex flex-col gap-6"><ClientHeader client={client} appName={config.appName} title={t.title} back={{ href: '/me/programlar', label: t.back }} />

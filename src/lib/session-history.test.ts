@@ -205,3 +205,31 @@ describe('kardiyo seti', () => {
     assert.equal(sessionDetail(doc, TZ).exercises[0]?.sets[0]?.text, '30:00 · 3 km · %5');
   });
 });
+
+describe('antrenmanın detayı İngilizce (en)', () => {
+  const doc = finished('s_aaaaaaaa', 0, {
+    entries: [
+      sessionEntry('e_aaaaaa', { exerciseId: 'sinav', title: 'Şınav', sets: [workingSet('st_aaaaaaaa', 2, { kg: undefined, reps: 12, plannedSetCount: 1 })] }),
+      sessionEntry('e_bbbbbb', { exerciseId: 'sinav', title: 'Duvar şınavı', sets: [workingSet('st_bbbbbbbb', 4, { kg: undefined, reps: 1, plannedSetCount: 1 })] }),
+      sessionEntry('e_cccccc', { exerciseId: 'halter-bench-press', title: 'Barbell Bench Press', sets: [workingSet('st_cccccccc', 6, { kg: 60, reps: 5, plannedSetCount: 1 })] }),
+    ],
+  });
+
+  test('kütüphane adı okuyanın dilinde (localizedLibraryTitle); PT adı olduğu gibi; set ve tekrar çoğulu', () => {
+    const detail = sessionDetail(doc, TZ, undefined, 'en');
+    assert.equal(detail.title, 'Gün A · 26 September 2026');
+    assert.equal(detail.meta, '18:00–18:52 · 3 sets · 300 kg');
+    assert.deepEqual(
+      detail.exercises.map((exercise) => [exercise.title, exercise.sets.map((set) => set.text)]),
+      [
+        ['Push-Up', ['12 reps']],
+        ['Duvar şınavı', ['1 rep']],
+        ['Barbell Bench Press', ['60 kg × 5']],
+      ],
+    );
+  });
+
+  test('İngilizce kaydedilmiş kütüphane adı Türkçe okuyana Türkçe', () => {
+    assert.equal(sessionDetail(doc, TZ).exercises[2]?.title, 'Halter Bench Press');
+  });
+});

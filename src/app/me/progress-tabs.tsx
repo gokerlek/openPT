@@ -3,7 +3,9 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { TabsNav, TabsNavLink } from '@/components/ui/tabs';
-import { hasProgressTabs, PROGRESS_SECTIONS, progressSectionIndex } from '@/lib/client-tabs';
+import { useLocale } from '@/i18n/client';
+import { clientProgressMessages } from '@/i18n/messages/client-progress';
+import { hasProgressTabs, progressSectionIndex, progressSections } from '@/lib/client-tabs';
 
 /**
  * Danışanın İlerleme sekmesinin ikinci şeridi: Özet · Geçmiş · Rekorlar (`PROGRESS_SECTIONS`). Her bölüm
@@ -13,10 +15,11 @@ import { hasProgressTabs, PROGRESS_SECTIONS, progressSectionIndex } from '@/lib/
  */
 export function ProgressTabs() {
   const active = progressSectionIndex(usePathname());
+  const locale = useLocale();
 
   return (
-    <TabsNav aria-label="İlerleme bölümleri" className="w-full">
-      {PROGRESS_SECTIONS.map((section, index) => (
+    <TabsNav aria-label={clientProgressMessages(locale).pages.sections} className="w-full">
+      {progressSections(locale).map((section, index) => (
         <TabsNavLink key={section.href} active={index === active} render={<Link href={section.href} />}>
           {section.label}
         </TabsNavLink>

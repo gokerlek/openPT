@@ -1,4 +1,5 @@
 import 'server-only';
+import { DEFAULT_LOCALE, type Locale } from '@/i18n/locale';
 import { canRecordHealth } from './client-status';
 import { activeConstraints, pendingReports } from './constraints';
 import { listExercises } from './exercises';
@@ -22,7 +23,7 @@ import { sessionRepo } from './session-files';
  * onaylıyken; yoksa `health.json` okunmaz. Ucuz sıra: önce `health.json` (bu antrenmanda ağrıyla geçme yoksa biter),
  * sonra yalnız ağrıyla geçme kaydı olan önceki antrenmanların dosyaları (en çok 6). Hata sayfayı durdurmaz: kısayol yok.
  */
-export async function loadPainReport(client: Client, sessionId: string): Promise<PainReportOffer[]> {
+export async function loadPainReport(client: Client, sessionId: string, locale: Locale = DEFAULT_LOCALE): Promise<PainReportOffer[]> {
   if (!SESSION_ID_PATTERN.test(sessionId) || !canRecordHealth(client, 'conditions') || !canRecordHealth(client, 'check_in')) return [];
   try {
     const record = await readHealthIfAllowed(client, ['conditions', 'check_in']);
@@ -35,7 +36,7 @@ export async function loadPainReport(client: Client, sessionId: string): Promise
     const [current, previous, exercises] = await Promise.all([
       readSession(repo, sessionId),
       Promise.all(earlier.map((item) => readSession(repo, item.sessionId).catch(() => null))),
-      listExercises(),
+      listExercises(undefined, locale),
     ]);
     if (current.status !== 'ok') return [];
     const earlierExercises = earlier.map((item, index) => {
@@ -45,7 +46,7 @@ export async function loadPainReport(client: Client, sessionId: string): Promise
     const repeated = repeatedPainSkips(painSkippedExercises(current.doc.entries, pain.rowIds), earlierExercises);
     if (repeated.length === 0) return [];
     const byId = new Map(exercises.map((exercise) => [exercise.id, exercise]));
-    return painReportOffers(repeated, (id) => byId.get(id), [...activeConstraints(record), ...pendingReports(record)]);
+    return painReportOffers(repeated, (id) => byId.get(id), [...activeConstraints(record), ...pendingReports(record)], locale);
   } catch (error) {
     console.error(`[ağrı kısayolu] ${client.id}: ${error instanceof Error ? error.message : String(error)}`);
     return [];
