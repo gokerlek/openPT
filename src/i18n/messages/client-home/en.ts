@@ -224,7 +224,7 @@ const en: Shape<typeof tr> = {
     seeResults: 'See movement test results',
     cameraClosed: 'Camera measurement is off',
     cameraLocked: {
-      before: 'Camera measurement is turned on by the “Movement screening” consent in your settings. You can check its status in ',
+      before: 'Camera measurement is turned on by the “Movement test” consent in your settings. You can check its status in ',
       link: 'your settings',
       after: '.',
     },

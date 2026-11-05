@@ -503,7 +503,7 @@ const en: Shape<typeof tr> = {
     },
     measurements: { label: 'Measurements', description: 'Body circumferences, performance tests and questionnaire scores.' },
     screening: {
-      label: 'Movement screening',
+      label: 'Movement test',
       description: 'Results of basic movements, left-right differences and pain notes; your trainer uses them to choose where to start.',
     },
   },
