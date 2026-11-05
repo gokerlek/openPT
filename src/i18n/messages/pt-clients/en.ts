@@ -227,7 +227,7 @@ const en: Shape<typeof tr> = {
       severe: (n: string) => `${n} severe (not reviewed)`,
       pending: (count: number, n: string) => plural('en', count, { one: `${n} report waiting`, other: `${n} reports waiting` }),
       awaiting: (n: string) => `${n} waiting for an opinion`,
-      noScreening: 'no movement test yet',
+      noScreening: 'no movement screening yet',
       lastScreening: (day: string, pain: string | null) => `last ${day}${pain ? ` · ${pain} pain` : ''}`,
     },
     program: {
@@ -311,7 +311,7 @@ const en: Shape<typeof tr> = {
     emptyBody: 'Shows up here when the client finishes a workout: its duration, set count, total weight and records. While one is in progress it is followed live at the top.',
     history: 'History',
     showMore: (n: string) => `Show more (${n})`,
-    records: (count: number, n: string) => plural('en', count, { one: `${n} record`, other: `${n} records` }),
+    records: (count: number, n: string) => plural('en', count, { one: `${n} PR`, other: `${n} PRs` }),
     ownProgram: 'Own program',
     otherDay: 'different program',
     unfinished: 'unfinished',
@@ -366,7 +366,7 @@ const en: Shape<typeof tr> = {
     description: "The client's trajectory: strength progress per muscle, exercise charts, weekly load, training consistency, records and achievements.",
     unavailableTitle: "Progress can't be opened right now",
     unavailableBody: "The client's data repo couldn't be reached. Reload the page in a moment.",
-    healthHidden: (state: string) => `${state}: readiness, pain, circumference measurements and the movement test aren't shown here.`,
+    healthHidden: (state: string) => `${state}: readiness, pain, circumference measurements and the movement screening aren't shown here.`,
   },
 };
 

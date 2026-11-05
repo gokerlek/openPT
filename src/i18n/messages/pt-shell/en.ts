@@ -80,7 +80,7 @@ const en: Shape<typeof tr> = {
     labels: {
       constraint: 'Limitation',
       missed: 'Missed day',
-      screening: 'Movement test',
+      screening: 'Movement screening',
       stalled: 'Progress',
       phase: 'Phase',
       proposals: 'Suggestion',
@@ -142,8 +142,8 @@ const en: Shape<typeof tr> = {
       waiting: (list: string) => `Waiting for a professional's opinion · ${list}`,
     },
     screening: {
-      pain: (list: string) => `Pain in the movement test: ${list}`,
-      asymmetry: (name: string) => `Large asymmetry in the movement test: ${name}`,
+      pain: (list: string) => `Pain in the movement screening: ${list}`,
+      asymmetry: (name: string) => `Large asymmetry in the movement screening: ${name}`,
     },
     listMore: (n: string) => `+${n}`,
   },
