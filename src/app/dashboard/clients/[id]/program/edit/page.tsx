@@ -57,8 +57,8 @@ export default async function EditProgramPage({ params }: { params: Promise<{ id
   const program = file.program;
   const [templateFiles, exercises, devices, config] = await Promise.all([
     listTemplates(locale).catch(() => []),
-    listExercises(),
-    listDevices(),
+    listExercises(undefined, locale),
+    listDevices(undefined, locale),
     readAppConfig(),
   ]);
   const templates = templateFiles.flatMap((item) =>

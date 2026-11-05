@@ -31,9 +31,8 @@ export default async function DevicesPage() {
   const locale = await getLocale();
   const t = ptLibraryMessages(locale).devicesPage;
   const kindLabels = deviceKindLabels(locale);
-  // i18n-followup(T5): listDevices/listExercises(…, locale) için kütüphane öğeleri henüz yerelleşmedi.
-  const [file, exercises] = await Promise.all([readCustomDevices(), listExercises()]);
-  const devices = await listDevices(file);
+  const [file, exercises] = await Promise.all([readCustomDevices(), listExercises(undefined, locale)]);
+  const devices = await listDevices(file, locale);
   const usage = new Map<string, number>();
   for (const exercise of exercises) {
     if (exercise.deviceId) usage.set(exercise.deviceId, (usage.get(exercise.deviceId) ?? 0) + 1);

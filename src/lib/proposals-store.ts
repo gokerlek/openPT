@@ -54,7 +54,7 @@ export async function approveProposal(clientId: string, id: string, sessionId: s
   // Kütüphane yalnız bekleyen bir öneri uygulanacaksa okunur (bir kez).
   let catalog: { library: Parameters<typeof planApproval>[0]['library']; ctx: Parameters<typeof planApproval>[0]['ctx'] } | null = null;
   const loadCatalog = async () => {
-    const [exercises, devices] = await Promise.all([listExercises(), listDevices()]);
+    const [exercises, devices] = await Promise.all([listExercises(undefined, locale), listDevices(undefined, locale)]);
     return {
       library: { exercises: new Map(exercises.map((exercise) => [exercise.id, exercise])), deviceIds: new Set(devices.map((device) => device.id)) },
       ctx: programDiffContext(exercises, devices, locale),

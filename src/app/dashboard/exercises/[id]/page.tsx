@@ -26,18 +26,20 @@ import { MedicalCard } from './medical-card';
 import { TOUCH_TARGETS } from '../touch-targets';
 import { EditButton } from '@/components/edit-button';
 import { requirePt } from '@/lib/guards';
-import { getLocale, getMessages } from '@/i18n/server';
+import { getLocale } from '@/i18n/server';
+import type { Locale } from '@/i18n/locale';
 import { catalogMessages } from '@/i18n/messages/catalog';
 import { ptLibraryMessages } from '@/i18n/messages/pt-library';
 
 // Başlık (`generateMetadata`) ve sayfa aynı isteği paylaşır: liste bir kez okunur.
-const loadAll = cache(() => listExercises());
-const loadExercise = cache(async (id: string) => getExercise(id, await loadAll()));
+const loadAll = cache((locale: Locale) => listExercises(undefined, locale));
+const loadExercise = cache(async (id: string, locale: Locale) => getExercise(id, await loadAll(locale)));
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
-  const t = (await getMessages(ptLibraryMessages)).exercisePage;
+  const locale = await getLocale();
+  const t = ptLibraryMessages(locale).exercisePage;
   await requirePt();
-  const exercise = await loadExercise((await params).id);
+  const exercise = await loadExercise((await params).id, locale);
   return { title: exercise?.title ?? t.notFound };
 }
 
@@ -49,9 +51,8 @@ export default async function ExerciseDetailPage({ params }: { params: Promise<{
   const format = getFormat(locale);
   const patterns = patternLabels(locale);
   const { id } = await params;
-  // i18n-followup(T5): listExercises/listDevices/listAttachments(…, locale) için kütüphane öğeleri henüz yerelleşmedi.
-  const [all, devices, pool] = await Promise.all([loadAll(), listDevices(), listAttachments()]);
-  const exercise = await loadExercise(id);
+  const [all, devices, pool] = await Promise.all([loadAll(locale), listDevices(undefined, locale), listAttachments(undefined, locale)]);
+  const exercise = await loadExercise(id, locale);
   if (!exercise) notFound();
   const deviceById = new Map(devices.map((device) => [device.id, device]));
   const device = exercise.deviceId ? deviceById.get(exercise.deviceId) : undefined;

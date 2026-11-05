@@ -54,7 +54,7 @@ export default async function OwnProgramViewPage({ params }: { params: Promise<{
   if (!loaded) notFound();
   if (!loaded.ok) redirect(`/dashboard/clients/${id}`);
 
-  const [read, exercises, config] = await Promise.all([readOwnProgramOf(id, pid), listExercises(), readAppConfig()]);
+  const [read, exercises, config] = await Promise.all([readOwnProgramOf(id, pid), listExercises(undefined, locale), readAppConfig()]);
   if (read.status === 'missing') notFound();
   const back = <EditorBackLink href={`/dashboard/clients/${id}/program`} label={t.backLabel} />;
 

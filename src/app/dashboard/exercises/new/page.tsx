@@ -4,7 +4,7 @@ import { listAttachments } from '@/lib/attachments';
 import { listDevices } from '@/lib/devices';
 import { ExerciseForm } from '../exercise-form';
 import { requirePt } from '@/lib/guards';
-import { getMessages } from '@/i18n/server';
+import { getLocale, getMessages } from '@/i18n/server';
 import { ptLibraryMessages } from '@/i18n/messages/pt-library';
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -13,9 +13,10 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function NewExercisePage() {
-  const t = (await getMessages(ptLibraryMessages)).exerciseNew;
+  const locale = await getLocale();
+  const t = ptLibraryMessages(locale).exerciseNew;
   await requirePt();
-  const [devices, attachments] = await Promise.all([listDevices(), listAttachments()]);
+  const [devices, attachments] = await Promise.all([listDevices(undefined, locale), listAttachments(undefined, locale)]);
   return (
     <div className="flex flex-col gap-6">
       <PageHeader

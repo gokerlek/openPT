@@ -48,6 +48,8 @@ const LIB_FILES = [
   'program-insights',
   'localized-github-error',
   'route-failure',
+  'draft-store',
+  'template-files',
 ].map((name) => `src/lib/${name}.ts`);
 
 const SCHEMA_FILES = ['template', 'program', 'device', 'attachment', 'own-program', 'exercise'].map((name) => `src/lib/schemas/${name}.ts`);

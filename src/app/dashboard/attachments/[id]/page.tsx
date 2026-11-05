@@ -15,16 +15,18 @@ import { listExercises } from '@/lib/exercises';
 import { summarizeMuscles } from '@/lib/muscles';
 import { EditButton } from '@/components/edit-button';
 import { requirePt } from '@/lib/guards';
-import { getLocale, getMessages } from '@/i18n/server';
+import { getLocale } from '@/i18n/server';
+import type { Locale } from '@/i18n/locale';
 import { ptLibraryMessages } from '@/i18n/messages/pt-library';
 
 /** Sayfa başlığı ile sayfa aynı okumayı paylaşır (istek başına bir kez). */
-const loadAttachment = cache((id: string) => getAttachment(id));
+const loadAttachment = cache((id: string, locale: Locale) => getAttachment(id, undefined, locale));
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   await requirePt();
-  const t = (await getMessages(ptLibraryMessages)).attachmentPage;
-  const attachment = await loadAttachment((await params).id);
+  const locale = await getLocale();
+  const t = ptLibraryMessages(locale).attachmentPage;
+  const attachment = await loadAttachment((await params).id, locale);
   return { title: attachment?.name ?? t.notFound };
 }
 
@@ -34,8 +36,7 @@ export default async function AttachmentDetailPage({ params }: { params: Promise
   const locale = await getLocale();
   const t = ptLibraryMessages(locale).attachmentPage;
   const { id } = await params;
-  // i18n-followup(T5): listDevices/listExercises(…, locale) için kütüphane öğeleri henüz yerelleşmedi.
-  const [attachment, devices, exercises] = await Promise.all([loadAttachment(id), listDevices(), listExercises()]);
+  const [attachment, devices, exercises] = await Promise.all([loadAttachment(id, locale), listDevices(undefined, locale), listExercises(undefined, locale)]);
   if (!attachment) notFound();
 
   const imageUrl = attachmentImageUrl(attachment);

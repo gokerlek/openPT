@@ -18,7 +18,7 @@ export async function GET(request: Request) {
   const t = ptLibraryMessages(locale).apiRoutes;
   try {
     if (!(await readAnySession())) return NextResponse.json({ error: t.sessionRequired }, { status: 401 });
-    return NextResponse.json({ devices: await listDevices() });
+    return NextResponse.json({ devices: await listDevices(undefined, locale) });
   } catch (error) {
     return failed(error, t.devicesReadFailed, locale);
   }

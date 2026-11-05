@@ -16,7 +16,7 @@ export async function GET(request: Request) {
     // Danışan da egzersizleri görür (kendi antrenmanını kurarken); yazma yalnız PT'de.
     if (!session) return NextResponse.json({ error: t.sessionRequired }, { status: 401 });
 
-    return NextResponse.json({ exercises: await listExercises() });
+    return NextResponse.json({ exercises: await listExercises(undefined, locale) });
   } catch (error) {
     const { message, status } = failureOf(error, t.exercisesReadFailed, locale);
     return NextResponse.json({ error: message }, { status });

@@ -30,8 +30,7 @@ export default async function EditTemplatePage({ params }: { params: Promise<{ i
   const t = ptLibraryMessages(locale).templateEdit;
   const { id } = await params;
   if (!TEMPLATE_ID_PATTERN.test(id)) notFound();
-  // i18n-followup(T5): listExercises/listDevices(…, locale) için kütüphane öğeleri henüz yerelleşmedi.
-  const [file, exercises, devices, config] = await Promise.all([readTemplateFile(id, locale), listExercises(), listDevices(), readAppConfig()]);
+  const [file, exercises, devices, config] = await Promise.all([readTemplateFile(id, locale), listExercises(undefined, locale), listDevices(undefined, locale), readAppConfig()]);
   if (!file) notFound();
   const name = file.template?.name ?? file.name ?? id;
 

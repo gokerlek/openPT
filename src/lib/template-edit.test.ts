@@ -925,6 +925,16 @@ describe('cihaz değiştirme', () => {
     );
   });
 
+  test('cihaz seçicinin "egzersizin cihazı" etiketi bağlamın dilinde; dil yoksa Türkçe', () => {
+    const legacy = row('r_1', 'cable-row', { deviceId: 'kablo-b' });
+    const ctx = cables(facePull, seatedRow);
+    const labelIn = (locale?: 'tr' | 'en') =>
+      deviceChoices(legacy, locale ? { ...ctx, locale } : ctx).find((choice) => choice.deviceId === 'kablo-a')?.label;
+    assert.equal(labelIn(), 'Egzersizin cihazı: Kablo istasyonu');
+    assert.equal(labelIn('tr'), 'Egzersizin cihazı: Kablo istasyonu');
+    assert.equal(labelIn('en'), "Exercise's equipment: Kablo istasyonu");
+  });
+
   test('egzersiz sayfasının "Cihaz değişirse"si düzenleyiciyle aynı kararı verir (deviceSwapTarget)', () => {
     // Bench Press'e Cable Fly sabitli, kabloda Cable Chest Press de var: ikisi de Cable Chest Press der.
     const cableFly = exercise('cable-fly', {

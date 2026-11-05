@@ -18,7 +18,7 @@ export async function GET(request: Request) {
   const t = ptLibraryMessages(locale).apiRoutes;
   try {
     if (!(await readAnySession())) return NextResponse.json({ error: t.sessionRequired }, { status: 401 });
-    return NextResponse.json({ attachments: await listAttachments() });
+    return NextResponse.json({ attachments: await listAttachments(undefined, locale) });
   } catch (error) {
     return failed(error, t.attachmentsReadFailed, locale);
   }

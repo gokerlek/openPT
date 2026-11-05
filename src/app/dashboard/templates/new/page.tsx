@@ -8,7 +8,7 @@ import { listExercises } from '@/lib/exercises';
 import { requirePt } from '@/lib/guards';
 import { pickerDevices, pickerExercises } from '@/lib/templates';
 import { TemplateForm } from '../template-form';
-import { getMessages } from '@/i18n/server';
+import { getLocale, getMessages } from '@/i18n/server';
 import { ptLibraryMessages } from '@/i18n/messages/pt-library';
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -18,9 +18,10 @@ export async function generateMetadata(): Promise<Metadata> {
 
 /** Şablon oluşturma: düzenleme sayfasıyla aynı desen ("‹ Şablonlar", Kaydet "Hareketler" başlığında). */
 export default async function NewTemplatePage() {
-  const t = (await getMessages(ptLibraryMessages)).templateNew;
+  const locale = await getLocale();
+  const t = ptLibraryMessages(locale).templateNew;
   await requirePt();
-  const [exercises, devices, config] = await Promise.all([listExercises(), listDevices(), readAppConfig()]);
+  const [exercises, devices, config] = await Promise.all([listExercises(undefined, locale), listDevices(undefined, locale), readAppConfig()]);
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-2">

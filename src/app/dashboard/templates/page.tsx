@@ -31,8 +31,7 @@ export default async function TemplatesPage() {
   await requirePt();
   const locale = await getLocale();
   const t = ptLibraryMessages(locale).templatesPage;
-  // i18n-followup(T5): listExercises(…, locale) için kütüphane öğeleri henüz yerelleşmedi.
-  const [templates, exercises] = await Promise.all([listTemplates(locale), listExercises()]);
+  const [templates, exercises] = await Promise.all([listTemplates(locale), listExercises(undefined, locale)]);
   const byId = new Map(exercises.map((exercise) => [exercise.id, exercise]));
 
   return (

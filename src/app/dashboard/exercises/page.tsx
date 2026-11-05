@@ -27,9 +27,8 @@ export default async function ExercisesPage({ searchParams }: { searchParams: Pr
   const locale = await getLocale();
   const t = ptLibraryMessages(locale).exercisesPage;
   const { client: clientId } = await searchParams;
-  // i18n-followup(T5): listExercises/listDevices(…, locale) için kütüphane öğeleri henüz yerelleşmedi.
-  const [file, devices, config] = await Promise.all([readCustomExercises(), listDevices(), readAppConfig()]);
-  const exercises = await listExercises(file);
+  const [file, devices, config] = await Promise.all([readCustomExercises(), listDevices(undefined, locale), readAppConfig()]);
+  const exercises = await listExercises(file, locale);
   const deviceNames = Object.fromEntries(devices.map((device) => [device.id, device.name]));
   let clientCare: { name: string; care: NonNullable<Awaited<ReturnType<typeof loadEditorCare>>> } | null = null;
   if (clientId && CLIENT_ID_PATTERN.test(clientId)) {

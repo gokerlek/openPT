@@ -45,7 +45,7 @@ export default async function EditOwnProgramPtPage({ params }: { params: Promise
   if (read.status === 'invalid' || !read.program.shared) redirect(viewHref);
 
   const program = read.program;
-  const [templateFiles, exercises, devices, config] = await Promise.all([listTemplates(locale).catch(() => []), listExercises(), listDevices(), readAppConfig()]);
+  const [templateFiles, exercises, devices, config] = await Promise.all([listTemplates(locale).catch(() => []), listExercises(undefined, locale), listDevices(undefined, locale), readAppConfig()]);
   const templates = templateFiles.flatMap((item) => (item.template ? [{ id: item.template.id, name: item.template.name, blocks: item.template.blocks }] : []));
   const care = await loadEditorCare(loaded.client, exercises, todayIn(config.timeZone), { locale });
 

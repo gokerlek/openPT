@@ -10,6 +10,9 @@ import { programValidationMessages } from './messages/program-validation/index.t
 import { ptLibraryMessages } from './messages/pt-library/index.ts';
 import { ptProgramMessages } from './messages/pt-program/index.ts';
 import type { Locale } from './locale.ts';
+import { DEVICE_LIBRARY } from '../data/device-library.ts';
+import { EXERCISE_LIBRARY } from '../data/exercise-library.ts';
+import { mergeDevices, mergeExercises } from '../lib/library-lists.ts';
 
 /** Bağımsız incelemenin istediği düzeltmeler (T1). */
 const ROOT = join(import.meta.dirname, '..', '..');
@@ -100,5 +103,64 @@ describe('çoğul', () => {
     assert.equal(ptLibraryMessages('en').templateSequence.rirFallback(2), '2 reps in reserve');
     assert.equal(programLogMessages('tr').diff.rirFallback(1), '1 tekrar yedekte');
     assert.equal(ptLibraryMessages('tr').templateSequence.rirFallback(1), '1 tekrar yedekte');
+  });
+});
+
+describe('kütüphane listeleri okuyanın dilinde; düzenleme sayfaları düzenlenen kaydı HAM okur', () => {
+  test('GET uçları dili listeye verir (İngilizce istek İngilizce hazır öğe alır)', () => {
+    assert.match(source('src/app/api/exercises/route.ts'), /listExercises\(undefined, locale\)/);
+    assert.match(source('src/app/api/devices/route.ts'), /listDevices\(undefined, locale\)/);
+    assert.match(source('src/app/api/attachments/route.ts'), /listAttachments\(undefined, locale\)/);
+  });
+
+  test('T5 işaretçileri kalmadı: sayfalar dili listeye verir', () => {
+    const pages = [
+      'src/app/dashboard/exercises/page.tsx',
+      'src/app/dashboard/exercises/[id]/page.tsx',
+      'src/app/dashboard/devices/page.tsx',
+      'src/app/dashboard/devices/new/page.tsx',
+      'src/app/dashboard/devices/[id]/page.tsx',
+      'src/app/dashboard/attachments/page.tsx',
+      'src/app/dashboard/attachments/[id]/page.tsx',
+      'src/app/dashboard/templates/page.tsx',
+      'src/app/dashboard/templates/[id]/page.tsx',
+      'src/app/dashboard/templates/[id]/edit/page.tsx',
+    ];
+    for (const page of pages) assert.equal(source(page).includes('i18n-followup(T5)'), false, page);
+  });
+
+  test('düzenleme sayfaları: düzenlenen kayıt dil verilmeden (ham), gösterilen ad dille okunur', () => {
+    const edits: [string, string, string][] = [
+      ['src/app/dashboard/exercises/[id]/edit/page.tsx', 'listExercises', 'readCustomExercises'],
+      ['src/app/dashboard/devices/[id]/edit/page.tsx', 'listDevices', 'readCustomDevices'],
+      ['src/app/dashboard/attachments/[id]/edit/page.tsx', 'listAttachments', 'readCustomAttachments'],
+    ];
+    for (const [file, list, custom] of edits) {
+      const text = source(file);
+      assert.match(text, /HAM:/, `${file}: ham okuma açıklaması`);
+      assert.match(text, new RegExp(`${list}\\(await loadCustom\\(\\)\\)`), `${file}: düzenlenen kayıt dil verilmeden`);
+      assert.match(text, new RegExp(`${list}\\(await loadCustom\\(\\), locale\\)`), `${file}: gösterim listesi dille`);
+      assert.match(text, new RegExp(`${custom}\\(\\)`), file);
+      assert.match(text, /\.\.\.editable\s*\}\s*=\s*(?:exercise|device|attachment)\b/, `${file}: form ham kayıttan dolar`);
+    }
+  });
+
+  test('sözleşme: dil verilmezse hazır öğe ham (Türkçe), dille çevrilir; PT\'nin kaydı olduğu gibi', () => {
+    const exercise = EXERCISE_LIBRARY.find((item) => mergeExercises([], [item], 'en')[0]?.title !== item.title);
+    assert.ok(exercise, 'İngilizcesi farklı bir hazır egzersiz var');
+    assert.equal(mergeExercises([], [exercise])[0]?.title, exercise.title);
+    assert.notEqual(mergeExercises([], [exercise], 'en')[0]?.title, exercise.title);
+    const custom = { ...exercise, title: 'PT yazdı' };
+    assert.equal(mergeExercises([custom], [exercise], 'en')[0]?.title, 'PT yazdı');
+    const device = DEVICE_LIBRARY.find((item) => mergeDevices([], [item], 'en')[0]?.name !== item.name);
+    assert.ok(device);
+    assert.equal(mergeDevices([], [device])[0]?.name, device.name);
+  });
+});
+
+describe('blok düzenleyici', () => {
+  test('cihaz değiştirme bağlamı (`swapContext`) okuyanın dilini taşır', () => {
+    const text = source('src/components/block-editor/block-items.tsx');
+    assert.match(text, /const swapContext = useMemo\(\(\) => \(\{ exercises: exerciseList, devices, familyOf, locale \}\), \[exerciseList, devices, locale\]\);/);
   });
 });

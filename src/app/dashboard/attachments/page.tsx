@@ -30,9 +30,8 @@ export default async function AttachmentsPage() {
   await requirePt();
   const locale = await getLocale();
   const t = ptLibraryMessages(locale).attachmentsPage;
-  // i18n-followup(T5): listDevices/listExercises/listAttachments(…, locale) için kütüphane öğeleri henüz yerelleşmedi.
-  const [file, devices, exercises] = await Promise.all([readCustomAttachments(), listDevices(), listExercises()]);
-  const attachments = await listAttachments(file);
+  const [file, devices, exercises] = await Promise.all([readCustomAttachments(), listDevices(undefined, locale), listExercises(undefined, locale)]);
+  const attachments = await listAttachments(file, locale);
   const deviceCount = new Map<string, number>();
   for (const device of devices) {
     for (const id of new Set(device.attachments ?? [])) deviceCount.set(id, (deviceCount.get(id) ?? 0) + 1);

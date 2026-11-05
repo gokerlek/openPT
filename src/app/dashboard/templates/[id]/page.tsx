@@ -48,8 +48,7 @@ export default async function TemplateDetailPage({ params }: { params: Promise<{
   const format = getFormat(locale);
   const { id } = await params;
   if (!TEMPLATE_ID_PATTERN.test(id)) notFound();
-  // i18n-followup(T5): listExercises/listDevices(…, locale) için kütüphane öğeleri henüz yerelleşmedi.
-  const [file, exercises, devices, config] = await Promise.all([readTemplate(id, locale), listExercises(), listDevices(), readAppConfig()]);
+  const [file, exercises, devices, config] = await Promise.all([readTemplate(id, locale), listExercises(undefined, locale), listDevices(undefined, locale), readAppConfig()]);
   if (!file) notFound();
 
   if (!file.template) {

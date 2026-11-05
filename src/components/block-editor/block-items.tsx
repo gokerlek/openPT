@@ -359,7 +359,7 @@ function RowDetails({ blockIndex, rowIndex, row, exercise }: { blockIndex: numbe
   const spec = loadSpecFor(exercise, device);
   const setRules = describeSetRules(row.sets, spec, locale);
   const ownDevice = exercise.deviceId ? devices.get(exercise.deviceId) : undefined;
-  const swapContext = useMemo(() => ({ exercises: exerciseList, devices, familyOf }), [exerciseList, devices]);
+  const swapContext = useMemo(() => ({ exercises: exerciseList, devices, familyOf, locale }), [exerciseList, devices, locale]);
 
   // Cihaz seçenekleri pahalı (her cihaz için muadil hesabı): yalnız hareket ya da cihaz değişince.
   const groups = useMemo(() => {

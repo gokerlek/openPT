@@ -20,16 +20,18 @@ import { getFormat } from '@/lib/format';
 import { summarizeMuscles } from '@/lib/muscles';
 import { EditButton } from '@/components/edit-button';
 import { requirePt } from '@/lib/guards';
-import { getLocale, getMessages } from '@/i18n/server';
+import { getLocale } from '@/i18n/server';
+import type { Locale } from '@/i18n/locale';
 import { ptLibraryMessages } from '@/i18n/messages/pt-library';
 
 /** Sayfa başlığı ile sayfa aynı okumayı paylaşır (istek başına bir kez). */
-const loadDevice = cache((id: string) => getDevice(id));
+const loadDevice = cache((id: string, locale: Locale) => getDevice(id, undefined, locale));
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   await requirePt();
-  const t = (await getMessages(ptLibraryMessages)).devicePage;
-  const device = await loadDevice((await params).id);
+  const locale = await getLocale();
+  const t = ptLibraryMessages(locale).devicePage;
+  const device = await loadDevice((await params).id, locale);
   return { title: device?.name ?? t.notFound };
 }
 
@@ -40,8 +42,7 @@ export default async function DeviceDetailPage({ params }: { params: Promise<{ i
   const t = ptLibraryMessages(locale).devicePage;
   const format = getFormat(locale);
   const { id } = await params;
-  // i18n-followup(T5): listExercises/listAttachments(…, locale) için kütüphane öğeleri henüz yerelleşmedi.
-  const [device, exercises, pool] = await Promise.all([loadDevice(id), listExercises(), listAttachments()]);
+  const [device, exercises, pool] = await Promise.all([loadDevice(id, locale), listExercises(undefined, locale), listAttachments(undefined, locale)]);
   if (!device) notFound();
 
   const used = exercises.filter((exercise) => exercise.deviceId === id);

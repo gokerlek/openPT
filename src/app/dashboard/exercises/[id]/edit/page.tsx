@@ -4,25 +4,35 @@ import { notFound } from 'next/navigation';
 import { PageHeader } from '@/components/page-header';
 import { listAttachments } from '@/lib/attachments';
 import { listDevices } from '@/lib/devices';
-import { getExercise, listExercises } from '@/lib/exercises';
+import { getExercise, listExercises, readCustomExercises } from '@/lib/exercises';
 import { exerciseAlternatives, summarizeMuscles } from '@/lib/muscles';
 import { equipmentLabels } from '@/lib/schemas/exercise';
 import { ExerciseActions } from '../exercise-actions';
 import { ExerciseForm } from '../../exercise-form';
 import { TOUCH_TARGETS } from '../../touch-targets';
 import { requirePt } from '@/lib/guards';
-import { getLocale, getMessages } from '@/i18n/server';
+import { getLocale } from '@/i18n/server';
+import type { Locale } from '@/i18n/locale';
 import { ptLibraryMessages } from '@/i18n/messages/pt-library';
 import { commonMessages } from '@/i18n/messages/common';
 
-// Başlık (`generateMetadata`) ve sayfa aynı isteği paylaşır: liste bir kez okunur.
-const loadAll = cache(() => listExercises());
-const loadExercise = cache(async (id: string) => getExercise(id, await loadAll()));
+/*
+ * HAM: düzenlenen kayıt dil verilmeden okunur (`listExercises(custom)`). Hazır egzersizin formu okuyanın dilindeki çeviriyle
+ * dolarsa kaydedince İngilizce metin PT'nin geçersiz kılmasına (override) donardı; form ham (Türkçe) kayıtla dolar.
+ * Başlık, kırıntı ve muadil adı gibi yalnız gösterilen yerler okuyanın dilindeki listeden (`loadShown`).
+ * Başlık (`generateMetadata`) ve sayfa aynı isteği paylaşır: PT dosyası ve listeler bir kez okunur.
+ */
+const loadCustom = cache(() => readCustomExercises());
+const loadRaw = cache(async () => listExercises(await loadCustom()));
+const loadShown = cache(async (locale: Locale) => listExercises(await loadCustom(), locale));
+const loadExercise = cache(async (id: string) => getExercise(id, await loadRaw()));
+const loadShownExercise = cache(async (id: string, locale: Locale) => getExercise(id, await loadShown(locale)));
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
-  const t = (await getMessages(ptLibraryMessages)).exerciseEdit;
+  const locale = await getLocale();
+  const t = ptLibraryMessages(locale).exerciseEdit;
   await requirePt();
-  const exercise = await loadExercise((await params).id);
+  const exercise = await loadShownExercise((await params).id, locale);
   return { title: exercise ? t.metaTitle(exercise.title) : t.notFound };
 }
 
@@ -33,9 +43,10 @@ export default async function EditExercisePage({ params }: { params: Promise<{ i
   const equipment = equipmentLabels(locale);
   await requirePt();
   const { id } = await params;
-  const [all, devices, attachments] = await Promise.all([loadAll(), listDevices(), listAttachments()]);
+  const [all, devices, attachments] = await Promise.all([loadShown(locale), listDevices(undefined, locale), listAttachments(undefined, locale)]);
   const exercise = await loadExercise(id);
   if (!exercise) notFound();
+  const shownTitle = all.find((item) => item.id === id)?.title ?? exercise.title;
 
   const { source: _source, overridesLibrary: _override, ...editable } = exercise;
   // Sabitlenebilecek muadiller detaydakiyle aynı sırada gelir (önerinin sırası).
@@ -55,14 +66,14 @@ export default async function EditExercisePage({ params }: { params: Promise<{ i
       <PageHeader
         crumbs={[
           { label: t.crumbList, href: '/dashboard/exercises' },
-          { label: exercise.title, href: `/dashboard/exercises/${id}` },
+          { label: shownTitle, href: `/dashboard/exercises/${id}` },
           { label: common.actions.edit },
         ]}
         title={t.title}
         actions={
           <ExerciseActions
             id={id}
-            title={exercise.title}
+            title={shownTitle}
             source={exercise.source}
             overridesLibrary={exercise.overridesLibrary}
           />

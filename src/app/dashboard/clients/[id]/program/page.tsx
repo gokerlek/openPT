@@ -108,7 +108,7 @@ export default async function ProgramPage({ params }: { params: Promise<{ id: st
 
   const [file, exercises, config, templates, proposals, sessions, own] = await Promise.all([
     readProgramFile(id, locale),
-    listExercises(),
+    listExercises(undefined, locale),
     readAppConfig(),
     templateChoices().catch(() => []),
     // Öneriler okunamasa da program görünür.

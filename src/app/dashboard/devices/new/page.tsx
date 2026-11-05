@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { PageHeader } from '@/components/page-header';
 import { Card, CardContent } from '@/components/ui/card';
-import { getMessages } from '@/i18n/server';
+import { getLocale, getMessages } from '@/i18n/server';
 import { ptLibraryMessages } from '@/i18n/messages/pt-library';
 import { listAttachments } from '@/lib/attachments';
 import { DeviceForm } from '../device-form';
@@ -14,9 +14,9 @@ export async function generateMetadata(): Promise<Metadata> {
 
 export default async function NewDevicePage() {
   await requirePt();
-  const t = (await getMessages(ptLibraryMessages)).deviceNew;
-  // i18n-followup(T5): listAttachments(…, locale) için kütüphane öğeleri henüz yerelleşmedi.
-  const attachments = await listAttachments();
+  const locale = await getLocale();
+  const t = ptLibraryMessages(locale).deviceNew;
+  const attachments = await listAttachments(undefined, locale);
   return (
     <div className="flex flex-col gap-6">
       <PageHeader

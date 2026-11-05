@@ -56,7 +56,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
   const { baseRevision, baseCreatedAt, phased, currentPhaseId, phases, weekdays } = parsed.output;
   try {
     if (!(await readClient(id))) return clientMissing(locale);
-    const [exercises, devices] = await Promise.all([listExercises(), listDevices()]);
+    const [exercises, devices] = await Promise.all([listExercises(undefined, locale), listDevices(undefined, locale)]);
     const result = await saveProgram(
       id,
       // Günleri hiç göndermeyen eski sekme kayıttaki atamalara dokunmaz (`keepStoredAssignments`).
