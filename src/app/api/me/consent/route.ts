@@ -31,7 +31,8 @@ export async function POST(request: Request) {
   try {
     const client = await sessionClient(session);
     if (!client) return NextResponse.json({ error: t.expired }, { status: 401 });
-    await setHealthConsent(client.id, body.output);
+    // Onay metninin gösterildiği dil kayda yazılır (`lang`).
+    await setHealthConsent(client.id, { ...body.output, locale });
     return NextResponse.json({ ok: true });
   } catch (error) {
     const failure = error instanceof GithubError ? error : null;
