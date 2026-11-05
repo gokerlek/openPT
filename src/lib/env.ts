@@ -1,4 +1,6 @@
 import 'server-only';
+import { LocalizedError } from '../i18n/errors';
+import { installMessages } from '../i18n/messages/install';
 import { githubAccessFrom, type GithubAccess } from './github/access';
 
 /**
@@ -9,7 +11,7 @@ import { githubAccessFrom, type GithubAccess } from './github/access';
  * tarayıcı paketine giremez. Hiçbir değişken NEXT_PUBLIC_ ile başlamaz.
  */
 
-class EnvError extends Error {}
+class EnvError extends LocalizedError {}
 
 /** Çerez imzasının sırrı en az bu kadar bayt (HS256 anahtarı). */
 const AUTH_SECRET_MIN_BYTES = 32;
@@ -17,9 +19,7 @@ const AUTH_SECRET_MIN_BYTES = 32;
 function required(name: string): string {
   const value = process.env[name];
   if (!value) {
-    throw new EnvError(
-      `${name} tanımlı değil. Vercel → Settings → Environment Variables altına ekle (şablon: .env.example).`,
-    );
+    throw new EnvError((l) => installMessages(l).env.missing(name));
   }
   return value;
 }
@@ -64,17 +64,15 @@ export function serverEnv(): ServerEnv {
   // Üretimde en az bir giriş yöntemi zorunlu. Yerel geliştirmede ikisi de yoksa
   // `/api/dev/login` kullanılır; giriş kodu hiçbir koşulda günlüğe yazılmaz.
   if (process.env.NODE_ENV === 'production' && !githubClientId && !resendApiKey) {
-    throw new EnvError(
-      'Giriş yöntemi tanımlı değil: GITHUB_CLIENT_ID + GITHUB_CLIENT_SECRET (önerilen) ya da yedek olarak RESEND_API_KEY.',
-    );
+    throw new EnvError((l) => installMessages(l).env.noLogin);
   }
   if (Boolean(githubClientId) !== Boolean(githubClientSecret)) {
-    throw new EnvError('GITHUB_CLIENT_ID ve GITHUB_CLIENT_SECRET birlikte tanımlanmalı.');
+    throw new EnvError((l) => installMessages(l).env.oauthPair);
   }
   // Oturum çerezleri HS256 ile bu sırla imzalanır; kısa sır çevrimdışı kırılıp PT çerezi sahtelenebilir.
   const authSecret = required('AUTH_SECRET');
   if (Buffer.byteLength(authSecret, 'utf8') < AUTH_SECRET_MIN_BYTES) {
-    throw new EnvError(`AUTH_SECRET en az ${AUTH_SECRET_MIN_BYTES} bayt olmalı (ör. \`openssl rand -base64 32\`).`);
+    throw new EnvError((l) => installMessages(l).env.secretShort(AUTH_SECRET_MIN_BYTES));
   }
 
   cached = {

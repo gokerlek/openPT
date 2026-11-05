@@ -1,6 +1,8 @@
 import 'server-only';
 import { DEFAULT_LOCALE, type Locale } from '../i18n/locale';
+import { LocalizedError } from '../i18n/errors';
 import { authMessages } from '../i18n/messages/auth';
+import { installMessages } from '../i18n/messages/install';
 import { serverEnv } from './env';
 
 /**
@@ -11,7 +13,7 @@ export async function sendOtpEmail(email: string, code: string, locale: Locale =
   const env = serverEnv();
   const t = authMessages(locale).mail;
 
-  if (!env.resendApiKey) throw new Error('RESEND_API_KEY tanımlı değil: e-posta yolu kapalı.');
+  if (!env.resendApiKey) throw new LocalizedError((l) => installMessages(l).env.resendMissing);
 
   const response = await fetch('https://api.resend.com/emails', {
     method: 'POST',

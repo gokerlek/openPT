@@ -1,3 +1,6 @@
+import {messageOf} from '../../i18n/errors.ts';
+import {DEFAULT_LOCALE,type Locale} from '../../i18n/locale.ts';
+import {installMessages} from '../../i18n/messages/install/index.ts';
 import {githubAccessFrom} from '../github/access.ts';
 
 /**
@@ -15,11 +18,11 @@ export function environmentStatus(env: Record<string,string|undefined>): 'missin
 }
 
 /**
- * GitHub uygulaması ayarı var ama bozuksa sihirbazda gösterilecek sebep (Türkçe; anahtarın kendisini
+ * GitHub uygulaması ayarı var ama bozuksa sihirbazda gösterilecek sebep (`locale` dilinde; anahtarın kendisini
  * tekrarlamaz). Hiç uygulama ayarı yoksa (ilk kurulum, eski kurulum) ya da ayar sağlamsa null.
  */
-export function githubSetupProblem(env: Record<string,string|undefined>): string|null {
+export function githubSetupProblem(env: Record<string,string|undefined>, locale: Locale = DEFAULT_LOCALE): string|null {
   if(!env.GITHUB_APP_ID?.trim() && !env.GITHUB_APP_PRIVATE_KEY?.trim() && !env.GITHUB_APP_INSTALLATION_ID?.trim())return null;
   try{githubAccessFrom(env);return null;}
-  catch(error){return error instanceof Error?error.message:'GitHub uygulamasının ayarları okunamadı.';}
+  catch(error){return messageOf(error,locale)??installMessages(locale).github.access.setupUnreadable;}
 }

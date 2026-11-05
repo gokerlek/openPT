@@ -1,4 +1,7 @@
 import * as v from 'valibot';
+import {LocalizedError} from '../../i18n/errors.ts';
+import {DEFAULT_LOCALE,type Locale} from '../../i18n/locale.ts';
+import {installMessages} from '../../i18n/messages/install/index.ts';
 import {normalizePrivateKey,isPrivateKey} from '../github/private-key.ts';
 
 /**
@@ -30,27 +33,27 @@ export type GithubAppManifest={
 
 /** Uygulama adının sonuna eklenen 6 küçük harf: ad GitHub'da benzersiz olmalı. */
 export function randomSuffix(bytes:Uint8Array):string {
-  if(bytes.length<6)throw new Error('6 bayt rastgele veri gerekir.');
+  if(bytes.length<6)throw new LocalizedError(l=>installMessages(l).githubApp.randomBytes);
   return Array.from(bytes.slice(0,6),byte=>String.fromCharCode(97+byte%26)).join('');
 }
 
 function productionOrigin(homepage:string):string {
   let url:URL;
-  try{url=new URL(homepage);}catch{throw new Error('Uygulamanın adresi okunamadı.');}
+  try{url=new URL(homepage);}catch{throw new LocalizedError(l=>installMessages(l).githubApp.homepageUnreadable);}
   const local=url.protocol==='http:'&&['localhost','127.0.0.1'].includes(url.hostname);
-  if(url.protocol!=='https:'&&!local)throw new Error('GitHub bağlantısı için uygulamanın HTTPS adresi gerekir.');
+  if(url.protocol!=='https:'&&!local)throw new LocalizedError(l=>installMessages(l).githubApp.needHttps);
   return url.origin;
 }
 
-export function githubAppManifest({homepage,appName='openPT',suffix}:{homepage:string;appName?:string;suffix:string}):GithubAppManifest {
-  if(!SUFFIX.test(suffix))throw new Error('Geçersiz uygulama adı eki.');
+export function githubAppManifest({homepage,appName='openPT',suffix,locale=DEFAULT_LOCALE}:{homepage:string;appName?:string;suffix:string;locale?:Locale}):GithubAppManifest {
+  if(!SUFFIX.test(suffix))throw new LocalizedError(l=>installMessages(l).githubApp.badSuffix);
   const origin=productionOrigin(homepage);
   // GitHub adı en çok 34 karakter ve benzersiz: "<ad> <6 harf>". Türkçe harfler sadeleşir, kalan işaretler atılır.
   const base=appName.replace(/[çÇğĞıİöÖşŞüÜ]/g,letter=>TURKISH[letter]!).replace(/[^A-Za-z0-9 ._-]/g,'').replace(/\s+/g,' ').trim().slice(0,NAME_LIMIT-suffix.length-1).trim()||'openPT';
   return {
     name:`${base} ${suffix}`,
     url:origin,
-    description:'openPT: PT’nin kendi kurulumu. GitHub ile giriş, özel veri repoları ve uygulama güncellemeleri.',
+    description:installMessages(locale).githubApp.description,
     public:false,
     redirect_url:`${origin}/api/install/github-app`,
     callback_urls:[`${origin}/api/auth/github/callback`],
@@ -68,7 +71,7 @@ export function manifestFormAction(state:string):string {
   return `https://github.com/settings/apps/new?${new URLSearchParams({state})}`;
 }
 export function installUrl(slug:string):string {
-  if(!SLUG.test(slug))throw new Error('Geçersiz GitHub uygulaması.');
+  if(!SLUG.test(slug))throw new LocalizedError(l=>installMessages(l).githubApp.badApp);
   return `https://github.com/apps/${slug}/installations/new`;
 }
 export function installationSettingsUrl(installationId:number|string):string {
@@ -87,7 +90,7 @@ const conversionSchema=v.object({
 });
 export function parseConversion(json:unknown):AppCredentials {
   const parsed=v.safeParse(conversionSchema,json);
-  if(!parsed.success)throw new Error('GitHub’dan beklenmeyen uygulama bilgisi geldi.');
+  if(!parsed.success)throw new LocalizedError(l=>installMessages(l).githubApp.badConversion);
   const data=parsed.output;
   return {appId:String(data.id),slug:data.slug,owner:data.owner.login,clientId:data.client_id,clientSecret:data.client_secret,privateKey:normalizePrivateKey(data.pem)};
 }
@@ -119,7 +122,7 @@ const installationSchema=v.object({
 });
 export function parseInstallation(json:unknown):InstallationInfo {
   const parsed=v.safeParse(installationSchema,json);
-  if(!parsed.success)throw new Error('GitHub’dan beklenmeyen kurulum bilgisi geldi.');
+  if(!parsed.success)throw new LocalizedError(l=>installMessages(l).githubApp.badInstallation);
   const data=parsed.output;
   return {id:data.id,account:data.account.login,selection:data.repository_selection,permissions:data.permissions,suspended:Boolean(data.suspended_at)};
 }
@@ -128,13 +131,14 @@ export function parseInstallation(json:unknown):InstallationInfo {
  * Kurulumun sorunları, PT'ye söylenecek sırayla (boşsa sorun yok). "All repositories" şart: danışan
  * repoları sonradan açılır ve seçili repolarla kurulmuş uygulama onları göremez.
  */
-export function installationProblems(info:InstallationInfo,owner:string):string[] {
+export function installationProblems(info:InstallationInfo,owner:string,locale:Locale=DEFAULT_LOCALE):string[] {
+  const t=installMessages(locale).githubApp;
   const problems:string[]=[];
-  if(info.account.toLowerCase()!==owner.toLowerCase())problems.push(`GitHub uygulaması ${info.account} hesabına kurulmuş; PT hesabına (${owner}) kurulmalı.`);
-  if(info.suspended)problems.push('GitHub uygulamasının kurulumu askıya alınmış. GitHub’daki kurulum ayarından yeniden etkinleştir.');
+  if(info.account.toLowerCase()!==owner.toLowerCase())problems.push(t.wrongAccount(info.account,owner));
+  if(info.suspended)problems.push(t.suspended);
   const missing=Object.entries(APP_PERMISSIONS).filter(([name,level])=>!grants(info.permissions[name],level)).map(([name])=>name);
-  if(missing.length)problems.push(`GitHub uygulamasının izinleri eksik (${missing.join(', ')}). GitHub’daki kurulum ayarında yeni izinleri onayla.`);
-  if(info.selection!=='all')problems.push('GitHub uygulaması yalnız seçili repolara erişiyor; yeni danışan repoları ona görünmez. GitHub’daki kurulum ayarında “All repositories” seç ve kaydet.');
+  if(missing.length)problems.push(t.missingPermissions(missing.join(', ')));
+  if(info.selection!=='all')problems.push(t.selectedOnly);
   return problems;
 }
 function grants(granted:string|undefined,needed:'read'|'write'):boolean {
@@ -156,15 +160,16 @@ const NONCE=/^[A-Za-z0-9+/=_-]{1,128}$/;
  * Dönüşten sonraki küçük sayfa: bilgileri YALNIZ bu sekmenin sessionStorage'ına koyar ve GitHub'ın kurulum
  * sayfasına geçer (`replace`: kodlu adres geçmişte kalmaz). Depolama kapalıysa ne yapılacağını söyler.
  */
-export function handoffPage(credentials:AppCredentials,nonce:string):string {
-  if(!NONCE.test(nonce))throw new Error('Geçersiz nonce.');
+export function handoffPage(credentials:AppCredentials,nonce:string,locale:Locale=DEFAULT_LOCALE):string {
+  if(!NONCE.test(nonce))throw new LocalizedError(l=>installMessages(l).githubApp.badNonce);
+  const t=installMessages(locale).githubApp.handoff;
   const script=`try{sessionStorage.setItem(${scriptJson(INSTALL_STORAGE_KEY)},JSON.stringify(${scriptJson(credentials)}));location.replace(${scriptJson(installUrl(credentials.slug))});}catch(e){document.getElementById('durum').hidden=true;document.getElementById('hata').hidden=false;}`;
-  return `<!doctype html><html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><meta name="robots" content="noindex"><title>GitHub’a bağlanıyor</title><style>body{font-family:system-ui,sans-serif;max-width:32rem;margin:3rem auto;padding:0 1rem;line-height:1.5;color-scheme:light dark}</style></head><body><p id="durum">GitHub uygulaman oluşturuldu. Kurulum sayfasına geçiliyor…</p><p id="hata" hidden>Bu sekme bilgileri saklayamadı (gizli pencere ya da site verisi kapalı olabilir). Kurulumu normal bir sekmede yeniden başlat. GitHub’da oluşan fazla uygulamayı Settings → Developer settings → GitHub Apps ekranından silebilirsin.</p><noscript><p>Devam etmek için JavaScript’i aç ve kurulumu yeniden başlat.</p></noscript><script nonce="${nonce}">${script}</script></body></html>`;
+  return `<!doctype html><html lang="${locale}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><meta name="robots" content="noindex"><title>${t.title}</title><style>body{font-family:system-ui,sans-serif;max-width:32rem;margin:3rem auto;padding:0 1rem;line-height:1.5;color-scheme:light dark}</style></head><body><p id="durum">${t.status}</p><p id="hata" hidden>${t.error}</p><noscript><p>${t.noscript}</p></noscript><script nonce="${nonce}">${script}</script></body></html>`;
 }
 
 /** Dönüş sayfasının başlıkları: önbellek yok, referrer yok, yalnız bu sayfanın betiği çalışır. */
 export function handoffHeaders(nonce:string):Record<string,string> {
-  if(!NONCE.test(nonce))throw new Error('Geçersiz nonce.');
+  if(!NONCE.test(nonce))throw new LocalizedError(l=>installMessages(l).githubApp.badNonce);
   return {
     'Content-Type':'text/html; charset=utf-8',
     'Cache-Control':'no-store',

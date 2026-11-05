@@ -1,6 +1,9 @@
 import {randomBytes} from 'node:crypto';
 import {cookies} from 'next/headers';
 import {NextResponse} from 'next/server';
+import {messageOf} from '@/i18n/errors';
+import {localeFromRequest} from '@/i18n/locale';
+import {installMessages} from '@/i18n/messages/install';
 import {appJwt} from '@/lib/github/app-jwt';
 import {installationHomepage} from '@/lib/installation/address';
 import {githubAppManifest,handoffHeaders,handoffPage,manifestFormAction,randomSuffix} from '@/lib/installation/github-app';
@@ -20,13 +23,15 @@ const STATE_PATH='/api/install/github-app';
 const NO_STORE={'Cache-Control':'no-store'};
 
 export async function POST(request:Request) {
-  if(!sameOrigin(request))return NextResponse.json({error:'İstek kaynağı doğrulanamadı.'},{status:403});
-  if(process.env.AXON_SETUP_DEMO==='1')return NextResponse.json({error:'Bu bir simülasyon. GitHub’a istek gönderilmez.'},{status:400});
-  if(environmentStatus(process.env)==='ready')return NextResponse.json({error:'Kurulum zaten tamamlanmış.'},{status:409});
+  const locale=localeFromRequest(request);
+  const t=installMessages(locale).vercel.api;
+  if(!sameOrigin(request))return NextResponse.json({error:t.origin},{status:403});
+  if(process.env.AXON_SETUP_DEMO==='1')return NextResponse.json({error:t.demoGithub},{status:400});
+  if(environmentStatus(process.env)==='ready')return NextResponse.json({error:t.alreadyDoneShort},{status:409});
   const homepage=installationHomepage(request.headers,{VERCEL_ENV:process.env.VERCEL_ENV,VERCEL_PROJECT_PRODUCTION_URL:process.env.VERCEL_PROJECT_PRODUCTION_URL});
   let manifest;
-  try{manifest=githubAppManifest({homepage,suffix:randomSuffix(randomBytes(6))});}
-  catch(error){return NextResponse.json({error:error instanceof Error?error.message:'Uygulamanın adresi okunamadı.'},{status:400,headers:NO_STORE});}
+  try{manifest=githubAppManifest({homepage,suffix:randomSuffix(randomBytes(6)),locale});}
+  catch(error){return NextResponse.json({error:messageOf(error,locale)??installMessages(locale).githubApp.homepageUnreadable},{status:400,headers:NO_STORE});}
   const state=randomBytes(32).toString('base64url');
   // GitHub dönüşü üst düzey bir GET: `lax` çerez gider. Akışın üç adımı GitHub'da en çok bir saat.
   (await cookies()).set(STATE_COOKIE,state,{httpOnly:true,sameSite:'lax',secure:process.env.NODE_ENV==='production',path:STATE_PATH,maxAge:3600});
@@ -34,6 +39,7 @@ export async function POST(request:Request) {
 }
 
 export async function GET(request:Request) {
+  const locale=localeFromRequest(request);
   const back=(reason:string)=>NextResponse.redirect(new URL(`/install?github=${reason}`,request.url),{status:303,headers:{...NO_STORE,'Referrer-Policy':'no-referrer'}});
   if(environmentStatus(process.env)==='ready')return NextResponse.redirect(new URL('/login',request.url),{status:303,headers:NO_STORE});
   if(process.env.AXON_SETUP_DEMO==='1')return back('simulasyon');
@@ -48,7 +54,7 @@ export async function GET(request:Request) {
   try{
     const credentials=await githubAppApi(appJwt).convert(code);
     const nonce=randomBytes(16).toString('base64url');
-    return new Response(handoffPage(credentials,nonce),{headers:handoffHeaders(nonce)});
+    return new Response(handoffPage(credentials,nonce,locale),{headers:handoffHeaders(nonce)});
   }catch(error){
     return back(error instanceof GithubAppError&&error.status===410?'sure':'donusum');
   }

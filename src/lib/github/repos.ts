@@ -1,5 +1,6 @@
 import 'server-only';
 import type { Octokit } from 'octokit';
+import { installMessages } from '../../i18n/messages/install';
 import { requireAllRepositories } from './app-auth';
 import { appRepo, clientRepoName, gh, githubMode, GithubError, isClientRepo, owner, toGithubError } from './client';
 import { repoAdminStep } from './repo-admin';
@@ -47,10 +48,7 @@ export async function checkAppRepo(): Promise<{ exists: boolean }> {
   try {
     const { data } = await gh().rest.repos.get({ owner: owner(), repo });
     if (data.fork || !data.private) {
-      throw new GithubError(
-        `"${repo}" ${data.fork ? 'bir fork' : 'herkese açık'}. Veri repo'su kodun fork'undan ayrı ve özel olmalı: APP_REPO'ya yeni bir ad ver (ör. openpt-data).`,
-        409,
-      );
+      throw new GithubError((l) => installMessages(l).github.repoForkOrPublic(repo, data.fork), 409);
     }
     return { exists: true };
   } catch (error) {
@@ -122,7 +120,7 @@ export async function createClientRepo(clientId: string): Promise<{ repo: string
 export async function deleteClientRepo(clientId: string): Promise<void> {
   const repo = clientRepoName(clientId);
   if (!isClientRepo(repo)) {
-    throw new GithubError('Yalnız danışan repoları silinebilir.', 403);
+    throw new GithubError((l) => installMessages(l).github.onlyClientRepos, 403);
   }
   await asRepoAdmin(async (admin) => {
     try {

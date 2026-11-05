@@ -1,5 +1,6 @@
 import { DEFAULT_LOCALE, type Locale } from '../../i18n/locale.ts';
 import type { Localizable, LocalizedText } from '../../i18n/errors.ts';
+import { installMessages } from '../../i18n/messages/install/index.ts';
 
 /**
  * GitHub katmanının hata tipleri ve yeni açılan repo'ya ilk yazma — saf: `server-only`, ortam ya da
@@ -71,7 +72,7 @@ export function rateLimitOf(status: number, headers: Record<string, unknown> | u
 export class BrokenJsonError extends GithubError {
   readonly sha: string;
   constructor(path: string, sha: string) {
-    super(`${path} bozuk JSON içeriyor.`, 500);
+    super((l) => installMessages(l).github.brokenJson(path), 500);
     this.name = 'BrokenJsonError';
     this.sha = sha;
   }

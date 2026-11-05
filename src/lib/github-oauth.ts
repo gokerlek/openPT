@@ -1,6 +1,8 @@
 import 'server-only';
 import { randomBytes } from 'node:crypto';
 import { cookies } from 'next/headers';
+import { LocalizedError } from '../i18n/errors';
+import { installMessages } from '../i18n/messages/install';
 import { serverEnv } from './env';
 import { userTokenFromGrant, type UserToken } from './github/user-token';
 import { safeReturnPath } from './navigation';
@@ -30,7 +32,7 @@ export function githubLoginEnabled(): boolean {
 function clientCredentials(): { id: string; secret: string } {
   const id = process.env.GITHUB_CLIENT_ID;
   const secret = process.env.GITHUB_CLIENT_SECRET;
-  if (!id || !secret) throw new Error('GITHUB_CLIENT_ID / GITHUB_CLIENT_SECRET tanımlı değil');
+  if (!id || !secret) throw new LocalizedError((l) => installMessages(l).github.oauthMissing);
   return { id, secret };
 }
 

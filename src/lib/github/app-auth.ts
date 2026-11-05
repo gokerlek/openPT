@@ -1,5 +1,7 @@
 import 'server-only';
 import { createAppAuth } from '@octokit/auth-app';
+import type { Locale } from '../../i18n/locale';
+import { installMessages } from '../../i18n/messages/install';
 import { serverEnv } from '../env';
 import { githubAppApi, GithubAppError } from '../installation/github-app-api';
 import { installationSettingsUrl, type InstallationInfo } from '../installation/github-app';
@@ -25,7 +27,7 @@ const INFO_TTL_MS = 60_000;
 
 function appAccess(): AppAccess {
   const access = serverEnv().githubAccess;
-  if (access.mode !== 'app') throw new Error('GitHub uygulaması modu kapalı.');
+  if (access.mode !== 'app') throw new GithubError((l) => installMessages(l).github.appMode, 500);
   return access;
 }
 
@@ -37,7 +39,7 @@ const api = () => githubAppApi(appJwt);
  * `toGithubError` bunu olduğu gibi geçirir (Türkçe, sırsız mesaj kaybolmasın). Kişisel anahtarda oluşmaz.
  */
 export class InstallationAccessError extends GithubError {
-  constructor(message: string) {
+  constructor(message: string | ((locale: Locale) => string)) {
     super(message, 503);
     this.name = 'InstallationAccessError';
   }
@@ -46,7 +48,9 @@ export class InstallationAccessError extends GithubError {
 /** GitHub uygulaması hatasını veri katmanının hata tipine çevirir (mesaj Türkçe, sırsız). */
 function asGithubError(error: unknown): unknown {
   if (!(error instanceof GithubAppError)) return error;
-  return error.status === 404 || error.status === 401 || error.status === 400 ? new InstallationAccessError(error.message) : new GithubError(error.message, error.status);
+  return error.status === 404 || error.status === 401 || error.status === 400
+    ? new InstallationAccessError((l) => error.localized(l))
+    : new GithubError((l) => error.localized(l), error.status);
 }
 
 /**
@@ -55,8 +59,8 @@ function asGithubError(error: unknown): unknown {
  */
 function tokenError(error: unknown): unknown {
   const status = typeof error === 'object' && error && 'status' in error ? Number(error.status) : 0;
-  if (status === 404) return new InstallationAccessError('GitHub uygulamasının kurulumuna erişilemiyor (kaldırılmış ya da kurulum kimliği eski olabilir). Uygulamayı GitHub’da yeniden kur; GITHUB_APP_INSTALLATION_ID’yi kontrol et.');
-  if (status === 401) return new InstallationAccessError('GitHub uygulamasının kimliği doğrulanamadı. GITHUB_APP_ID ve GITHUB_APP_PRIVATE_KEY değerlerini kontrol et.');
+  if (status === 404) return new InstallationAccessError((l) => installMessages(l).github.installationGone);
+  if (status === 401) return new InstallationAccessError((l) => installMessages(l).github.appUnauthorized);
   return error;
 }
 
@@ -83,7 +87,7 @@ function installation(access: AppAccess) {
           throw asGithubError(error);
         });
       if (!found) {
-        throw new InstallationAccessError(`GitHub uygulaması ${owner} hesabına kurulu değil. GitHub → Settings → Applications ekranından uygulamayı kur ya da GITHUB_APP_INSTALLATION_ID ekle.`);
+        throw new InstallationAccessError((l) => installMessages(l).github.notInstalledFor(owner));
       }
       return found.id;
     },
@@ -169,9 +173,6 @@ export async function requireAllRepositories(): Promise<void> {
   if (serverEnv().githubAccess.mode !== 'app') return;
   const info = await installationInfo({ fresh: true });
   if (info.selection !== 'all') {
-    throw new GithubError(
-      `GitHub uygulaması yalnız seçili repolara erişiyor; danışan repoları ona görünmez, açılamaz ya da silinemez. GitHub’daki kurulum ayarında “All repositories” seç: ${installationSettingsUrl(info.id)}`,
-      409,
-    );
+    throw new GithubError((l) => installMessages(l).github.selectedOnlyRepos(installationSettingsUrl(info.id)), 409);
   }
 }

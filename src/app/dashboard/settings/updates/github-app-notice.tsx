@@ -1,28 +1,33 @@
 import { WarningCircle } from '@phosphor-icons/react/dist/ssr';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { githubConnection, githubMode, GithubError } from '@/lib/github/client';
+import { messageOf } from '@/i18n/errors';
+import { installMessages } from '@/i18n/messages/install';
+import { getLocale } from '@/i18n/server';
+import { githubConnection, githubMode } from '@/lib/github/client';
 
 /**
  * GitHub uygulaması kurulumunun sorunları (tasarım B1): kurulum "All repositories" değilse yeni danışan
  * repoları uygulamaya görünmez; izin eksikse güncelleme ve repo işleri düşer. Kişisel anahtar (PAT)
- * kurulumunda hiç görünmez. Kurulum okunamazsa sebebi (Türkçe, sırsız) söylenir; sayfa düşmez.
+ * kurulumunda hiç görünmez. Kurulum okunamazsa sebebi (isteğin dilinde, sırsız) söylenir; sayfa düşmez.
  */
 export async function GithubAppNotice() {
   if (githubMode() !== 'app') return null;
+  const locale = await getLocale();
+  const t = installMessages(locale).updates.panel;
   let problems: string[];
   let settingsUrl: string | undefined;
   try {
-    const connection = await githubConnection();
+    const connection = await githubConnection(locale);
     problems = connection.problems;
     settingsUrl = connection.settingsUrl;
   } catch (error) {
-    problems = [error instanceof GithubError ? error.message : 'GitHub uygulamasının kurulumu okunamadı. Biraz sonra tekrar dene.'];
+    problems = [messageOf(error, locale) ?? t.appNoticeUnreadable];
   }
   if (problems.length === 0) return null;
   return (
     <Alert variant="destructive">
       <WarningCircle weight="fill" />
-      <AlertTitle>GitHub uygulamasının kurulumu eksik</AlertTitle>
+      <AlertTitle>{t.appNoticeTitle}</AlertTitle>
       <AlertDescription>
         {problems.map((problem) => (
           <p key={problem}>{problem}</p>
@@ -30,7 +35,7 @@ export async function GithubAppNotice() {
         {settingsUrl && (
           <p>
             <a href={settingsUrl} target="_blank" rel="noreferrer">
-              GitHub’daki kurulum ayarını aç
+              {installMessages(locale).ui.github.openSettings}
             </a>
           </p>
         )}
