@@ -225,3 +225,37 @@ Every English string must use these terms. Plan: `docs/plans/2026-11-05-coklu-di
 | Genel koç / Tüm danışanlar | general coach / All clients | AI coach scope. |
 | Paneldeki anahtar | dashboard key | Gemini key stored in settings. |
 | Hedefler | Getting fitter / Gaining strength / Muscle growth / Supporting weight management / Mobility | AI goals. |
+
+## Added from area work (T1 library/programs, T2 shell, T3 client app)
+
+| Turkish | English | Notes |
+|---|---|---|
+| öneri | suggestion | Program change proposals the client or AI makes. |
+| rekor | PR | Personal record; plural "PRs". |
+| hafif gün / hafifletildi | lighter day / made lighter | Client-chosen readiness option. Not "deload". |
+| hafifletme haftası | deload week | Planned phase week. |
+| yarım (antrenman) | unfinished | |
+| sırada (evre) / sıradaki (gün) | Upcoming / Next | |
+| önceki | Previous | |
+| muadil seç / Değiştir | pick an alternative / Swap | |
+| tur | round | |
+| bardak | glass | Water tracking. |
+| fazladan | extra | |
+| Ara ver | Take a break | |
+| ısınma | Warm-up | |
+| Gelişim (kart) | Strength | Progress card title. |
+| Erişimi kapat | Revoke access | |
+| yedek yol | backup method | |
+| Şu an antrenmanda | Working out now | |
+| kaynak şablonlar | source templates | |
+| kinetik zincir | open chain / closed chain / semi-closed | Exercise filter. |
+| eksenel yük | axial load | None / Low / Moderate / High. |
+| makaslama | shear | |
+| omurga hizası | spinal alignment | |
+| eklem penceresi | joint window | |
+| yük vektörü | load vector | |
+| kasılma türü | contraction type | |
+| direnç profili | resistance profile | |
+| engelli / uyarı / ipucu (filtre kararı) | blocked / caution / give a cue | One term per decision across screens. |
+| AMRAP, bpm | AMRAP, bpm | Unchanged. |
+| metre | meters | US spelling. |
