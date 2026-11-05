@@ -157,13 +157,13 @@ const en: Shape<typeof tr> = {
       reduceChip: (delta) => `Pain · ${delta}`,
       reduceDetail: (cause, done, last, after, setsText) =>
         `${cause}. Today the weight is ${after} instead of ${done ? `the ${last} you did last time` : last}${setsText ? `, ${setsText}` : ''}. Your next check-in decides the next workout.`,
-      lightChipDelta: (delta) => `Light day · ${delta}`,
-      lightChipFewer: 'Light day · one set fewer',
-      lightChip: 'Light day',
+      lightChipDelta: (delta) => `Lighter day · ${delta}`,
+      lightChipFewer: 'Lighter day · one set fewer',
+      lightChip: 'Lighter day',
       lightWeight: (before, after) => `weight ${after} instead of ${before}`,
       lightPain: (cause) => ` ${cause}: no increase today.`,
       lightDetail: (parts, pain) =>
-        `You chose a light day today${parts.length > 0 ? `: ${parts.join(', ')}` : ''}.${pain} Only today's plan changed; your next workout goes back to the plan's own weight.`,
+        `You chose a lighter day today${parts.length > 0 ? `: ${parts.join(', ')}` : ''}.${pain} Only today's plan changed; your next workout goes back to the plan's own weight.`,
       unavailableChip: (duration) => (duration ? 'Pain · shorten the time' : 'Pain · fewer reps'),
       unavailableDetail: (cause, weighted) =>
         `${cause}. ${weighted ? 'The weight is already at its lightest setting' : "There's no weight to reduce on this exercise"}: stay at the low end of the range today, and do one set fewer if you need to.`,
@@ -508,7 +508,7 @@ const en: Shape<typeof tr> = {
     previousHead: 'Previous',
     targetHead: 'Target',
     kgHead: 'kg',
-    metersHead: 'Metres',
+    metersHead: 'Meters',
     inclineHead: 'Incline %',
     statusHead: 'Status',
     kcalNote: 'Calories are calculated from the body weight your trainer entered.',

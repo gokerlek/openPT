@@ -214,7 +214,7 @@ export function StrengthProgress({
             <MuscleMap
               layout="split"
               marks={statusMarks(statuses)}
-              legend={statusLegend(statuses)}
+              legend={statusLegend(statuses, locale)}
               counts={counts}
               selected={open?.muscles.filter((muscle): muscle is BodyMuscle => muscle !== 'cardio') ?? []}
               onToggle={(muscle) => {

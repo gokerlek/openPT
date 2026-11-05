@@ -44,6 +44,28 @@ function row(id: string, finishedDaysAgo: number | null, overrides: Partial<Sess
 const index = (...items: SessionIndexRow[]): SessionIndex => ({ version: 1, items, deleted: [] });
 const texts = (notices: readonly PtNotice[]) => notices.map((notice) => `${notice.kind}: ${notice.text}`);
 
+describe('PT bildirimleri: aşırı yükte hareketin adı', () => {
+  const overload = (items: NonNullable<SessionIndexRow['overloads']>) => index(row('s_cccccccc', 3, { notices: ['overload'], overloads: items }));
+
+  test('kimliği olan kütüphane hareketi okuyanın dilinde; PT adı ve kimliksiz eski satır olduğu gibi', () => {
+    const items = [
+      { title: 'Şınav', exerciseId: 'sinav', kg: 20 },
+      { title: 'Duvar şınavı', exerciseId: 'sinav', kg: 10 },
+      { title: 'Halter Bench Press', kg: 85, plannedKg: 62.5 },
+    ];
+    assert.deepEqual(texts(sessionNotices(overload(items), 0, [], 'en')), [
+      'overload: Push-Up 20 kg',
+      'overload: Duvar şınavı 10 kg',
+      'overload: Halter Bench Press 85 kg (target 62.5)',
+    ]);
+    assert.deepEqual(texts(sessionNotices(overload(items), 0)), [
+      'overload: Şınav 20 kg',
+      'overload: Duvar şınavı 10 kg',
+      'overload: Halter Bench Press 85 kg (hedef 62,5)',
+    ]);
+  });
+});
+
 describe('PT bildirimleri: antrenmanlardan', () => {
   test('başka program, yarım (12/17 set), aşırı yük (hareket başına), hafifletildi', () => {
     const notices = sessionNotices(

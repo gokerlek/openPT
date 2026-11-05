@@ -110,9 +110,10 @@ const tr = {
     forecastShort: '(tahmin)',
     forecastBand: 'Tahmin ve olası aralık',
     showTable: 'Değerleri tablo olarak göster',
-    defaultNoun: 'ölçüm günü',
+    /** Noktaların adı, sayıya göre (`countLine`); Türkçede sayıdan sonra hep tekil. */
+    defaultNoun: { one: 'ölçüm günü', other: 'ölçüm günü' },
     /** Ekran okuyucu özeti: "Başlık: 12 ölçüm günü." ve çubuk grafikte son dönem ile ortalama. */
-    countLine: (title: string, n: string, noun: string) => `${title}: ${n} ${noun}.`,
+    countLine: (title: string, _count: number, n: string, noun: { one: string; other: string }) => `${title}: ${n} ${noun.one}.`,
     barLast: (label: string, value: string, partial: boolean) => `Son: ${label} ${value}${partial ? ' (sürüyor)' : ''}.`,
     barAverage: (value: string) => `Ortalama ${value}.`,
     /** Çizgi grafikte son değer (`series`: iki seride serinin adı) ve tahmin. */

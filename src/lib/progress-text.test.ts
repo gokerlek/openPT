@@ -33,6 +33,8 @@ import {
   weekLabel,
 } from './progress-text.ts';
 import { forecast } from './trend.ts';
+import { uiMessages } from '../i18n/messages/ui/index.ts';
+import { clientProgressMessages } from '../i18n/messages/client-progress/index.ts';
 
 const point = (date: string, fields: Partial<ExercisePoint> = {}): ExercisePoint => ({ date, volumeKg: 0, totalReps: 0, totalSeconds: 0, sets: 3, ...fields });
 
@@ -371,5 +373,19 @@ describe('İlerleme metinleri İngilizce (en)', () => {
     assert.equal(describeTrend(forecast(weekly([60, 62.5, 65])), 'kg', '2026-08-20', 'en'), 'A forecast needs at least 4 workouts.');
     assert.equal(describeTrend(forecast(weekly([70, 67.5, 65, 62.5, 60])), 'kg', '2026-09-01', 'en'), 'Trend: −2.5 kg a week.');
     assert.equal(formatSeconds(90, 'en'), '1 min 30 s');
+  });
+});
+
+describe('grafiğin ekran okuyucu özeti: sayı ve ad', () => {
+  test('İngilizcede ad sayıya göre tekil ya da çoğul; Türkçe değişmez', () => {
+    const en = uiMessages('en').charts;
+    const nouns = clientProgressMessages('en').charts;
+    assert.equal(en.countLine('Bench Press', 1, '1', nouns.workoutDayNoun), 'Bench Press: 1 workout day.');
+    assert.equal(en.countLine('Bench Press', 12, '12', nouns.workoutDayNoun), 'Bench Press: 12 workout days.');
+    assert.equal(en.countLine('Weekly volume', 1, '1', nouns.weekNoun), 'Weekly volume: 1 week.');
+    assert.equal(en.countLine('Weight', 2, '2', en.defaultNoun), 'Weight: 2 measurement days.');
+    const tr = uiMessages('tr').charts;
+    assert.equal(tr.countLine('Bench Press', 12, '12', clientProgressMessages('tr').charts.workoutDayNoun), 'Bench Press: 12 antrenman günü.');
+    assert.equal(tr.countLine('Kilo', 1, '1', tr.defaultNoun), 'Kilo: 1 ölçüm günü.');
   });
 });

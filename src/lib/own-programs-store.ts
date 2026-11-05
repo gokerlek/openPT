@@ -89,7 +89,7 @@ export async function readOwnOverview(clientId: string): Promise<OwnOverview> {
  */
 export async function ownEditorLibrary(client: Client, locale?: Locale): Promise<{ exercises: PickerExercise[]; devices: EditorDevice[] }> {
   const [exercises, devices, config] = await Promise.all([listExercises(undefined, locale), listDevices(undefined, locale), readAppConfig()]);
-  const care = await loadCareInput(client, todayIn(config.timeZone, new Date()));
+  const care = await loadCareInput(client, todayIn(config.timeZone, new Date()), locale);
   const flags = care ? exerciseCaution(exercises, care) : null;
   return {
     exercises: pickerExercises(exercises).map((exercise) =>
@@ -110,9 +110,17 @@ export async function readOwnProgramOf(clientId: string, programId: string): Pro
 
 /**
  * PT'nin kaydı (`PUT /api/clients/[id]/programs/[pid]`): dosya dalın ucunda okunur, paylaşılmamışsa `forbidden`;
- * aynı uçla commit, çakışmada paylaşım yeniden denetlenir (`saveOwnProgram`, `by: 'pt'`).
+ * aynı uçla commit, çakışmada paylaşım yeniden denetlenir (`saveOwnProgram`, `by: 'pt'`). `locale`: PT'nin dili (commit ve
+ * program geçmişinin cümleleri, kütüphane adları); yoksa Türkçe.
  */
-export async function ptSaveOwnProgram(clientId: string, programId: string, body: OwnProgramSaveBody): Promise<OwnSaveResult> {
-  const { library, ctx } = await ownLibrary();
-  return saveOwnProgram(sessionRepo(clientId), { id: programId, body: { ...body, name: undefined }, by: 'pt', library, ctx, now: new Date() });
+export async function ptSaveOwnProgram(clientId: string, programId: string, body: OwnProgramSaveBody, locale?: Locale): Promise<OwnSaveResult> {
+  const { library, ctx } = await ownLibrary(locale);
+  return saveOwnProgram(sessionRepo(clientId), {
+    id: programId,
+    body: { ...body, name: undefined },
+    by: 'pt',
+    library,
+    ctx: locale ? { ...ctx, locale } : ctx,
+    now: new Date(),
+  });
 }

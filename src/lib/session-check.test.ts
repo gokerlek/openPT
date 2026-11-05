@@ -320,6 +320,13 @@ describe('bugünün planı (yalnız bugün; seans dosyasına nötr gerekçe)', (
     assert.match(why?.detail ?? '', /62,5 kg yerine 52,5 kg, 3 set yerine 2/);
   });
 
+  test('İngilizce: "Lighter day" (PT tarafıyla aynı terim)', () => {
+    const result = adjustDay(day(), { outcome: outcome({ score: 55, low: true }), lighten: true, mode: 'pain_free', locale: 'en' });
+    const why = result.day.rows.r_aaaaaa?.why;
+    assert.equal(why?.chip, 'Lighter day · −10 kg');
+    assert.match(why?.detail ?? '', /^You chose a lighter day today: weight 52\.5 kg instead of 62\.5 kg/);
+  });
+
   test('"Planı koru": hiçbir şey değişmez (aynı nesne)', () => {
     const input = day();
     const result = adjustDay(input, { outcome: outcome({ score: 55, low: true }), lighten: false, mode: 'pain_free' });

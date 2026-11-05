@@ -457,7 +457,6 @@ async function markLoginLocked(store: ClientStore, record: { client: Client; sha
  * onay yazılmaz. `decision.locale`: onay metninin gösterildiği dil (istek dili); kayda `lang` olarak yazılır,
  * verilmezse yazılmaz.
  */
-// i18n-followup(T3): `api/me/consent` isteğin dilini (`localeFromRequest`) `decision.locale` olarak geçirmeli.
 export async function setHealthConsent(
   store: ClientStore,
   id: string,

@@ -61,7 +61,7 @@ export default async function NewOwnProgramPage({ searchParams }: { searchParams
   const templateParam = one(query.sablon);
 
   const [library, templates, wantedTemplate] = await Promise.all([
-    ownEditorLibrary(client),
+    ownEditorLibrary(client, locale),
     clientTemplates().catch(() => []),
     templateParam ? clientTemplate(templateParam).catch(() => null) : Promise.resolve(null),
   ]);

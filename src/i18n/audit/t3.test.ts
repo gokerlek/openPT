@@ -2,6 +2,7 @@ import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
+import ts from 'typescript';
 import { findHardcodedText } from '../audit.ts';
 
 /**
@@ -109,6 +110,38 @@ describe('T3 dosyalarında gömülü metin yok', () => {
       [],
       'kullanılmayan izin kayıtları',
     );
+  });
+
+  test('kapsamda `locale` varken onu alan her yardımcıya verilir (dil parametresi unutulmaz)', () => {
+    // Tür denetçisiyle: çağrılan imzanın `locale` adlı parametresi var ve çağrı o yere kadar argüman vermiyorsa, çağrının
+    // kapsamında `locale` adlı bir değişken de varsa dil unutulmuştur (`statusLegend(statuses)` gibi). Kapsamda dil yoksa
+    // varsayılan (Türkçe) bilerek kullanılmıştır (Türkçe takma adlar, dilsiz veri).
+    const config = ts.readConfigFile(join(ROOT, 'tsconfig.json'), ts.sys.readFile);
+    const options = ts.parseJsonConfigFileContent(config.config, ts.sys, ROOT).options;
+    const program = ts.createProgram(
+      files.map((file) => join(ROOT, file)),
+      { ...options, incremental: false, noEmit: true },
+    );
+    const checker = program.getTypeChecker();
+    const missing: string[] = [];
+    for (const file of files) {
+      const source = program.getSourceFile(join(ROOT, file));
+      if (!source) continue;
+      const visit = (node: ts.Node): void => {
+        if (ts.isCallExpression(node)) {
+          const declaration = checker.getResolvedSignature(node)?.getDeclaration();
+          const parameters = declaration && 'parameters' in declaration ? (declaration as ts.SignatureDeclaration).parameters : undefined;
+          const index = parameters?.findIndex((parameter) => ts.isIdentifier(parameter.name) && parameter.name.text === 'locale') ?? -1;
+          if (index >= 0 && node.arguments.length <= index) {
+            const inScope = checker.getSymbolsInScope(node, ts.SymbolFlags.Variable).some((symbol) => symbol.name === 'locale');
+            if (inScope) missing.push(`${file}:${source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1}: ${node.expression.getText(source)}`);
+          }
+        }
+        ts.forEachChild(node, visit);
+      };
+      visit(source);
+    }
+    assert.deepEqual(missing, []);
   });
 
   test('günlük çağrısı yalnız çağrının içindeki metni izinli kılar', () => {

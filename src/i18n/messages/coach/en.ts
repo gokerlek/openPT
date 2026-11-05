@@ -382,7 +382,7 @@ const en: Shape<typeof tr> = {
   },
   preferences: {
     title: 'AI coach preferences',
-    // i18n-followup(T3): the text names the “AI review” (Progress) and “Suggest a program with AI” (Programs) buttons; T3 must translate those button labels with exactly these English names.
+    // Names the “AI review” (Progress) and “Suggest a program with AI” (Programs) buttons: `client-progress` and `client-programs`.
     description:
       'If your trainer has turned on AI support, you can reach the AI coach from the “AI review” button under Progress and the “Suggest a program with AI” button under Programs. Automatic messages are then shown according to your preferences. Health records are limited to the scope of your current health consent; no Gemini call is made for these messages.',
     loading: 'Opening preferences…',

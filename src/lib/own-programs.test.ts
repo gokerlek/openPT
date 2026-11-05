@@ -63,6 +63,15 @@ describe('kimlik, yol, ad', () => {
     assert.match(newOwnProgramId(new Set()), /^op_[a-z0-9]{8}$/);
   });
 
+  test('ad: İngilizce büyük-küçük harf de aynı ad sayılır (I/i); Türkçenin ı/i ayrımı korunur', () => {
+    assert.equal(ownNameProblem("YOUR TRAINER'S PROGRAM", [], 'en'), `"Your trainer's program" can't be used as a name.`);
+    assert.equal(ownNameProblem('Indoor', ['indoor'], 'en'), 'You already have a program with this name.');
+    assert.equal(ownNameProblem('INDOOR', ['Indoor'], 'en'), 'You already have a program with this name.');
+    assert.equal(ownNameProblem('İSTANBUL', ['istanbul']), 'Bu adda bir programın var.');
+    assert.equal(ownNameProblem('Sıra', ['Sira']), null);
+    assert.equal(ownNameProblem('kır', ['kir']), null);
+  });
+
   test('ad: boş, uzun, ayrılmış ve (Türkçe büyük-küçük harf farkı gözetmeden) tekrar eden reddedilir', () => {
     assert.equal(ownNameProblem('  ', []), 'Ad gir.');
     assert.equal(ownNameProblem('x'.repeat(41), []), 'En fazla 40 karakter.');

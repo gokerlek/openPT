@@ -63,8 +63,6 @@ const CENTER: Record<Size, { plain: string; unit: string }> = {
  * (`en-GB`) kutu "57.5" gösterir ama Base UI virgülü ondalık saymaz ("2,5" → 2): `commaAsDecimal` yazılan virgülü noktaya
  * çevirir (`Stepper` ondalık kutularında).
  */
-// i18n-followup(T3): `me/antrenman/set-row.tsx` hâlâ `locale="tr-TR"`: `useLocale()` + `intlLocale` ve ondalık kutuda `commaAsDecimal`
-// kullanmalı (aynı NumberField sorunu).
 export const NUMBER_FORMAT = { useGrouping: false } as const satisfies Intl.NumberFormatOptions;
 /** Tam sayı alanı (tekrar, saniye, set): yazılan "8,5" kutudan çıkınca 9 olur, kutu da 9 gösterir. */
 export const WHOLE_FORMAT = { useGrouping: false, maximumFractionDigits: 0 } as const satisfies Intl.NumberFormatOptions;

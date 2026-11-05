@@ -114,8 +114,13 @@ export function newOwnProgramId(taken: ReadonlySet<string>, random?: (n: number)
   return randomId('op', 8, taken, random);
 }
 
-function nameKey(name: string): string {
-  return name.trim().toLocaleLowerCase('tr');
+/**
+ * İki ad aynı mı: Türkçe küçük harfle ("İSTANBUL" = "istanbul") ya da dilden bağımsız küçük harfle ("INDOOR" = "indoor";
+ * Türkçede I → ı olurdu). Türkçenin ı/i ayrımı korunur: "Sıra" ile "Sira" iki ayrı ad.
+ */
+function sameName(a: string, b: string): boolean {
+  const [x, y] = [a.trim(), b.trim()];
+  return x.toLocaleLowerCase('tr') === y.toLocaleLowerCase('tr') || x.toLowerCase() === y.toLowerCase();
 }
 
 /**
@@ -127,9 +132,9 @@ export function ownNameProblem(name: string, others: readonly string[], locale: 
   const trimmed = name.trim();
   if (!trimmed) return t.empty;
   if (trimmed.length > OWN_PROGRAM_NAME_MAX) return t.tooLong(OWN_PROGRAM_NAME_MAX);
-  const reserved = LOCALES.find((other) => nameKey(trimmed) === nameKey(ptProgramName(other)));
+  const reserved = LOCALES.find((other) => sameName(trimmed, ptProgramName(other)));
   if (reserved) return t.reserved(ptProgramName(reserved));
-  if (others.some((other) => nameKey(other) === nameKey(trimmed))) return t.taken;
+  if (others.some((other) => sameName(other, trimmed))) return t.taken;
   return null;
 }
 

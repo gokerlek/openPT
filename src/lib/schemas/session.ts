@@ -355,10 +355,13 @@ export const sessionIndexRowSchema = v.object({
   progress: v.optional(
     v.object({ done: int(0, SESSION_LIMITS.entries * SESSION_LIMITS.setsPerEntry), planned: int(0, SESSION_LIMITS.entries * SESSION_LIMITS.setsPerEntry) }),
   ),
-  /** Onaylanmış aşırı yük: hareket başına en ağır set ve planın ağırlığı ("Bench Press 85 kg (hedef 62,5)"). */
+  /**
+   * Onaylanmış aşırı yük: hareket başına en ağır set ve planın ağırlığı ("Bench Press 85 kg (hedef 62,5)"). `exerciseId`
+   * sonradan eklendi (bildirimde ad okuyanın dilinde); eski satırlarda yok.
+   */
   overloads: v.optional(
     v.pipe(
-      v.array(v.object({ title: v.pipe(v.string(), v.maxLength(SESSION_LIMITS.title)), kg, plannedKg: v.optional(kg) })),
+      v.array(v.object({ title: v.pipe(v.string(), v.maxLength(SESSION_LIMITS.title)), exerciseId: v.optional(slugSchema), kg, plannedKg: v.optional(kg) })),
       v.maxLength(SESSION_LIMITS.entries),
     ),
   ),

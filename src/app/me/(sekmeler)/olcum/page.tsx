@@ -16,7 +16,7 @@ export async function generateMetadata(): Promise<Metadata> {
 export default async function ClientCameraPage() {
   const [client, config, locale] = await Promise.all([currentClient(), readAppConfig(), getLocale()]);
   const t = clientHomeMessages(locale).health;
-  const view = await loadHealthPart(client, 'screening');
+  const view = await loadHealthPart(client, 'screening', locale);
   return (
     <main className="flex flex-col gap-6">
       <ClientHeader client={client} appName={config.appName} title={t.camera} back={{ href: '/me/saglik', label: t.title }} />

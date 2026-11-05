@@ -143,8 +143,8 @@ export function ProgressChart({
    * toplamda hafta ("21–27 Eyl"). Eksen etiketleri yine gündür.
    */
   dateLabel?: (date: string) => string;
-  /** Ekran okuyucu özetinde noktaların adı: "6 ölçüm günü", "6 antrenman günü", "12 hafta". */
-  pointNoun?: string;
+  /** Ekran okuyucu özetinde noktaların adı, sayıya göre tekil/çoğul: "6 ölçüm günü", "12 hafta" ("1 week", "12 weeks"). */
+  pointNoun?: { one: string; other: string };
   /** Değer ekseninin genişliği (px): binlik sayılarda ("12.500") 40 dar kalır. */
   yAxisWidth?: number;
   /** Çizim alanının yüksekliği; sheet'teki küçük grafiklerde `h-36`. */
@@ -194,7 +194,7 @@ export function ProgressChart({
   const forecastText = projected
     ? t.lineForecast(dateLabel(projected.at(-1)!.date), format(projected.at(-1)!.value), band(projected.at(-1)!.low, projected.at(-1)!.high))
     : null;
-  const summary = `${t.countLine(title, number(actualTimes.length), pointNoun)} ${latestText}.${forecastText ? ` ${forecastText}` : ''}`;
+  const summary = `${t.countLine(title, actualTimes.length, number(actualTimes.length), pointNoun)} ${latestText}.${forecastText ? ` ${forecastText}` : ''}`;
 
   return (
     <figure className={cn('flex flex-col gap-2', className)}>
