@@ -1,4 +1,4 @@
-# PulseCoach v2 — Spec
+# openPT — Spec
 
 Tek antrenörlük (PT), GitHub'ı veritabanı olarak kullanan, mobil öncelikli web uygulaması.
 Her PT uygulamayı kendi GitHub hesabına kurar, kendi adresinde yayınlar, kendi adını ve logosunu verir.

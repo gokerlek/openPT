@@ -48,7 +48,7 @@ export async function checkAppRepo(): Promise<{ exists: boolean }> {
     const { data } = await gh().rest.repos.get({ owner: owner(), repo });
     if (data.fork || !data.private) {
       throw new GithubError(
-        `"${repo}" ${data.fork ? 'bir fork' : 'herkese açık'}. Veri repo'su kodun fork'undan ayrı ve özel olmalı: APP_REPO'ya yeni bir ad ver (ör. pulsecoach-data).`,
+        `"${repo}" ${data.fork ? 'bir fork' : 'herkese açık'}. Veri repo'su kodun fork'undan ayrı ve özel olmalı: APP_REPO'ya yeni bir ad ver (ör. openpt-data).`,
         409,
       );
     }
@@ -77,7 +77,7 @@ export async function createAppRepo(): Promise<{ created: boolean }> {
         name: repo,
         private: true,
         auto_init: true,
-        description: 'PulseCoach — uygulama ayarları ve antrenman kütüphanesi',
+        description: 'openPT — uygulama ayarları ve antrenman kütüphanesi',
         has_issues: false,
         has_projects: false,
         has_wiki: false,
@@ -98,7 +98,7 @@ export async function createClientRepo(clientId: string): Promise<{ repo: string
         // ÖZEL olmak zorunda: içinde danışan adı ve antrenman kayıtları var.
         private: true,
         auto_init: true,
-        description: 'PulseCoach danışan verisi',
+        description: 'openPT danışan verisi',
         has_issues: false,
         has_projects: false,
         has_wiki: false,

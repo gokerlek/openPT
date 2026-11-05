@@ -35,7 +35,7 @@ function authOptions(): { auth: string } | { authStrategy: typeof installationAu
 let client: Octokit | null = null;
 
 export function gh(): Octokit {
-  client ??= new Octokit({ ...authOptions(), userAgent: 'pulsecoach' });
+  client ??= new Octokit({ ...authOptions(), userAgent: 'openpt' });
   return client;
 }
 
@@ -53,7 +53,7 @@ let sessionClient: Octokit | null = null;
 export function sessionWriter(): Octokit {
   sessionClient ??= new Octokit({
     ...authOptions(),
-    userAgent: 'pulsecoach',
+    userAgent: 'openpt',
     retry: { doNotRetry: [400, 401, 403, 404, 409, 410, 422, 429, 451], retries: 1 },
     throttle: { onRateLimit: () => false, onSecondaryRateLimit: () => false },
   });

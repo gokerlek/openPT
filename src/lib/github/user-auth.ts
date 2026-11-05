@@ -63,5 +63,5 @@ export async function userOctokit(): Promise<Octokit> {
       // bir yerden gelirse bu istek yine yapılır, sonraki repo işi yeniden giriş ister.
     }
   }
-  return new Octokit({ auth: token.accessToken, userAgent: 'pulsecoach' });
+  return new Octokit({ auth: token.accessToken, userAgent: 'openpt' });
 }

@@ -17,7 +17,7 @@ export async function sendOtpEmail(email: string, code: string): Promise<void> {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      from: process.env.RESEND_FROM ?? 'PulseCoach <onboarding@resend.dev>',
+      from: process.env.RESEND_FROM ?? 'openPT <onboarding@resend.dev>',
       to: email,
       subject: `Giriş kodun: ${code}`,
       text: `Giriş kodun: ${code}\n\nKod 5 dakika geçerli ve tek kullanımlıktır. Bu isteği sen yapmadıysan yok sayabilirsin.`,

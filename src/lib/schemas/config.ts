@@ -47,7 +47,7 @@ export const appConfigSchema = v.object({
 export type AppConfig = v.InferOutput<typeof appConfigSchema>;
 
 export const defaultConfig: AppConfig = {
-  appName: 'PulseCoach',
+  appName: 'openPT',
   logo: null,
   accent: null,
   theme: 'dark',

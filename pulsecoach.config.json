@@ -1,6 +1,6 @@
 {
   "$schema": "./docs/config.schema.json",
-  "appName": "PulseCoach",
+  "appName": "openPT",
   "logo": null,
   "accent": null,
   "theme": "dark",

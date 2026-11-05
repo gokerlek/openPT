@@ -32,7 +32,7 @@ export const COMMON_PASSWORDS: ReadonlySet<string> = new Set([
   'galatasaray', 'galatasaray1905', 'cimbom1905', 'fenerbahce', 'fenerbahce1907', 'sarikanarya',
   'besiktas', 'besiktas1903', 'kartal1903', 'carsi1903', 'trabzonspor', 'trabzon61', 'bursaspor',
   // uygulama ve spor
-  'pulsecoach', 'antrenman', 'antrenor', 'fitness1', 'spor1234', 'sporcu123',
+  'pulsecoach', 'openpt', 'antrenman', 'antrenor', 'fitness1', 'spor1234', 'sporcu123',
 ]);
 
 /** Baştan sona aynı karakter, sıralı ("abcdefgh", "87654321") ya da kısa bir birimin tekrarı ("abababab"). */
