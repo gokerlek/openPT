@@ -8,20 +8,26 @@ import { listExercises } from '@/lib/exercises';
 import { requirePt } from '@/lib/guards';
 import { pickerDevices, pickerExercises } from '@/lib/templates';
 import { TemplateForm } from '../template-form';
+import { getMessages } from '@/i18n/server';
+import { ptLibraryMessages } from '@/i18n/messages/pt-library';
 
-export const metadata: Metadata = { title: 'Yeni şablon' };
+export async function generateMetadata(): Promise<Metadata> {
+  const t = (await getMessages(ptLibraryMessages)).templateNew;
+  return { title: t.title };
+}
 
 /** Şablon oluşturma: düzenleme sayfasıyla aynı desen ("‹ Şablonlar", Kaydet "Hareketler" başlığında). */
 export default async function NewTemplatePage() {
+  const t = (await getMessages(ptLibraryMessages)).templateNew;
   await requirePt();
   const [exercises, devices, config] = await Promise.all([listExercises(), listDevices(), readAppConfig()]);
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-2">
-        <EditorBackLink href="/dashboard/templates" label="Şablonlar" className={USER_MENU_GUTTER} />
+        <EditorBackLink href="/dashboard/templates" label={t.crumbList} className={USER_MENU_GUTTER} />
         <PageHeader
-          title="Yeni şablon"
-          description="Şablon uygulama repo'nda durur ve birden çok danışana atanabilir; içine kişisel bilgi yazma."
+          title={t.title}
+          description={t.description}
         />
       </div>
       <TemplateForm editing={null} exercises={pickerExercises(exercises)} devices={pickerDevices(devices)} timeZone={config.timeZone} />

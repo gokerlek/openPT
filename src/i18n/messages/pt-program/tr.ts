@@ -255,6 +255,27 @@ const tr = {
     exerciseDevice: (name: string) => `Egzersizin cihazı: ${name}`,
     noDevice: 'Cihazsız',
   },
+  /** src/app/api/clients/[id]/{program,programs,proposals}/** — uç yanıtları (isteği yapanın dilinde). */
+  apiRoutes: {
+    clientNotFound: 'Danışan bulunamadı.',
+    programNotFound: 'Program bulunamadı.',
+    programNotFoundMaybeDeleted: 'Program bulunamadı; silinmiş olabilir.',
+    checkInput: 'Bilgileri kontrol et.',
+    invalidRequest: 'İstek geçersiz.',
+    programStale: 'Bu program sen düzenlerken başka bir yerde değişti. Değişikliklerin kaybolmasın diye kaydetmedim.',
+    programExists: 'Bu danışanın programı sen hazırlarken oluşturuldu. Değişikliklerin kaybolmasın diye kaydetmedim.',
+    programSaveFailed: 'Program kaydedilemedi.',
+    programDeleteFailed: 'Program silinemedi.',
+    phaseNotFound: 'Evre bulunamadı.',
+    phaseStale: 'Program bu arada başka bir yerde değişti; sayfayı yeniledim, öneriye yeniden bak.',
+    phaseSwitchFailed: 'Evre değiştirilemedi.',
+    proposalNotFound: 'Öneri bulunamadı.',
+    proposalDecided: 'Bu öneri zaten karara bağlanmış.',
+    proposalChanged: 'Öneri değişti; sayfayı yenile.',
+    proposalStale: (reason: string) => `Program değişti; öneri uygulanamadı. ${reason}`,
+    programUnreadable: 'Program dosyası okunamıyor; önce programı düzelt.',
+    decisionSaveFailed: 'Karar kaydedilemedi.',
+  },
   // @@SECTIONS
 };
 

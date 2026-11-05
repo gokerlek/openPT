@@ -5,7 +5,7 @@ import { cache } from 'react';
 import { WarningCircle } from '@phosphor-icons/react/dist/ssr';
 import { EditButton } from '@/components/edit-button';
 import { MuscleMap } from '@/components/muscle-map/muscle-map';
-import { LOAD_DESCRIPTION, loadMapProps } from '@/lib/muscle-tiers';
+import { loadDescription, loadMapProps } from '@/lib/muscle-tiers';
 import { PageHeader } from '@/components/page-header';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -13,7 +13,7 @@ import { Table, TableBody, TableCell, TableRow } from '@/components/ui/table';
 import { readAppConfig } from '@/lib/config';
 import { listDevices } from '@/lib/devices';
 import { listExercises } from '@/lib/exercises';
-import { formatDate, formatNumber } from '@/lib/format';
+import { getFormat } from '@/lib/format';
 import { requirePt } from '@/lib/guards';
 import { exerciseSetWeights } from '@/lib/muscles';
 import { TEMPLATE_ID_PATTERN } from '@/lib/schemas/template';
@@ -21,16 +21,19 @@ import { templateMuscleLoad, templateSummary } from '@/lib/template-plan';
 import { readTemplateFile } from '@/lib/templates';
 import { InvalidTemplateAlert } from '../invalid-template-alert';
 import { TemplateSequence } from '../template-sequence';
+import { getLocale } from '@/i18n/server';
+import type { Locale } from '@/i18n/locale';
+import { ptLibraryMessages } from '@/i18n/messages/pt-library';
 
 /** Sayfa ve başlığı (metadata) aynı isteğin tek okumasını paylaşır. */
-const readTemplate = cache(readTemplateFile);
+const readTemplate = cache((id: string, locale: Locale) => readTemplateFile(id, locale));
 
 /** Sekme başlığı: şablonun adı. */
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   await requirePt();
   const { id } = await params;
   if (!TEMPLATE_ID_PATTERN.test(id)) return {};
-  const file = await readTemplate(id);
+  const file = await readTemplate(id, await getLocale());
   return file ? { title: file.template?.name ?? file.name ?? id } : {};
 }
 
@@ -40,18 +43,22 @@ const TOUCH_LINK = 'touch:inline-flex touch:min-h-11 touch:items-center';
 /** Şablon detayı — yalnız gösterim; tek eylem "Düzenle" (SPEC §6). */
 export default async function TemplateDetailPage({ params }: { params: Promise<{ id: string }> }) {
   await requirePt();
+  const locale = await getLocale();
+  const t = ptLibraryMessages(locale).templateDetail;
+  const format = getFormat(locale);
   const { id } = await params;
   if (!TEMPLATE_ID_PATTERN.test(id)) notFound();
-  const [file, exercises, devices, config] = await Promise.all([readTemplate(id), listExercises(), listDevices(), readAppConfig()]);
+  // i18n-followup(T5): listExercises/listDevices(…, locale) için kütüphane öğeleri henüz yerelleşmedi.
+  const [file, exercises, devices, config] = await Promise.all([readTemplate(id, locale), listExercises(), listDevices(), readAppConfig()]);
   if (!file) notFound();
 
   if (!file.template) {
     return (
       <div className="flex flex-col gap-6">
         <PageHeader
-          crumbs={[{ label: 'Şablonlar', href: '/dashboard/templates' }, { label: file.name ?? file.id }]}
+          crumbs={[{ label: t.crumbList, href: '/dashboard/templates' }, { label: file.name ?? file.id }]}
           title={file.name ?? file.id}
-          description="Bu şablon dosyası okunamadı."
+          description={t.unreadable}
           actions={<EditButton href={`/dashboard/templates/${id}/edit`} />}
         />
         <InvalidTemplateAlert id={id} problem={file.problem} />
@@ -67,17 +74,17 @@ export default async function TemplateDetailPage({ params }: { params: Promise<{
   const counted = Object.values(load).some((value) => value > 0);
 
   const groupParts = [
-    summary.groups.superset ? `${summary.groups.superset} süperset` : null,
-    summary.groups.circuit ? `${summary.groups.circuit} devre` : null,
-    summary.groups.complex ? `${summary.groups.complex} kompleks` : null,
+    summary.groups.superset ? t.groupSuperset(summary.groups.superset) : null,
+    summary.groups.circuit ? t.groupCircuit(summary.groups.circuit) : null,
+    summary.groups.complex ? t.groupComplex(summary.groups.complex) : null,
   ].filter(Boolean);
 
   const rows: [string, React.ReactNode][] = [
-    ['Hareket', `${formatNumber(summary.rows)}${groupParts.length ? ` (${groupParts.join(', ')})` : ''}`],
-    ['Çalışma seti', formatNumber(summary.workingSets)],
-    ['Tahmini süre', `≈ ${formatNumber(summary.minutes)} dk`],
+    [t.rowExercises, `${format.number(summary.rows)}${groupParts.length ? ` (${groupParts.join(', ')})` : ''}`],
+    [t.rowWorkingSets, format.number(summary.workingSets)],
+    [t.rowEstimated, t.approxMinutes(format.number(summary.minutes))],
     [
-      'Cihazlar',
+      t.rowDevices,
       summary.deviceIds.length > 0 ? (
         <span className="flex flex-wrap gap-x-1">
           {summary.deviceIds.map((deviceId, index) => {
@@ -92,24 +99,24 @@ export default async function TemplateDetailPage({ params }: { params: Promise<{
               </span>
             ) : (
               <span key={deviceId} className="text-muted-foreground">
-                Silinmiş cihaz{comma}
+                {t.deletedDevice(comma)}
               </span>
             );
           })}
         </span>
       ) : (
-        <span className="text-muted-foreground">Cihazsız</span>
+        <span className="text-muted-foreground">{t.noDevice}</span>
       ),
     ],
-    ['Isınma', 'Antrenmanda hesaplanır: halterle bileşik hareket, kas grubunun ilk hareketi, 40 kg ve üstü.'],
-    ['Oluşturuldu', formatDate(template.createdAt, config.timeZone)],
-    ['Güncellendi', formatDate(template.updatedAt, config.timeZone)],
+    [t.rowWarmup, t.warmupNote],
+    [t.rowCreated, format.date(template.createdAt, config.timeZone)],
+    [t.rowUpdated, format.date(template.updatedAt, config.timeZone)],
   ];
 
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
-        crumbs={[{ label: 'Şablonlar', href: '/dashboard/templates' }, { label: template.name }]}
+        crumbs={[{ label: t.crumbList, href: '/dashboard/templates' }, { label: template.name }]}
         title={template.name}
         description={template.description || undefined}
         actions={<EditButton href={`/dashboard/templates/${template.id}/edit`} />}
@@ -118,9 +125,9 @@ export default async function TemplateDetailPage({ params }: { params: Promise<{
       {summary.missingRowIds.length > 0 ? (
         <Alert>
           <WarningCircle weight="fill" />
-          <AlertTitle>{summary.missingRowIds.length} hareket kütüphanede bulunamadı</AlertTitle>
+          <AlertTitle>{t.missingTitle(summary.missingRowIds.length)}</AlertTitle>
           <AlertDescription>
-            Silinmiş bir egzersize bağlı; haritaya ve sayılara girmez. Şablonu düzenleyip kaldır, yerine yenisini ekle.
+            {t.missingBody}
           </AlertDescription>
         </Alert>
       ) : null}
@@ -129,22 +136,22 @@ export default async function TemplateDetailPage({ params }: { params: Promise<{
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle>Kas yükü</CardTitle>
-            <CardDescription>{LOAD_DESCRIPTION}</CardDescription>
+            <CardTitle>{t.loadTitle}</CardTitle>
+            <CardDescription>{loadDescription(locale)}</CardDescription>
           </CardHeader>
           <CardContent>
             {counted ? (
-              <MuscleMap layout="split" bodyClassName="h-72" {...loadMapProps(load, 'session', 'Şablonun kas yükü')} />
+              <MuscleMap layout="split" bodyClassName="h-72" {...loadMapProps(load, 'session', t.loadLabel, {}, locale)} />
             ) : (
-              <p className="text-sm text-muted-foreground">Bu şablonda sayılan kas yükü yok (ısınma, soğuma ya da kardiyo).</p>
+              <p className="text-sm text-muted-foreground">{t.noLoad}</p>
             )}
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader>
-            <CardTitle>Özet</CardTitle>
-            <CardDescription>Tahmini süre ısınma setleri hariç.</CardDescription>
+            <CardTitle>{t.summaryTitle}</CardTitle>
+            <CardDescription>{t.summaryHint}</CardDescription>
           </CardHeader>
           <CardContent className="text-sm">
             <Table>
@@ -163,11 +170,11 @@ export default async function TemplateDetailPage({ params }: { params: Promise<{
 
       <Card>
         <CardHeader>
-          <CardTitle>Hareketler</CardTitle>
-          <CardDescription>Antrenman bu sırayla yapılır; gruptakiler arka arkaya, dinlenme turun sonunda.</CardDescription>
+          <CardTitle>{t.exercisesTitle}</CardTitle>
+          <CardDescription>{t.exercisesHint}</CardDescription>
         </CardHeader>
         <CardContent>
-          <TemplateSequence template={template} exercises={byId} devices={deviceById} />
+          <TemplateSequence template={template} exercises={byId} devices={deviceById} locale={locale} />
         </CardContent>
       </Card>
     </div>

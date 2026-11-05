@@ -1,8 +1,12 @@
 // Göreli ve uzantılı içe aktarma: bu yardımcılar `node --test` ile de sınanır (`exercise-form-logic.test.ts`).
+import { DEFAULT_LOCALE, type Locale } from '../../../i18n/locale.ts';
+import { catalogMessages } from '../../../i18n/messages/catalog/index.ts';
+import { ptLibraryMessages } from '../../../i18n/messages/pt-library/index.ts';
+import { lower } from '../../../i18n/text.ts';
 import { cardioKind } from '../../../lib/cardio.ts';
 import { describeDeviceLoads, loadSpecFor, type DeviceLoadSettings } from '../../../lib/device-loads.ts';
-import { defaultRule, PROGRESSION_LABELS, RIR_LABELS, type ProgressionRule, type TrackingType } from '../../../lib/progression.ts';
-import { CATEGORY_LABELS, type Category, type ExerciseInput } from '../../../lib/schemas/exercise.ts';
+import { defaultRule, progressionLabels, rirLabels, type ProgressionRule, type TrackingType } from '../../../lib/progression.ts';
+import { categoryLabels, type Category, type ExerciseInput } from '../../../lib/schemas/exercise.ts';
 import { parseVideoUrl } from '../../../lib/video.ts';
 
 /** Egzersiz formunun saf yardımcıları: gönderilen gövde, cihazdan gelen yük, varsayılan kural. */
@@ -14,13 +18,14 @@ export function sameRule(a: ProgressionRule | undefined, b: ProgressionRule): bo
 }
 
 /** Türün varsayılan kuralı tek satırda: "Varsayılan: bileşik 6–10 tekrar · çift ilerleme · 2 tekrar yedekte". */
-export function describeDefaultRule(category: Category, trackingType: TrackingType): string {
+export function describeDefaultRule(category: Category, trackingType: TrackingType, locale: Locale = DEFAULT_LOCALE): string {
+  const time = catalogMessages(locale).time;
   const rule = defaultRule(category, trackingType);
-  const unit = trackingType === 'duration' ? 'sn' : 'tekrar';
-  const parts = [`${rule.targetMin}–${rule.targetMax} ${unit}`, PROGRESSION_LABELS[rule.scheme].toLocaleLowerCase('tr')];
+  const unit = trackingType === 'duration' ? time.secondsUnit : time.reps(rule.targetMax);
+  const parts = [`${rule.targetMin}–${rule.targetMax} ${unit}`, lower(locale, progressionLabels(locale)[rule.scheme])];
   // Süreli harekette ve ilerlemesiz kuralda yedekte tekrar öneriyi değiştirmez.
-  if (trackingType !== 'duration' && rule.scheme !== 'none') parts.push((RIR_LABELS[rule.targetRir] ?? '').toLocaleLowerCase('tr'));
-  return `Varsayılan: ${CATEGORY_LABELS[category].toLocaleLowerCase('tr')} ${parts.join(' · ')}`;
+  if (trackingType !== 'duration' && rule.scheme !== 'none') parts.push(lower(locale, rirLabels(locale)[rule.targetRir] ?? ''));
+  return ptLibraryMessages(locale).exerciseFormLogic.defaultRule(lower(locale, categoryLabels(locale)[category]), parts.join(' · '));
 }
 
 /** Cihazın ayarından gelen yük alanları (formda salt okunur gösterilir). */
@@ -38,7 +43,7 @@ export type DeviceLoadFields = {
  * cihaz ağırlık vermiyorsa (istasyon, bant, eksik ayar) ya da cihaz yoksa `null`: egzersizin kendi
  * değerleri düzenlenir. Egzersizin değerleri formda kalır; cihaz silinirse onlarla devam edilir.
  */
-export function deviceLoadFields(device: DeviceLoadSettings | undefined): DeviceLoadFields | null {
+export function deviceLoadFields(device: DeviceLoadSettings | undefined, locale: Locale = DEFAULT_LOCALE): DeviceLoadFields | null {
   if (!device) return null;
   // Egzersizin değerleri yerine NaN: cihaz ağırlık vermiyorsa sonuç NaN kalır.
   const spec = loadSpecFor({ trackingType: 'weight_reps', loadStepKg: Number.NaN, minLoadKg: Number.NaN }, device);
@@ -47,7 +52,7 @@ export function deviceLoadFields(device: DeviceLoadSettings | undefined): Device
   return {
     stepKg: spec.loadsKg ? blockStep : spec.loadStepKg,
     minKg: spec.minLoadKg,
-    summary: describeDeviceLoads(device),
+    summary: describeDeviceLoads(device, locale),
   };
 }
 
@@ -69,8 +74,12 @@ export function toExercisePayload(
 }
 
 /** Kütüphane değişikliğinin şablon ve programlara yansıdığını söyleyen satır (kullanılabilirlik 16). */
-export const LIBRARY_IMPACT_NOTE =
-  'Bu değişiklik bu egzersizi kullanan şablon ve programlarda, satırda özel cihaz/kural yoksa geçerli olur.';
+export function libraryImpactNote(locale: Locale = DEFAULT_LOCALE): string {
+  return ptLibraryMessages(locale).exerciseFormLogic.libraryImpact;
+}
+
+/** Türkçe metin (eski çağrılar ve testler); arayüz `libraryImpactNote(locale)` kullanır. */
+export const LIBRARY_IMPACT_NOTE = libraryImpactNote('tr');
 
 /**
  * Düzenlemede cihaz açılıştakinden farklı mı (cihazsız ile boş seçim aynı): satırında kendi cihazı

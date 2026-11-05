@@ -258,6 +258,27 @@ const en: Shape<typeof tr> = {
     exerciseDevice: (name: string) => `Exercise's equipment: ${name}`,
     noDevice: 'No equipment',
   },
+  /** src/app/api/clients/[id]/{program,programs,proposals}/** — uç yanıtları (isteği yapanın dilinde). */
+  apiRoutes: {
+    clientNotFound: 'Client not found.',
+    programNotFound: 'Program not found.',
+    programNotFoundMaybeDeleted: 'Program not found; it may have been deleted.',
+    checkInput: 'Check the information.',
+    invalidRequest: 'Invalid request.',
+    programStale: "This program changed elsewhere while you were editing it. I didn't save, so your changes aren't lost.",
+    programExists: "This client's program was created while you were preparing it. I didn't save, so your changes aren't lost.",
+    programSaveFailed: "Couldn't save the program.",
+    programDeleteFailed: "Couldn't delete the program.",
+    phaseNotFound: 'Phase not found.',
+    phaseStale: 'The program changed elsewhere in the meantime; I refreshed the page, so take another look at the suggestion.',
+    phaseSwitchFailed: "Couldn't switch the phase.",
+    proposalNotFound: 'Suggestion not found.',
+    proposalDecided: 'This suggestion has already been decided.',
+    proposalChanged: 'The suggestion changed; refresh the page.',
+    proposalStale: (reason: string) => `The program changed; the suggestion couldn't be applied. ${reason}`,
+    programUnreadable: "The program file can't be read; fix the program first.",
+    decisionSaveFailed: "Couldn't save the decision.",
+  },
   // @@SECTIONS
 };
 

@@ -11,7 +11,8 @@ import { DraftAutosave, DraftNotice, useEditorDraft } from '@/components/block-e
 import { keepLineEnter } from '@/components/block-editor/enter-key';
 import { EditorSaveProvider, FloatingSaveButton } from '@/components/block-editor/editor-save';
 import { MuscleMap } from '@/components/muscle-map/muscle-map';
-import { LOAD_DESCRIPTION, loadMapProps } from '@/lib/muscle-tiers';
+import { loadDescription, loadMapProps } from '@/lib/muscle-tiers';
+import { catalogMessages } from '@/i18n/messages/catalog';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -28,6 +29,8 @@ import { templateFormSchema, type Template, type TemplateFormValues, type Templa
 import { idSource, prepareForEditing, type EditorDevice, type PickerExercise } from '@/lib/template-edit';
 import { templateMuscleLoad } from '@/lib/template-plan';
 import { TEMPLATE_DRAFT_BASE, templateDraftKey } from '@/lib/unsaved-changes';
+import { useLocale, useMessages } from '@/i18n/client';
+import { ptLibraryMessages } from '@/i18n/messages/pt-library';
 
 const BLANK: TemplateInput = { name: '', description: '', blocks: [], sharedWithClients: false };
 
@@ -52,6 +55,8 @@ export function TemplateForm({
   devices: EditorDevice[];
   timeZone: string;
 }) {
+  const t = useMessages(ptLibraryMessages).templateForm;
+  const locale = useLocale();
   const router = useRouter();
   const exerciseById = useMemo(() => new Map(exercises.map((exercise) => [exercise.id, exercise])), [exercises]);
 
@@ -87,7 +92,7 @@ export function TemplateForm({
         body: JSON.stringify({ ...values, ...(editing ? { id: editing.template.id, baseSha: draft.saveBase ?? editing.sha } : {}) }),
       }),
     invalidate: [['templates']],
-    notify: { success: editing ? 'Şablon güncellendi.' : 'Şablon eklendi.' },
+    notify: { success: editing ? t.updated : t.added },
     onError: (error) => {
       if (error.status === 412) setStale(true);
       else applyFieldErrors(form as never, error);
@@ -113,7 +118,7 @@ export function TemplateForm({
         missing = true;
         setErrors(form, {
           path: ['blocks', blockIndex, 'rows', rowIndex, 'exerciseId'],
-          errors: ['Bu egzersiz kütüphanede yok; kartı sil, yerine yenisini ekle.'],
+          errors: [catalogMessages(locale).blocks.missingExercise],
         });
       }),
     );
@@ -133,27 +138,27 @@ export function TemplateForm({
         dirty,
         pending: save.isPending || save.isSuccess,
         creating: !editing,
-        submitLabel: editing ? 'Şablonu kaydet' : 'Şablonu oluştur',
+        submitLabel: editing ? t.saveButton : t.createButton,
       }}>
       <Form of={form} className="flex flex-col gap-6" onSubmit={submit}>
         {draft.offer ? <DraftNotice offer={draft.offer} timeZone={timeZone} onRestore={draft.restore} onDismiss={draft.dismiss} /> : null}
 
         <Card>
           <CardHeader>
-            <CardTitle>Şablon</CardTitle>
-            <CardDescription>Adı ve kısa amacı; danışan antrenman ekranında görür.</CardDescription>
+            <CardTitle>{t.cardTitle}</CardTitle>
+            <CardDescription>{t.cardDescription}</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-5 lg:grid-cols-2">
             <FormField of={form} path={['name']}>
               {(field) => (
                 <Field data-invalid={Boolean(field.errors) || undefined}>
-                  <FieldLabel htmlFor="name">Şablon adı</FieldLabel>
+                  <FieldLabel htmlFor="name">{t.nameLabel}</FieldLabel>
                   <Input
                     {...field.props}
                     id="name"
                     className="max-w-sm"
                     value={field.input ?? ''}
-                    placeholder="Ör. Alt vücut A"
+                    placeholder={t.namePlaceholder}
                     aria-invalid={Boolean(field.errors) || undefined}
                     onKeyDown={keepLineEnter}
                   />
@@ -164,10 +169,10 @@ export function TemplateForm({
             <FormField of={form} path={['description']}>
               {(field) => (
                 <Field data-invalid={Boolean(field.errors) || undefined}>
-                  <FieldLabel htmlFor="description">Açıklama</FieldLabel>
-                  <Textarea {...field.props} id="description" rows={2} value={field.input ?? ''} placeholder="Ör. Güç odaklı, haftada iki kez" />
+                  <FieldLabel htmlFor="description">{t.descriptionLabel}</FieldLabel>
+                  <Textarea {...field.props} id="description" rows={2} value={field.input ?? ''} placeholder={t.descriptionPlaceholder} />
                   <FieldDescription>
-                    Danışana özel bilgi yazma: şablonlar uygulama repo&apos;sunda durur ve birden çok danışana atanır.
+                    {t.descriptionHint}
                   </FieldDescription>
                   <FieldError>{field.errors?.[0]}</FieldError>
                 </Field>
@@ -185,10 +190,9 @@ export function TemplateForm({
                     />
                   </label>
                   <FieldContent>
-                    <FieldLabel htmlFor="sharedWithClients">Danışanlar kendi programlarına kopyalayabilir</FieldLabel>
+                    <FieldLabel htmlFor="sharedWithClients">{t.sharedLabel}</FieldLabel>
                     <FieldDescription>
-                      Açıksa danışanlar kendi programlarını bu şablondan başlatabilir ya da gün olarak ekleyebilir. Yarım kalmış ve
-                      kişiye özel (ör. rehabilitasyon) şablonları kapalı tut.
+                      {t.sharedHint}
                     </FieldDescription>
                   </FieldContent>
                 </Field>
@@ -204,14 +208,13 @@ export function TemplateForm({
           exercises={exercises}
           devices={devices}
           newIds={idSource}
-          noteHint="Danışan antrenmanda görür. Kişisel bilgi yazma."
-          libraryDescription="Ada ya da kasa göre ara; dokununca şablonun sonuna eklenir."
+          noteHint={t.noteHint}
+          libraryDescription={t.libraryDescription}
           notice={
             start.dropped > 0 ? (
               <Alert>
                 <WarningCircle />
-                <AlertDescription>
-                  {start.dropped} satırın cihazı silinmiş; egzersizin kendi cihazına döndü. Kaydedince kalıcı olur.
+                <AlertDescription>{t.droppedDevices(start.dropped)}
                 </AlertDescription>
               </Alert>
             ) : null
@@ -221,15 +224,14 @@ export function TemplateForm({
         {stale ? (
           <Alert variant="destructive">
             <WarningCircle />
-            <AlertTitle>Bu şablon başka bir yerde değişti</AlertTitle>
+            <AlertTitle>{t.staleTitle}</AlertTitle>
             <AlertDescription>
-              Sen düzenlerken şablon başka bir sekmede ya da cihazda kaydedildi. Değişikliklerin burada duruyor; yeni sürümü
-              ayrı sekmede açıp karşılaştırabilir ya da sayfayı yenileyip (değişikliklerin gider) baştan düzenleyebilirsin.
+              {t.staleBody}
             </AlertDescription>
             <div className="col-start-2 mt-2 flex flex-wrap gap-2">
               <Button variant="outline" size="sm" nativeButton={false} render={<Link href={detailHref} target="_blank" rel="noopener" />}>
                 <ArrowSquareOut data-icon="inline-start" />
-                Yeni sekmede aç
+                {t.openNewTab}
               </Button>
               <Button
                 type="button"
@@ -243,7 +245,7 @@ export function TemplateForm({
                   window.location.reload();
                 }}>
                 <ArrowClockwise data-icon="inline-start" />
-                Sayfayı yenile
+                {t.reload}
               </Button>
             </div>
           </Alert>
@@ -252,7 +254,7 @@ export function TemplateForm({
         {hiddenError ? (
           <Alert variant="destructive" data-form-error>
             <WarningCircle />
-            <AlertTitle>Form gönderilemedi</AlertTitle>
+            <AlertTitle>{t.errorTitle}</AlertTitle>
             <AlertDescription>{hiddenError}</AlertDescription>
           </Alert>
         ) : null}
@@ -260,14 +262,14 @@ export function TemplateForm({
 
         <Card>
           <CardHeader>
-            <CardTitle>Kas yükü</CardTitle>
-            <CardDescription>{LOAD_DESCRIPTION}</CardDescription>
+            <CardTitle>{t.loadTitle}</CardTitle>
+            <CardDescription>{loadDescription(locale)}</CardDescription>
           </CardHeader>
           <CardContent>
             {blocks.length > 0 ? (
-              <MuscleMap layout="split" bodyClassName="h-56 lg:h-64" {...loadMapProps(load, 'session', 'Şablonun kas yükü')} />
+              <MuscleMap layout="split" bodyClassName="h-56 lg:h-64" {...loadMapProps(load, 'session', t.loadLabel, {}, locale)} />
             ) : (
-              <p className="text-sm text-muted-foreground">Hareket ekleyince kas yükü burada görünür.</p>
+              <p className="text-sm text-muted-foreground">{t.loadEmpty}</p>
             )}
           </CardContent>
         </Card>
@@ -275,7 +277,7 @@ export function TemplateForm({
         <FloatingSaveButton />
       </Form>
       <DraftAutosave form={form} onChange={draft.sync} />
-      <UnsavedChangesGuard ref={guard} active={guarded} description="Çıkarsan bu değişiklikler kaydedilmez." onLeave={draft.leave} />
+      <UnsavedChangesGuard ref={guard} active={guarded} description={t.guardDescription} onLeave={draft.leave} />
     </EditorSaveProvider>
   );
 }

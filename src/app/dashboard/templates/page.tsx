@@ -10,14 +10,18 @@ import { Button } from '@/components/ui/button';
 import { Card, CardAction, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { listExercises } from '@/lib/exercises';
-import { formatNumber } from '@/lib/format';
 import { requirePt } from '@/lib/guards';
 import { BODY_MUSCLES, exerciseSetWeights, summarizeMuscles } from '@/lib/muscles';
 import { templateMuscleLoad, templateSummary } from '@/lib/template-plan';
 import { listTemplates } from '@/lib/templates';
 import { TrainingTabs } from '../training-tabs';
+import { getLocale, getMessages } from '@/i18n/server';
+import { ptLibraryMessages } from '@/i18n/messages/pt-library';
 
-export const metadata: Metadata = { title: 'Şablonlar' };
+export async function generateMetadata(): Promise<Metadata> {
+  const t = (await getMessages(ptLibraryMessages)).templatesPage;
+  return { title: t.title };
+}
 
 /**
  * Şablonlar: danışana program kurarken başlangıç olan antrenmanlar (programa kopyalanır). Kartta şablonun kas haritası, adı ve
@@ -25,23 +29,24 @@ export const metadata: Metadata = { title: 'Şablonlar' };
  */
 export default async function TemplatesPage() {
   await requirePt();
-  const [templates, exercises] = await Promise.all([listTemplates(), listExercises()]);
+  const locale = await getLocale();
+  const t = ptLibraryMessages(locale).templatesPage;
+  // i18n-followup(T5): listExercises(…, locale) için kütüphane öğeleri henüz yerelleşmedi.
+  const [templates, exercises] = await Promise.all([listTemplates(locale), listExercises()]);
   const byId = new Map(exercises.map((exercise) => [exercise.id, exercise]));
 
   return (
     <div className="flex flex-col gap-6">
       <TrainingTabs />
       <PageHeader
-        title="Şablonlar"
+        title={t.title}
         description={
-          <>
-            <span className="tabular-nums">{templates.length}</span> şablon
-          </>
+          <span className="tabular-nums">{t.count(templates.length)}</span>
         }
         actions={
           <Button nativeButton={false} render={<Link href="/dashboard/templates/new" />}>
             <Plus data-icon="inline-start" />
-            Yeni şablon
+            {t.add}
           </Button>
         }
       />
@@ -52,16 +57,15 @@ export default async function TemplatesPage() {
             <EmptyMedia variant="icon">
               <ClipboardText weight="fill" />
             </EmptyMedia>
-            <EmptyTitle>Henüz şablon yok</EmptyTitle>
+            <EmptyTitle>{t.emptyTitle}</EmptyTitle>
             <EmptyDescription>
-              Şablon bir antrenmanın sırasıdır: hareketler, setler, hedefler ve dinlenme. Danışana program kurarken
-              kopyalanır; şablonu sonradan değiştirmek programları değiştirmez.
+              {t.emptyDescription}
             </EmptyDescription>
           </EmptyHeader>
           <EmptyContent>
             <Button nativeButton={false} render={<Link href="/dashboard/templates/new" />}>
               <Plus data-icon="inline-start" />
-              İlk şablonu oluştur
+              {t.createFirst}
             </Button>
           </EmptyContent>
         </Empty>
@@ -77,7 +81,7 @@ export default async function TemplatesPage() {
                     <Card size="sm" className="h-full bg-destructive/5 ring-destructive/40 transition-colors hover:bg-destructive/10">
                       <CardHeader>
                         <CardTitle>{file.name ?? file.id}</CardTitle>
-                        <CardDescription className="break-words">Dosya okunamadı: {file.problem}</CardDescription>
+                        <CardDescription className="break-words">{t.unreadable(file.problem)}</CardDescription>
                       </CardHeader>
                     </Card>
                   </Link>
@@ -96,7 +100,7 @@ export default async function TemplatesPage() {
                 {/* Uzatılmış bağlantı: başlıktaki bağlantı kartın tamamını kaplar (after:inset-0). */}
                 <Card size="sm" className="relative h-full transition-colors hover:bg-muted/40">
                   <div className="mx-(--card-spacing) rounded-lg bg-muted/40 py-3">
-                    <MuscleMap layout="split" bodyClassName="h-80" {...loadMapProps(load, 'session', 'Şablonun kas yükü', { legend: false })} />
+                    <MuscleMap layout="split" bodyClassName="h-80" {...loadMapProps(load, 'session', t.loadLabel, { legend: false }, locale)} />
                   </div>
                   <CardHeader>
                     <CardTitle>
@@ -107,18 +111,17 @@ export default async function TemplatesPage() {
                       </Link>
                     </CardTitle>
                     <CardDescription className="line-clamp-2">
-                      {template.description || summarizeMuscles(top).join(', ') || 'Sayılan kas yükü yok'}
+                      {template.description || summarizeMuscles(top, locale).join(', ') || t.noLoad}
                     </CardDescription>
                     {missingRowIds.length > 0 || template.sharedWithClients ? (
                       <CardAction className="flex flex-col items-end gap-1">
-                        {missingRowIds.length > 0 ? <Badge variant="destructive">eksik hareket</Badge> : null}
+                        {missingRowIds.length > 0 ? <Badge variant="destructive">{t.missing}</Badge> : null}
                         {/* Danışanlar kendi programlarına kopyalayabilir (kendi-program.md §3.8). */}
-                        {template.sharedWithClients ? <Badge variant="secondary">Danışanlara açık</Badge> : null}
+                        {template.sharedWithClients ? <Badge variant="secondary">{t.shared}</Badge> : null}
                       </CardAction>
                     ) : null}
                   </CardHeader>
-                  <CardFooter className="mt-auto text-xs text-muted-foreground tabular-nums">
-                    {formatNumber(summary.rows)} hareket · {formatNumber(summary.workingSets)} set · ≈ {formatNumber(summary.minutes)} dk
+                  <CardFooter className="mt-auto text-xs text-muted-foreground tabular-nums">{t.footer(summary.rows, summary.workingSets, summary.minutes)}
                   </CardFooter>
                 </Card>
               </li>

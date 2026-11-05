@@ -11,18 +11,24 @@ import { ExerciseActions } from '../exercise-actions';
 import { ExerciseForm } from '../../exercise-form';
 import { TOUCH_TARGETS } from '../../touch-targets';
 import { requirePt } from '@/lib/guards';
+import { getMessages } from '@/i18n/server';
+import { ptLibraryMessages } from '@/i18n/messages/pt-library';
+import { commonMessages } from '@/i18n/messages/common';
 
 // Başlık (`generateMetadata`) ve sayfa aynı isteği paylaşır: liste bir kez okunur.
 const loadAll = cache(() => listExercises());
 const loadExercise = cache(async (id: string) => getExercise(id, await loadAll()));
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
+  const t = (await getMessages(ptLibraryMessages)).exerciseEdit;
   await requirePt();
   const exercise = await loadExercise((await params).id);
-  return { title: exercise ? `Düzenle: ${exercise.title}` : 'Egzersiz bulunamadı' };
+  return { title: exercise ? t.metaTitle(exercise.title) : t.notFound };
 }
 
 export default async function EditExercisePage({ params }: { params: Promise<{ id: string }> }) {
+  const t = (await getMessages(ptLibraryMessages)).exerciseEdit;
+  const common = await getMessages(commonMessages);
   await requirePt();
   const { id } = await params;
   const [all, devices, attachments] = await Promise.all([loadAll(), listDevices(), listAttachments()]);
@@ -46,11 +52,11 @@ export default async function EditExercisePage({ params }: { params: Promise<{ i
     <div className={`flex flex-col gap-6 ${TOUCH_TARGETS}`}>
       <PageHeader
         crumbs={[
-          { label: 'Egzersizler', href: '/dashboard/exercises' },
+          { label: t.crumbList, href: '/dashboard/exercises' },
           { label: exercise.title, href: `/dashboard/exercises/${id}` },
-          { label: 'Düzenle' },
+          { label: common.actions.edit },
         ]}
-        title="Egzersizi düzenle"
+        title={t.title}
         actions={
           <ExerciseActions
             id={id}
@@ -61,7 +67,7 @@ export default async function EditExercisePage({ params }: { params: Promise<{ i
         }
         description={
           exercise.source === 'library'
-            ? 'Hazır kütüphaneden bir egzersiz: kaydettiğinde yalnız senin kurulumunda geçerli bir sürüm oluşur. İstediğin zaman varsayılana dönebilirsin.'
+            ? t.libraryNote
             : undefined
         }
       />

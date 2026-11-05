@@ -10,30 +10,37 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Item, ItemContent, ItemDescription, ItemGroup, ItemMedia, ItemTitle } from '@/components/ui/item';
 import { Table, TableBody, TableCell, TableRow } from '@/components/ui/table';
-import { DEVICE_KIND_LABELS, describeDeviceLoads, deviceLoads, effectiveLoadKg } from '@/lib/device-loads';
+import { deviceKindLabels, describeDeviceLoads, deviceLoads, effectiveLoadKg } from '@/lib/device-loads';
 import { attachmentImageUrl } from '@/lib/attachment-media';
 import { listAttachments } from '@/lib/attachments';
 import { deviceImageUrl } from '@/lib/device-media';
 import { getDevice } from '@/lib/devices';
 import { listExercises } from '@/lib/exercises';
-import { formatKg } from '@/lib/format';
+import { getFormat } from '@/lib/format';
 import { summarizeMuscles } from '@/lib/muscles';
 import { EditButton } from '@/components/edit-button';
 import { requirePt } from '@/lib/guards';
+import { getLocale, getMessages } from '@/i18n/server';
+import { ptLibraryMessages } from '@/i18n/messages/pt-library';
 
 /** Sayfa başlığı ile sayfa aynı okumayı paylaşır (istek başına bir kez). */
 const loadDevice = cache((id: string) => getDevice(id));
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   await requirePt();
+  const t = (await getMessages(ptLibraryMessages)).devicePage;
   const device = await loadDevice((await params).id);
-  return { title: device?.name ?? 'Cihaz bulunamadı' };
+  return { title: device?.name ?? t.notFound };
 }
 
 /** Cihaz detayı — kendi sayfası (modal değil). */
 export default async function DeviceDetailPage({ params }: { params: Promise<{ id: string }> }) {
   await requirePt();
+  const locale = await getLocale();
+  const t = ptLibraryMessages(locale).devicePage;
+  const format = getFormat(locale);
   const { id } = await params;
+  // i18n-followup(T5): listExercises/listAttachments(…, locale) için kütüphane öğeleri henüz yerelleşmedi.
   const [device, exercises, pool] = await Promise.all([loadDevice(id), listExercises(), listAttachments()]);
   if (!device) notFound();
 
@@ -43,20 +50,20 @@ export default async function DeviceDetailPage({ params }: { params: Promise<{ i
   const ratio = device.kind === 'cable' ? (device.pulleyRatio ?? 1) : 1;
 
   const rows: [string, string][] = [
-    ['Tür', DEVICE_KIND_LABELS[device.kind]],
+    [t.rowKind, deviceKindLabels(locale)[device.kind]],
     ...(device.baseKg !== undefined
-      ? ([[device.kind === 'barbell' ? 'Bar' : device.kind === 'plate_loaded' ? 'Kızak' : 'İlk blok', formatKg(device.baseKg)]] as [string, string][])
+      ? ([[device.kind === 'barbell' ? t.rowBar : device.kind === 'plate_loaded' ? t.rowSled : t.rowFirstStack, format.kg(device.baseKg)]] as [string, string][])
       : []),
-    ...(device.stepKg ? ([[device.kind === 'barbell' || device.kind === 'plate_loaded' ? 'En küçük artış' : 'Blok adımı', formatKg(device.stepKg)]] as [string, string][]) : []),
-    ...(device.maxKg ? ([['En çok', formatKg(device.maxKg)]] as [string, string][]) : []),
-    ...(device.addOnsKg?.length ? ([['Ara ağırlıklar', device.addOnsKg.map((kg) => `+${formatKg(kg)}`).join(', ')]] as [string, string][]) : []),
+    ...(device.stepKg ? ([[device.kind === 'barbell' || device.kind === 'plate_loaded' ? t.rowSmallestIncrement : t.rowStackStep, format.kg(device.stepKg)]] as [string, string][]) : []),
+    ...(device.maxKg ? ([[t.rowMax, format.kg(device.maxKg)]] as [string, string][]) : []),
+    ...(device.addOnsKg?.length ? ([[t.rowAddOns, device.addOnsKg.map((kg) => `+${format.kg(kg)}`).join(', ')]] as [string, string][]) : []),
 
     ...(device.kind === 'cable'
-      ? ([['Makara', ratio === 1 ? 'Tek makara (1:1)' : `${ratio}:1 — 20 kg seçince kolda ${formatKg(effectiveLoadKg(device, 20))}`]] as [string, string][])
+      ? ([[t.rowPulley, ratio === 1 ? t.pulleySingle : t.pulleyRatio(ratio, format.kg(effectiveLoadKg(device, 20)))]] as [string, string][])
       : []),
   ];
 
-  const origin = device.source === 'library' ? 'Hazır katalog' : device.overridesLibrary ? 'Senin sürümün' : 'Senin cihazın';
+  const origin = device.source === 'library' ? t.originLibrary : device.overridesLibrary ? t.originOverride : t.originCustom;
   const imageUrl = deviceImageUrl(device);
   // Aparatlar havuzda durur; cihazda yalnız kimlikleri yazılı. Havuzdan silinmiş kimlik düşer.
   const attachments = (device.attachments ?? []).flatMap((attachmentId) => {
@@ -67,16 +74,16 @@ export default async function DeviceDetailPage({ params }: { params: Promise<{ i
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
-        crumbs={[{ label: 'Cihazlar', href: '/dashboard/devices' }, { label: device.name }]}
+        crumbs={[{ label: t.crumbList, href: '/dashboard/devices' }, { label: device.name }]}
         title={device.name}
-        description={describeDeviceLoads(device)}
+        description={describeDeviceLoads(device, locale)}
         actions={<EditButton href={`/dashboard/devices/${device.id}/edit`} />}
       />
 
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle>Ağırlık ayarı</CardTitle>
+            <CardTitle>{t.loadTitle}</CardTitle>
             <CardDescription>{origin}</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-4 text-sm">
@@ -100,22 +107,22 @@ export default async function DeviceDetailPage({ params }: { params: Promise<{ i
             </Table>
             {loads.length > 0 ? (
               <div className="flex flex-col gap-2">
-                <span className="text-muted-foreground">Ayarlanabilen ağırlıklar (öneriler bunlardan seçilir)</span>
+                <span className="text-muted-foreground">{t.adjustable}</span>
                 <div className="flex flex-wrap gap-1.5">
                   {shown.map((kg) => (
                     <Badge key={kg} variant="secondary" className="tabular-nums">
-                      {kg.toLocaleString('tr-TR', { maximumFractionDigits: 2 })}
+                      {format.number(kg)}
                     </Badge>
                   ))}
                   {loads.length > shown.length ? (
                     <Badge variant="outline" className="tabular-nums">
-                      +{loads.length - shown.length} ağırlık daha
+                      {t.moreWeights(loads.length - shown.length)}
                     </Badge>
                   ) : null}
                 </div>
               </div>
             ) : (
-              <p className="text-muted-foreground">Ağırlık ayarı yok; ilerleme tekrar ya da süreyle olur.</p>
+              <p className="text-muted-foreground">{t.noLoad}</p>
             )}
             {device.notes ? <p className="text-muted-foreground">{device.notes}</p> : null}
           </CardContent>
@@ -125,13 +132,13 @@ export default async function DeviceDetailPage({ params }: { params: Promise<{ i
           {attachments.length > 0 ? (
             <Card>
               <CardHeader>
-                <CardTitle>Aparatlar</CardTitle>
+                <CardTitle>{t.attachmentsTitle}</CardTitle>
                 <CardDescription>
-                  Bu cihaza takılabilenler. Aparatın adı ve fotoğrafı{' '}
+                  {t.poolNote.before}
                   <Link href="/dashboard/attachments" className="underline underline-offset-4">
-                    havuzda
-                  </Link>{' '}
-                  durur; hangilerinin takıldığını cihazı düzenleyerek seçersin.
+                    {t.poolNote.link}
+                  </Link>
+                  {t.poolNote.after}
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -168,11 +175,11 @@ export default async function DeviceDetailPage({ params }: { params: Promise<{ i
 
       <Card>
         <CardHeader>
-          <CardTitle>Bu cihazla yapılan egzersizler</CardTitle>
+          <CardTitle>{t.exercisesTitle}</CardTitle>
           <CardDescription>
             {used.length > 0
-              ? 'Şablonda cihaz değişince egzersiz, o cihazdaki muadiline geçer.'
-              : 'Henüz bağlı egzersiz yok. Egzersizi düzenleyip cihazını seçebilirsin.'}
+              ? t.exercisesHint
+              : t.exercisesEmpty}
           </CardDescription>
         </CardHeader>
         {used.length > 0 ? (
@@ -182,7 +189,7 @@ export default async function DeviceDetailPage({ params }: { params: Promise<{ i
                 <Item key={exercise.id} variant="outline" size="sm" render={<Link href={`/dashboard/exercises/${exercise.id}`} />}>
                   <ItemContent>
                     <ItemTitle>{exercise.title}</ItemTitle>
-                    <ItemDescription>{summarizeMuscles(exercise.primaryMuscles).join(', ')}</ItemDescription>
+                    <ItemDescription>{summarizeMuscles(exercise.primaryMuscles, locale).join(', ')}</ItemDescription>
                   </ItemContent>
                 </Item>
               ))}

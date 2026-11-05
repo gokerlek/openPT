@@ -9,8 +9,13 @@ import { CLIENT_ID_PATTERN } from '@/lib/schemas/client';
 import { ExerciseList } from './exercise-list';
 import { UnreadableRecordsAlert } from '../unreadable-records-alert';
 import { requirePt } from '@/lib/guards';
+import { getLocale, getMessages } from '@/i18n/server';
+import { ptLibraryMessages } from '@/i18n/messages/pt-library';
 
-export const metadata: Metadata = { title: 'Egzersizler' };
+export async function generateMetadata(): Promise<Metadata> {
+  const t = (await getMessages(ptLibraryMessages)).exercisesPage;
+  return { title: t.title };
+}
 
 /**
  * Egzersiz kütüphanesi: hazır liste + PT'nin kendi egzersizleri. Kabuk yetkiyi zaten denetler.
@@ -19,7 +24,10 @@ export const metadata: Metadata = { title: 'Egzersizler' };
  */
 export default async function ExercisesPage({ searchParams }: { searchParams: Promise<{ client?: string }> }) {
   await requirePt();
+  const locale = await getLocale();
+  const t = ptLibraryMessages(locale).exercisesPage;
   const { client: clientId } = await searchParams;
+  // i18n-followup(T5): listExercises/listDevices(…, locale) için kütüphane öğeleri henüz yerelleşmedi.
   const [file, devices, config] = await Promise.all([readCustomExercises(), listDevices(), readAppConfig()]);
   const exercises = await listExercises(file);
   const deviceNames = Object.fromEntries(devices.map((device) => [device.id, device.name]));
@@ -27,10 +35,10 @@ export default async function ExercisesPage({ searchParams }: { searchParams: Pr
   if (clientId && CLIENT_ID_PATTERN.test(clientId)) {
     const loaded = await loadClient(clientId).catch(() => null);
     if (loaded?.ok) {
-      const care = await loadEditorCare(loaded.client, exercises, todayIn(config.timeZone), { screening: false });
+      const care = await loadEditorCare(loaded.client, exercises, todayIn(config.timeZone), { screening: false, locale });
       clientCare = {
         name: loaded.client.name,
-        care: care ?? { clientId, unavailable: 'Kısıtlar bu danışanın sağlık modülünde seçili değil.', summary: [], pending: [], map: {} },
+        care: care ?? { clientId, unavailable: t.unavailable, summary: [], pending: [], map: {} },
       };
     }
   }

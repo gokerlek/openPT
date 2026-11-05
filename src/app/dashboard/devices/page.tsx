@@ -8,14 +8,19 @@ import { TrainingTabs } from '../training-tabs';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardAction, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { DEVICE_KIND_LABELS, DEVICE_KINDS, describeDeviceLoads } from '@/lib/device-loads';
+import { deviceKindLabels, DEVICE_KINDS, describeDeviceLoads } from '@/lib/device-loads';
 import { deviceImageUrl } from '@/lib/device-media';
 import { CUSTOM_DEVICES_PATH, listDevices, readCustomDevices } from '@/lib/devices';
 import { listExercises } from '@/lib/exercises';
 import { requirePt } from '@/lib/guards';
+import { getLocale, getMessages } from '@/i18n/server';
+import { ptLibraryMessages } from '@/i18n/messages/pt-library';
 import { UnreadableRecordsAlert } from '../unreadable-records-alert';
 
-export const metadata: Metadata = { title: 'Cihazlar' };
+export async function generateMetadata(): Promise<Metadata> {
+  const t = (await getMessages(ptLibraryMessages)).devicesPage;
+  return { title: t.title };
+}
 
 /**
  * Cihazlar: hazır katalog + PT'nin cihazları, türe göre gruplu. Egzersizler cihaza
@@ -23,6 +28,10 @@ export const metadata: Metadata = { title: 'Cihazlar' };
  */
 export default async function DevicesPage() {
   await requirePt();
+  const locale = await getLocale();
+  const t = ptLibraryMessages(locale).devicesPage;
+  const kindLabels = deviceKindLabels(locale);
+  // i18n-followup(T5): listDevices/listExercises(…, locale) için kütüphane öğeleri henüz yerelleşmedi.
   const [file, exercises] = await Promise.all([readCustomDevices(), listExercises()]);
   const devices = await listDevices(file);
   const usage = new Map<string, number>();
@@ -35,17 +44,12 @@ export default async function DevicesPage() {
     <div className="flex flex-col gap-6">
       <TrainingTabs />
       <PageHeader
-        title="Cihazlar"
-        description={
-          <>
-            <span className="tabular-nums">{devices.length}</span> cihaz · <span className="tabular-nums">{custom}</span> tanesi
-            senin
-          </>
-        }
+        title={t.title}
+        description={<span className="tabular-nums">{t.summary(devices.length, custom)}</span>}
         actions={
           <Button nativeButton={false} render={<Link href="/dashboard/devices/new" />}>
             <Plus data-icon="inline-start" />
-            Yeni cihaz
+            {t.add}
           </Button>
         }
       />
@@ -55,8 +59,8 @@ export default async function DevicesPage() {
         const group = devices.filter((device) => device.kind === kind);
         if (group.length === 0) return null;
         return (
-          <section key={kind} className="flex flex-col gap-3" aria-label={DEVICE_KIND_LABELS[kind]}>
-            <h2 className="text-sm font-medium text-muted-foreground">{DEVICE_KIND_LABELS[kind]}</h2>
+          <section key={kind} className="flex flex-col gap-3" aria-label={kindLabels[kind]}>
+            <h2 className="text-sm font-medium text-muted-foreground">{kindLabels[kind]}</h2>
             <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {group.map((device) => {
                 const imageUrl = deviceImageUrl(device);
@@ -76,15 +80,15 @@ export default async function DevicesPage() {
                             </ImagePlaceholder>
                           )}
                           <CardTitle>{device.name}</CardTitle>
-                          <CardDescription>{describeDeviceLoads(device)}</CardDescription>
+                          <CardDescription>{describeDeviceLoads(device, locale)}</CardDescription>
                           {device.source === 'custom' ? (
                             <CardAction>
-                              <Badge variant="secondary">senin</Badge>
+                              <Badge variant="secondary">{t.mine}</Badge>
                             </CardAction>
                           ) : null}
                         </CardHeader>
                         <CardFooter className="text-xs text-muted-foreground">
-                          <span className="tabular-nums">{usage.get(device.id) ?? 0}</span>&nbsp;egzersiz
+                          <span className="tabular-nums">{t.exerciseCount(usage.get(device.id) ?? 0)}</span>
                         </CardFooter>
                       </Card>
                     </Link>

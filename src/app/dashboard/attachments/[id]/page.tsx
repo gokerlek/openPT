@@ -9,26 +9,32 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Item, ItemContent, ItemDescription, ItemGroup, ItemTitle } from '@/components/ui/item';
 import { attachmentImageUrl } from '@/lib/attachment-media';
 import { getAttachment } from '@/lib/attachments';
-import { DEVICE_KIND_LABELS } from '@/lib/device-loads';
+import { deviceKindLabels } from '@/lib/device-loads';
 import { listDevices } from '@/lib/devices';
 import { listExercises } from '@/lib/exercises';
 import { summarizeMuscles } from '@/lib/muscles';
 import { EditButton } from '@/components/edit-button';
 import { requirePt } from '@/lib/guards';
+import { getLocale, getMessages } from '@/i18n/server';
+import { ptLibraryMessages } from '@/i18n/messages/pt-library';
 
 /** Sayfa başlığı ile sayfa aynı okumayı paylaşır (istek başına bir kez). */
 const loadAttachment = cache((id: string) => getAttachment(id));
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   await requirePt();
+  const t = (await getMessages(ptLibraryMessages)).attachmentPage;
   const attachment = await loadAttachment((await params).id);
-  return { title: attachment?.name ?? 'Aparat bulunamadı' };
+  return { title: attachment?.name ?? t.notFound };
 }
 
 /** Aparat detayı — yalnız gösterir; değiştirmek için "Düzenle" (SPEC §6). */
 export default async function AttachmentDetailPage({ params }: { params: Promise<{ id: string }> }) {
   await requirePt();
+  const locale = await getLocale();
+  const t = ptLibraryMessages(locale).attachmentPage;
   const { id } = await params;
+  // i18n-followup(T5): listDevices/listExercises(…, locale) için kütüphane öğeleri henüz yerelleşmedi.
   const [attachment, devices, exercises] = await Promise.all([loadAttachment(id), listDevices(), listExercises()]);
   if (!attachment) notFound();
 
@@ -36,12 +42,12 @@ export default async function AttachmentDetailPage({ params }: { params: Promise
   const usedByDevices = devices.filter((device) => device.attachments?.includes(id));
   const usedByExercises = exercises.filter((exercise) => exercise.attachmentId === id);
   const origin =
-    attachment.source === 'library' ? 'Hazır havuz' : attachment.overridesLibrary ? 'Senin sürümün' : 'Senin aparatın';
+    attachment.source === 'library' ? t.sourceLibrary : attachment.overridesLibrary ? t.sourceOverride : t.sourceCustom;
 
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
-        crumbs={[{ label: 'Aparatlar', href: '/dashboard/attachments' }, { label: attachment.name }]}
+        crumbs={[{ label: t.crumbList, href: '/dashboard/attachments' }, { label: attachment.name }]}
         title={attachment.name}
         description={origin}
         actions={<EditButton href={`/dashboard/attachments/${attachment.id}/edit`} />}
@@ -50,8 +56,8 @@ export default async function AttachmentDetailPage({ params }: { params: Promise
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle>Fotoğraf</CardTitle>
-            <CardDescription>Danışan hangisini takacağını buradan tanır.</CardDescription>
+            <CardTitle>{t.photoTitle}</CardTitle>
+            <CardDescription>{t.photoDescription}</CardDescription>
           </CardHeader>
           <CardContent>
             {imageUrl ? (
@@ -68,11 +74,11 @@ export default async function AttachmentDetailPage({ params }: { params: Promise
         <div className="flex flex-col gap-6">
           <Card>
             <CardHeader>
-              <CardTitle>Takılı olduğu cihazlar</CardTitle>
+              <CardTitle>{t.devicesTitle}</CardTitle>
               <CardDescription>
                 {usedByDevices.length > 0
-                  ? 'Cihazı düzenleyerek bu listeyi değiştirebilirsin.'
-                  : 'Henüz bir cihazda seçili değil. Cihazı düzenleyip havuzdan ekleyebilirsin.'}
+                  ? t.devicesEditHint
+                  : t.devicesEmpty}
               </CardDescription>
             </CardHeader>
             {usedByDevices.length > 0 ? (
@@ -82,7 +88,7 @@ export default async function AttachmentDetailPage({ params }: { params: Promise
                     <Item key={device.id} variant="outline" size="sm" render={<Link href={`/dashboard/devices/${device.id}`} />}>
                       <ItemContent>
                         <ItemTitle>{device.name}</ItemTitle>
-                        <ItemDescription>{DEVICE_KIND_LABELS[device.kind]}</ItemDescription>
+                        <ItemDescription>{deviceKindLabels(locale)[device.kind]}</ItemDescription>
                       </ItemContent>
                     </Item>
                   ))}
@@ -96,11 +102,11 @@ export default async function AttachmentDetailPage({ params }: { params: Promise
 
       <Card>
         <CardHeader>
-          <CardTitle>Bu aparatla yapılan egzersizler</CardTitle>
+          <CardTitle>{t.exercisesTitle}</CardTitle>
           <CardDescription>
             {usedByExercises.length > 0
-              ? 'Egzersizi düzenleyerek aparatını değiştirebilirsin.'
-              : 'Henüz bağlı egzersiz yok.'}
+              ? t.exercisesEditHint
+              : t.exercisesEmpty}
           </CardDescription>
         </CardHeader>
         {usedByExercises.length > 0 ? (
@@ -110,7 +116,7 @@ export default async function AttachmentDetailPage({ params }: { params: Promise
                 <Item key={exercise.id} variant="outline" size="sm" render={<Link href={`/dashboard/exercises/${exercise.id}`} />}>
                   <ItemContent>
                     <ItemTitle>{exercise.title}</ItemTitle>
-                    <ItemDescription>{summarizeMuscles(exercise.primaryMuscles).join(', ')}</ItemDescription>
+                    <ItemDescription>{summarizeMuscles(exercise.primaryMuscles, locale).join(', ')}</ItemDescription>
                   </ItemContent>
                 </Item>
               ))}
