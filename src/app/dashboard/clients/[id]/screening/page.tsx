@@ -8,12 +8,16 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import type { Locale } from '@/i18n/locale';
+import { healthMessages } from '@/i18n/messages/health';
+import { screeningMessages } from '@/i18n/messages/screening';
+import { getLocale, getMessages } from '@/i18n/server';
 import { canRecordHealth } from '@/lib/client-status';
 import { readAppConfig } from '@/lib/config';
 import { careInputOf, evaluateCare, hasCare } from '@/lib/constraint-filter';
-import { AVOID_TAGS, constraintsOf, isPaired, regionText } from '@/lib/constraints';
+import { constraintsOf, isPaired, regionText } from '@/lib/constraints';
 import { listExercises } from '@/lib/exercises';
-import { formatDay, formatNumber, formatWithUnit, todayIn } from '@/lib/format';
+import { getFormat, todayIn } from '@/lib/format';
 import { requirePt } from '@/lib/guards';
 import { loadHealthPart } from '@/lib/health';
 import type { Client } from '@/lib/schemas/client';
@@ -26,7 +30,7 @@ import {
   effectiveMissed,
   majorAsymmetry,
   newestFirst,
-  OUTCOME_LABELS,
+  outcomeLabels,
   outcomeOf,
   painHistory,
   previousOutcome,
@@ -35,11 +39,11 @@ import {
   SCREENING_TEST_IDS,
   SCREENING_TESTS,
   screeningHints,
+  screeningTest,
   screeningSummary,
   sideEntry,
   sidesOf,
   testName,
-  type Change,
   type ScreeningTestId,
   type SideKey,
 } from '@/lib/screening';
@@ -48,51 +52,59 @@ import { MeasurementProblemAlert, measurementClient } from '../measurements/meas
 import { CompareSelect } from './compare-select';
 import { PainActions } from './screening-actions';
 
-export const metadata: Metadata = { title: 'Hareket' };
-
-const CHANGE_TEXT: Record<Change, string> = { up: '↑', down: '↓', same: '=', new: 'yeni', pain_new: 'yeni ağrı', pain_gone: 'ağrı geçti' };
+export async function generateMetadata(): Promise<Metadata> {
+  return { title: (await getMessages(screeningMessages)).page.title };
+}
 
 /** Ön uzanma: ham cm ve bacak boyu girildiyse yüzdesi ("64 cm (%71,1)"; Plisky 2006). */
-function reachText(reach: { cm: number; percent?: number }): string {
-  return `${formatNumber(reach.cm)} cm${reach.percent !== undefined ? ` (${formatWithUnit(reach.percent, '%')})` : ''}`;
+function reachText(reach: { cm: number; percent?: number }, locale: Locale): string {
+  const format = getFormat(locale);
+  return screeningMessages(locale).page.reach(format.number(reach.cm), reach.percent !== undefined ? format.withUnit(reach.percent, '%') : null);
 }
 
 /** Hücrenin metni: sözcük; telafide kaçan noktalar; dengede süre ve uzanma (bacak boyuna göre yüzdesiyle). */
-function cellText(testId: ScreeningTestId, screening: Screening, side: SideKey): string {
+function cellText(testId: ScreeningTestId, screening: Screening, side: SideKey, locale: Locale): string {
+  const t = screeningMessages(locale).page;
+  const format = getFormat(locale);
+  const labels = outcomeLabels(locale);
   const entry = sideEntry(screening.tests, testId, side);
   const outcome = outcomeOf(testId, entry);
   if (!entry || !outcome) return '—';
-  const parts: string[] = [outcome === 'pain' ? `⚑ ${OUTCOME_LABELS.pain}` : OUTCOME_LABELS[outcome]];
-  if (outcome === 'not_tested' && entry.reason === 'constraint') parts[0] = 'Yapılmadı (kısıt)';
+  const parts: string[] = [outcome === 'pain' ? t.painCell(labels.pain) : labels[outcome]];
+  if (outcome === 'not_tested' && entry.reason === 'constraint') parts[0] = t.notTestedConstraint;
   if (outcome === 'compensated' || outcome === 'easier') {
-    const missed = effectiveMissed(testId, entry).map((id) => SCREENING_TESTS[testId].points.find((point) => point.id === id)?.label.toLocaleLowerCase('tr') ?? id);
-    if (missed.length > 0) parts.push(missed.join(', '));
+    const points = screeningTest(testId, locale).points;
+    const missed = effectiveMissed(testId, entry).map((id) => points.find((point) => point.id === id)?.label ?? id);
+    if (missed.length > 0) parts.push(t.missedList(missed));
   }
-  if (entry.seconds !== undefined) parts.push(`${formatNumber(entry.seconds)} sn`);
+  if (entry.seconds !== undefined) parts.push(t.seconds(format.number(entry.seconds)));
   const reach = side !== 'center' && testId === 'single_leg_balance' ? reachOf(screening.tests, side) : null;
-  if (reach) parts.push(reachText(reach));
+  if (reach) parts.push(reachText(reach, locale));
   const leg = side !== 'center' && testId === 'single_leg_balance' && entry.legCm !== undefined ? entry.legCm : undefined;
-  if (leg !== undefined) parts.push(`bacak ${formatNumber(leg)} cm`);
+  if (leg !== undefined) parts.push(t.leg(format.number(leg)));
   return parts.join(' · ');
 }
 
 /** Ön uzanmanın önceki taramaya göre değişimi ("uzanma 61 → 64 cm (%68,5 → %71,9)"); ikisinde de yoksa boş. */
-function reachChange(current: Screening, previous: Screening, side: 'left' | 'right'): string {
+function reachChange(current: Screening, previous: Screening, side: 'left' | 'right', locale: Locale): string {
+  const format = getFormat(locale);
   const now = reachOf(current.tests, side);
   const before = previous.protocol === SCREENING_PROTOCOL ? reachOf(previous.tests, side) : null;
   if (!now || !before) return '';
-  const percent = now.percent !== undefined && before.percent !== undefined ? ` (${formatWithUnit(before.percent, '%')} → ${formatWithUnit(now.percent, '%')})` : '';
-  return `uzanma ${formatNumber(before.cm)} → ${formatNumber(now.cm)} cm${percent}`;
+  const percent =
+    now.percent !== undefined && before.percent !== undefined ? { before: format.withUnit(before.percent, '%'), after: format.withUnit(now.percent, '%') } : null;
+  return screeningMessages(locale).page.reachChange(format.number(before.cm), format.number(now.cm), percent);
 }
 
-function changeText(testId: ScreeningTestId, current: Screening, previous: Screening | null): string {
+function changeText(testId: ScreeningTestId, current: Screening, previous: Screening | null, locale: Locale): string {
   if (!previous) return '';
+  const t = screeningMessages(locale).page;
   const parts = sidesOf(testId).flatMap((side) => {
     const compared = compareCell(outcomeOf(testId, sideEntry(current.tests, testId, side)), previousOutcome(previous, testId, side));
-    const reach = testId === 'single_leg_balance' && side !== 'center' ? reachChange(current, previous, side) : '';
+    const reach = testId === 'single_leg_balance' && side !== 'center' ? reachChange(current, previous, side, locale) : '';
     if (!compared && !reach) return [];
-    const text = [compared ? `${CHANGE_TEXT[compared.change]}${compared.significant ? ' (belirgin)' : ''}` : '', reach].filter(Boolean).join(', ');
-    return [side === 'center' ? text : `${side === 'left' ? 'sol' : 'sağ'} ${text}`];
+    const text = [compared ? `${t.changes[compared.change]}${compared.significant ? t.significant : ''}` : '', reach].filter(Boolean).join(', ');
+    return [side === 'center' ? text : t.sideChange(side, text)];
   });
   return parts.join(' · ');
 }
@@ -115,16 +127,27 @@ function weeksAgo(date: string, today: string): number {
   return Math.floor((Date.parse(`${today}T00:00:00Z`) - Date.parse(`${date}T00:00:00Z`)) / (7 * 86_400_000));
 }
 
-async function Overview({ client, record, today, query }: { client: Client; record: HealthRecord; today: string; query: { gun?: string; onceki?: string } }) {
+async function Overview({
+  client,
+  record,
+  today,
+  query,
+  locale,
+}: {
+  client: Client;
+  record: HealthRecord;
+  today: string;
+  query: { gun?: string; onceki?: string };
+  locale: Locale;
+}) {
+  const messages = screeningMessages(locale);
+  const t = messages.page;
+  const format = getFormat(locale);
+  const outcomes = outcomeLabels(locale);
   const base = `/dashboard/clients/${client.id}/screening`;
   const list = newestFirst(record.screenings ?? []);
   const legacy = record.movementScreens?.length ?? 0;
-  const legacyNote =
-    legacy > 0 ? (
-      <p className="text-sm text-muted-foreground">
-        Eski biçimde hareket testi kaydı ({formatNumber(legacy)} gün); yeni protokolle karşılaştırılmaz.
-      </p>
-    ) : null;
+  const legacyNote = legacy > 0 ? <p className="text-sm text-muted-foreground">{t.legacy(format.number(legacy), legacy)}</p> : null;
 
   if (list.length === 0) {
     return (
@@ -134,8 +157,8 @@ async function Overview({ client, record, today, query }: { client: Client; reco
             <EmptyMedia variant="icon">
               <PersonSimpleTaiChi weight="fill" />
             </EmptyMedia>
-            <EmptyTitle>Henüz hareket testi yok</EmptyTitle>
-            <EmptyDescription>Başlangıçta ve 6–8 haftada bir önerilir. Sekiz test yaklaşık 15 dakika; yalnız doldurduğun testler kaydedilir.</EmptyDescription>
+            <EmptyTitle>{t.emptyTitle}</EmptyTitle>
+            <EmptyDescription>{t.emptyDescription}</EmptyDescription>
           </EmptyHeader>
         </Empty>
         {legacyNote}
@@ -160,49 +183,42 @@ async function Overview({ client, record, today, query }: { client: Client; reco
   const exercises = await listExercises();
   const titles = new Map(exercises.map((exercise) => [exercise.id, exercise.title]));
   // Kısıtın izinsiz yasakladığı hareket ipucunda önerilmez (düzenleyici de yaptırmaz; tek bacak hareketinde iki taraf).
-  const care = conditionsConsent ? careInputOf(record, { today, painConsent: canRecordHealth(client, 'check_in') }) : null;
+  const care = conditionsConsent ? careInputOf(record, { today, painConsent: canRecordHealth(client, 'check_in'), locale }) : null;
   const blocked = new Set(care && hasCare(care) ? exercises.filter((exercise) => evaluateCare(exercise, care).blockedBy.length > 0).map((exercise) => exercise.id) : []);
-  const hints = screeningHints(current, (id) => (blocked.has(id) ? undefined : titles.get(id)), suppress);
+  const hints = screeningHints(current, (id) => (blocked.has(id) ? undefined : titles.get(id)), suppress, locale);
+  const weeks = weeksAgo(list[0]!.date, today);
   const own = exercises.filter((exercise) => exercise.source === 'custom');
 
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-2">
-        <p className="text-sm text-muted-foreground">
-          Son hareket testi {formatDay(list[0]!.date)}
-          {weeksAgo(list[0]!.date, today) >= 1 ? ` · ${formatNumber(weeksAgo(list[0]!.date, today))} hafta önce` : ''}. Başlangıçta ve 6–8 haftada bir önerilir.
-        </p>
+        <p className="text-sm text-muted-foreground">{t.latest(format.day(list[0]!.date), weeks >= 1 ? format.number(weeks) : null, weeks)}</p>
         <CompareSelect dates={list.map((item) => item.date)} current={current.date} previous={previous?.date ?? null} />
       </div>
 
       {pains.length > 0 || gone.length > 0 || asymmetry ? (
         <Card>
           <CardHeader>
-            <CardTitle>Uyarılar</CardTitle>
-            <CardDescription>
-              Ağrılı test öneri üretmez: önce değerlendirme. Ağrı, o test sonra ağrısız yapılana ya da &quot;Gördüm&quot; diyene kadar açık kalır. Asimetri
-              risk değil, öncelik içindir.
-            </CardDescription>
+            <CardTitle>{t.warnings}</CardTitle>
+            <CardDescription>{t.warningsHint}</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-3 text-sm">
             {pains.map((cell) => {
               const test = SCREENING_TESTS[cell.testId];
               const draft = constraintFromCell(cell.testId, cell.side);
-              const suggestion = `${regionText(draft)}${draft.avoid[0] ? ` · kaçın: ${AVOID_TAGS[draft.avoid[0]].label.toLocaleLowerCase('tr')}` : ''}`;
+              const suggestion = t.suggestion(regionText(draft, locale), draft.avoid[0] ? healthMessages(locale).constraints.avoid[draft.avoid[0]] : null);
               const carried = cell.date !== current.date;
               return (
                 <div key={`${cell.date}:${cell.key}`} className="flex flex-col gap-2 rounded-lg border p-3">
                   <p>
-                    <span className="font-medium">⚑ Ağrı · {cellTitle(cell.testId, cell.side)}</span>
-                    {carried ? ` · ${formatDay(cell.date)} hareket testinden; sonra test edilmedi` : ''}
+                    <span className="font-medium">{t.painTitle(cellTitle(cell.testId, cell.side, false, locale))}</span>
+                    {carried ? t.painCarried(format.day(cell.date)) : ''}
                     {cell.note ? ` · “${cell.note}”` : ''}
-                    {cell.state === 'open' || cell.state === 'reviewed' ? ': önce değerlendirme.' : '.'}
-                    {cell.state === 'reviewed' ? <span className="text-muted-foreground"> Gözden geçirildi.</span> : null}
-                    {cell.state === 'resolved' && cell.laterDate ? (
-                      <span className="text-muted-foreground"> {formatDay(cell.laterDate)} hareket testinde ağrı geçti.</span>
-                    ) : null}
+                    {cell.state === 'open' || cell.state === 'reviewed' ? t.painOpen : '.'}
+                    {cell.state === 'reviewed' ? <span className="text-muted-foreground">{t.reviewed}</span> : null}
+                    {cell.state === 'resolved' && cell.laterDate ? <span className="text-muted-foreground">{t.painResolved(format.day(cell.laterDate))}</span> : null}
                     {cell.state === 'superseded' && cell.laterDate ? (
-                      <span className="text-muted-foreground"> {formatDay(cell.laterDate)} hareket testinde de ağrılı; o günün uyarısına bak.</span>
+                      <span className="text-muted-foreground">{t.painSuperseded(format.day(cell.laterDate))}</span>
                     ) : null}
                   </p>
                   {cell.state === 'open' ? (
@@ -210,7 +226,7 @@ async function Overview({ client, record, today, query }: { client: Client; reco
                       clientId={client.id}
                       date={cell.date}
                       cellKey={cell.key}
-                      title={cellTitle(cell.testId, cell.side)}
+                      title={cellTitle(cell.testId, cell.side, false, locale)}
                       constraint={conditionsConsent ? draft : null}
                       suggestion={test ? suggestion : null}
                     />
@@ -220,16 +236,19 @@ async function Overview({ client, record, today, query }: { client: Client; reco
             })}
             {gone.map((cell) => (
               <p key={`gone:${cell.date}:${cell.key}`}>
-                <span className="font-medium">✓ Ağrı geçti · {cellTitle(cell.testId, cell.side)}</span>: {formatDay(cell.date)} hareket testinde ağrılıydı, bu kez
-                ağrısız.
+                <span className="font-medium">{t.goneTitle(cellTitle(cell.testId, cell.side, false, locale))}</span>
+                {t.gone(format.day(cell.date))}
               </p>
             ))}
             {asymmetry ? (
               <p>
-                <span className="font-medium">◐ Büyük asimetri · {testName(asymmetry.testId)}</span>: sol {OUTCOME_LABELS[asymmetry.left].toLocaleLowerCase('tr')} · sağ{' '}
-                {OUTCOME_LABELS[asymmetry.right].toLocaleLowerCase('tr')}
-                {asymmetry.reachDiff !== undefined ? ` · ön uzanma farkı ${formatNumber(asymmetry.reachDiff)} cm` : ''}
-                {asymmetry.reachPercentDiff !== undefined ? ` (bacak boyuna göre ${formatWithUnit(asymmetry.reachPercentDiff, '%')})` : ''}.
+                <span className="font-medium">{t.asymmetryTitle(testName(asymmetry.testId, locale))}</span>
+                {t.asymmetry(
+                  outcomes[asymmetry.left],
+                  outcomes[asymmetry.right],
+                  asymmetry.reachDiff !== undefined ? format.number(asymmetry.reachDiff) : null,
+                  asymmetry.reachPercentDiff !== undefined ? format.withUnit(asymmetry.reachPercentDiff, '%') : null,
+                )}
               </p>
             ) : null}
           </CardContent>
@@ -238,9 +257,9 @@ async function Overview({ client, record, today, query }: { client: Client; reco
 
       <Card>
         <CardHeader>
-          <CardTitle>{formatDay(current.date)}</CardTitle>
+          <CardTitle>{format.day(current.date)}</CardTitle>
           <CardDescription>
-            {current.protocol === SCREENING_PROTOCOL ? 'Protokol 1' : `Protokol ${current.protocol}`}
+            {t.protocol(current.protocol)}
             {current.note ? ` · ${current.note}` : ''}
           </CardDescription>
         </CardHeader>
@@ -250,27 +269,27 @@ async function Overview({ client, record, today, query }: { client: Client; reco
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Test</TableHead>
-                  <TableHead>Sol</TableHead>
-                  <TableHead>Sağ</TableHead>
-                  <TableHead>{previous ? `${formatDay(previous.date)} tarihine göre` : 'Değişim'}</TableHead>
+                  <TableHead>{t.test}</TableHead>
+                  <TableHead>{messages.sides.left}</TableHead>
+                  <TableHead>{messages.sides.right}</TableHead>
+                  <TableHead>{previous ? t.comparedTo(format.day(previous.date)) : t.change}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {SCREENING_TEST_IDS.map((testId) => (
                   <TableRow key={testId}>
-                    <TableCell className="font-medium">{testName(testId)}</TableCell>
+                    <TableCell className="font-medium">{testName(testId, locale)}</TableCell>
                     {SCREENING_TESTS[testId].sided ? (
                       <>
-                        <TableCell className="whitespace-normal">{cellText(testId, current, 'left')}</TableCell>
-                        <TableCell className="whitespace-normal">{cellText(testId, current, 'right')}</TableCell>
+                        <TableCell className="whitespace-normal">{cellText(testId, current, 'left', locale)}</TableCell>
+                        <TableCell className="whitespace-normal">{cellText(testId, current, 'right', locale)}</TableCell>
                       </>
                     ) : (
                       <TableCell colSpan={2} className="whitespace-normal">
-                        {cellText(testId, current, 'center')}
+                        {cellText(testId, current, 'center', locale)}
                       </TableCell>
                     )}
-                    <TableCell className="text-muted-foreground">{changeText(testId, current, previous)}</TableCell>
+                    <TableCell className="text-muted-foreground">{changeText(testId, current, previous, locale)}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -279,26 +298,26 @@ async function Overview({ client, record, today, query }: { client: Client; reco
           <ul className="flex flex-col gap-2 md:hidden">
             {SCREENING_TEST_IDS.map((testId) => (
               <li key={testId} className="rounded-lg border p-3 text-sm">
-                <p className="font-medium">{testName(testId)}</p>
+                <p className="font-medium">{testName(testId, locale)}</p>
                 {sidesOf(testId).map((side) => (
                   <p key={side}>
-                    {side === 'center' ? '' : `${side === 'left' ? 'Sol' : 'Sağ'}: `}
-                    {cellText(testId, current, side)}
+                    {side === 'center' ? '' : t.sideLine(messages.sides[side])}
+                    {cellText(testId, current, side, locale)}
                   </p>
                 ))}
-                {previous ? <p className="text-muted-foreground">{changeText(testId, current, previous)}</p> : null}
+                {previous ? <p className="text-muted-foreground">{changeText(testId, current, previous, locale)}</p> : null}
               </li>
             ))}
           </ul>
-          {previous ? <p className="text-xs text-muted-foreground">Tek basamaklık değişim gözlem farkı olabilir.</p> : null}
+          {previous ? <p className="text-xs text-muted-foreground">{t.stepNote}</p> : null}
         </CardContent>
       </Card>
 
       {hints.length > 0 ? (
         <Card>
           <CardHeader>
-            <CardTitle>Programa ipuçları (yalnız sana)</CardTitle>
-            <CardDescription>Sıra: ağrı → en düşük sonuç → asimetri. Sonrası senin hedefine göre.</CardDescription>
+            <CardTitle>{t.hintsTitle}</CardTitle>
+            <CardDescription>{t.hintsHint}</CardDescription>
           </CardHeader>
           <CardContent>
             <ol className="flex list-decimal flex-col gap-2 pl-5 text-sm">
@@ -308,7 +327,7 @@ async function Overview({ client, record, today, query }: { client: Client; reco
                   <li key={hint.key}>
                     {hint.text}
                     {mine.length > 0 && hint.outcome !== 'pain' ? (
-                      <span className="text-muted-foreground"> Kütüphanende aynı kalıptan: {mine.map((exercise) => exercise.title).join(', ')}.</span>
+                      <span className="text-muted-foreground">{t.sameFamily(mine.map((exercise) => exercise.title).join(', '))}</span>
                     ) : null}
                   </li>
                 );
@@ -320,7 +339,7 @@ async function Overview({ client, record, today, query }: { client: Client; reco
 
       <section aria-labelledby="days-heading" className="flex flex-col gap-3">
         <h4 id="days-heading" className="font-heading text-base font-medium">
-          Test günleri
+          {t.days}
         </h4>
         <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
           {list.map((item) => {
@@ -329,8 +348,8 @@ async function Overview({ client, record, today, query }: { client: Client; reco
               <li key={item.date}>
                 <Link href={`${base}/${item.date}/edit`} className="flex min-h-11 items-center justify-between gap-2 rounded-lg border px-3 py-2 text-sm hover:bg-muted">
                   <span>
-                    <span className="font-medium">{formatDay(item.date)}</span> · {formatNumber(summary.tests)} test
-                    {summary.pain > 0 ? ` · ${formatNumber(summary.pain)} ağrı` : ''}
+                    <span className="font-medium">{format.day(item.date)}</span>
+                    {t.daySummary(format.number(summary.tests), summary.tests, summary.pain > 0 ? format.number(summary.pain) : null)}
                   </span>
                   <CaretRight className="size-4 text-muted-foreground" />
                 </Link>
@@ -360,44 +379,48 @@ export default async function ScreeningPage({
 }) {
   await requirePt();
   const { id } = await params;
+  const locale = await getLocale();
+  const t = screeningMessages(locale).page;
   const loaded = await measurementClient(id);
   if (!loaded.ok) {
     return (
       <div className="flex flex-col gap-6">
-        <SectionHeader title="Hareket" />
-        <MeasurementProblemAlert title="Danışan kaydı okunamadı" problem={loaded.problem} />
+        <SectionHeader title={t.title} />
+        <MeasurementProblemAlert title={t.clientUnreadable} problem={loaded.problem} />
       </div>
     );
   }
   const { client } = loaded;
-  const [view, config] = await Promise.all([loadHealthPart(client, 'screening'), readAppConfig()]);
+  const [view, config] = await Promise.all([loadHealthPart(client, 'screening', locale), readAppConfig()]);
 
   return (
     <div className="flex flex-col gap-6">
       <HealthStrip client={client} record={view.state === 'ok' ? view.record : null} />
       <SectionHeader
-        title="Hareket"
-        description="Danışanın duruş ve hareket açıları kamerayla, temel hareketlerdeki ağrı ve kontrol hareket testiyle kaydedilir."
+        title={t.title}
+        description={t.description}
       />
       {view.state === 'locked' ? <HealthLockAlert field="screening" lock={view.lock} clientId={id} /> : null}
       {view.state === 'broken' ? (
         <Alert variant="destructive">
           <WarningCircle weight="fill" />
-          <AlertTitle>Sağlık kaydı okunamadı</AlertTitle>
-          <AlertDescription>{view.problem} Kayıt uygulama dışında değiştirilmiş olabilir; düzeltilene kadar kamera ölçümü ve hareket testi yazılmaz.</AlertDescription>
+          <AlertTitle>{t.recordUnreadable}</AlertTitle>
+          <AlertDescription>
+            {view.problem} {t.brokenDetail}
+          </AlertDescription>
         </Alert>
       ) : null}
       {view.state === 'ok' ? (
         <>
-          <div className="grid gap-3 sm:grid-cols-2" role="group" aria-label="Yeni kayıt">
+          <div className="grid gap-3 sm:grid-cols-2" role="group" aria-label={t.newRecord}>
             <Button
               nativeButton={false}
               render={<Link href={`/dashboard/clients/${id}/measurements/camera`} />}
               className="h-auto min-h-24 w-full justify-start gap-4 rounded-xl px-5 py-4 text-left whitespace-normal">
               <Camera aria-hidden className="size-8" />
               <span className="flex min-w-0 flex-col gap-1">
-                <span className="text-lg font-semibold">Kamerayla ölçüm al</span>
-                <span className="text-sm font-normal">Duruş ve hareket açılarını adım adım ölç.</span>
+                <span className="text-lg font-semibold">{t.camera}</span>
+                <span className="text-sm font-normal">{t.cameraHint}</span>
               </span>
             </Button>
             <Button
@@ -407,8 +430,8 @@ export default async function ScreeningPage({
               className="h-auto min-h-24 w-full justify-start gap-4 rounded-xl border-border px-5 py-4 text-left whitespace-normal">
               <PersonSimpleTaiChi aria-hidden weight="fill" className="size-8" />
               <span className="flex min-w-0 flex-col gap-1">
-                <span className="text-lg font-semibold">Hareket testi yap</span>
-                <span className="text-sm font-normal">Sekiz temel hareketi gözle; ağrı ve kontrolü kaydet.</span>
+                <span className="text-lg font-semibold">{t.screen}</span>
+                <span className="text-sm font-normal">{t.screenHint}</span>
               </span>
             </Button>
           </div>
@@ -416,11 +439,11 @@ export default async function ScreeningPage({
           <section aria-labelledby="screening-results-heading" className="flex flex-col gap-4">
             <div>
               <h3 id="screening-results-heading" className="font-heading text-lg font-semibold">
-                Hareket testi sonuçları
+                {t.resultsTitle}
               </h3>
-              <p className="mt-1 text-sm text-muted-foreground">Sonuç gözlenen noktalardan sözcükle yazılır; toplam ve puan yok.</p>
+              <p className="mt-1 text-sm text-muted-foreground">{t.resultsHint}</p>
             </div>
-            <Overview client={client} record={view.record} today={todayIn(config.timeZone)} query={await searchParams} />
+            <Overview client={client} record={view.record} today={todayIn(config.timeZone)} query={await searchParams} locale={locale} />
           </section>
         </>
       ) : null}

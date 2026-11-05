@@ -18,6 +18,9 @@ import {
 import { ConfirmDeleteDialog } from '@/components/confirm-delete-dialog';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
+import { useMessages } from '@/i18n/client';
+import { commonMessages } from '@/i18n/messages/common';
+import { screeningMessages } from '@/i18n/messages/screening';
 import type { ConstraintForm } from '@/lib/schemas/constraint';
 import { fetchJson } from '@/lib/query/errors';
 import { useServiceMutation } from '@/lib/query/use-service';
@@ -45,9 +48,11 @@ export function PainActions({
   suggestion: string | null;
 }) {
   const router = useRouter();
+  const t = useMessages(screeningMessages).actions;
+  const common = useMessages(commonMessages).actions;
   const review = useServiceMutation({
     fn: () => fetchJson<{ ok: true }>(`/api/clients/${clientId}/screenings/${date}/review`, { method: 'POST', body: JSON.stringify({ key: cellKey }) }),
-    notify: { success: 'Gözden geçirildi.' },
+    notify: { success: t.reviewed },
     onSuccess: () => router.refresh(),
   });
   const add = useServiceMutation({
@@ -56,7 +61,7 @@ export function PainActions({
         method: 'POST',
         body: JSON.stringify({ constraint, fromScreening: { date, key: cellKey } }),
       }),
-    notify: { success: 'Kısıt eklendi.' },
+    notify: { success: t.constraintAdded },
     onSuccess: (data) => {
       router.push(`/dashboard/clients/${clientId}/constraints/${data.id}/edit`);
       router.refresh();
@@ -66,26 +71,24 @@ export function PainActions({
     <div className="flex flex-wrap gap-2">
       <Button size="sm" variant="outline" disabled={review.isPending} onClick={() => review.mutate()}>
         {review.isPending ? <Spinner data-icon="inline-start" /> : <Check data-icon="inline-start" />}
-        Gördüm
+        {t.seen}
       </Button>
       {constraint ? (
         <AlertDialog>
           <AlertDialogTrigger render={<Button size="sm" variant="outline" />}>
             <Plus data-icon="inline-start" />
-            Kısıt olarak ekle
+            {t.addConstraint}
           </AlertDialogTrigger>
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>{title}: kısıt eklensin mi?</AlertDialogTitle>
-              <AlertDialogDescription>
-                {suggestion ?? 'Hareket kısıtı'} · tanısız, hareket testinden. Kaydedince kısıtın sayfası açılır; bölgeyi, tarafı ve kaçınmaları orada düzelt.
-              </AlertDialogDescription>
+              <AlertDialogTitle>{t.addTitle(title)}</AlertDialogTitle>
+              <AlertDialogDescription>{t.addDescription(suggestion)}</AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel>Vazgeç</AlertDialogCancel>
+              <AlertDialogCancel>{common.cancel}</AlertDialogCancel>
               <AlertDialogAction disabled={add.isPending} onClick={() => add.mutate()}>
                 {add.isPending ? <Spinner data-icon="inline-start" /> : null}
-                Kısıt olarak ekle
+                {t.addConstraint}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
@@ -99,9 +102,11 @@ export function PainActions({
 export function ScreeningDelete({ clientId, date, dateLabel }: { clientId: string; date: string; dateLabel: string }) {
   const [open, setOpen] = useState(false);
   const router = useRouter();
+  const t = useMessages(screeningMessages).actions;
+  const common = useMessages(commonMessages).actions;
   const remove = useServiceMutation({
     fn: () => fetchJson<{ ok: true }>(`/api/clients/${clientId}/screenings/${date}`, { method: 'DELETE' }),
-    notify: { success: 'Hareket testi silindi.' },
+    notify: { success: t.deleted },
     onSuccess: () => {
       router.push(`/dashboard/clients/${clientId}/screening`);
       router.refresh();
@@ -111,13 +116,13 @@ export function ScreeningDelete({ clientId, date, dateLabel }: { clientId: strin
     <>
       <Button variant="outline" className="text-destructive-text" onClick={() => setOpen(true)}>
         <Trash data-icon="inline-start" />
-        Sil
+        {common.delete}
       </Button>
       <ConfirmDeleteDialog
         open={open}
         onOpenChange={setOpen}
-        title={`${dateLabel} hareket testi silinsin mi?`}
-        body="O günün bütün testleri kayıttan çıkar. Danışanın kaydının değişiklik geçmişinde bir kopyası kalır."
+        title={t.deleteTitle(dateLabel)}
+        body={t.deleteBody}
         busy={remove.isPending}
         onConfirm={() => remove.mutate()}
       />

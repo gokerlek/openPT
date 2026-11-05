@@ -16,24 +16,26 @@ import { Input } from '@/components/ui/input';
 import { InputGroup, InputGroupAddon, InputGroupInput, InputGroupText } from '@/components/ui/input-group';
 import { Spinner } from '@/components/ui/spinner';
 import { Toggle } from '@/components/ui/toggle';
-import { formatDay, formatNumber } from '@/lib/format';
+import { useLocale, useMessages } from '@/i18n/client';
+import { commonMessages } from '@/i18n/messages/common';
+import { screeningMessages } from '@/i18n/messages/screening';
+import { getFormat } from '@/lib/format';
 import { fetchJson } from '@/lib/query/errors';
 import { useServiceMutation } from '@/lib/query/use-service';
 import {
   BALANCE_SECONDS,
   LEG_LENGTH_CM,
   reachPercent,
-  NOT_TESTED_REASON_LABELS,
+  notTestedReasonLabels,
   NOT_TESTED_REASONS,
-  OUTCOME_LABELS,
+  outcomeLabels,
   outcomeOf,
-  RESULT_CHOICE_LABELS,
+  resultChoiceLabels,
   RESULT_CHOICES,
   SCREENING_TEST_IDS,
-  SCREENING_TESTS,
+  screeningTests,
   screeningKey,
   sideEntry,
-  SIDE_KEY_LABELS,
   sidesOf,
   type ScreeningTestId,
   type SideKey,
@@ -85,7 +87,11 @@ function SideInput({
   state: SideState;
   onChange: (next: SideState) => void;
 }) {
-  const test = SCREENING_TESTS[testId];
+  const locale = useLocale();
+  const messages = useMessages(screeningMessages);
+  const common = useMessages(commonMessages);
+  const t = messages.form;
+  const test = screeningTests(locale)[testId];
   const id = screeningKey(testId, side).replace('.', '-');
   const outcome = outcomeOf(testId, toEntry(state));
   const pointsOpen = !state.pain && (state.result === 'standard' || state.result === 'easier');
@@ -93,7 +99,7 @@ function SideInput({
   const percent = reachPercent(decimal(state.reachCm), decimal(state.legCm ?? ""));
   return (
     <div className="flex flex-col gap-3 rounded-lg border p-3">
-      {side !== 'center' ? <p className="text-sm font-medium">{SIDE_KEY_LABELS[side]}</p> : null}
+      {side !== 'center' ? <p className="text-sm font-medium">{messages.sides[side]}</p> : null}
       <div className="flex flex-col gap-2">
         <Toggle
           variant="outline"
@@ -101,14 +107,14 @@ function SideInput({
           onPressedChange={(pain) => onChange({ ...state, pain })}
           className={cn('h-11 w-fit px-4', state.pain && 'border-destructive text-destructive-text')}>
           {state.pain ? <WarningCircle weight="fill" data-icon="inline-start" /> : null}
-          Ağrı
+          {t.pain}
         </Toggle>
         {state.pain ? (
           <>
-            <p className="text-sm font-medium text-destructive-text">Ağrı olunca testi bırak.</p>
+            <p className="text-sm font-medium text-destructive-text">{t.painStop}</p>
             <Field>
               <FieldLabel htmlFor={`${id}-pain`} className="text-xs">
-                Nerede (isteğe bağlı)
+                {t.painWhere}
               </FieldLabel>
               <Input id={`${id}-pain`} maxLength={140} value={state.painNote} onChange={(event) => onChange({ ...state, painNote: event.currentTarget.value })} />
             </Field>
@@ -117,25 +123,25 @@ function SideInput({
       </div>
       <Field>
         <FieldLabel id={`${id}-version`} className="text-xs">
-          Yapılan sürüm
+          {t.version}
         </FieldLabel>
         <ChoiceChips
           labelledBy={`${id}-version`}
           value={state.result}
           disabled={state.pain}
-          options={RESULT_CHOICES.map((choice) => ({ value: choice, label: RESULT_CHOICE_LABELS[choice] }))}
+          options={RESULT_CHOICES.map((choice) => ({ value: choice, label: resultChoiceLabels(locale)[choice] }))}
           onChange={(result) => onChange({ ...state, ...(result ? { result } : { result: undefined }) })}
         />
       </Field>
       {state.result === 'not_tested' && !state.pain ? (
         <Field>
           <FieldLabel id={`${id}-reason`} className="text-xs">
-            Neden
+            {t.reason}
           </FieldLabel>
           <ChoiceChips
             labelledBy={`${id}-reason`}
             value={state.reason}
-            options={NOT_TESTED_REASONS.map((reason) => ({ value: reason, label: NOT_TESTED_REASON_LABELS[reason] }))}
+            options={NOT_TESTED_REASONS.map((reason) => ({ value: reason, label: notTestedReasonLabels(locale)[reason] }))}
             onChange={(reason) => onChange({ ...state, ...(reason ? { reason } : { reason: undefined }) })}
           />
         </Field>
@@ -144,7 +150,7 @@ function SideInput({
         <div className="grid grid-cols-2 gap-2">
           <Field>
             <FieldLabel htmlFor={`${id}-seconds`} className="text-xs">
-              Süre (en iyisi)
+              {t.seconds}
             </FieldLabel>
             <InputGroup>
               <InputGroupInput
@@ -154,13 +160,13 @@ function SideInput({
                 onChange={(event) => onChange({ ...state, seconds: event.currentTarget.value })}
               />
               <InputGroupAddon align="inline-end">
-                <InputGroupText>sn</InputGroupText>
+                <InputGroupText>{t.secondsUnit}</InputGroupText>
               </InputGroupAddon>
             </InputGroup>
           </Field>
           <Field>
             <FieldLabel htmlFor={`${id}-reach`} className="text-xs">
-              Ön uzanma
+              {t.reach}
             </FieldLabel>
             <InputGroup>
               <InputGroupInput
@@ -170,26 +176,26 @@ function SideInput({
                 onChange={(event) => onChange({ ...state, reachCm: event.currentTarget.value })}
               />
               <InputGroupAddon align="inline-end">
-                <InputGroupText>cm</InputGroupText>
+                <InputGroupText>{common.units.cm}</InputGroupText>
               </InputGroupAddon>
             </InputGroup>
           </Field>
           <Field className="col-span-2">
-            <FieldLabel htmlFor={`${id}-leg`} className="text-xs">Bacak boyu (isteğe bağlı)</FieldLabel>
+            <FieldLabel htmlFor={`${id}-leg`} className="text-xs">{t.leg}</FieldLabel>
             <InputGroup>
               <InputGroupInput id={`${id}-leg`} inputMode="decimal" value={state.legCm ?? ''}
                 onChange={(event) => onChange({ ...state, legCm: event.currentTarget.value })} />
-              <InputGroupAddon align="inline-end"><InputGroupText>cm</InputGroupText></InputGroupAddon>
+              <InputGroupAddon align="inline-end"><InputGroupText>{common.units.cm}</InputGroupText></InputGroupAddon>
             </InputGroup>
             <FieldDescription>
-              Leğen kemiğinin ön üst çıkıntısından iç ayak bileği kemiğine; {LEG_LENGTH_CM.min}–{LEG_LENGTH_CM.max} cm.
-              {percent !== undefined ? ` Ön uzanma: bacak boyunun %${formatNumber(percent)} kadarı.` : ' Ön uzanmayı bacak boyuna göre yüzde olarak gösterir.'}
+              {t.legHint(LEG_LENGTH_CM.min, LEG_LENGTH_CM.max)}
+              {percent !== undefined ? t.legPercent(getFormat(locale).number(percent)) : t.legPercentHint}
             </FieldDescription>
           </Field>
         </div>
       ) : null}
       <fieldset className="flex flex-col gap-1.5" disabled={!pointsOpen}>
-        <legend className="mb-1.5 text-xs font-medium">Kaçan noktalar</legend>
+        <legend className="mb-1.5 text-xs font-medium">{t.missed}</legend>
         <div className={cn('flex flex-wrap gap-1.5', !pointsOpen && 'opacity-50')}>
           {test.points.map((point) => {
             // Dengede süre girildiyse "30 sn dolmadı" süreden hesaplanır.
@@ -211,7 +217,7 @@ function SideInput({
         </div>
       </fieldset>
       <p className="text-sm font-medium" aria-live="polite">
-        {outcome ? OUTCOME_LABELS[outcome] : 'Sürüm seçilmedi'}
+        {outcome ? outcomeLabels(locale)[outcome] : t.noVersion}
       </p>
     </div>
   );
@@ -241,6 +247,11 @@ export function ScreeningForm({
   constraintsNote?: React.ReactNode;
 }) {
   const router = useRouter();
+  const locale = useLocale();
+  const messages = useMessages(screeningMessages);
+  const t = messages.form;
+  const common = useMessages(commonMessages);
+  const testTexts = screeningTests(locale);
   const base = `/dashboard/clients/${clientId}/screening`;
   const key = draftKey(clientId, mode);
   const [state, setState] = useState<ScreeningDraftState>(initial);
@@ -278,7 +289,7 @@ export function ScreeningForm({
       mode.kind === 'new'
         ? fetchJson<{ ok: true }>(`/api/clients/${clientId}/screenings`, { method: 'POST', body: JSON.stringify({ date: state.date, tests, note: state.note }) })
         : fetchJson<{ ok: true }>(`/api/clients/${clientId}/screenings/${mode.date}`, { method: 'PUT', body: JSON.stringify({ tests, note: state.note }) }),
-    notify: { success: mode.kind === 'new' ? 'Hareket testi kaydedildi.' : 'Hareket testi güncellendi.' },
+    notify: { success: mode.kind === 'new' ? t.saved : t.updated },
     onError: (failure) => setError(Object.values(failure.fields)[0] ?? failure.message),
     onSuccess: () => {
       writeDraft(key, null);
@@ -289,7 +300,7 @@ export function ScreeningForm({
 
   const submit = () => {
     if (Object.keys(tests).length === 0) {
-      setError('En az bir test gir; boş testler kaydedilmez.');
+      setError(messages.errors.empty);
       return;
     }
     save.mutate();
@@ -297,7 +308,7 @@ export function ScreeningForm({
   const saveButton = (className?: string) => (
     <Button type="button" disabled={save.isPending} onClick={submit} className={className}>
       {save.isPending ? <Spinner data-icon="inline-start" /> : <Check data-icon="inline-start" />}
-      {save.isPending ? 'Kaydediliyor…' : 'Kaydet'}
+      {save.isPending ? common.actions.saving : common.actions.save}
     </Button>
   );
   const taken = mode.kind === 'new' && mode.screenedDates.includes(state.date);
@@ -305,7 +316,7 @@ export function ScreeningForm({
   return (
     <div className="flex flex-col gap-6">
       <SectionHeader
-        back={{ href: base, label: 'Hareket' }}
+        back={{ href: base, label: t.back }}
         title={title}
         description={description}
         actions={
@@ -319,7 +330,7 @@ export function ScreeningForm({
       {offered ? (
         <Alert>
           <WarningCircle />
-          <AlertTitle>Kaydedilmemiş bir taslağın var</AlertTitle>
+          <AlertTitle>{t.draftTitle}</AlertTitle>
           <AlertDescription className="flex flex-wrap gap-2">
             <Button
               size="sm"
@@ -327,7 +338,7 @@ export function ScreeningForm({
                 setState(offered);
                 setDirty(true);
               }}>
-              Taslağa devam et
+              {t.draftContinue}
             </Button>
             <Button
               size="sm"
@@ -336,7 +347,7 @@ export function ScreeningForm({
                 writeDraft(key, null);
                 setDismissed(true);
               }}>
-              At
+              {t.draftDiscard}
             </Button>
           </AlertDescription>
         </Alert>
@@ -346,13 +357,13 @@ export function ScreeningForm({
 
       {mode.kind === 'new' ? (
         <Field className="max-w-xs">
-          <FieldLabel htmlFor="screening-date">Test günü</FieldLabel>
+          <FieldLabel htmlFor="screening-date">{t.date}</FieldLabel>
           <DatePicker id="screening-date" max={mode.today} value={state.date} onValueChange={value => update({ ...state, date: value })} />
-          {taken ? <FieldDescription>{formatDay(state.date)} tarihinde hareket testi var: kaydedersen o günün yerine geçer.</FieldDescription> : null}
+          {taken ? <FieldDescription>{t.dateTaken(getFormat(locale).day(state.date))}</FieldDescription> : null}
         </Field>
       ) : null}
 
-      <nav aria-label="Testler" className="sticky top-0 z-20 -mx-1 overflow-x-auto bg-background/95 px-1 py-2 backdrop-blur [scrollbar-width:none]">
+      <nav aria-label={t.tests} className="sticky top-0 z-20 -mx-1 overflow-x-auto bg-background/95 px-1 py-2 backdrop-blur [scrollbar-width:none]">
         <ol className="flex w-max gap-1.5">
           {SCREENING_TEST_IDS.map((testId, index) => (
             <li key={testId}>
@@ -362,8 +373,8 @@ export function ScreeningForm({
                   'flex h-11 items-center gap-1.5 rounded-lg border px-3 text-sm whitespace-nowrap hover:bg-muted',
                   done(testId) && 'border-primary/50',
                 )}>
-                <span className="tabular-nums">{index + 1}</span> {SCREENING_TESTS[testId].short}
-                {done(testId) ? <CheckCircle weight="fill" className="size-4 text-primary" aria-label="dolu" /> : started(testId) ? <span className="sr-only">(yarım)</span> : null}
+                <span className="tabular-nums">{index + 1}</span> {testTexts[testId].short}
+                {done(testId) ? <CheckCircle weight="fill" className="size-4 text-primary" aria-label={t.filled} /> : started(testId) ? <span className="sr-only">{t.partial}</span> : null}
               </a>
             </li>
           ))}
@@ -371,24 +382,19 @@ export function ScreeningForm({
       </nav>
 
       {SCREENING_TEST_IDS.map((testId, index) => {
-        const test = SCREENING_TESTS[testId];
+        const test = testTexts[testId];
         const extra = state.extras[testId] ?? { note: '' };
         return (
           <Card key={testId} id={`test-${testId}`} className="scroll-mt-20">
             <CardHeader>
-              <CardTitle>
-                {index + 1} · {test.title}
-              </CardTitle>
+              <CardTitle>{t.cardTitle(index + 1, test.title)}</CardTitle>
               <CardDescription className="flex flex-col gap-1">
                 <span>{test.setup}</span>
                 <span>
-                  {testId === 'single_leg_balance'
-                    ? 'Süre 3 denemenin en iyisi; bir nokta 3 denemenin en az 2’sinde görüldüyse kaçmış say.'
-                    : 'Bir nokta 3 tekrarın en az 2’sinde görüldüyse kaçmış say.'}{' '}
-                  {test.sideNote ?? ''}
+                  {testId === 'single_leg_balance' ? t.countBalance : t.count} {test.sideNote ?? ''}
                 </span>
-                <span>Kolaylaştırılmış: {test.easier}</span>
-                <span className="text-xs">Dayanak: {test.source}</span>
+                <span>{t.easier(test.easier)}</span>
+                <span className="text-xs">{t.source(test.source)}</span>
               </CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-4">
@@ -401,14 +407,14 @@ export function ScreeningForm({
               {testId === 'squat' ? (
                 <Field>
                   <FieldLabel id="heel-label" className="text-xs">
-                    Topuk altına 2–5 cm destekle düzeldi mi? (isteğe bağlı)
+                    {t.heelSupport}
                   </FieldLabel>
                   <ChoiceChips
                     labelledBy="heel-label"
                     value={extra.heelSupportHelps === undefined ? undefined : extra.heelSupportHelps ? 'yes' : 'no'}
                     options={[
-                      { value: 'yes', label: 'Evet' },
-                      { value: 'no', label: 'Hayır' },
+                      { value: 'yes', label: common.states.yes },
+                      { value: 'no', label: common.states.no },
                     ]}
                     onChange={(next) => {
                       const { heelSupportHelps: _heel, ...rest } = extra;
@@ -419,7 +425,7 @@ export function ScreeningForm({
               ) : null}
               <Field>
                 <FieldLabel htmlFor={`note-${testId}`} className="text-xs">
-                  Not
+                  {t.note}
                 </FieldLabel>
                 <Input id={`note-${testId}`} maxLength={140} value={extra.note} onChange={(event) => setExtra(testId, { ...extra, note: event.currentTarget.value })} />
               </Field>
@@ -429,14 +435,14 @@ export function ScreeningForm({
       })}
 
       <Field>
-        <FieldLabel htmlFor="screening-note">Hareket testinin notu</FieldLabel>
+        <FieldLabel htmlFor="screening-note">{t.screeningNote}</FieldLabel>
         <Input id="screening-note" maxLength={500} value={state.note} onChange={(event) => update({ ...state, note: event.currentTarget.value })} />
       </Field>
 
       {error ? (
         <Alert variant="destructive" data-form-error>
           <WarningCircle />
-          <AlertTitle>Kaydedilemedi</AlertTitle>
+          <AlertTitle>{t.saveFailed}</AlertTitle>
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       ) : null}
@@ -445,7 +451,7 @@ export function ScreeningForm({
         {saveButton('h-11 px-5')}
       </div>
 
-      <UnsavedChangesGuard active={dirty && !save.isPending && !save.isSuccess} description="Çıkarsan girdiğin hareket testi kaydedilmez; taslak bu sekme kapanana kadar durur." onLeave={() => undefined} />
+      <UnsavedChangesGuard active={dirty && !save.isPending && !save.isSuccess} description={t.leaveDescription} onLeave={() => undefined} />
     </div>
   );
 }
