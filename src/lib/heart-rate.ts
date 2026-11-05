@@ -37,6 +37,11 @@ export const ALERT_AFTER_MS = 5000;
 export const ALERT_REARM_BPM = 5;
 /** Bu kadar süre geçerli ölçüm gelmezse nabız yok sayılır (band çıkarıldı, ölçmüyor, bağlantı sessizce düştü). */
 export const READING_STALE_MS = 5000;
+/**
+ * Beklerken nabzın görüldüğü an en çok bu sıklıkla yazılır (kayıt her karede değişmesin). Geç fark etme sınırından
+ * (`LATE_MS`, 2 sn) kısa: ekran açıkken bant koparsa bitiş sesli kalır.
+ */
+export const HOLD_SEEN_STEP_MS = 1000;
 
 /* --- ölçüm --- */
 
@@ -118,10 +123,10 @@ export function heartZone(bpm: number, limits: Pick<HeartLimits, 'recovery' | 'a
 /* --- dinlenme --- */
 
 /**
- * Uzayan dinlenme: tavanın sayıldığı an (temel sürenin ilk bittiği an) ve nabzın sınıra ya da altına indiği an
- * (inmediyse null).
+ * Uzayan dinlenme: tavanın sayıldığı an (temel sürenin ilk bittiği an), nabzın sınıra ya da altına indiği an
+ * (inmediyse null) ve nabzın son görüldüğü an (saniyede bir; nabız kesilirse bekleme o an biter).
  */
-export type RestHold = { since: number; calmSince: number | null };
+export type RestHold = { since: number; calmSince: number | null; seenAt: number };
 
 export type RestHoldStep =
   | { kind: 'hold'; hold: RestHold }
@@ -132,7 +137,9 @@ export type RestHoldStep =
  * Temel süre (`baseEnd`) bitti: dinlenme uzar mı, sürer mi, bitti mi. Tavan `origin`'den sayılır: temel sürenin ilk
  * bittiği an (beklerken +15'le uzatılan dinlenmede de o an; yoksa `baseEnd`). Temel süre tavandan sonra bittiyse yeniden
  * uzamaz. Değişmeyen bekleme aynı nesne döner (sayaç kare kare çağrılır, değişmeyen durum yazılmasın). Bitiş anı gerçekte
- * bittiği an: 3 sn'nin dolduğu an ya da tavan (geç fark edildiyse de); bağlantı koptuysa o an.
+ * bittiği an: 3 sn'nin dolduğu an ya da tavan (geç fark edildiyse de). Nabız kesildiyse (bant koptu, sayfa yenilendi,
+ * telefon kilitliyken bağlantı düştü) o an değil, nabzın son görüldüğü an; tavanı geçmez. Böylece çok sonra dönülünce
+ * bitiş geç fark edilmiş sayılır: ses yok, aşım doğru.
  */
 export function restHoldStep(
   hold: RestHold | null,
@@ -142,18 +149,22 @@ export function restHoldStep(
   now: number,
   origin: number = baseEnd,
 ): RestHoldStep {
-  if (bpm === null) return { kind: 'end', at: hold ? now : baseEnd, high: false };
+  if (bpm === null) {
+    if (!hold) return { kind: 'end', at: baseEnd, high: false };
+    return { kind: 'end', at: Math.min(now, hold.seenAt, hold.since + REST_EXTEND_MAX_MS), high: false };
+  }
   if (!hold) {
     if (bpm <= recovery) return { kind: 'end', at: baseEnd, high: false };
     if (baseEnd >= origin + REST_EXTEND_MAX_MS) return { kind: 'end', at: baseEnd, high: true };
   }
-  const current = hold ?? { since: origin, calmSince: null };
+  const current = hold ?? { since: origin, calmSince: null, seenAt: now };
   const calmSince = bpm <= recovery ? (current.calmSince ?? now) : null;
   const cap = current.since + REST_EXTEND_MAX_MS;
   if (calmSince !== null && calmSince + REST_CALM_MS <= Math.min(now, cap)) return { kind: 'end', at: calmSince + REST_CALM_MS, high: false };
   // Sınıra gelindi: nabız o an inmişse (3 sn dolmasa da) not yok.
   if (now >= cap) return { kind: 'end', at: cap, high: calmSince === null };
-  return { kind: 'hold', hold: hold && hold.calmSince === calmSince ? hold : { since: current.since, calmSince } };
+  const seenAt = now - current.seenAt >= HOLD_SEEN_STEP_MS ? now : current.seenAt;
+  return { kind: 'hold', hold: hold && hold.calmSince === calmSince && hold.seenAt === seenAt ? hold : { since: current.since, calmSince, seenAt } };
 }
 
 /** Dinlenme panelinde uzarken: "Nabzın 120'ye inince devam" (sınırın kendisi; sınırda ya da altında 3 sn). */

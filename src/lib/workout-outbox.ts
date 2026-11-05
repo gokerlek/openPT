@@ -209,10 +209,19 @@ function restOf(value: unknown): RestTimer | null {
   };
 }
 
-/** Dinlenmenin nabız beklemesi (`hold`); bozuksa ya da yoksa alan yazılmaz (sayaç bugünkü gibi biter). */
+/**
+ * Dinlenmenin nabız beklemesi (`hold`); bozuksa ya da yoksa alan yazılmaz (sayaç bugünkü gibi biter). Nabzın görüldüğü
+ * an yoksa beklemenin başladığı an sayılır.
+ */
 function holdOf(value: unknown): Pick<RestTimer, 'hold'> {
   if (!isRecord(value) || typeof value.since !== 'number') return {};
-  return { hold: { since: value.since, calmSince: typeof value.calmSince === 'number' ? value.calmSince : null } };
+  return {
+    hold: {
+      since: value.since,
+      calmSince: typeof value.calmSince === 'number' ? value.calmSince : null,
+      seenAt: typeof value.seenAt === 'number' ? value.seenAt : value.since,
+    },
+  };
 }
 
 function isPlan(value: unknown): value is WorkoutDay {

@@ -128,7 +128,8 @@ export function tickRest(timer: RestTimer, now: number, heart?: RestHeart): Rest
   }
 
   // Temel süre bitti: nabız ölçülüyorsa uzayabilir (geç fark edildiyse de; tavan doldu mu `restHoldStep` bakar, geç
-  // fark edilen bitiş sessiz). Uzarken bağlantı koparsa (nabız yok) o an biter. Beklerken −15'e basıldıysa uzamaz.
+  // fark edilen bitiş sessiz). Uzarken nabız kesilirse (bant koptu, sayfa yenilendi) nabzın son görüldüğü an biter; o an
+  // eskiyse geç fark edilmiş sayılır. Beklerken −15'e basıldıysa uzamaz.
   if (timer.endedAt === null && !timer.heartOff && (timer.hold || (heart && heart.bpm !== null))) {
     const step = restHoldStep(timer.hold ?? null, heart?.bpm ?? null, heart?.recovery ?? 0, timer.endsAt, now, timer.holdFrom ?? timer.endsAt);
     if (step.kind === 'hold') {

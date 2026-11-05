@@ -9,6 +9,7 @@ import {
   heartAlertStep,
   heartAlertText,
   heartZone,
+  HOLD_SEEN_STEP_MS,
   parseHeartRateMeasurement,
   READING_STALE_MS,
   readingBpm,
@@ -96,22 +97,25 @@ describe('dinlenme: nabız toparlanma sınırına inene kadar uzar', () => {
     assert.deepEqual(restHoldStep(null, 120, RECOVERY, s(90), s(90)), { kind: 'end', at: s(90), high: false });
   });
 
-  test('nabız yoksa bugünkü sayaç: uzamaz; uzarken bağlantı koptuysa o an biter', () => {
+  test('nabız yoksa bugünkü sayaç: uzamaz; uzarken nabız kesildiyse bekleme nabzın son görüldüğü an biter, tavanı geçmez', () => {
     assert.deepEqual(restHoldStep(null, null, RECOVERY, s(90), s(90)), { kind: 'end', at: s(90), high: false });
-    const hold: RestHold = { since: s(90), calmSince: null };
+    const hold: RestHold = { since: s(90), calmSince: null, seenAt: s(100) };
     assert.deepEqual(restHoldStep(hold, null, RECOVERY, s(90), s(100)), { kind: 'end', at: s(100), high: false });
+    // Sayfa yenilendi ya da telefon kilitliyken bant koptu, çok sonra dönüldü: bitiş o an değil, nabzın son görüldüğü an.
+    assert.deepEqual(restHoldStep(hold, null, RECOVERY, s(90), s(700)), { kind: 'end', at: s(100), high: false });
+    assert.deepEqual(restHoldStep({ ...hold, seenAt: s(250) }, null, RECOVERY, s(90), s(700)), { kind: 'end', at: s(210), high: false });
   });
 
   test('üstündeyse uzar; 3 sn boyunca sınırın altında kalınca biter', () => {
     let step = restHoldStep(null, 135, RECOVERY, s(90), s(90));
-    assert.deepEqual(step, { kind: 'hold', hold: { since: s(90), calmSince: null } });
+    assert.deepEqual(step, { kind: 'hold', hold: { since: s(90), calmSince: null, seenAt: s(90) } });
     if (step.kind !== 'hold') return;
     step = restHoldStep(step.hold, 119, RECOVERY, s(90), s(100));
-    assert.deepEqual(step, { kind: 'hold', hold: { since: s(90), calmSince: s(100) } });
+    assert.deepEqual(step, { kind: 'hold', hold: { since: s(90), calmSince: s(100), seenAt: s(100) } });
     if (step.kind !== 'hold') return;
     // 2 sn sonra yeniden yükseldi: sayım baştan.
     step = restHoldStep(step.hold, 125, RECOVERY, s(90), s(102));
-    assert.deepEqual(step, { kind: 'hold', hold: { since: s(90), calmSince: null } });
+    assert.deepEqual(step, { kind: 'hold', hold: { since: s(90), calmSince: null, seenAt: s(102) } });
     if (step.kind !== 'hold') return;
     step = restHoldStep(step.hold, 118, RECOVERY, s(90), s(104));
     if (step.kind !== 'hold') return assert.fail('uzamalıydı');
@@ -119,14 +123,19 @@ describe('dinlenme: nabız toparlanma sınırına inene kadar uzar', () => {
     assert.deepEqual(restHoldStep(step.hold, 117, RECOVERY, s(90), s(104) + REST_CALM_MS), { kind: 'end', at: s(107), high: false });
   });
 
-  test('değişmeyen bekleme aynı nesne kalır (kare kare kayıt yazılmasın)', () => {
-    const hold: RestHold = { since: s(90), calmSince: null };
-    const step = restHoldStep(hold, 140, RECOVERY, s(90), s(95));
+  test('değişmeyen bekleme aynı nesne kalır (kare kare kayıt yazılmasın); nabzın görüldüğü an saniyede bir yazılır', () => {
+    const hold: RestHold = { since: s(90), calmSince: null, seenAt: s(90) };
+    const step = restHoldStep(hold, 140, RECOVERY, s(90), s(90) + HOLD_SEEN_STEP_MS - 1);
     assert.equal(step.kind === 'hold' && step.hold, hold);
+    assert.deepEqual(restHoldStep(hold, 140, RECOVERY, s(90), s(90) + HOLD_SEEN_STEP_MS), {
+      kind: 'hold',
+      hold: { ...hold, seenAt: s(90) + HOLD_SEEN_STEP_MS },
+    });
+    assert.ok(HOLD_SEEN_STEP_MS < 2000, 'canlı kopmada bitiş sesli kalsın (LATE_MS)');
   });
 
   test('en çok 120 sn uzar, sonra "nabız hâlâ yüksek" notuyla biter', () => {
-    const hold: RestHold = { since: s(90), calmSince: null };
+    const hold: RestHold = { since: s(90), calmSince: null, seenAt: s(90) };
     assert.equal(restHoldStep(hold, 140, RECOVERY, s(90), s(90) + REST_EXTEND_MAX_MS - 1).kind, 'hold');
     assert.deepEqual(restHoldStep(hold, 140, RECOVERY, s(90), s(90) + REST_EXTEND_MAX_MS), { kind: 'end', at: s(210), high: true });
     // Geç fark edildiyse (sekme arkadaydı) bitiş anı sınırın kendisi.
@@ -134,16 +143,16 @@ describe('dinlenme: nabız toparlanma sınırına inene kadar uzar', () => {
   });
 
   test('sınıra gelindiğinde nabız inmiş ama 3 sn dolmamışsa not yok', () => {
-    const hold: RestHold = { since: s(90), calmSince: s(209) };
+    const hold: RestHold = { since: s(90), calmSince: s(209), seenAt: s(209) };
     assert.deepEqual(restHoldStep(hold, 115, RECOVERY, s(90), s(210)), { kind: 'end', at: s(210), high: false });
     // 3 sn sınırdan önce dolduysa bitiş o an.
-    assert.deepEqual(restHoldStep({ since: s(90), calmSince: s(200) }, 115, RECOVERY, s(90), s(260)), { kind: 'end', at: s(203), high: false });
+    assert.deepEqual(restHoldStep({ since: s(90), calmSince: s(200), seenAt: s(200) }, 115, RECOVERY, s(90), s(260)), { kind: 'end', at: s(203), high: false });
   });
 
   test('tavan temel sürenin ilk bittiği andan sayılır (+15 sonrası yeni bekleme de)', () => {
     // İlk bekleme 60. sn'de başladı, +15'le temel süre 85'e uzadı: yeni beklemenin tavanı yine 60 + 120.
     const step = restHoldStep(null, 140, RECOVERY, s(85), s(85), s(60));
-    assert.deepEqual(step, { kind: 'hold', hold: { since: s(60), calmSince: null } });
+    assert.deepEqual(step, { kind: 'hold', hold: { since: s(60), calmSince: null, seenAt: s(85) } });
     if (step.kind !== 'hold') return;
     assert.deepEqual(restHoldStep(step.hold, 140, RECOVERY, s(85), s(180), s(60)), { kind: 'end', at: s(180), high: true });
     // Temel süre tavandan sonraya uzatıldıysa yeniden uzamaz; nabız yüksekse not yazılır.
@@ -152,7 +161,7 @@ describe('dinlenme: nabız toparlanma sınırına inene kadar uzar', () => {
   });
 
   test('geç fark edildiyse de tavan dolmadıysa bekler; dolduysa bitiş anı tavan', () => {
-    assert.deepEqual(restHoldStep(null, 140, RECOVERY, s(60), s(100)), { kind: 'hold', hold: { since: s(60), calmSince: null } });
+    assert.deepEqual(restHoldStep(null, 140, RECOVERY, s(60), s(100)), { kind: 'hold', hold: { since: s(60), calmSince: null, seenAt: s(100) } });
     assert.deepEqual(restHoldStep(null, 140, RECOVERY, s(60), s(300)), { kind: 'end', at: s(180), high: true });
   });
 

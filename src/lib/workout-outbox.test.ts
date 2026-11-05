@@ -112,11 +112,14 @@ describe('kuyruk: telefondaki kayıt', () => {
   });
 
   test('dinlenmenin nabız beklemesi ve "nabız hâlâ yüksek" notu korunur; bozuksa atlanır, eski kayıtta yok', () => {
-    const rest = { ...startRest('st_aaaaaaaa', 90, 1_000), hold: { since: 91_000, calmSince: 95_000 }, holdFrom: 91_000, heartHigh: true, heartOff: true };
+    const rest = { ...startRest('st_aaaaaaaa', 90, 1_000), hold: { since: 91_000, calmSince: 95_000, seenAt: 96_000 }, holdFrom: 91_000, heartHigh: true, heartOff: true };
     const local = { ...createLocalWorkout(docWith([]), workoutDay()), rest, restCount: 1 };
     assert.deepEqual(parseLocalWorkout(JSON.stringify(local))?.rest, rest);
     const broken = parseLocalWorkout(JSON.stringify({ ...local, rest: { ...rest, hold: { since: 'x' }, holdFrom: 'x', heartHigh: 'evet', heartOff: 1 } }));
     assert.deepEqual(broken?.rest, startRest('st_aaaaaaaa', 90, 1_000));
+    // Nabzın görüldüğü an yoksa beklemenin başladığı an sayılır.
+    const { seenAt: _seenAt, ...older } = rest.hold;
+    assert.deepEqual(parseLocalWorkout(JSON.stringify({ ...local, rest: { ...rest, hold: older } }))?.rest?.hold, { ...older, seenAt: 91_000 });
   });
 
   test('okunamayan kayıt yok sayılır: bozuk JSON, başka sürüm, bitmiş ya da şemaya uymayan belge', () => {

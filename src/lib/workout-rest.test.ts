@@ -97,7 +97,7 @@ describe('dinlenme sayacı: nabızla uzama', () => {
     assert.deepEqual(events, ['50:warn', '60:hold']);
     assert.equal(last?.state, 'hold');
     assert.equal(held.endedAt, null);
-    assert.deepEqual(held.hold, { since: s(60), calmSince: null });
+    assert.deepEqual(held.hold, { since: s(60), calmSince: null, seenAt: s(70) });
     // Bitiş anı nabzın 3 sn altında kaldığı an: aşım oradan sayılır.
     const done = runHeart(held, [[80, 118], [82, 117], [83, 116], [84, 116]]);
     assert.deepEqual(done.events, ['83:end']);
@@ -111,7 +111,7 @@ describe('dinlenme sayacı: nabızla uzama', () => {
 
   test('değişmeyen bekleme aynı nesne (kare kare kayıt yazılmaz)', () => {
     const held = runHeart(startRest('st_aaaaaaaa', 60, T0), [[60, 140]]).timer;
-    assert.equal(tickRest(held, s(61), { bpm: 141, recovery: 120 }).timer, held);
+    assert.equal(tickRest(held, s(60) + 500, { bpm: 141, recovery: 120 }).timer, held);
   });
 
   test('en çok 120 sn uzar, sonra "nabız hâlâ yüksek" notuyla biter', () => {
@@ -122,19 +122,39 @@ describe('dinlenme sayacı: nabızla uzama', () => {
     assert.equal(timer.endsAt, s(180));
   });
 
-  test('uzarken bağlantı koparsa o an biter', () => {
-    const held = runHeart(startRest('st_aaaaaaaa', 60, T0), [[60, 140]]).timer;
-    assert.deepEqual(runHeart(held, [[75, null]]).events, ['75:end']);
-    // Nabız hiç verilmezse de (bağlı değil) aynı.
+  test('ekran açıkken bağlantı koparsa bekleme kopma anında biter, bip çalar', () => {
+    const seconds = Array.from({ length: 15 }, (_, index) => 60 + index);
+    const held = runHeart(startRest('st_aaaaaaaa', 60, T0), seconds.map((second): [number, number] => [second, 140])).timer;
+    const lost = runHeart(held, [[75, null]]);
+    assert.deepEqual(lost.events, ['75:end']);
+    assert.ok((lost.last?.overrunMs ?? Infinity) <= LATE_MS);
+    // Nabız hiç verilmezse de (bant bağlı değil) aynı.
     const tick = tickRest(held, s(75));
-    assert.deepEqual([tick.events, tick.state, tick.timer.endsAt], [['end'], 'ended', s(75)]);
+    assert.deepEqual([tick.events, tick.state], [['end'], 'ended']);
+  });
+
+  test('beklerken nabız kesildi (sayfa yenilendi, telefon kilitlendi), tavandan sonra dönüldü: bant yok → sessiz, aşım nabzın son görüldüğü andan', () => {
+    // 60'ta bekleme başladı, 90'a kadar nabız geldi; sonra sayfa yenilendi ya da bant koptu, 661'de dönüldü.
+    const held = runHeart(startRest('st_aaaaaaaa', 60, T0), [[60, 140], [70, 140], [80, 140], [90, 140]]).timer;
+    for (const tick of [runHeart(held, [[661, null]]).last, tickRest(held, s(661))]) {
+      assert.deepEqual([tick?.events, tick?.state, tick?.overrunMs, tick?.timer.heartHigh], [[], 'ended', 571_000, undefined]);
+      // Biriken alarmlar da çalmaz.
+      assert.deepEqual(tick ? runHeart(tick.timer, [[676, null], [691, null], [706, null]]).events : null, []);
+    }
+  });
+
+  test('aynı durumda bant bayat değer gönderiyor: bitiş tavan (60 + 120), sessiz, aşım 481 sn, "Nabız hâlâ yüksek"', () => {
+    const held = runHeart(startRest('st_aaaaaaaa', 60, T0), [[60, 140], [70, 140], [80, 140], [90, 140]]).timer;
+    const { events, last } = runHeart(held, [[661, 140]]);
+    assert.deepEqual([events, last?.state, last?.overrunMs, last?.timer.heartHigh], [[], 'ended', 481_000, true]);
+    assert.deepEqual(last ? runHeart(last.timer, [[676, 140], [691, 140]]).events : null, []);
   });
 
   test('temel bitiş geç fark edildiyse de (sekme arkadaydı) nabız yüksekse ve tavan dolmadıysa bekler; bip yok', () => {
     const late = runHeart(startRest('st_aaaaaaaa', 60, T0), [[60 + LATE_MS / 1000 + 1, 150]]);
     assert.deepEqual(late.events, ['63:hold']);
     assert.equal(late.last?.state, 'hold');
-    assert.deepEqual(late.timer.hold, { since: s(60), calmSince: null });
+    assert.deepEqual(late.timer.hold, { since: s(60), calmSince: null, seenAt: s(63) });
     assert.deepEqual(runHeart(late.timer, [[70, 110], [73, 110]]).events, ['73:end']);
     // Tavan da geçtiyse bugünkü gibi sessiz biter; bitiş anı tavan.
     const over = runHeart(startRest('st_aaaaaaaa', 60, T0), [[300, 150]]);
