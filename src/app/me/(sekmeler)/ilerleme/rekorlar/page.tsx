@@ -4,13 +4,17 @@ import { AchievementsCard } from '@/components/progress/achievements-card';
 import { ProgressNotice } from '@/components/progress/progress-summary';
 import { RecordsCard } from '@/components/progress/records-card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { clientProgressMessages } from '@/i18n/messages/client-progress';
+import { getLocale, getMessages } from '@/i18n/server';
 import { readAppConfig } from '@/lib/config';
 import { todayIn } from '@/lib/format';
 import { currentClient } from '@/lib/guards';
 import { loadProgress } from '@/lib/progress-data';
 import { ProgressHeader } from '../../../progress-header';
 
-export const metadata: Metadata = { title: 'Rekorlar' };
+export async function generateMetadata(): Promise<Metadata> {
+  return { title: (await getMessages(clientProgressMessages)).pages.records };
+}
 
 /**
  * Danışanın İlerleme sekmesinin Rekorlar'ı (tasarım §2.8, §8 satır 10; SPEC §7.6): son rekorlar ve başarılar
@@ -23,10 +27,10 @@ export const metadata: Metadata = { title: 'Rekorlar' };
  * kendisi denetler (SPEC §5).
  */
 export default async function RecordsPage() {
-  const [client, config] = await Promise.all([currentClient(), readAppConfig()]);
+  const [client, config, locale] = await Promise.all([currentClient(), readAppConfig(), getLocale()]);
   const now = new Date();
   const today = todayIn(config.timeZone, now);
-  const load = await loadProgress(client, now, today, config.timeZone, { scope: 'records' });
+  const load = await loadProgress(client, now, today, config.timeZone, { scope: 'records', locale });
   const header = <ProgressHeader client={client} appName={config.appName} />;
 
   if (load.status === 'error') {
@@ -35,7 +39,7 @@ export default async function RecordsPage() {
         {header}
         <Alert variant="destructive">
           <WarningCircle weight="fill" />
-          <AlertTitle>İlerleme açılamadı</AlertTitle>
+          <AlertTitle>{clientProgressMessages(locale).pages.loadFailed}</AlertTitle>
           <AlertDescription>{load.message}</AlertDescription>
         </Alert>
       </main>

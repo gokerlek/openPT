@@ -13,7 +13,6 @@ const ROOT = join(import.meta.dirname, '..', '..');
 const SRC = join(ROOT, 'src');
 const PENDING = new Set([
   'src/app/me/antrenman/program-update-sheet.tsx',
-  'src/app/me/(sekmeler)/programlar/[pid]/duzenle/page.tsx',
 ]);
 const IMPORTS_TURKISH = /from\s+['"][^'"]*\/turkish(?:\.ts)?['"]/;
 

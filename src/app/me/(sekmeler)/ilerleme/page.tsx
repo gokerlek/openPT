@@ -8,16 +8,20 @@ import { ScreeningCard } from '@/components/progress/screening-card';
 import { StrengthProgress } from '@/components/progress/strength-progress';
 import { WeeklyProgress } from '@/components/progress/weekly-progress';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { clientProgressMessages } from '@/i18n/messages/client-progress';
+import { getLocale, getMessages } from '@/i18n/server';
 import { coachAccess } from '@/lib/ai/coach-contract';
 import { readAppConfig } from '@/lib/config';
 import { todayIn } from '@/lib/format';
 import { currentClient } from '@/lib/guards';
-import { defaultStrengthWindow, STRENGTH_WINDOWS, type StrengthWindow } from '@/lib/muscle-progress';
+import { defaultStrengthWindow, STRENGTH_WINDOW_KEYS, type StrengthWindow } from '@/lib/muscle-progress';
 import { loadProgress } from '@/lib/progress-data';
 import { LOW_READINESS } from '@/lib/session-check';
 import { ProgressHeader } from '../../progress-header';
 
-export const metadata: Metadata = { title: 'İlerleme' };
+export async function generateMetadata(): Promise<Metadata> {
+  return { title: (await getMessages(clientProgressMessages)).pages.progress };
+}
 
 /**
  * Danışanın İlerleme sekmesinin Özet'i (tasarım §0, §8 satır 10; SPEC §6, §7.6). Başlığın altında İlerleme'nin
@@ -36,10 +40,11 @@ export default async function ProgressPage({
 }: {
   searchParams: Promise<{ hareket?: string | string[]; donem?: string | string[] }>;
 }) {
-  const [client, config, params] = await Promise.all([currentClient(), readAppConfig(), searchParams]);
+  const [client, config, params, locale] = await Promise.all([currentClient(), readAppConfig(), searchParams, getLocale()]);
+  const t = clientProgressMessages(locale).pages;
   const now = new Date();
   const today = todayIn(config.timeZone, now);
-  const load = await loadProgress(client, now, today, config.timeZone);
+  const load = await loadProgress(client, now, today, config.timeZone, { locale });
   const header = <ProgressHeader client={client} appName={config.appName} />;
 
   if (load.status === 'error') {
@@ -48,7 +53,7 @@ export default async function ProgressPage({
         {header}
         <Alert variant="destructive">
           <WarningCircle weight="fill" />
-          <AlertTitle>İlerleme açılamadı</AlertTitle>
+          <AlertTitle>{t.loadFailed}</AlertTitle>
           <AlertDescription>{load.message}</AlertDescription>
         </Alert>
       </main>
@@ -68,7 +73,7 @@ export default async function ProgressPage({
 
   const requested = typeof params.hareket === 'string' ? params.hareket : null;
   const period: StrengthWindow =
-    typeof params.donem === 'string' && Object.hasOwn(STRENGTH_WINDOWS, params.donem)
+    typeof params.donem === 'string' && (STRENGTH_WINDOW_KEYS as readonly string[]).includes(params.donem)
       ? (params.donem as StrengthWindow)
       : defaultStrengthWindow(view.exercises, today);
 
@@ -77,7 +82,7 @@ export default async function ProgressPage({
       {header}
       <ProgressNotice view={view} />
       <ProgressStats viewer="client" view={view} />
-      {coachAccess(client) === 'ready' ? <CoachButton label="AI değerlendirmesi" detail={{ autoReview: true }} className="h-11 w-full" /> : null}
+      {coachAccess(client) === 'ready' ? <CoachButton label={t.aiReview} detail={{ autoReview: true }} className="h-11 w-full" /> : null}
       <StrengthProgress viewer="client" exercises={view.exercises} today={today} initialWindow={period} circumference={insights.circumference} />
       {view.exercises.length > 0 ? <ExerciseProgress viewer="client" exercises={view.exercises} initialKey={requested} today={today} /> : null}
       <WeeklyLoadCard viewer="client" weeks={view.weeks} today={today} />

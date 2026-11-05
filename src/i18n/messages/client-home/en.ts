@@ -2,6 +2,7 @@ import { plural, type Shape } from '../../define.ts';
 import type tr from './tr.ts';
 
 const en: Shape<typeof tr> = {
+  pageLoading: 'Loading page…',
   tabs: {
     today: 'Today',
     programs: 'Program',

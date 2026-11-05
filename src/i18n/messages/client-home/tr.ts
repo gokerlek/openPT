@@ -3,6 +3,8 @@
  * Sağlık, Ölçüm; `lib/client-tabs`, `check-in-routes`, `me-constraint-routes`, `water`, `pain-report`).
  */
 const tr = {
+  /** Sekme değişirken iskeletin ekran okuyucu metni. */
+  pageLoading: 'Sayfa yükleniyor…',
   /** Dock'un sekmeleri (`CLIENT_TABS`, sırayla). */
   tabs: {
     today: 'Bugün',

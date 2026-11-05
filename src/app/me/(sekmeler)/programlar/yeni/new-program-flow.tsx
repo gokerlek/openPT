@@ -7,8 +7,10 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Field, FieldContent, FieldDescription, FieldError, FieldLabel, FieldTitle } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { useLocale } from '@/i18n/client';
+import { clientProgramsMessages } from '@/i18n/messages/client-programs';
 import { newOwnProgramId, OWN_PROGRAM_LIMITS, ownNameProblem, ownStartBody, type OwnStart } from '@/lib/own-programs';
-import { formatNumber } from '@/lib/format';
+import { getFormat } from '@/lib/format';
 import { displayDays, programIdSource, type ClientTargets, type ProgramPhase, type TemplateOption } from '@/lib/program-plan';
 import type { TemplateBlock } from '@/lib/template-plan';
 
@@ -42,6 +44,8 @@ export function NewProgramFlow({
   /** Var olan kendi programların kimlikleri (yeni kimlik çakışmasın). */
   takenIds: string[];
 }) {
+  const locale = useLocale();
+  const t = clientProgramsMessages(locale).start;
   const [step, setStep] = useState<{ programId: string; initial: OwnProgramFormProps['initial'] } | null>(null);
   const [name, setName] = useState(defaultName);
   const [nameError, setNameError] = useState<string | null>(null);
@@ -56,7 +60,7 @@ export function NewProgramFlow({
   /** "Sana önerilmeyen 1 hareket; kopyada işaretli kalır." — yoksa null. */
   const blockedNote = (blocks: readonly TemplateBlock[]) => {
     const count = blocks.reduce((sum, block) => sum + block.rows.filter((row) => blockedIds.has(row.exerciseId)).length, 0);
-    return count > 0 ? `Sana önerilmeyen ${formatNumber(count)} hareket; kopyada işaretli kalır.` : null;
+    return count > 0 ? t.blocked(getFormat(locale).number(count), count) : null;
   };
 
   if (step) {
@@ -78,7 +82,7 @@ export function NewProgramFlow({
     setDayIds((list) => (on ? (list.includes(id) || list.length >= OWN_PROGRAM_LIMITS.days ? list : [...list, id]) : list.filter((item) => item !== id)));
 
   const next = () => {
-    const problem = ownNameProblem(name, otherNames);
+    const problem = ownNameProblem(name, otherNames, locale);
     if (problem) {
       setNameError(problem);
       return;
@@ -90,7 +94,7 @@ export function NewProgramFlow({
         : kind === 'template' && template
           ? { kind: 'template', template }
           : { kind: 'blank' };
-    const body = ownStartBody(start, programIdSource(ptPhases), new Date());
+    const body = ownStartBody(start, programIdSource(ptPhases), new Date(), locale);
     setStep({ programId: newOwnProgramId(new Set(takenIds)), initial: { name: name.trim(), currentPhaseId: body.currentPhaseId, phases: body.phases } });
   };
 
@@ -119,7 +123,7 @@ export function NewProgramFlow({
   return (
     <div className="flex flex-col gap-6">
       <Field data-invalid={Boolean(nameError) || undefined}>
-        <FieldLabel htmlFor="new-own-name">Adı</FieldLabel>
+        <FieldLabel htmlFor="new-own-name">{t.name}</FieldLabel>
         <Input
           id="new-own-name"
           className="h-11 text-base"
@@ -136,14 +140,14 @@ export function NewProgramFlow({
 
       <div className="flex flex-col gap-2">
         <h2 id="start-title" className="text-sm font-medium">
-          Nasıl başlayalım?
+          {t.how}
         </h2>
         <RadioGroup aria-labelledby="start-title" value={kind} onValueChange={(value) => setKind(value as StartKind)}>
           <FieldLabel htmlFor="start-blank">
             <Field orientation="horizontal" className="min-h-11">
               <RadioGroupItem value="blank" id="start-blank" />
               <FieldContent>
-                <FieldTitle>Boş program</FieldTitle>
+                <FieldTitle>{t.blank}</FieldTitle>
               </FieldContent>
             </Field>
           </FieldLabel>
@@ -152,11 +156,8 @@ export function NewProgramFlow({
               <Field orientation="horizontal" className="min-h-11">
                 <RadioGroupItem value="pt" id="start-pt" />
                 <FieldContent>
-                  <FieldTitle>Antrenörünün programından</FieldTitle>
-                  <FieldDescription>
-                    Programlar senin hedeflerinle ve atanmamış olarak kopyalanır; günlerini sen seçersin. Antrenörün sonra
-                    değiştirse de kopyan değişmez.
-                  </FieldDescription>
+                  <FieldTitle>{t.fromPt}</FieldTitle>
+                  <FieldDescription>{t.fromPtText}</FieldDescription>
                 </FieldContent>
               </Field>
             </FieldLabel>
@@ -166,7 +167,7 @@ export function NewProgramFlow({
               <Field orientation="horizontal" className="min-h-11">
                 <RadioGroupItem value="template" id="start-template" />
                 <FieldContent>
-                  <FieldTitle>Hazır şablondan</FieldTitle>
+                  <FieldTitle>{t.fromTemplate}</FieldTitle>
                 </FieldContent>
               </Field>
             </FieldLabel>
@@ -178,7 +179,7 @@ export function NewProgramFlow({
             {displayDays(current.days).map(dayRow)}
             {others.length > 0 ? (
               <details className="flex flex-col gap-1">
-                <summary className="flex min-h-11 cursor-pointer items-center text-sm text-muted-foreground">Öteki evreler</summary>
+                <summary className="flex min-h-11 cursor-pointer items-center text-sm text-muted-foreground">{t.otherPhases}</summary>
                 {others.map((phase) => (
                   <div key={phase.id} className="flex flex-col gap-1">
                     <p className="text-sm font-medium text-muted-foreground">{phase.name}</p>
@@ -187,12 +188,12 @@ export function NewProgramFlow({
                 ))}
               </details>
             ) : null}
-            {dayIds.length === 0 ? <p className="text-sm text-muted-foreground">Hiçbirini seçmezsen boş bir programla başlar.</p> : null}
+            {dayIds.length === 0 ? <p className="text-sm text-muted-foreground">{t.noneSelected}</p> : null}
           </div>
         ) : null}
 
         {kind === 'template' && templates.length > 0 ? (
-          <RadioGroup aria-label="Şablon" className="pl-7" value={templateId} onValueChange={(value) => setTemplateId(String(value))}>
+          <RadioGroup aria-label={t.template} className="pl-7" value={templateId} onValueChange={(value) => setTemplateId(String(value))}>
             {templates.map((template) => (
               <FieldLabel key={template.id} htmlFor={`start-template-${template.id}`}>
                 <Field orientation="horizontal" className="min-h-11">
@@ -200,7 +201,7 @@ export function NewProgramFlow({
                   <FieldContent>
                     <FieldTitle className="break-words">{template.name}</FieldTitle>
                     <FieldDescription className="tabular-nums">
-                      {template.blocks.reduce((sum, block) => sum + block.rows.length, 0)} hareket
+                      {t.exercises(template.blocks.reduce((sum, block) => sum + block.rows.length, 0))}
                       {blockedNote(template.blocks as TemplateBlock[]) ? ` · ${blockedNote(template.blocks as TemplateBlock[])}` : ''}
                     </FieldDescription>
                   </FieldContent>
@@ -212,7 +213,7 @@ export function NewProgramFlow({
       </div>
 
       <Button size="lg" className="h-11 w-full" onClick={next}>
-        Devam
+        {t.continue}
       </Button>
     </div>
   );

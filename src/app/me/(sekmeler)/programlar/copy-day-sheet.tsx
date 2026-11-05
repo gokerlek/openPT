@@ -7,6 +7,8 @@ import { Plus } from '@/components/line-icons';
 import { Button } from '@/components/ui/button';
 import { Item, ItemContent, ItemDescription, ItemMedia, ItemTitle } from '@/components/ui/item';
 import { Drawer, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle } from '@/components/ui/drawer';
+import { useMessages } from '@/i18n/client';
+import { clientProgramsMessages } from '@/i18n/messages/client-programs';
 import { OWN_PROGRAM_LIMITS } from '@/lib/own-programs';
 
 /**
@@ -25,19 +27,20 @@ export function CopyDaySheet({
   programs: { id: string; name: string; days: number }[];
   canCreate: boolean;
 }) {
+  const t = useMessages(clientProgramsMessages);
   const [open, setOpen] = useState(false);
   const query = `gunler=${encodeURIComponent(dayId)}`;
   return (
     <>
       <Button variant="ghost" className="-ml-2 h-11 px-2" onClick={() => setOpen(true)}>
         <CopySimple data-icon="inline-start" />
-        Kendi programına kopyala
+        {t.copy.button}
       </Button>
       <Drawer open={open} onOpenChange={setOpen}>
         <DrawerContent className="gap-0">
           <DrawerHeader className="gap-1.5 pt-5">
-            <DrawerTitle className="text-lg font-semibold">{dayName} nereye kopyalansın?</DrawerTitle>
-            <DrawerDescription>Kopya o anki hâliyle alınır; antrenörün bu programı sonra değiştirse de kopyan değişmez.</DrawerDescription>
+            <DrawerTitle className="text-lg font-semibold">{t.copy.title(dayName)}</DrawerTitle>
+            <DrawerDescription>{t.copy.text}</DrawerDescription>
           </DrawerHeader>
           <div className="flex flex-col gap-2 overflow-y-auto px-4 pb-4">
             {canCreate ? (
@@ -46,11 +49,11 @@ export function CopyDaySheet({
                   <Plus />
                 </ItemMedia>
                 <ItemContent>
-                  <ItemTitle>Yeni programa</ItemTitle>
+                  <ItemTitle>{t.copy.toNew}</ItemTitle>
                 </ItemContent>
               </Item>
             ) : (
-              <p className="text-sm text-muted-foreground">En fazla {OWN_PROGRAM_LIMITS.programs} program; yenisi için birini sil.</p>
+              <p className="text-sm text-muted-foreground">{t.errors.limit(OWN_PROGRAM_LIMITS.programs)}</p>
             )}
             {programs.map((program) => {
               const full = program.days >= OWN_PROGRAM_LIMITS.days;
@@ -58,7 +61,7 @@ export function CopyDaySheet({
                 <Item key={program.id} variant="outline" className="opacity-60" aria-disabled>
                   <ItemContent>
                     <ItemTitle className="break-words">{program.name}</ItemTitle>
-                    <ItemDescription>{OWN_PROGRAM_LIMITS.days} antrenman dolu</ItemDescription>
+                    <ItemDescription>{t.copy.full(OWN_PROGRAM_LIMITS.days)}</ItemDescription>
                   </ItemContent>
                 </Item>
               ) : (
@@ -69,7 +72,7 @@ export function CopyDaySheet({
                   render={<Link href={`/me/programlar/${program.id}/duzenle?${query}`} onClick={() => setOpen(false)} />}>
                   <ItemContent>
                     <ItemTitle className="break-words">{program.name}</ItemTitle>
-                    <ItemDescription className="tabular-nums">{program.days} antrenman</ItemDescription>
+                    <ItemDescription className="tabular-nums">{t.copy.workouts(program.days)}</ItemDescription>
                   </ItemContent>
                 </Item>
               );
