@@ -151,6 +151,7 @@ const en: Shape<typeof tr> = {
       overrideNotFound: 'Permission not found; it may have been removed.',
       reportSide: 'Choose which side.',
       tooManyReports: (max) => `You have ${max} reports your trainer hasn't looked at yet; wait for those first.`,
+      // i18n-followup(T3): "Got worse" / "Got better" must match the English buttons in `me/(sekmeler)/saglik/health-constraints.tsx`.
       reviewed: 'Your trainer has looked at this report; you can now say "Got worse" or "Got better".',
       inactive: 'This limitation is no longer active.',
       severityNotHigher: 'Severity must be higher than the current one.',
@@ -201,6 +202,7 @@ const en: Shape<typeof tr> = {
       reportTrigger: (label, trigger) => `Client reported (decision pending): ${label} · ${lowerFirst('en', trigger)}`,
       reportSevere: (label) => `Client reported (decision pending): ${label} · severe; this exercise works the area`,
     },
+    // i18n-followup(T3): 'Swap' must match the English label of the workout card's "Değiştir" button (`me/antrenman`).
     row: {
       title: (label) => `Note: ${label}`,
       avoidOwn: (where) => `This exercise isn't recommended for ${yourRegion(where, 'gen')} right now. Skip it today or ask your trainer.`,

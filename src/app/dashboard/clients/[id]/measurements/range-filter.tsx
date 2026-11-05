@@ -46,6 +46,7 @@ const SELECTED = [
 /** Hazır aralıklar bağlantı, özel aralık shadcn takvim seçicisiyle GET formu olarak gönderilir. */
 export function RangeFilter({ base, range, locale }: { base: string; range: DateRange; locale: Locale }) {
   const t = measurementsMessages(locale).page.range;
+  // i18n-followup(T3): `rangePresets(locale)` (`lib/trend.ts`) still returns the Turkish preset names.
   const presets = rangePresets(locale);
   return (
     <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
