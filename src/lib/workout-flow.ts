@@ -4,7 +4,7 @@ import { getFormat } from './format.ts';
 import type { EntryStatus, SessionDoc, SessionEntry, SkipReason } from './schemas/session.ts';
 import { normalizeSession, withDeletions } from './session-merge.ts';
 import { isStraight } from './set-plan.ts';
-import { BLOCK_KIND_LABELS, FALLBACK_REST_SECONDS, ROW_ID_PATTERN, type BlockKind, type TemplateBlock } from './template-plan.ts';
+import { blockKindLabels, FALLBACK_REST_SECONDS, ROW_ID_PATTERN, type BlockKind, type TemplateBlock } from './template-plan.ts';
 import { dropUnit, entryForRow, entryStatusOf, remaining, restoreUnit, type CursorUnit, type Stamp } from './workout-cursor.ts';
 import type { LocalWorkout } from './workout-outbox.ts';
 import { dayBody, entryPlanOf, extraKey, type ExtraRow, type ExtraRows, type WorkoutDay, type WorkoutRow } from './workout-plan.ts';
@@ -126,7 +126,7 @@ export type FlowItem = {
   /** Birimin anahtarı (blok ya da eklenen hareketin kaydı). */
   key: string;
   kind: BlockKind;
-  /** Grupta "Süperset", "Devre", "Kompleks". */
+  /** Grupta "Süperset", "Devre", "Kompleks" (okuyanın dilinde: `listView`'un `locale`'i). */
   kindLabel: string | null;
   /** Planın sırasıyla numara ("3", grupta "3a", "3b") ve ad. */
   members: { rowId: string; number: string; title: string }[];
@@ -167,7 +167,7 @@ export function itemName(item: { members: readonly { title: string }[] }): strin
 }
 
 /** Birimin satırı: numara planın sırasıyla (eklenen hareket planın arkasındaki numarayla), grupta "3a", "3b". */
-function itemOf(day: WorkoutDay, doc: Pick<SessionDoc, 'entries'>, unit: CursorUnit, numbers: ReadonlyMap<string, number>): FlowItem {
+function itemOf(day: WorkoutDay, doc: Pick<SessionDoc, 'entries'>, unit: CursorUnit, numbers: ReadonlyMap<string, number>, locale: Locale): FlowItem {
   const number = numbers.get(unit.key) ?? numbers.size + 1;
   const group = unit.kind !== 'single' && unit.members.length > 1;
   const members = unit.members.map((member, index) => ({
@@ -178,7 +178,7 @@ function itemOf(day: WorkoutDay, doc: Pick<SessionDoc, 'entries'>, unit: CursorU
   return {
     key: unit.key,
     kind: unit.kind,
-    kindLabel: unit.kind === 'single' ? null : BLOCK_KIND_LABELS[unit.kind],
+    kindLabel: unit.kind === 'single' ? null : blockKindLabels(locale)[unit.kind],
     members,
     done: unit.members.reduce((sum, member) => sum + Math.min(member.done, member.planned), 0),
     planned: unit.members.reduce((sum, member) => sum + member.planned, 0),
@@ -216,7 +216,7 @@ export type ListView = {
  * "şu an" odur: listeye dönünce "Devam et" onu gösterir. Biten birim odakta da "bitti" görünür; açılamayan birime
  * (günde yok, atlandı, plan dışı kayıt) odak yok sayılır. Plan dışı kayıt listede setleriyle durur.
  */
-export function listView(day: WorkoutDay, doc: Pick<SessionDoc, 'entries' | 'order'>, focus?: string | null): ListView {
+export function listView(day: WorkoutDay, doc: Pick<SessionDoc, 'entries' | 'order'>, focus?: string | null, locale: Locale = DEFAULT_LOCALE): ListView {
   const cursor = cursorOf(day, doc);
   const numbers = new Map(day.blocks.map((block, index) => [block.id, index + 1]));
   let latest: { entryId: string; at: string } | null = null;
@@ -233,7 +233,7 @@ export function listView(day: WorkoutDay, doc: Pick<SessionDoc, 'entries' | 'ord
   const current = focusAmong(day, cursor.units, focus) ?? active ?? firstOpen?.key ?? null;
   const items = cursor.units.map((unit): ListItem => {
     const state: ListState = isSkipped(unit) ? 'skipped' : isFinished(unit) ? 'done' : unit.key === current ? 'current' : 'pending';
-    return { ...itemOf(day, doc, unit, numbers), state, ...lastWeightOf(day, doc, unit) };
+    return { ...itemOf(day, doc, unit, numbers, locale), state, ...lastWeightOf(day, doc, unit) };
   });
   return { items, current, doneSets: cursor.progress.doneSets, plannedSets: cursor.progress.plannedSets, allDone: cursor.allDone };
 }

@@ -949,7 +949,7 @@ export function WorkoutScreen({
     const address = new URLSearchParams(window.location.search);
     const fresh = !address.has(LIST_PARAM) && !address.has(FOCUS_PARAM);
     const plan = planOf(current);
-    const list = listView(plan, current.doc);
+    const list = listView(plan, current.doc, null, locale);
     // Açılan hareket: yeni açılışta "şu an" (hepsi bittiyse ya da bitiş sorusuyla açıldıysa yok); adres liste ya da odak
     // taşıyorsa (yenileme, geri/ileri) adresin gösterdiği (`validFocus`; liste işaretinde yok).
     const target = fresh ? (finishOnOpen || list.allDone ? null : list.current) : validFocus(plan, current.doc, focusOf(address));
@@ -965,7 +965,7 @@ export function WorkoutScreen({
     focusRef.current = target;
     focusPushed.current = true;
     window.history.pushState(null, '', workoutHref(window.location.pathname, window.location.search, { focus: target }));
-  }, [openingDoc, opened, finishOnOpen, commit]);
+  }, [openingDoc, opened, finishOnOpen, commit, locale]);
 
   // Bekleyen korkuluk (`armPending`): adres işaretli çizildi, artık kurulabilir.
   useEffect(() => {
@@ -1151,7 +1151,7 @@ export function WorkoutScreen({
     // Odak yoksa liste. Geçersiz odak (birim günde yok, atlandı ya da plan dışı kayıt: kartın satırı yok) bir an bile
     // çizilmez: liste çizilir, effect adresten düşürür (`listView`'ın kuralı). Geçerli odakta kartın satırı hep var.
     const shownFocus = validFocus(plan, doc, focus);
-    const list = listView(plan, doc, shownFocus);
+    const list = listView(plan, doc, shownFocus, locale);
     const cursor = cursorOf(plan, doc, shownFocus);
     const next = nextSet(plan, doc, local.draft, shownFocus, local.drafts);
     // Kaydedilirken kart ve panel az önce kaydedilen seti gösterir (✓ önce satırda), sonra sıradakine geçer.
@@ -1995,10 +1995,10 @@ export function WorkoutScreen({
       if (!unit || doc === current.doc) return;
       commitFlow(current, doc);
       highlightUnit(key);
-      const position = listView(plan, doc).items.findIndex((item) => item.key === key) + 1;
+      const position = listView(plan, doc, null, locale).items.findIndex((item) => item.key === key) + 1;
       announce(t.movedTo(unitTitle(plan, current.doc, unit), position));
     },
-    [saving, commitFlow, highlightUnit, announce, t],
+    [saving, commitFlow, highlightUnit, announce, t, locale],
   );
 
   /** Sürükleyip bırakmak (listede tutamaçtan): birim bırakıldığı bitmemiş birimin yerine (`moveUnitTo`). */
@@ -2012,10 +2012,10 @@ export function WorkoutScreen({
       if (!unit || doc === current.doc) return;
       commitFlow(current, doc);
       highlightUnit(key);
-      const position = listView(plan, doc).items.findIndex((item) => item.key === key) + 1;
+      const position = listView(plan, doc, null, locale).items.findIndex((item) => item.key === key) + 1;
       announce(t.movedTo(unitTitle(plan, current.doc, unit), position));
     },
-    [saving, commitFlow, highlightUnit, announce, t],
+    [saving, commitFlow, highlightUnit, announce, t, locale],
   );
 
   /**

@@ -99,6 +99,17 @@ describe('listenin satırları', () => {
     assert.equal(item?.kindLabel, 'Süperset');
     assert.equal(item?.planned, 4);
   });
+
+  test('türün adı okuyanın dilinde', () => {
+    const day = dayWithBlocks([
+      { id: 'b_aaaaaa', kind: 'superset', restSeconds: 90, rows: [
+        { id: 'r_aaaaaa', exerciseId: 'bench-press', sets: [{ min: 8, max: 10 }] },
+        { id: 'r_bbbbbb', exerciseId: 'goblet-squat', sets: [{ min: 8, max: 10 }] },
+      ] },
+    ]);
+    assert.equal(listView(day, start(day), null, 'en').items[0]?.kindLabel, 'Superset');
+    assert.equal(listView(day, start(day), null, 'tr').items[0]?.kindLabel, 'Süperset');
+  });
 });
 
 describe('atlama ve geri alma', () => {

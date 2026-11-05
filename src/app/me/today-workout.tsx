@@ -87,7 +87,7 @@ function ResumeCard({ progress, timeZone, strip, clientWater }: { progress: InPr
   const locale = useLocale();
   const t = clientHomeMessages(locale).today;
   const states = unitStateText(locale);
-  const view = plan ? listView(plan, doc) : null;
+  const view = plan ? listView(plan, doc, null, locale) : null;
   const items = view && view.items.length > 0 ? view.items : null;
   const list = items && view ? listWindow(items, view.current, RESUME_LIST_LIMIT) : null;
   const current = view?.current ? view.items.find((item) => item.key === view.current) : undefined;
