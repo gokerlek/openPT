@@ -25,7 +25,7 @@ export async function GET(request: Request) {
   }
 
   try {
-    const connection = await githubConnection();
+    const connection = await githubConnection(locale);
     const repo = appRepo();
 
     let appRepoExists = true;

@@ -42,7 +42,7 @@ export function groupSummary(
   locale: Locale = DEFAULT_LOCALE,
 ): { count: number; text: string } {
   const t = text(locale);
-  const filled = MEASUREMENT_SLOTS.filter((slot) => measurementDef(slot.id).group === group && (slots[slot.key] ?? '').trim() !== '');
+  const filled = MEASUREMENT_SLOTS.filter((slot) => measurementDef(slot.id, locale).group === group && (slots[slot.key] ?? '').trim() !== '');
   const shown = filled.slice(0, 3).map(({ key, id, side }) => {
     const def = measurementDef(id, locale);
     const name = t.text.slotName(def.label, side ? t.sides[side] : null);

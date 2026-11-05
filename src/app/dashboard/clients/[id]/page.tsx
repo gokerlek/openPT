@@ -382,9 +382,9 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
   const [invite, programFile, exercises, measurements, history, live, healthRecord] = await Promise.all([
     readInvite(id),
     // undefined: GitHub'dan okunamadı; sayfa yine açılır.
-    readProgramFile(id).catch(() => undefined),
-    listExercises(),
-    loadMeasurements(client).catch(() => undefined),
+    readProgramFile(id, locale).catch(() => undefined),
+    listExercises(undefined, locale),
+    loadMeasurements(client, locale).catch(() => undefined),
     loadHistory(id, config.timeZone, locale).catch(() => null),
     readLiveResponse(id),
     // Kısıt ve tarama özeti yalnız o parçanın onayı sürdükçe (onay yoksa dosya okunmaz).

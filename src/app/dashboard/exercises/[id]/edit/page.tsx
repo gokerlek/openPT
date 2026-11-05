@@ -26,7 +26,7 @@ const loadCustom = cache(() => readCustomExercises());
 const loadRaw = cache(async () => listExercises(await loadCustom()));
 const loadShown = cache(async (locale: Locale) => listExercises(await loadCustom(), locale));
 const loadExercise = cache(async (id: string) => getExercise(id, await loadRaw()));
-const loadShownExercise = cache(async (id: string, locale: Locale) => getExercise(id, await loadShown(locale)));
+const loadShownExercise = cache(async (id: string, locale: Locale) => getExercise(id, await loadShown(locale), locale));
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const locale = await getLocale();

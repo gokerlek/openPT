@@ -26,8 +26,7 @@ export default async function NewConstraintPage({ params }: { params: Promise<{ 
   const view = loaded.ok ? await loadHealthPart(loaded.client, 'conditions', locale) : null;
 
   if (view?.state === 'ok') {
-    // i18n-followup(T5): `listExercises()` has no locale yet; library titles here stay Turkish until T5 localizes it.
-    const library = await listExercises();
+    const library = await listExercises(undefined, locale);
     return (
       <ConstraintFormView
         clientId={id}

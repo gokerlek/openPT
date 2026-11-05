@@ -30,7 +30,7 @@ const id = (prefix?: string) => prefix ? `${prefix}_${randomBytes(3).toString('h
  * başka dilde onaylanabilir ya da danışan dil değiştirince taslağı kaybolmaz.
  */
 export async function coachContext(client: Client, locale: Locale = DEFAULT_LOCALE) {
-  const [custom, program, index, config] = await Promise.all([readCustomExercises(), readProgramFile(client.id), readIndex(sessionRepo(client.id)), readAppConfig()]);
+  const [custom, program, index, config] = await Promise.all([readCustomExercises(), readProgramFile(client.id, locale), readIndex(sessionRepo(client.id)), readAppConfig()]);
   if (program?.problem) throw new CoachError(l => coachMessages(l).failures.programUnreadable, 409);
   const today = todayIn(config.timeZone);
   const conditions = canRecordHealth(client, 'conditions'), pain = canRecordHealth(client, 'check_in'), measurements = canRecordHealth(client, 'measurements'), screening = canRecordHealth(client, 'screening');
@@ -42,9 +42,8 @@ export async function coachContext(client: Client, locale: Locale = DEFAULT_LOCA
     surgeryDate: conditions ? record.surgeryDate : undefined,
     overrides: conditions ? record.overrides : undefined,
     checkIns: pain ? record.checkIns : [],
-  }, { today, painConsent: pain }) : { ...EMPTY_CARE, today };
+  }, { today, painConsent: pain, locale }) : { ...EMPTY_CARE, today };
   const current = program?.program;
-  // i18n-followup(T4): `protocols`, `metricLabels` ve `measurementDef` Türkçe döner, T4 çevirene kadar ölçüm özetlerinin başlıkları İngilizcede de Türkçe kalır.
   const records: CoachRecords = {
     today, items: index.index.items, program: current,
     camera: screening && record ? (record.cameraMeasurements ?? []) : [],
@@ -68,7 +67,7 @@ export function coachDeps(session: CoachDeps['session'], locale: Locale = DEFAUL
       return classifyCoachQuestion(key, message, context.exercises.map(e => ({ id: e.id, title: e.title })), previous, fetch, locale);
     },
     published: async (clientId, proposal) => {
-      const current = (await readProgramFile(clientId))?.program;
+      const current = (await readProgramFile(clientId, locale))?.program;
       return !!current && coachProgramMatches(current, proposal.body);
     },
     publish: async (clientId, proposal) => {

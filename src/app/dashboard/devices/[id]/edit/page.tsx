@@ -21,7 +21,7 @@ import { requirePt } from '@/lib/guards';
  */
 const loadCustom = cache(() => readCustomDevices());
 const loadDevice = cache(async (id: string) => getDevice(id, await listDevices(await loadCustom())));
-const loadShownDevice = cache(async (id: string, locale: Locale) => getDevice(id, await listDevices(await loadCustom(), locale)));
+const loadShownDevice = cache(async (id: string, locale: Locale) => getDevice(id, await listDevices(await loadCustom(), locale), locale));
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   await requirePt();

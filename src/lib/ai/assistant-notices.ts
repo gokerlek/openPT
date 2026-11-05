@@ -4,7 +4,8 @@ import * as v from 'valibot';
 import { assistantStoreSchema } from './assistant-contract.ts';
 import type { OwnIndex } from '../own-program-index.ts';
 import { NOTICE_WINDOW_DAYS, type PtNotice } from '../notices.ts';
-// i18n-followup(T2): `notices-store.ts` bu metni `unstable_cache` içindeki özete (`readClientDigest`) locale'siz yazar; çağrı `locale` geçmeli ve önbellek anahtarına dil girmeli. Burada dil yalnız parametreden gelir, çerez okunmaz.
+// Dil yalnız parametreden gelir, çerez okunmaz: `notices-store.ts` bunu `unstable_cache` içindeki özette (`readClientDigest`,
+// anahtarında `locale` var) özetin diliyle çağırır.
 export function assistantNotices(raw: unknown, permissionHash: string, own: OwnIndex | null, now: Date, locale: Locale = DEFAULT_LOCALE): PtNotice[] {
   const parsed = v.safeParse(assistantStoreSchema, raw); if (!parsed.success) return [];
   return parsed.output.drafts.flatMap(draft => {

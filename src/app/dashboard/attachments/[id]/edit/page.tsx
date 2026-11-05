@@ -20,7 +20,7 @@ import { requirePt } from '@/lib/guards';
  */
 const loadCustom = cache(() => readCustomAttachments());
 const loadAttachment = cache(async (id: string) => getAttachment(id, await listAttachments(await loadCustom())));
-const loadShownAttachment = cache(async (id: string, locale: Locale) => getAttachment(id, await listAttachments(await loadCustom(), locale)));
+const loadShownAttachment = cache(async (id: string, locale: Locale) => getAttachment(id, await listAttachments(await loadCustom(), locale), locale));
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   await requirePt();

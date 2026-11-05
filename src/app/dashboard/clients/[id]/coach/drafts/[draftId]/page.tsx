@@ -31,7 +31,7 @@ export default async function DraftEditor({ params }: { params: Promise<{ id: st
   const draft = (result.body as AssistantView).drafts.find(d => d.id === draftId);
   if (!draft) notFound();
   if (draft.status === 'saved') redirect(`/dashboard/clients/${id}/program`);
-  const [stored, exercises, devices, templates, config] = await Promise.all([readClient(id), listExercises(undefined, locale), listDevices(undefined, locale), listTemplates(), readAppConfig()]);
+  const [stored, exercises, devices, templates, config] = await Promise.all([readClient(id), listExercises(undefined, locale), listDevices(undefined, locale), listTemplates(locale), readAppConfig()]);
   if (!stored) notFound();
   const care = await loadEditorCare(stored.client, exercises, todayIn(config.timeZone), { locale });
   return <div className="flex flex-col gap-6">

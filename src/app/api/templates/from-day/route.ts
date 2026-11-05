@@ -38,7 +38,7 @@ export async function POST(request: Request) {
 
   const { template } = dayToTemplate({ blocks: parsed.output.blocks }, parsed.output.name);
   try {
-    const [exercises, devices] = await Promise.all([listExercises(), listDevices()]);
+    const [exercises, devices] = await Promise.all([listExercises(undefined, locale), listDevices(undefined, locale)]);
     const normalized = normalizeTemplate(template, {
       exercises: new Map(exercises.map((exercise) => [exercise.id, exercise])),
       deviceIds: new Set(devices.map((device) => device.id)),

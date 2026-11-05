@@ -51,8 +51,7 @@ export default async function EditConstraintPage({ params }: { params: Promise<{
   if (view?.state === 'ok' && constraint) {
     const confirming = isPendingReport(constraint);
     const label = regionText(constraint, locale);
-    // i18n-followup(T5): `listExercises()` has no locale yet; library titles here stay Turkish until T5 localizes it.
-    const library = await listExercises();
+    const library = await listExercises(undefined, locale);
     const status = confirming ? 'pending' : isActive(constraint) ? 'active' : 'closed';
     return (
       <ConstraintFormView

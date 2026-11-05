@@ -42,7 +42,7 @@ export async function POST(request: Request) {
   /** Bayrak yalnız açıkken yazılır; göndermeyen eski sekme kayıttakini korur (kendi-program.md §3.8). */
   const flag = (stored?: boolean) => ((sharedWithClients ?? stored) ? { sharedWithClients: true as const } : {});
   try {
-    const [exercises, devices] = await Promise.all([listExercises(), listDevices()]);
+    const [exercises, devices] = await Promise.all([listExercises(undefined, locale), listDevices(undefined, locale)]);
     const normalized = normalizeTemplate(
       { blocks },
       { exercises: new Map(exercises.map((exercise) => [exercise.id, exercise])), deviceIds: new Set(devices.map((device) => device.id)) },

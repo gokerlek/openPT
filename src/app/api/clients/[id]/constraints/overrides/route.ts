@@ -23,8 +23,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const parsed = v.safeParse(overridePostSchema, await readBody(request), langConfig(locale));
   if (!parsed.success) return invalid(parsed.issues, locale);
 
-  // i18n-followup(T5): `listExercises()` has no locale yet; the library title goes into the stored log line (`overrideAdded`/`overrideRemoved`), so it stays Turkish until T5 localizes it.
-  const exercise = (await listExercises()).find((item) => item.id === parsed.output.exerciseId);
+  // Hazır egzersizin adı kayda (`overrideAdded`) eylemi yapanın dilinde yazılır.
+  const exercise = (await listExercises(undefined, locale)).find((item) => item.id === parsed.output.exerciseId);
   if (!exercise) return notFound(messages.constraintApi.exerciseMissing, locale);
   try {
     await updateHealth(

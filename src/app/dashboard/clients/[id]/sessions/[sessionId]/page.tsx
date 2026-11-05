@@ -109,7 +109,7 @@ export default async function SessionDetailPage({ params }: { params: Promise<{ 
 
   const { doc, changes, program } = detail.value;
   const [exercises, health] = await Promise.all([
-    listExercises(),
+    listExercises(undefined, locale),
     // Ağrı ayrıntısı ve kardiyo kalorisinin kilosu yalnız kendi onayı sürdükçe; okunamazsa yazılmaz.
     canRecordHealth(client, 'check_in') || canRecordHealth(client, 'measurements') ? readHealth(id).catch(() => null) : Promise.resolve(null),
   ]);

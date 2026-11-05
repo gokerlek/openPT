@@ -160,13 +160,13 @@ async function buildDigest(id: string, locale: Locale): Promise<ClientOverview |
   if (consent.conditions && record) {
     // Çelişkiler için kütüphanenin etiketleri: yalnız etkin kısıt ve program varken okunur.
     const today = todayIn((await readAppConfig()).timeZone, now);
-    const input = careInputOf(record, { today, painConsent: consent.pain });
+    // Çelişkinin hareket adı ve bulgusu özetin dilinde: dil dışarıdan verilir (burası `unstable_cache` içinde, `getLocale()`
+    // okunamaz; anahtarda `locale` var).
+    const input = careInputOf(record, { today, painConsent: consent.pain, locale });
     // "Sıradaki" bugünkü ya da sıradaki atanmış program (Faz 3).
-    // i18n-followup(T5): `listExercises(custom?, locale?)` gelince `listExercises(undefined, locale)` yaz: dil dışarıdan
-    // verilir (burası `unstable_cache` içinde, `getLocale()` okunamaz); o zamana kadar çelişen hareketin adı Türkçe.
     const conflicts =
       programOk && input.active.length > 0
-        ? programConflicts(programOk, new Map((await listExercises()).map((exercise) => [exercise.id, exercise])), input, today)
+        ? programConflicts(programOk, new Map((await listExercises(undefined, locale)).map((exercise) => [exercise.id, exercise])), input, today)
         : [];
     constraints = constraintFactsOf(record, conflicts, locale);
   }

@@ -22,7 +22,7 @@ export function assistantDeps(session: CoachDeps['session'], base?: CoachDeps, l
       return interpretGoal(key, text, fetch, language);
     },
     saveOwn: async (client, draft, body) => {
-      const [{ library, ctx }, guard] = await Promise.all([ownLibrary(), ownGuard(client)]);
+      const [{ library, ctx }, guard] = await Promise.all([ownLibrary(language), ownGuard(client)]);
       if (body.phases.some(p => p.days.some(d => d.blocks.some(b => b.rows.some(r => r.deviceId && !library.deviceIds.has(r.deviceId)))))) return { status: 400, body: { error: coachMessages(language).assistant.deviceGone } };
       return saveResponse(await saveOwnProgram(sessionRepo(client.id), { id: draft.programId, body, by: 'client', library, ctx, guard, now: new Date(), shareOnCreate: true }), 'client', language);
     },

@@ -33,7 +33,7 @@ import { ptLibraryMessages } from '@/i18n/messages/pt-library';
 
 // Başlık (`generateMetadata`) ve sayfa aynı isteği paylaşır: liste bir kez okunur.
 const loadAll = cache((locale: Locale) => listExercises(undefined, locale));
-const loadExercise = cache(async (id: string, locale: Locale) => getExercise(id, await loadAll(locale)));
+const loadExercise = cache(async (id: string, locale: Locale) => getExercise(id, await loadAll(locale), locale));
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const locale = await getLocale();

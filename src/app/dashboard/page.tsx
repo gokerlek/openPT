@@ -40,7 +40,7 @@ export default async function DashboardPage() {
   // okumayı paylaştırır). Reddedilmez: okunamayan danışan sayılır (`client-overviews.ts`).
   void clientOverviews();
   const [exercises, clientIds, config] = await Promise.all([
-    listExercises(),
+    listExercises(undefined, locale),
     listClientIds().catch(() => [] as string[]),
     readAppConfig(),
   ]);
