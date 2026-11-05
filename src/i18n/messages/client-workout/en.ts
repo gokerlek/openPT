@@ -296,6 +296,8 @@ const en: Shape<typeof tr> = {
     workout: 'Workout',
   },
 
+  unitState: { done: 'done', current: 'now', pending: 'up next', skipped: 'skipped' },
+
   errors: {
     expired: 'Your session has expired. Sign in again.',
     notFound: 'Workout not found.',

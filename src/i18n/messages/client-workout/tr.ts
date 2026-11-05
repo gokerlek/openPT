@@ -306,6 +306,9 @@ const tr = {
     workout: 'Antrenman',
   },
 
+  /** Antrenman listesinin birim durumu, ekran okuyucu sözcüğü (`components/workout/unit-state.tsx`). */
+  unitState: { done: 'bitti', current: 'şu an', pending: 'sırada', skipped: 'atlandı' },
+
   /** Uçların hata mesajları (`session-routes.ts`, `workout-routes.ts`). */
   errors: {
     expired: 'Oturumun kapanmış. Yeniden giriş yap.',

@@ -10,6 +10,10 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { useLocale } from '@/i18n/client';
+import type { Locale } from '@/i18n/locale';
+import { clientProgressMessages } from '@/i18n/messages/client-progress';
+import { lower } from '@/i18n/text';
 import { summarizeMuscles, type BodyMuscle } from '@/lib/muscles';
 import {
   exerciseStrength,
@@ -19,7 +23,7 @@ import {
   muscleGroups,
   muscleStrength,
   STRENGTH_WINDOW_KEYS,
-  STRENGTH_WINDOWS,
+  strengthWindows,
   type CircumferenceChange,
   type ExerciseStrength,
   type MuscleGroup,
@@ -32,14 +36,14 @@ import {
   circumferenceText,
   formatChangePct,
   groupRoleText,
-  METRICS,
   metricMinSpan,
+  metricsOf,
   progressCopy,
-  STRENGTH_STATUS_LABELS,
   strengthDetail,
+  strengthStatusLabels,
   type ProgressViewer,
 } from '@/lib/progress-text';
-import { MUSCLE_LABELS } from '@/lib/schemas/exercise';
+import { muscleLabels } from '@/lib/schemas/exercise';
 import { cn } from '@/lib/utils';
 import { ProgressCard, SubHeading } from './progress-card';
 import { ProgressSheet, ProgressSheetContent } from './progress-sheet';
@@ -50,8 +54,8 @@ const LIST_LIMIT = 5;
 const STATUS_ICONS = { improved: TrendUp, stable: Equals, declined: TrendDown, insufficient: Equals } as const;
 
 const groupId = (group: Pick<MuscleGroup, 'muscles'>) => group.muscles.join(',');
-const groupLabel = (group: Pick<MuscleGroup, 'muscles'>) => summarizeMuscles(group.muscles).join(', ');
-const labelOf = (muscle: string) => MUSCLE_LABELS[muscle as BodyMuscle] ?? muscle;
+const groupLabel = (group: Pick<MuscleGroup, 'muscles'>, locale: Locale) => summarizeMuscles(group.muscles, locale).join(', ');
+const labelOf = (locale: Locale) => (muscle: string) => muscleLabels(locale)[muscle as BodyMuscle] ?? muscle;
 
 function toneOf(group: Pick<MuscleGroup, 'status' | 'strong'>): MuscleStatusTone | undefined {
   if (group.status === 'improved') return group.strong ? 'strong' : 'improved';
@@ -60,10 +64,10 @@ function toneOf(group: Pick<MuscleGroup, 'status' | 'strong'>): MuscleStatusTone
 }
 
 /** Kararın kısa metni: "Gelişti · +%12,4", sabitte değişim yazılmaz (aralık sıfırı kapsıyor). */
-function verdictText(group: Pick<MuscleGroup, 'status' | 'changePct'>): string {
-  const label = STRENGTH_STATUS_LABELS[group.status];
-  if (group.status === 'stable') return `${label} · belirgin değişim yok`;
-  return group.changePct === null || group.status === 'insufficient' ? label : `${label} · ${formatChangePct(group.changePct)}`;
+function verdictText(group: Pick<MuscleGroup, 'status' | 'changePct'>, locale: Locale): string {
+  const label = strengthStatusLabels(locale)[group.status];
+  if (group.status === 'stable') return clientProgressMessages(locale).strengthCard.verdictStable(label);
+  return group.changePct === null || group.status === 'insufficient' ? label : `${label} · ${formatChangePct(group.changePct, locale)}`;
 }
 
 function StatusIcon({ status, className }: { status: StrengthStatus; className?: string }) {
@@ -99,7 +103,11 @@ export function StrengthProgress({
   initialWindow: StrengthWindow;
   circumference: ProgressInsights['circumference'];
 }) {
-  const copy = progressCopy(viewer, name);
+  const locale = useLocale();
+  const t = clientProgressMessages(locale).strengthCard;
+  const labels = muscleLabels(locale);
+  const windows = strengthWindows(locale);
+  const copy = progressCopy(viewer, name, locale);
   const [range, setRange] = useState<StrengthWindow>(initialWindow);
   // Açık grup ve (kapanış animasyonu bitene dek içerik boşalmasın diye) son açılan grup.
   const [openId, setOpenId] = useState<string | null>(null);
@@ -134,9 +142,7 @@ export function StrengthProgress({
   const open = groups.find((group) => groupId(group) === openId) ?? null;
   const shown = groups.find((group) => groupId(group) === shownId) ?? null;
   // "Son 8 hafta" (başlık) ve "Son 8 haftada" (cümle içi).
-  const all = STRENGTH_WINDOWS[range].days === null;
-  const period = all ? 'Tüm kayıtlar' : `Son ${STRENGTH_WINDOWS[range].label}`;
-  const periodIn = all ? 'Tüm kayıtlarda' : `Son ${STRENGTH_WINDOWS[range].label}da`;
+  const { period, periodIn } = windows[range];
 
   function openGroup(group: MuscleGroup) {
     opener.current = document.activeElement;
@@ -167,7 +173,7 @@ export function StrengthProgress({
   if (groups.length === 0) return null;
 
   return (
-    <ProgressCard viewer={viewer} title="Gelişim" titleId="gelisim" description={copy.strengthIntro} contentClassName="@container gap-5">
+    <ProgressCard viewer={viewer} title={t.title} titleId="gelisim" description={copy.strengthIntro} contentClassName="@container gap-5">
       <ToggleGroup
         variant="outline"
         spacing={0}
@@ -176,11 +182,11 @@ export function StrengthProgress({
           const next = value[0] as StrengthWindow | undefined;
           if (next) pickWindow(next);
         }}
-        aria-label="Dönem"
+        aria-label={t.period}
         className="w-full @3xl:max-w-md">
         {STRENGTH_WINDOW_KEYS.map((key) => (
           <ToggleGroupItem key={key} value={key} className="h-11 flex-1 px-1">
-            {STRENGTH_WINDOWS[key].label}
+            {windows[key].label}
           </ToggleGroupItem>
         ))}
       </ToggleGroup>
@@ -191,13 +197,13 @@ export function StrengthProgress({
         // Dar kapta alt alta (sayılar, harita, listeler); genişte harita solda iki satır boyu, sağda sayılar ve listeler.
         // Dar kapta da sütun açıkça `grid-cols-1` (minmax(0, 1fr)): kısaltılan hareket adları sütunu kabın dışına itmesin.
         <div className="grid grid-cols-1 gap-5 @3xl:grid-cols-[minmax(0,5fr)_minmax(0,6fr)] @3xl:grid-rows-[auto_1fr] @3xl:gap-x-8">
-          <dl className="grid grid-cols-3 divide-x text-center @3xl:col-start-2 @3xl:row-start-1" aria-label={`${period}: kaslar`}>
+          <dl className="grid grid-cols-3 divide-x text-center @3xl:col-start-2 @3xl:row-start-1" aria-label={t.statsLabel(period)}>
             {[
-              { value: count(up), label: 'gelişen kas' },
-              { value: count(flat.filter((group) => group.status === 'stable')), label: 'sabit' },
-              { value: count(flat.filter((group) => group.status === 'declined')), label: 'geriyen' },
+              { key: 'improved', value: count(up), label: t.statImproved },
+              { key: 'stable', value: count(flat.filter((group) => group.status === 'stable')), label: t.statStable },
+              { key: 'declined', value: count(flat.filter((group) => group.status === 'declined')), label: t.statDeclined },
             ].map((stat) => (
-              <div key={stat.label} className="flex flex-col-reverse gap-0.5 px-1">
+              <div key={stat.key} className="flex flex-col-reverse gap-0.5 px-1">
                 <dt className="text-xs text-muted-foreground">{stat.label}</dt>
                 <dd className="font-heading text-2xl font-semibold tabular-nums">{stat.value}</dd>
               </div>
@@ -217,23 +223,23 @@ export function StrengthProgress({
               }}
               describe={(muscle) => {
                 const group = groupOf.get(muscle);
-                return group ? `${MUSCLE_LABELS[muscle]} · ${verdictText(group)}` : `${MUSCLE_LABELS[muscle]} · bu dönemde çalışılmadı`;
+                return group ? `${labels[muscle]} · ${verdictText(group, locale)}` : t.untrained(labels[muscle]);
               }}
               labelOf={(muscle) => {
                 const group = groupOf.get(muscle);
-                return `${MUSCLE_LABELS[muscle]}: ${group ? verdictText(group) : 'çalışılmadı'}. Hareketleri aç.`;
+                return t.muscleButton(labels[muscle], group ? verdictText(group, locale) : null);
               }}
               hint={copy.strengthHint}
               bodyClassName="h-56 @3xl:h-72"
-              label={`${periodIn} güç gelişimi: ${up.length > 0 ? `gelişen ${summarizeMuscles(up.flatMap((group) => group.muscles)).join(', ')}` : 'gelişen kas yok'}`}
+              label={t.mapLabel(periodIn, up.length > 0 ? summarizeMuscles(up.flatMap((group) => group.muscles), locale).join(', ') : null)}
             />
           </div>
 
           <div className="flex flex-col gap-5 @3xl:col-start-2 @3xl:row-start-2">
             <GroupList
               viewer={viewer}
-              title="En çok gelişen kaslar"
-              empty={`${periodIn} belirgin gelişen kas yok. Gelişme, eğilimin olası aralığı tamamen artıda olunca yazılır.`}
+              title={t.upTitle}
+              empty={t.upEmpty(periodIn)}
               groups={up}
               expanded={showAll.up}
               onExpand={() => setShowAll((value) => ({ ...value, up: true }))}
@@ -241,8 +247,8 @@ export function StrengthProgress({
             />
             <GroupList
               viewer={viewer}
-              title="Durağan / geriyen"
-              empty={`${periodIn} durağan ya da geriyen kas yok.`}
+              title={t.flatTitle}
+              empty={t.flatEmpty(periodIn)}
               groups={flat}
               expanded={showAll.flat}
               onExpand={() => setShowAll((value) => ({ ...value, flat: true }))}
@@ -253,10 +259,7 @@ export function StrengthProgress({
       )}
 
       {unknown.length > 0 ? (
-        <p className="text-xs text-muted-foreground">
-          Veri az: {summarizeMuscles(unknown.flatMap((group) => group.muscles)).join(', ')}. Kasa karar için onu hedef ya da
-          yardımcı olarak çalıştıran bir harekette dönemde en az 4 antrenman günü ve 3 hafta gerekir.
-        </p>
+        <p className="text-xs text-muted-foreground">{t.unknown(summarizeMuscles(unknown.flatMap((group) => group.muscles), locale).join(', '))}</p>
       ) : null}
       <p className="text-xs text-muted-foreground">{copy.strengthFootnote}</p>
 
@@ -293,6 +296,9 @@ function GroupList({
   onExpand: () => void;
   onOpen: (group: MuscleGroup) => void;
 }) {
+  const locale = useLocale();
+  const t = clientProgressMessages(locale).strengthCard;
+  const statusLabels = strengthStatusLabels(locale);
   const shown = expanded ? groups : groups.slice(0, LIST_LIMIT);
   return (
     <section className="flex flex-col gap-1" aria-label={title}>
@@ -316,8 +322,8 @@ function GroupList({
                   <StatusIcon status={group.status} />
                   <span className="flex min-w-0 flex-1 flex-col">
                     <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                      <span className="font-medium">{groupLabel(group)}</span>
-                      {group.strong ? <Badge variant="secondary">Belirgin</Badge> : null}
+                      <span className="font-medium">{groupLabel(group, locale)}</span>
+                      {group.strong ? <Badge variant="secondary">{t.strong}</Badge> : null}
                     </span>
                     <span className="truncate text-xs text-muted-foreground">
                       {names.join(', ')}
@@ -326,9 +332,9 @@ function GroupList({
                   </span>
                   <span className="flex shrink-0 flex-col items-end text-right">
                     <span className="text-sm font-medium tabular-nums">
-                      {group.status === 'stable' || group.changePct === null ? STRENGTH_STATUS_LABELS[group.status] : formatChangePct(group.changePct)}
+                      {group.status === 'stable' || group.changePct === null ? statusLabels[group.status] : formatChangePct(group.changePct, locale)}
                     </span>
-                    {group.status !== 'stable' ? <span className="text-xs text-muted-foreground">{STRENGTH_STATUS_LABELS[group.status]}</span> : null}
+                    {group.status !== 'stable' ? <span className="text-xs text-muted-foreground">{statusLabels[group.status]}</span> : null}
                   </span>
                   <CaretRight className="size-4 shrink-0 text-muted-foreground" aria-hidden />
                 </button>
@@ -339,7 +345,7 @@ function GroupList({
       )}
       {!expanded && groups.length > LIST_LIMIT ? (
         <Button variant="ghost" className="h-11 self-start px-2 text-sm" onClick={onExpand}>
-          Tümünü göster ({groups.length})
+          {t.showAll(groups.length)}
         </Button>
       ) : null}
     </section>
@@ -369,6 +375,10 @@ function MuscleSheet({
   onOpenChange: (open: boolean) => void;
   finalFocus: () => boolean;
 }) {
+  const locale = useLocale();
+  const t = clientProgressMessages(locale).strengthCard;
+  const statusLabels = strengthStatusLabels(locale);
+  const metricText = metricsOf(locale);
   const title = useRef<HTMLHeadingElement>(null);
   const related = shown ? measurementsFor(shown.muscles) : [];
   const changes = Array.isArray(circumference) ? circumference.filter((change) => related.includes(change.id)) : [];
@@ -381,30 +391,27 @@ function MuscleSheet({
             <SheetHeader className="gap-1 pt-5 pb-3 pr-14">
               <SheetTitle ref={title} tabIndex={-1} className="flex items-center gap-2 text-lg font-semibold outline-none">
                 <StatusIcon status={shown.status} className="size-5" />
-                {groupLabel(shown)}
+                {groupLabel(shown, locale)}
               </SheetTitle>
-              <SheetDescription>
-                {period}: {verdictText(shown).toLocaleLowerCase('tr')}
-                {shown.strong ? ' (belirgin)' : ''}. Güç gelişimi, hareketlerinden.
-              </SheetDescription>
+              <SheetDescription>{t.sheetDescription(period, lower(locale, verdictText(shown, locale)), shown.strong)}</SheetDescription>
             </SheetHeader>
             <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overscroll-contain px-4 pb-6">
               {related.length > 0 && circumference !== 'off' ? (
-                <section aria-label="Çevre ölçümü" className="flex gap-2.5 rounded-lg bg-muted px-3 py-2.5 text-sm">
+                <section aria-label={t.circumference} className="flex gap-2.5 rounded-lg bg-muted px-3 py-2.5 text-sm">
                   <Ruler className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden />
                   <div className="flex flex-col gap-0.5">
                     {circumference === 'unavailable' ? (
                       <p className="text-muted-foreground">{measurementsUnavailable}</p>
                     ) : changes.length === 0 ? (
-                      <p className="text-muted-foreground">Bu dönemde bu kasa yakın çevre ölçümünden iki kayıt yok.</p>
+                      <p className="text-muted-foreground">{t.noCircumference}</p>
                     ) : (
                       <>
                         {changes.map((change) => (
                           <p key={`${change.id}-${change.key}`} className="tabular-nums">
-                            {circumferenceText(change)}
+                            {circumferenceText(change, locale)}
                           </p>
                         ))}
-                        <p className="text-xs text-muted-foreground">Dönemin ilk ve son ölçümü arası. Çevre kas kadar yağla da değişir.</p>
+                        <p className="text-xs text-muted-foreground">{t.circumferenceNote}</p>
                       </>
                     )}
                   </div>
@@ -415,7 +422,7 @@ function MuscleSheet({
                 {shown.contributors.map((contributor) => {
                   const exercise = byKey.get(contributor.key);
                   if (!exercise) return null;
-                  const info = METRICS[exercise.metric];
+                  const info = metricText[exercise.metric];
                   const chartTitle = `${exercise.title} · ${info.label}`;
                   return (
                     <li key={contributor.key} className="flex flex-col gap-2 py-3 first:pt-0">
@@ -426,22 +433,22 @@ function MuscleSheet({
                             {exercise.deviceName ? <span className="font-normal text-muted-foreground"> · {exercise.deviceName}</span> : null}
                           </span>
                           <span className="text-xs text-muted-foreground">
-                            {groupRoleText(contributor.roles, labelOf)} · {info.label.toLocaleLowerCase('tr')}
+                            {groupRoleText(contributor.roles, labelOf(locale), locale)} · {lower(locale, info.label)}
                           </span>
                         </div>
                         <span className="flex shrink-0 items-center gap-1.5 text-sm font-medium">
                           <StatusIcon status={exercise.status} />
-                          {STRENGTH_STATUS_LABELS[exercise.status]}
+                          {statusLabels[exercise.status]}
                         </span>
                       </div>
-                      <p className="text-sm text-muted-foreground tabular-nums">{strengthDetail(exercise)}</p>
+                      <p className="text-sm text-muted-foreground tabular-nums">{strengthDetail(exercise, locale)}</p>
                       {exercise.points.length > 1 ? (
                         <ProgressChart
                           title={chartTitle}
                           unit={info.unit}
                           series={[{ key: 'value', label: info.label, points: exercise.points }]}
                           minSpan={metricMinSpan(exercise.metric, exercise.points.map((point) => point.value))}
-                          pointNoun="antrenman günü"
+                          pointNoun={t.workoutDayNoun}
                           chartClassName="h-36"
                         />
                       ) : null}
@@ -452,7 +459,7 @@ function MuscleSheet({
 
               <section aria-labelledby="gelisim-yontem" className="flex flex-col gap-1.5 rounded-lg border px-3 py-2.5 text-xs text-muted-foreground">
                 <h3 id="gelisim-yontem" className="text-sm font-medium text-foreground">
-                  Nasıl hesaplanır?
+                  {t.method}
                 </h3>
                 {methodNote.map((line) => (
                   <p key={line}>{line}</p>

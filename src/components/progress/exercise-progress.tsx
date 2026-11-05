@@ -10,18 +10,21 @@ import { InputGroup, InputGroupAddon, InputGroupInput } from '@/components/ui/in
 import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from '@/components/ui/item';
 import { SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { useLocale } from '@/i18n/client';
+import type { Locale } from '@/i18n/locale';
+import { clientProgressMessages } from '@/i18n/messages/client-progress';
 import { fold } from '@/lib/exercise-search';
-import { formatDay, formatDayShort, formatWithUnit } from '@/lib/format';
+import { getFormat } from '@/lib/format';
 import type { RecordMark } from '@/lib/personal-records';
 import type { ExerciseView } from '@/lib/progress';
 import {
   describeTrend,
   highRepDaysSince,
-  METRICS,
   METRICS_OF,
   metricForecast,
   metricMinSpan,
   metricPoints,
+  metricsOf,
   progressCopy,
   recordLabel,
   recordValue,
@@ -34,14 +37,9 @@ import { cn } from '@/lib/utils';
 import { ProgressCard, SubHeading } from './progress-card';
 import { ProgressSheet, ProgressSheetContent } from './progress-sheet';
 
-/** Grafiğin tarih aralıkları; 375 px'te tek satıra sığan kısa adlar. */
-const RANGES = [
-  ['3a', '3 ay'],
-  ['6a', '6 ay'],
-  ['1y', '1 yıl'],
-  ['tumu', 'Tümü'],
-] as const satisfies readonly (readonly [RangePreset, string])[];
-type Range = (typeof RANGES)[number][0];
+/** Grafiğin tarih aralıkları; 375 px'te tek satıra sığan kısa adlar sözlükte. */
+const RANGES = ['3a', '6a', '1y', 'tumu'] as const satisfies readonly RangePreset[];
+type Range = (typeof RANGES)[number];
 
 /** Bir aralıkta en az bu kadar gün yoksa varsayılan "Tümü". */
 const MIN_POINTS_IN_RANGE = 2;
@@ -49,19 +47,20 @@ const MIN_POINTS_IN_RANGE = 2;
 /** Ağırlığa göre en çok tekrarın en çok bu kadar satırı (en ağırdan). */
 const REPS_AT_WEIGHT_ROWS = 4;
 
-function subtitle(exercise: ExerciseView, today: string): string {
+function subtitle(exercise: ExerciseView, today: string, locale: Locale): string {
+  const t = clientProgressMessages(locale).exercise;
   const parts = [
     exercise.deviceName ?? null,
-    `${exercise.sessions} antrenman`,
-    `son ${formatDayShort(exercise.lastDate, exercise.lastDate.slice(0, 4) !== today.slice(0, 4))}`,
-    exercise.inLibrary ? null : 'kütüphanede yok',
+    t.workouts(exercise.sessions),
+    t.last(getFormat(locale).dayShort(exercise.lastDate, exercise.lastDate.slice(0, 4) !== today.slice(0, 4))),
+    exercise.inLibrary ? null : t.notInLibrary,
   ];
   return parts.filter(Boolean).join(' · ');
 }
 
 /** Aralıklar yalnız seri 3 aydan eskiye uzanıyorsa; bir aralık ancak öncekinden fazlasını gösteriyorsa. */
 function rangesFor(exercise: ExerciseView, today: string): Range[] {
-  const useful = RANGES.map(([range]) => range).filter((range) => {
+  const useful = RANGES.filter((range) => {
     const from = rangeStart(range, today);
     return from === undefined || exercise.firstDate < from;
   });
@@ -95,7 +94,11 @@ export function ExerciseProgress({
   initialKey: string | null;
   today: string;
 }) {
-  const copy = progressCopy(viewer);
+  const locale = useLocale();
+  const t = clientProgressMessages(locale).exercise;
+  const f = getFormat(locale);
+  const copy = progressCopy(viewer, undefined, locale);
+  const metricText = metricsOf(locale);
   const [key, setKey] = useState(() => (exercises.some((item) => item.key === initialKey) ? initialKey! : (exercises[0]?.key ?? '')));
   const exercise = exercises.find((item) => item.key === key) ?? exercises[0];
   const [metric, setMetric] = useState<Metric>(() => METRICS_OF[exercise?.trackingType ?? 'weight_reps'][0]!);
@@ -124,7 +127,7 @@ export function ExerciseProgress({
 
   const from = rangeStart(activeRange, today);
   const points = metricPoints(exercise.points, shown).filter((point) => !from || point.date >= from);
-  const info = METRICS[shown];
+  const info = metricText[shown];
   const outlook = points.length > 1 ? metricForecast(shown, points) : null;
   const drawn = outlook ? forecastAsOf(outlook, today) : null;
   // Son günlerin bütün setleri 12'den çok tekrarlıysa grafik orada biter: "son kayıt … gün önce" yanıltır.
@@ -132,7 +135,7 @@ export function ExerciseProgress({
   const title = `${exercise.title} · ${info.label}`;
 
   return (
-    <ProgressCard viewer={viewer} title="Hareketler" titleId="hareketler" description={copy.exerciseIntro} contentClassName="@container">
+    <ProgressCard viewer={viewer} title={t.title} titleId="hareketler" description={copy.exerciseIntro} contentClassName="@container">
       <div className="grid grid-cols-1 gap-4 @3xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] @3xl:gap-x-8">
         <div className="flex min-w-0 flex-col gap-4">
           <button
@@ -142,10 +145,10 @@ export function ExerciseProgress({
             className="flex min-h-14 w-full items-center gap-3 rounded-lg border border-input bg-transparent px-3 py-2 text-left outline-none hover:bg-muted focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30">
             <span className="flex min-w-0 flex-1 flex-col">
               <span className="truncate text-base font-medium">{exercise.title}</span>
-              <span className="truncate text-xs text-muted-foreground">{subtitle(exercise, today)}</span>
+              <span className="truncate text-xs text-muted-foreground">{subtitle(exercise, today, locale)}</span>
             </span>
             <CaretDown className="size-4 shrink-0 text-muted-foreground" aria-hidden />
-            <span className="sr-only">, hareketi değiştir</span>
+            <span className="sr-only">{t.change}</span>
           </button>
 
           {exercise.stage ? (
@@ -164,11 +167,11 @@ export function ExerciseProgress({
                 const next = value[0] as Metric | undefined;
                 if (next) setMetric(next);
               }}
-              aria-label="Grafikte ne gösterilsin"
+              aria-label={t.chartPick}
               className="w-full">
               {metrics.map((item) => (
-                <ToggleGroupItem key={item} value={item} className="h-10 flex-1" aria-label={METRICS[item].label}>
-                  {METRICS[item].short}
+                <ToggleGroupItem key={item} value={item} className="h-10 flex-1" aria-label={metricText[item].label}>
+                  {metricText[item].short}
                 </ToggleGroupItem>
               ))}
             </ToggleGroup>
@@ -188,10 +191,10 @@ export function ExerciseProgress({
                     const next = value[0] as Range | undefined;
                     if (next) setRange(next);
                   }}
-                  aria-label="Tarih aralığı">
-                  {RANGES.filter(([item]) => ranges.includes(item)).map(([item, label]) => (
+                  aria-label={t.range}>
+                  {RANGES.filter((item) => ranges.includes(item)).map((item) => (
                     <ToggleGroupItem key={item} value={item} className="px-2">
-                      {label}
+                      {t.ranges[item]}
                     </ToggleGroupItem>
                   ))}
                 </ToggleGroup>
@@ -205,28 +208,26 @@ export function ExerciseProgress({
                 series={[{ key: 'value', label: info.label, points }]}
                 minSpan={metricMinSpan(shown, points.map((point) => point.value))}
                 forecast={drawn?.kind === 'current' ? drawn.forecast.points : undefined}
-                pointNoun="antrenman günü"
+                pointNoun={t.workoutDayNoun}
                 yAxisWidth={shown === 'volume' ? 48 : 40}
               />
             ) : points.length === 1 ? (
               <p className="rounded-lg bg-muted px-3 py-2.5 text-sm">
-                İlk kayıt: <span className="font-medium tabular-nums">{formatWithUnit(points[0]!.value, info.unit)}</span> ·{' '}
-                {formatDay(points[0]!.date)}. Grafik ikinci antrenman gününden sonra çizilir.
+                {t.first} <span className="font-medium tabular-nums">{f.withUnit(points[0]!.value, info.unit)}</span>{' '}
+                {t.firstTail(f.day(points[0]!.date))}
               </p>
             ) : (
               <p className="rounded-lg bg-muted px-3 py-2.5 text-sm text-muted-foreground">
-                {shown === 'e1rm'
-                  ? 'Bu dönemde 1–12 tekrarlı set yok; tahmini maksimum hesaplanamıyor.'
-                  : 'Bu dönemde bu değer için kayıt yok.'}
+                {shown === 'e1rm' ? t.noE1rm : t.noValue}
               </p>
             )}
             {highRep > 0 ? <p className="text-sm text-muted-foreground">{copy.highRepDays(highRep)}</p> : null}
             {outlook && !(highRep > 0 && drawn?.kind === 'stale') ? (
-              <p className="text-sm text-muted-foreground">{describeTrend(outlook, info.unit, today)}</p>
+              <p className="text-sm text-muted-foreground">{describeTrend(outlook, info.unit, today, locale)}</p>
             ) : null}
             {shown === 'e1rm' ? <p className="text-xs text-muted-foreground">{copy.e1rmNote}</p> : null}
             {shown === 'volume' ? (
-              <p className="text-xs text-muted-foreground">Toplam ağırlık: ısınma hariç her setin ağırlığı × tekrarı, gün başına.</p>
+              <p className="text-xs text-muted-foreground">{t.volumeNote}</p>
             ) : null}
           </section>
         </div>
@@ -250,6 +251,8 @@ export function ExerciseProgress({
 
 /** Seçili hareketin en iyileri: tür başına bir satır; ağırlıkta tekrarda en ağır birkaç ağırlık. */
 function ExerciseRecords({ viewer, copy, exercise }: { viewer: ProgressViewer; copy: ProgressCopy; exercise: ExerciseView }) {
+  const locale = useLocale();
+  const t = clientProgressMessages(locale).exercise;
   const singles = exercise.best.filter((mark) => mark.kind !== 'reps_at_weight');
   const atWeight = exercise.best.filter((mark) => mark.kind === 'reps_at_weight').slice(0, REPS_AT_WEIGHT_ROWS);
   // Hareket başına bir kutlama: aynı antrenmandaki rekorlar bir sayılır.
@@ -262,21 +265,21 @@ function ExerciseRecords({ viewer, copy, exercise }: { viewer: ProgressViewer; c
         <SubHeading viewer={viewer} id="hareket-rekorlari" className="text-sm font-medium">
           {copy.bestTitle}
         </SubHeading>
-        <span className="text-xs text-muted-foreground">{broken > 0 ? copy.recordSessions(broken) : 'İlk kayıt başlangıç noktası'}</span>
+        <span className="text-xs text-muted-foreground">{broken > 0 ? copy.recordSessions(broken) : t.firstIsStart}</span>
       </div>
       <dl className="flex flex-col divide-y">
         {singles.map((mark) => (
-          <RecordRow key={mark.kind} label={recordLabel(mark.kind, exercise.trackingType)} mark={mark} />
+          <RecordRow key={mark.kind} label={recordLabel(mark.kind, exercise.trackingType, locale)} mark={mark} locale={locale} />
         ))}
         {atWeight.length > 0 ? (
           <div className="flex flex-col gap-1 py-2">
-            <dt className="text-xs text-muted-foreground">{recordLabel('reps_at_weight', exercise.trackingType)}</dt>
+            <dt className="text-xs text-muted-foreground">{recordLabel('reps_at_weight', exercise.trackingType, locale)}</dt>
             <dd>
               <ul className="flex flex-col gap-1">
                 {atWeight.map((mark) => (
                   <li key={mark.kg} className="flex items-baseline justify-between gap-3 text-sm">
-                    <span className="font-medium tabular-nums">{recordValue(mark)}</span>
-                    <span className="text-xs text-muted-foreground">{formatDayShort(mark.date)}</span>
+                    <span className="font-medium tabular-nums">{recordValue(mark, locale)}</span>
+                    <span className="text-xs text-muted-foreground">{getFormat(locale).dayShort(mark.date)}</span>
                   </li>
                 ))}
               </ul>
@@ -288,13 +291,13 @@ function ExerciseRecords({ viewer, copy, exercise }: { viewer: ProgressViewer; c
   );
 }
 
-function RecordRow({ label, mark }: { label: string; mark: RecordMark }) {
+function RecordRow({ label, mark, locale }: { label: string; mark: RecordMark; locale: Locale }) {
   return (
     <div className="flex items-baseline justify-between gap-3 py-2">
       <dt className="text-xs text-muted-foreground">{label}</dt>
       <dd className="flex flex-col items-end text-right">
-        <span className="text-sm font-medium tabular-nums">{recordValue(mark)}</span>
-        <span className="text-xs text-muted-foreground">{formatDay(mark.date)}</span>
+        <span className="text-sm font-medium tabular-nums">{recordValue(mark, locale)}</span>
+        <span className="text-xs text-muted-foreground">{getFormat(locale).day(mark.date)}</span>
       </dd>
     </div>
   );
@@ -323,6 +326,8 @@ function ExercisePicker({
   today: string;
   onPick: (exercise: ExerciseView) => void;
 }) {
+  const locale = useLocale();
+  const t = clientProgressMessages(locale).exercise;
   const title = useRef<HTMLHeadingElement>(null);
   const [search, setSearch] = useState('');
   const deferred = useDeferredValue(search);
@@ -340,7 +345,7 @@ function ExercisePicker({
       <ProgressSheetContent showCloseButton={false} initialFocus={title}>
         <SheetHeader className="gap-1 pt-5 pb-3">
           <SheetTitle ref={title} tabIndex={-1} className="text-lg font-semibold outline-none">
-            Hareket seç
+            {t.pick}
           </SheetTitle>
           <SheetDescription>{copy.pickerDescription}</SheetDescription>
           <InputGroup className="mt-2 h-11">
@@ -355,8 +360,8 @@ function ExercisePicker({
               onKeyDown={(event) => {
                 if (event.key === 'Enter' && !event.nativeEvent.isComposing) event.preventDefault();
               }}
-              placeholder="Hareket ara"
-              aria-label="Hareket ara"
+              placeholder={t.search}
+              aria-label={t.search}
               autoComplete="off"
               enterKeyHint="search"
             />
@@ -366,8 +371,8 @@ function ExercisePicker({
           {results.length === 0 ? (
             <Empty className="border-0 p-4">
               <EmptyHeader>
-                <EmptyTitle>Sonuç yok</EmptyTitle>
-                <EmptyDescription>Başka bir ad dene.</EmptyDescription>
+                <EmptyTitle>{t.noResults}</EmptyTitle>
+                <EmptyDescription>{t.tryAnother}</EmptyDescription>
               </EmptyHeader>
             </Empty>
           ) : (
@@ -382,13 +387,13 @@ function ExercisePicker({
                       render={<button type="button" aria-current={current ? 'true' : undefined} onClick={() => onPick(item)} />}>
                       <ItemContent className="min-w-0">
                         <ItemTitle className={cn('w-full truncate text-[0.9375rem]', current && 'text-primary-text')}>{item.title}</ItemTitle>
-                        <ItemDescription className="truncate text-[0.8125rem]">{subtitle(item, today)}</ItemDescription>
+                        <ItemDescription className="truncate text-[0.8125rem]">{subtitle(item, today, locale)}</ItemDescription>
                       </ItemContent>
                       <ItemActions className="text-primary-text">
                         {current ? (
                           <>
                             <Check weight="bold" className="size-4" aria-hidden />
-                            <span className="sr-only">seçili</span>
+                            <span className="sr-only">{t.selected}</span>
                           </>
                         ) : null}
                       </ItemActions>

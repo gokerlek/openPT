@@ -29,6 +29,12 @@ const en: Shape<typeof tr> = {
     healthBroken: "Your health record can't be opened right now. Let your trainer know.",
     constraintMissing: 'Limitation not found.',
   },
+  consentApi: {
+    sessionRequired: 'You need to be signed in.',
+    badRequest: 'Invalid request.',
+    expired: 'Your session has expired. Sign in again.',
+    failed: "Couldn't save your consent.",
+  },
   commits: {
     checkIn: 'Check-in saved',
     reported: 'Limitation reported',

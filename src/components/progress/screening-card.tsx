@@ -1,6 +1,10 @@
+'use client';
+
 import Link from 'next/link';
 import { ArrowDown, ArrowUp, CaretRight, WarningCircle } from '@phosphor-icons/react/dist/ssr';
-import { formatDay } from '@/lib/format';
+import { useLocale } from '@/i18n/client';
+import { clientProgressMessages } from '@/i18n/messages/client-progress';
+import { getFormat } from '@/lib/format';
 import type { ProgressInsights } from '@/lib/progress-insights';
 import { progressCopy, type ProgressViewer } from '@/lib/progress-text';
 import { progressScreening, type ClientScreeningRow } from '@/lib/screening';
@@ -12,6 +16,7 @@ import { ProgressCard } from './progress-card';
  * İlerleme'deki tarama kartı ortak.
  */
 export function ScreeningRows({ rows }: { rows: readonly ClientScreeningRow[] }) {
+  const t = clientProgressMessages(useLocale()).cards;
   return (
     <ul className="flex flex-col divide-y rounded-lg border">
       {rows.map((row) => (
@@ -21,11 +26,15 @@ export function ScreeningRows({ rows }: { rows: readonly ClientScreeningRow[] })
             <p key={side.side} className="flex items-start gap-2">
               {side.label ? <span className="w-8 shrink-0 text-muted-foreground">{side.label}</span> : null}
               <span className="flex-1">{side.text}</span>
-              {side.change === 'up' ? <ArrowUp weight="bold" className="mt-0.5 size-4 shrink-0 text-primary" aria-label="bir önceki hareket testine göre iyileşti" /> : null}
-              {side.change === 'down' ? <ArrowDown weight="bold" className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-label="bir önceki hareket testine göre geriledi" /> : null}
+              {side.change === 'up' ? <ArrowUp weight="bold" className="mt-0.5 size-4 shrink-0 text-primary" aria-label={t.screeningUp} /> : null}
+              {side.change === 'down' ? <ArrowDown weight="bold" className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-label={t.screeningDown} /> : null}
             </p>
           ))}
-          {row.focus ? <p className="text-muted-foreground">Odak: {row.focus}</p> : null}
+          {row.focus ? (
+            <p className="text-muted-foreground">
+              {t.screeningFocus} {row.focus}
+            </p>
+          ) : null}
         </li>
       ))}
     </ul>
@@ -48,31 +57,34 @@ export function ScreeningCard({
   /** PT: tarama sayfasının bağlantısı. */
   clientId?: string;
 }) {
+  const locale = useLocale();
+  const t = clientProgressMessages(locale).cards;
+  const f = getFormat(locale);
   if (screening.state === 'off') return null;
   const pt = viewer === 'pt';
-  const view = screening.state === 'ok' ? progressScreening(screening.screenings, viewer) : null;
+  const view = screening.state === 'ok' ? progressScreening(screening.screenings, viewer, locale) : null;
   if (!view && !pt && screening.state === 'ok') return null;
   const href = pt ? `/dashboard/clients/${clientId}/screening${view ? '' : '/new'}` : '/me/saglik';
   const description = view
-    ? `${formatDay(view.date)} · ${pt ? 'Sonuç gözlenen noktalardan; toplam ve puan yok.' : 'Antrenörün temel hareketlerine baktı. Not değil; nereden başlayacağınızın haritası.'}`
+    ? `${f.day(view.date)} · ${pt ? t.screeningPt : t.screeningClient}`
     : pt
-      ? 'Henüz hareket testi yok.'
+      ? t.screeningNone
       : undefined;
   return (
-    <ProgressCard viewer={viewer} title="Hareket testi" description={description}>
+    <ProgressCard viewer={viewer} title={t.screening} description={description}>
       {screening.state === 'unavailable' ? (
         <p className="flex items-start gap-2 rounded-lg bg-muted px-3 py-2.5 text-sm text-muted-foreground">
           <WarningCircle weight="fill" className="mt-0.5 size-4 shrink-0" aria-hidden />
-          {progressCopy(viewer).unavailable(pt ? 'Hareket testi sonuçları' : 'Hareket testi sonuçların')}
+          {progressCopy(viewer, undefined, locale).unavailable(t.screeningResults(pt))}
         </p>
       ) : null}
       {view ? <ScreeningRows rows={view.rows} /> : null}
-      {view?.previousDate ? <p className="text-xs text-muted-foreground">↑ ↓: bir önceki hareket testine göre ({formatDay(view.previousDate)}).</p> : null}
+      {view?.previousDate ? <p className="text-xs text-muted-foreground">{t.screeningPrevious(f.day(view.previousDate))}</p> : null}
       {pt || view ? (
         <Link
           href={href}
           className="flex min-h-11 items-center gap-1 self-start text-sm font-medium text-primary-text underline-offset-4 hover:underline">
-          {pt ? (view ? 'Hareket sayfası' : 'Hareket testi yap') : 'Sağlık sayfan'}
+          {pt ? (view ? t.screeningPage : t.screeningStart) : t.healthPage}
           <CaretRight weight="bold" className="size-3.5" aria-hidden />
         </Link>
       ) : null}

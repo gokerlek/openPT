@@ -26,9 +26,9 @@ import { nextTimeLines, sessionChanges, sessionSummary, summaryWeek, type Change
 export type SessionLoad<T> = { status: 'ok'; value: T } | { status: 'missing' | 'deleted' | 'active' };
 
 /** Geçmiş listesi (index'ten, tek okuma). */
-export async function loadHistory(clientId: string, timeZone: string, _locale: Locale = DEFAULT_LOCALE): Promise<HistoryList> {
+export async function loadHistory(clientId: string, timeZone: string, locale: Locale = DEFAULT_LOCALE): Promise<HistoryList> {
   const { index } = await readIndex(sessionRepo(clientId));
-  return historyList(index, new Date(), timeZone);
+  return historyList(index, new Date(), timeZone, locale);
 }
 
 /** Bitmiş antrenmanın belgesi; kimlik biçimi yanlışsa ya da dosya yoksa `missing`, silinmişse `deleted`. */
@@ -63,7 +63,8 @@ async function programOf(clientId: string, doc: Pick<SessionDoc, 'program'> | nu
 
 /**
  * Geçmiş detayı: belge ve program değişiklikleri (düzenleme telefonda belgeden yeniden çizilir). Program da döner
- * (okunamazsa null): PT'nin detayı muadilin yerini aldığı hareketin adını ondan okur.
+ * (okunamazsa null): PT'nin detayı muadilin yerini aldığı hareketin adını ondan okur. Dönen yalnız veri (değişiklik
+ * cümleleri yazıldığı dilde kalır); detayın metinlerini `sessionDetail(…, locale)` kurar, dil burada kullanılmaz.
  */
 export async function loadDetail(
   clientId: string,
@@ -86,9 +87,11 @@ export async function loadSummary(
   clientId: string,
   id: string,
   timeZone: string,
-  options: { bodyMass?: (date: string) => Promise<number | undefined> } = {},
+  options: { bodyMass?: (date: string) => Promise<number | undefined>; /** Metinlerin dili; yoksa Türkçe. */ locale?: Locale } = {},
 ): Promise<SessionLoad<SessionSummary>> {
+  const locale = options.locale ?? DEFAULT_LOCALE;
   const repo = sessionRepo(clientId);
+  // i18n-followup(T5): `listExercises(undefined, locale)` / `listDevices(undefined, locale)` gelince dili ver.
   const [loaded, repaired, exercises] = await Promise.all([readFinished(clientId, id), readIndex(repo), listExercises()]);
   if (loaded.status !== 'ok') return loaded;
   const doc = loaded.value;
@@ -117,7 +120,7 @@ export async function loadSummary(
       owner,
       today: doc.date,
     });
-    if (day?.dayId === dayId) next = nextTimeLines(day, doc);
+    if (day?.dayId === dayId) next = nextTimeLines(day, doc, locale);
   }
 
   // Kilo (sağlık verisi) yalnız yürüyüş/koşu seti varken okunur: kalorinin tek girdisi.
@@ -130,10 +133,11 @@ export async function loadSummary(
     timeZone,
     exercises: byId,
     setWeightsOf: exerciseSetWeights,
-    muscleGroups: (muscles) => groupMuscles(muscles.filter((muscle): muscle is Muscle => isBodyMuscle(muscle as Muscle)) as Muscle[]),
-    week: summaryWeek(index, doc.date, weekOf(index, program, now, timeZone)),
+    muscleGroups: (muscles) => groupMuscles(muscles.filter((muscle): muscle is Muscle => isBodyMuscle(muscle as Muscle)) as Muscle[], locale),
+    week: summaryWeek(index, doc.date, weekOf(index, program, now, timeZone, locale)),
     changes: await changesOf(clientId, id, program, Boolean(own)),
     next,
+    locale,
   });
   return { status: 'ok', value: summary };
 }

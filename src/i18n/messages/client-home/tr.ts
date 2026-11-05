@@ -35,6 +35,13 @@ const tr = {
     healthBroken: 'Sağlık kaydın şu an açılamıyor. Antrenörüne haber ver.',
     constraintMissing: 'Kısıt bulunamadı.',
   },
+  /** Onay ucu (`api/me/consent`). */
+  consentApi: {
+    sessionRequired: 'Oturum gerekli.',
+    badRequest: 'İstek geçersiz.',
+    expired: 'Oturumun kapanmış. Yeniden giriş yap.',
+    failed: 'Onay kaydedilemedi.',
+  },
   /** `health.json`'un commit mesajları (yazanın dilinde). */
   commits: {
     checkIn: 'Yoklama kaydedildi',

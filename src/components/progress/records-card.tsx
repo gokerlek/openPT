@@ -1,5 +1,10 @@
+'use client';
+
 import { Trophy } from '@phosphor-icons/react/dist/ssr';
-import { formatDayShort } from '@/lib/format';
+import { useLocale } from '@/i18n/client';
+import { clientProgressMessages } from '@/i18n/messages/client-progress';
+import { lower } from '@/i18n/text';
+import { getFormat } from '@/lib/format';
 import type { RecordItem } from '@/lib/progress';
 import { progressCopy, recordLabel, recordPrevious, recordValue, type ProgressViewer } from '@/lib/progress-text';
 import { ProgressCard } from './progress-card';
@@ -22,17 +27,11 @@ export function RecordsCard({
   total: number;
   today: string;
 }) {
-  const copy = progressCopy(viewer, name);
+  const locale = useLocale();
+  const t = clientProgressMessages(locale).cards;
+  const copy = progressCopy(viewer, name, locale);
   return (
-    <ProgressCard
-      viewer={viewer}
-      title="Rekorlar"
-      description={
-        <>
-          {total > items.length ? `Toplam ${total} rekor; son ${items.length} tanesi.` : copy.recordsIntro} Bir hareketin ilk kaydı başlangıç
-          noktasıdır, rekor sayılmaz.
-        </>
-      }>
+    <ProgressCard viewer={viewer} title={t.records} description={`${total > items.length ? t.recordsTotal(total, items.length) : copy.recordsIntro} ${t.recordsFirst}`}>
       {items.length === 0 ? (
         <p className="rounded-lg bg-muted px-3 py-2.5 text-sm text-muted-foreground">{copy.recordsEmpty}</p>
       ) : (
@@ -50,16 +49,16 @@ export function RecordsCard({
                       {item.title}
                       {item.deviceName ? <span className="font-normal text-muted-foreground"> · {item.deviceName}</span> : null}
                     </span>
-                    <span className="shrink-0 text-xs text-muted-foreground">{formatDayShort(item.date, withYear)}</span>
+                    <span className="shrink-0 text-xs text-muted-foreground">{getFormat(locale).dayShort(item.date, withYear)}</span>
                   </div>
                   <p className="text-sm">
-                    {recordLabel(primary.kind, item.trackingType)}: <span className="font-medium tabular-nums">{recordValue(primary)}</span>
+                    {recordLabel(primary.kind, item.trackingType, locale)}: <span className="font-medium tabular-nums">{recordValue(primary, locale)}</span>
                   </p>
-                  <p className="text-xs text-muted-foreground tabular-nums">{recordPrevious(primary)}</p>
+                  <p className="text-xs text-muted-foreground tabular-nums">{recordPrevious(primary, locale)}</p>
                   {others.length > 0 ? (
                     <p className="text-xs text-muted-foreground">
-                      Ayrıca:{' '}
-                      {others.map((event) => `${recordLabel(event.kind, item.trackingType).toLocaleLowerCase('tr')} ${recordValue(event)}`).join(' · ')}
+                      {t.recordsAlso}{' '}
+                      {others.map((event) => `${lower(locale, recordLabel(event.kind, item.trackingType, locale))} ${recordValue(event, locale)}`).join(' · ')}
                     </p>
                   ) : null}
                 </div>

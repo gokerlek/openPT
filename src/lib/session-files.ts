@@ -1,5 +1,6 @@
 import 'server-only';
 import { revalidateTag } from 'next/cache';
+import { getLocale } from '@/i18n/server';
 import { readAppConfig } from './config';
 import { listDevices } from './devices';
 import { listExercises } from './exercises';
@@ -42,9 +43,13 @@ export function sessionRepo(clientId: string): SessionRepo {
   };
 }
 
-/** İsteğin ortamı: oturum (çerezden), kayıtla doğrulama, depo, uygulamanın saat dilimi. */
+/**
+ * İsteğin ortamı: oturum (çerezden), kayıtla doğrulama, depo, uygulamanın saat dilimi ve dil (çerez, yoksa
+ * `Accept-Language`: yanıt mesajları, commit mesajları ve program geçmişi bu dilde).
+ */
 export async function sessionRouteDeps(): Promise<SessionRouteDeps> {
   return {
+    locale: await getLocale(),
     session: await readClientSession(),
     loadClient: sessionClient,
     repo: sessionRepo,
@@ -63,6 +68,7 @@ export async function workoutRouteDeps(): Promise<WorkoutRouteDeps> {
   return {
     ...(await sessionRouteDeps()),
     catalog: async () => {
+      // i18n-followup(T5): `listExercises(undefined, locale)` / `listDevices(undefined, locale)` gelince dili ver.
       const [exercises, devices] = await Promise.all([listExercises(), listDevices()]);
       return { exercises, devices };
     },
