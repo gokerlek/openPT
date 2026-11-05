@@ -12,6 +12,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { useMessages } from '@/i18n/client';
+import { uiMessages } from '@/i18n/messages/ui';
 import { leaveHref } from '@/lib/unsaved-changes';
 
 export type UnsavedChangesGuardHandle = {
@@ -55,6 +57,7 @@ export function UnsavedChangesGuard({
   onLeave: () => void;
   ref?: React.Ref<UnsavedChangesGuardHandle>;
 }) {
+  const t = useMessages(uiMessages).unsaved;
   const router = useRouter();
   const [href, setHref] = useState<string | null>(null);
   const [action, setAction] = useState<(() => void) | null>(null);
@@ -125,13 +128,13 @@ export function UnsavedChangesGuard({
       }}>
       <AlertDialogContent initialFocus={stay}>
         <AlertDialogHeader>
-          <AlertDialogTitle>Kaydedilmemiş değişiklikler var</AlertDialogTitle>
+          <AlertDialogTitle>{t.title}</AlertDialogTitle>
           <AlertDialogDescription>{description}</AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel ref={stay}>Kal</AlertDialogCancel>
+          <AlertDialogCancel ref={stay}>{t.stay}</AlertDialogCancel>
           <AlertDialogAction variant="destructive" onClick={leave}>
-            Kaydetmeden çık
+            {t.leave}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

@@ -1,14 +1,19 @@
 import 'server-only';
+import { DEFAULT_LOCALE, type Locale } from '../i18n/locale';
+import { LocalizedError } from '../i18n/errors';
+import { authMessages } from '../i18n/messages/auth';
+import { installMessages } from '../i18n/messages/install';
 import { serverEnv } from './env';
 
 /**
  * Giriş kodu e-postası. Yalnız yedek e-posta yolu açıkken (`RESEND_API_KEY`) çağrılır; kod
  * hiçbir koşulda günlüğe ya da HTTP yanıtına yazılmaz (yerel geliştirmede `/api/dev/login`).
  */
-export async function sendOtpEmail(email: string, code: string): Promise<void> {
+export async function sendOtpEmail(email: string, code: string, locale: Locale = DEFAULT_LOCALE): Promise<void> {
   const env = serverEnv();
+  const t = authMessages(locale).mail;
 
-  if (!env.resendApiKey) throw new Error('RESEND_API_KEY tanımlı değil: e-posta yolu kapalı.');
+  if (!env.resendApiKey) throw new LocalizedError((l) => installMessages(l).env.resendMissing);
 
   const response = await fetch('https://api.resend.com/emails', {
     method: 'POST',
@@ -19,8 +24,8 @@ export async function sendOtpEmail(email: string, code: string): Promise<void> {
     body: JSON.stringify({
       from: process.env.RESEND_FROM ?? 'openPT <onboarding@resend.dev>',
       to: email,
-      subject: `Giriş kodun: ${code}`,
-      text: `Giriş kodun: ${code}\n\nKod 5 dakika geçerli ve tek kullanımlıktır. Bu isteği sen yapmadıysan yok sayabilirsin.`,
+      subject: t.subject(code),
+      text: t.body(code),
     }),
   });
 

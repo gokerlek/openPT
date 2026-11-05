@@ -1,6 +1,8 @@
 'use client';
 
 import { toast } from 'sonner';
+import { currentClientLocale } from '@/i18n/client-locale';
+import { uiMessages } from '@/i18n/messages/ui';
 import { undoAt } from '@/lib/editor-undo';
 
 let current: string | number | null = null;
@@ -15,8 +17,8 @@ const TOUCH_CLASSES = {
   closeButton: "touch:before:absolute touch:before:-inset-3 touch:before:content-['']",
 };
 
-/** Geri al'dan önce aynı yerde başka değişiklik yapıldıysa. */
-export const UNDO_CONFLICT = 'Sonrasında başka değişiklik yapıldı; geri alınamadı.';
+/** Geri al'dan önce aynı yerde başka değişiklik yapıldıysa (Türkçe metin; bildirim `currentClientLocale()` dilinde). */
+export const UNDO_CONFLICT = uiMessages('tr').undo.conflict;
 
 /**
  * "Geri al" bildirimi (8 sn). Aynı anda tek bildirim: yenisi öncekini kapatır (uygulamadaki her yerel silme ve geri
@@ -26,7 +28,7 @@ export function showUndoToast(message: string, onUndo: () => void, options: { de
   if (current !== null) toast.dismiss(current);
   current = toast(message, {
     description: options.description,
-    action: { label: 'Geri al', onClick: onUndo },
+    action: { label: uiMessages(currentClientLocale()).undo.action, onClick: onUndo },
     duration: 8000,
     classNames: TOUCH_CLASSES,
   });
@@ -49,7 +51,7 @@ export function showGuardedUndo<P, T>(
     message,
     () => {
       if (!undoAt(guard.locate, guard.read, guard.write, guard.before, after)) {
-        toast.error(UNDO_CONFLICT);
+        toast.error(uiMessages(currentClientLocale()).undo.conflict);
         return;
       }
       options.onUndone?.();

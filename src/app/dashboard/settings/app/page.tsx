@@ -4,9 +4,13 @@ import { InstallHelper } from '@/components/install/install-helper';
 import { PageHeader } from '@/components/page-header';
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { LocaleSwitch } from '@/i18n/locale-switch';
+import { ptShellMessages } from '@/i18n/messages/pt-shell';
+import { getLocale } from '@/i18n/server';
 import { requirePt } from '@/lib/guards';
 
-export const metadata: Metadata = { title: 'Uygulama' };
+export async function generateMetadata(): Promise<Metadata> {
+  return { title: ptShellMessages(await getLocale()).settings.app.title };
+}
 
 /**
  * Ayarlar → Uygulama (tasarım Paket A): panelin uygulama olarak yüklenmesi. Yükleme yardımcısı burada her
@@ -15,23 +19,20 @@ export const metadata: Metadata = { title: 'Uygulama' };
  */
 export default async function AppSettingsPage() {
   await requirePt();
+  const t = ptShellMessages(await getLocale()).settings.app;
   return (
     <div className="flex max-w-2xl flex-col gap-6">
-      <PageHeader
-        title="Uygulama"
-        description="Panel ve danışan uygulaması telefona yüklenir; simge ve ad Görünüm ayarlarından gelir."
-      />
+      <PageHeader title={t.title} description={t.description} />
       <InstallHelper variant="status" audience="pt" openPath="/dashboard" />
       <Card>
         <CardHeader>
-          <CardTitle>Danışan uygulaması</CardTitle>
+          <CardTitle>{t.clientAppTitle}</CardTitle>
           <CardDescription>
-            Danışan davet kare kodunu telefon kamerasıyla okutur, şifresini belirler ve ekrandaki adımlarla uygulamayı ana
-            ekrana ekler. Panelden ayrı bir simgedir; ikisi aynı telefonda da durabilir. Sıra her danışanın{' '}
+            {t.clientAppBody.before}
             <Link href="/dashboard/clients" className="font-medium underline underline-offset-4">
-              davet ekranında
-            </Link>{' '}
-            da yazar.
+              {t.clientAppBody.link}
+            </Link>
+            {t.clientAppBody.after}
           </CardDescription>
         </CardHeader>
       </Card>

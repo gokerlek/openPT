@@ -1,5 +1,6 @@
 import 'server-only';
 import { cache } from 'react';
+import { getLocale } from '@/i18n/server';
 import { cachedClientIndex } from '@/lib/clients';
 import { readClientDigest, type ClientOverview } from '@/lib/notices-store';
 
@@ -9,9 +10,10 @@ import { readClientDigest, type ClientOverview } from '@/lib/notices-store';
  * okunamayan danışanlar.
  */
 export const clientOverviews = cache(async (): Promise<{ overviews: ClientOverview[]; failed: number }> => {
+  const locale = await getLocale();
   const index = await cachedClientIndex().catch(() => []);
   const results = await Promise.all(
-    index.filter((entry) => entry.status !== 'archived').map((entry) => readClientDigest(entry.id).catch(() => null)),
+    index.filter((entry) => entry.status !== 'archived').map((entry) => readClientDigest(entry.id, locale).catch(() => null)),
   );
   const overviews = results.filter((item): item is ClientOverview => item !== null);
   return { overviews, failed: results.length - overviews.length };

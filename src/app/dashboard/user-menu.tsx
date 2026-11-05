@@ -15,7 +15,9 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { confirmLeave } from '@/components/unsaved-changes-guard';
+import { useMessages } from '@/i18n/client';
 import { LocaleSwitch } from '@/i18n/locale-switch';
+import { ptShellMessages } from '@/i18n/messages/pt-shell';
 
 /**
  * Sağ üstteki kullanıcı menüsü: AI koç paneli, Ayarlar ve çıkış burada (üst çubuk yok, SPEC §6).
@@ -24,6 +26,7 @@ import { LocaleSwitch } from '@/i18n/locale-switch';
  * menü öğeleri de 44 px.
  */
 export function UserMenu({ login, appName }: { login: string; appName: string }) {
+  const t = useMessages(ptShellMessages).userMenu;
   function signOut() {
     // Kaydedilmemiş değişiklik varsa önce düzenleyicinin uyarısı: "Kal" oturumu korur, Kaydet çalışır.
     confirmLeave(async () => {
@@ -41,7 +44,7 @@ export function UserMenu({ login, appName }: { login: string; appName: string })
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
-        aria-label="Hesap menüsü"
+        aria-label={t.ariaLabel}
         className="inline-flex size-11 items-center justify-center rounded-full outline-none focus-visible:ring-3 focus-visible:ring-ring/50">
         <Avatar size="lg">
           <AvatarImage src={`https://github.com/${encodeURIComponent(login)}.png?size=80`} alt="" />
@@ -54,18 +57,18 @@ export function UserMenu({ login, appName }: { login: string; appName: string })
         <DropdownMenuGroup>
           <DropdownMenuLabel className="flex flex-col gap-0.5">
             <span className="text-foreground">@{login}</span>
-            <span className="font-normal text-muted-foreground">{appName} · antrenör</span>
+            <span className="font-normal text-muted-foreground">{t.role(appName)}</span>
           </DropdownMenuLabel>
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
           <DropdownMenuItem className="touch:min-h-11" onClick={() => openCoach()}>
             <Sparkle weight="fill" />
-            AI koç
+            {t.coach}
           </DropdownMenuItem>
           <DropdownMenuItem className="touch:min-h-11" render={<Link href="/dashboard/settings" />}>
             <GearSix />
-            Ayarlar
+            {t.settings}
           </DropdownMenuItem>
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
@@ -73,7 +76,7 @@ export function UserMenu({ login, appName }: { login: string; appName: string })
         <DropdownMenuSeparator />
         <DropdownMenuItem variant="destructive" className="touch:min-h-11" onClick={signOut}>
           <SignOut />
-          Çıkış yap
+          {t.signOut}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

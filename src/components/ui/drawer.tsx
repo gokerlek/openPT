@@ -28,6 +28,8 @@ import { cn } from "cn"
 
 import { X } from "@/components/line-icons"
 import { Button } from "@/components/ui/button"
+import { useMessages } from "@/i18n/client"
+import { commonMessages } from "@/i18n/messages/common"
 
 function Drawer({
   ...props
@@ -77,6 +79,7 @@ function DrawerContent({
   /** `false`: tutamaç yok, panel sürüklenmez (Esc ve paneldeki düğmeler kapatır). */
   swipeable?: boolean
 }) {
+  const t = useMessages(commonMessages).actions
   return (
     <DrawerPortal>
       <DrawerOverlay />
@@ -129,7 +132,7 @@ function DrawerContent({
               }
             >
               <X />
-              <span className="sr-only">Kapat</span>
+              <span className="sr-only">{t.close}</span>
             </DrawerPrimitive.Close>
           ) : swipeable ? (
             // Görünen X yokken ekran okuyucu (dokunmatikte kaydırma hareketi yapamayan) için kapatma; klavyeyle
@@ -138,7 +141,7 @@ function DrawerContent({
               data-slot="drawer-close"
               className="sr-only rounded-lg bg-popover text-sm font-medium outline-none focus-visible:not-sr-only focus-visible:absolute focus-visible:top-3 focus-visible:right-[max(0.75rem,env(safe-area-inset-right))] focus-visible:inline-flex focus-visible:h-11 focus-visible:items-center focus-visible:px-3 focus-visible:ring-3 focus-visible:ring-ring/50"
             >
-              Kapat
+              {t.close}
             </DrawerPrimitive.Close>
           ) : null}
         </DrawerPrimitive.Popup>

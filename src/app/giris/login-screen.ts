@@ -1,3 +1,6 @@
+import { DEFAULT_LOCALE, type Locale } from '../../i18n/locale.ts';
+import { authMessages } from '../../i18n/messages/auth/index.ts';
+
 /**
  * `/giris` ekranının kararı ve metinleri (SPEC §5) — saf, testli (`login-screen.test.ts`).
  *
@@ -9,9 +12,10 @@
  * bir hesabın şifresi olup olmadığını dışarıya söylemez.
  */
 
-export const LOGGED_OUT_NOTICE = 'Çıkış yaptın. Tekrar girmek için şifreni yaz.';
-export const NO_PASSWORD_TITLE = 'Çıkış yaptın';
-export const NO_PASSWORD_NOTICE = 'Bu hesabın şifresi yok; tekrar girmek için antrenöründen yeni bir kare kod iste.';
+/** Türkçe metinler (eski çağrılar ve testler); arayüz `loginScreen`'in `locale`'ini ve `authMessages(locale).loginScreen`'i kullanır. */
+export const LOGGED_OUT_NOTICE = authMessages('tr').loginScreen.loggedOutNotice;
+export const NO_PASSWORD_TITLE = authMessages('tr').loginScreen.noPasswordTitle;
+export const NO_PASSWORD_NOTICE = authMessages('tr').loginScreen.noPasswordNotice;
 
 export type LoginScreen =
   /** Telefonda saklanan kimlik henüz okunmadı (ilk çizim). */
@@ -27,6 +31,7 @@ export function loginScreen({
   remembered,
   loggedOut,
   passwordless,
+  locale = DEFAULT_LOCALE,
 }: {
   /** Adresteki (doğrulanmış) kimlik. */
   clientId: string | null;
@@ -35,12 +40,14 @@ export function loginScreen({
   loggedOut: boolean;
   /** Çıkış yönlendirmesi "şifresi yok" dedi (`sifre=0`). */
   passwordless: boolean;
+  /** Bilgi satırının dili; yoksa Türkçe. */
+  locale?: Locale;
 }): LoginScreen {
   if (loggedOut && passwordless) return { kind: 'no-password' };
   const id = clientId ?? remembered;
   if (id === undefined) return { kind: 'loading' };
   if (id === null) return { kind: 'no-id' };
-  return { kind: 'password', clientId: id, notice: loggedOut ? LOGGED_OUT_NOTICE : null };
+  return { kind: 'password', clientId: id, notice: loggedOut ? authMessages(locale).loginScreen.loggedOutNotice : null };
 }
 
 /**

@@ -8,23 +8,19 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { LocaleSwitch } from '@/i18n/locale-switch';
+import { authMessages } from '@/i18n/messages/auth';
+import { getMessages } from '@/i18n/server';
 import { readAppConfig } from '@/lib/config';
 import { emailLoginEnabled } from '@/lib/env';
 import { githubLoginEnabled } from '@/lib/github-oauth';
+import { ownText } from '@/lib/own-text';
 import { RETURN_PARAM, safeReturnPath } from '@/lib/navigation';
 import { readPtSession } from '@/lib/session';
 import { LoginForm } from './login-form';
 
-const errors: Record<string, string> = {
-  yetkisiz: 'Bu GitHub hesabı uygulamanın sahibi değil.',
-  iptal: 'GitHub girişi yarıda kaldı.',
-  oturum_suresi: 'Giriş isteğinin süresi doldu. Tekrar dene.',
-  github_hatasi: 'GitHub ile bağlantı kurulamadı. Tekrar dene.',
-  github_kapali: 'GitHub girişi bu kurulumda yapılandırılmamış.',
-  kod_yok: 'GitHub yetki kodu gelmedi. Tekrar dene.',
-};
-
-export const metadata: Metadata = { title: 'Giriş' };
+export async function generateMetadata(): Promise<Metadata> {
+  return { title: (await getMessages(authMessages)).login.title };
+}
 
 export default async function LoginPage({
   searchParams,
@@ -41,8 +37,8 @@ export default async function LoginPage({
   // oturumu ayrı çerezde, PT girince danışanınki olduğu gibi kalır.
   if (await readPtSession()) redirect(next ?? '/dashboard');
 
-  const config = await readAppConfig();
-  const error = typeof code === 'string' ? (errors[code] ?? 'Giriş yapılamadı.') : null;
+  const [config, t] = await Promise.all([readAppConfig(), getMessages(authMessages)]);
+  const error = typeof code === 'string' ? (ownText(t.trainer.errors, code) ?? t.trainer.failed) : null;
   const githubHref = next ? `/api/auth/github?${RETURN_PARAM}=${encodeURIComponent(next)}` : '/api/auth/github';
   const github = githubLoginEnabled();
   // Yedek yol yalnız PT açıkça istediyse (RESEND_API_KEY) görünür; uçlar da aynı koşula bakar (SPEC §5).
@@ -54,7 +50,7 @@ export default async function LoginPage({
         <div className="flex flex-col items-center gap-2 text-center">
           <h1 className="font-heading text-3xl font-semibold tracking-tight">{config.appName}</h1>
           <PulseLine className="h-6 w-40" />
-          <p className="text-muted-foreground">Güçlü antrenman. Akıllı koçluk.</p>
+          <p className="text-muted-foreground">{t.trainer.tagline}</p>
         </div>
 
         <Card>
@@ -70,15 +66,17 @@ export default async function LoginPage({
               <div className="flex flex-col gap-2">
                 <Button size="lg" className="h-11 w-full" nativeButton={false} render={<a href={githubHref} />}>
                   <GithubLogo data-icon="inline-start" weight="fill" />
-                  GitHub ile devam et
+                  {t.trainer.github}
                 </Button>
-                <p className="text-center text-xs text-muted-foreground">
-                  Antrenör girişi. Uygulamanın sahibi olan hesapla açılır.
-                </p>
+                <p className="text-center text-xs text-muted-foreground">{t.trainer.githubHint}</p>
               </div>
             ) : (
               <p className="text-center text-sm text-muted-foreground">
-                GitHub girişi için <code>GITHUB_CLIENT_ID</code> ve <code>GITHUB_CLIENT_SECRET</code> tanımlanmalı.
+                {t.trainer.githubMissing.before}
+                <code>GITHUB_CLIENT_ID</code>
+                {t.trainer.githubMissing.between}
+                <code>GITHUB_CLIENT_SECRET</code>
+                {t.trainer.githubMissing.after}
               </p>
             )}
 
@@ -86,7 +84,7 @@ export default async function LoginPage({
               <>
                 <div className="flex items-center gap-3 text-xs text-muted-foreground">
                   <Separator className="flex-1" />
-                  yedek yol
+                  {t.trainer.fallback}
                   <Separator className="flex-1" />
                 </div>
                 <LoginForm next={next} />
@@ -96,7 +94,7 @@ export default async function LoginPage({
         </Card>
       </div>
       <div className="flex flex-col items-center gap-1">
-        <p className="text-center text-sm text-muted-foreground">Danışansan antrenörünün verdiği kare kodu kullan.</p>
+        <p className="text-center text-sm text-muted-foreground">{t.trainer.clientHint}</p>
         <LocaleSwitch />
       </div>
     </main>

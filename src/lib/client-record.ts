@@ -1,5 +1,6 @@
 import 'server-only';
 import * as v from 'valibot';
+import { ptClientsMessages } from '../i18n/messages/pt-clients';
 import { clientRepoName, GithubError } from './github/client';
 import { readJson, writeJson } from './github/files';
 import { clientSchema, type Client } from './schemas/client';
@@ -18,7 +19,7 @@ export async function readClient(id: string): Promise<{ client: Client; sha: str
   const stored = await readJson<unknown>(clientRepoName(id), CLIENT_PATH);
   if (!stored) return null;
   const parsed = v.safeParse(clientSchema, stored.content);
-  if (!parsed.success) throw new GithubError(`${id}: danışan kaydı beklenen biçimde değil.`, 500);
+  if (!parsed.success) throw new GithubError((l) => ptClientsMessages(l).errors.recordMalformed(id), 500);
   return { client: parsed.output, sha: stored.sha };
 }
 

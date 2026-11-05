@@ -1,5 +1,8 @@
+'use client';
+
 import { Archive, PauseCircle } from '@phosphor-icons/react/dist/ssr';
-import { CLIENT_STATUS_LABELS, type ClientStatus } from '@/lib/schemas/client';
+import { useLocale } from '@/i18n/client';
+import { clientStatusLabels, type ClientStatus } from '@/lib/schemas/client';
 import { cn } from '@/lib/utils';
 
 /**
@@ -9,7 +12,7 @@ import { cn } from '@/lib/utils';
  * yüzeylerden ≥3:1).
  */
 export function StatusDot({ status, className }: { status: ClientStatus; className?: string }) {
-  const label = CLIENT_STATUS_LABELS[status];
+  const label = clientStatusLabels(useLocale())[status];
   return (
     <span
       role="img"

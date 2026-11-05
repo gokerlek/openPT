@@ -3,6 +3,8 @@
 import { Suspense, use, useState } from 'react';
 import Link from 'next/link';
 import { CaretRight, MagnifyingGlass, UserCircle, WarningCircle } from '@phosphor-icons/react';
+import { useLocale, useMessages } from '@/i18n/client';
+import { ptClientsMessages } from '@/i18n/messages/pt-clients';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardAction, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
@@ -10,7 +12,7 @@ import { InputGroup, InputGroupAddon, InputGroupInput } from '@/components/ui/in
 import { Skeleton } from '@/components/ui/skeleton';
 import type { CardExtras } from '@/lib/client-card-extras';
 import type { AccessState, passwordState } from '@/lib/client-status';
-import { formatNumber } from '@/lib/format';
+import { getFormat } from '@/lib/format';
 import { matchesName } from '@/lib/name-search';
 import type { ClientStatus } from '@/lib/schemas/client';
 import type { HealthWork } from './client-work';
@@ -42,6 +44,8 @@ const HEALTH_VARIANT: Record<HealthWork['tone'], 'outline' | 'secondary'> = { wa
  * son antrenman (`extras`) her kartın altında kendi `Suspense`'inde gelir, arama durumu korunur.
  */
 export function ClientList({ sections, extras }: { sections: ClientSectionData[]; extras: Promise<Record<string, CardExtras>> }) {
+  const t = useMessages(ptClientsMessages).list;
+  const { number } = getFormat(useLocale());
   const [query, setQuery] = useState('');
   const visible = sections
     .map((section) => ({ ...section, cards: section.cards.filter((card) => matchesName(card.name, query)) }))
@@ -60,14 +64,14 @@ export function ClientList({ sections, extras }: { sections: ClientSectionData[]
             type="search"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Danışan ara"
-            aria-label="Danışan ara"
+            placeholder={t.search}
+            aria-label={t.search}
           />
         </InputGroup>
       </div>
       {/* Ekran okuyucu için sonuç sayısı; görünür liste zaten değişiyor. */}
       <p role="status" className="sr-only">
-        {searching ? (matches > 0 ? `${formatNumber(matches)} danışan` : 'Eşleşen danışan yok') : ''}
+        {searching ? (matches > 0 ? t.resultCount(matches, number(matches)) : t.noMatches) : ''}
       </p>
 
       {visible.length === 0 ? (
@@ -76,7 +80,7 @@ export function ClientList({ sections, extras }: { sections: ClientSectionData[]
             <EmptyMedia variant="icon">
               <MagnifyingGlass />
             </EmptyMedia>
-            <EmptyTitle>“{query.trim()}” ile eşleşen danışan yok</EmptyTitle>
+            <EmptyTitle>{t.noMatchFor(query.trim())}</EmptyTitle>
           </EmptyHeader>
         </Empty>
       ) : null}
@@ -98,6 +102,7 @@ export function ClientList({ sections, extras }: { sections: ClientSectionData[]
 }
 
 function ClientCard({ card, extras }: { card: ClientCardData; extras: Promise<Record<string, CardExtras>> }) {
+  const locale = useLocale();
   const { work } = card;
   return (
     <Link
@@ -125,7 +130,7 @@ function ClientCard({ card, extras }: { card: ClientCardData; extras: Promise<Re
         </CardHeader>
         {work ? (
           <CardFooter className="flex flex-wrap items-center gap-1.5">
-            <AccessBadge state={work.access} password={work.password} />
+            <AccessBadge state={work.access} password={work.password} locale={locale} />
             {work.health ? <Badge variant={HEALTH_VARIANT[work.health.tone]}>{work.health.label}</Badge> : null}
             <Suspense fallback={<Skeleton aria-hidden className="h-5 w-14 rounded-4xl" />}>
               <CardExtrasView extras={extras} id={card.id} />
@@ -139,6 +144,8 @@ function ClientCard({ card, extras }: { card: ClientCardData; extras: Promise<Re
 
 /** Kartın altındaki dikkat rozeti ve son antrenman; özet gelene kadar yerinde iskelet. */
 function CardExtrasView({ extras, id }: { extras: Promise<Record<string, CardExtras>>; id: string }) {
+  const t = useMessages(ptClientsMessages).list;
+  const { number } = getFormat(useLocale());
   const extra = use(extras)[id];
   if (!extra) return null;
   const { attention, lastWorkout } = extra;
@@ -150,10 +157,10 @@ function CardExtrasView({ extras, id }: { extras: Promise<Record<string, CardExt
             // Sağlık güvenliği maddesi var: renk tek başına bilgi taşımaz, ekran okuyucu "Acil" duyar.
             <>
               <WarningCircle data-icon="inline-start" weight="fill" aria-hidden className="text-destructive" />
-              <span className="sr-only">Acil: </span>
+              <span className="sr-only">{t.urgentSr}</span>
             </>
           ) : null}
-          {formatNumber(attention.count)} dikkat
+          {t.attentionBadge(attention.count, number(attention.count))}
         </Badge>
       ) : null}
       {lastWorkout ? <span className="text-xs text-muted-foreground tabular-nums">{lastWorkout}</span> : null}

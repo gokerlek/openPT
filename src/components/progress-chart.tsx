@@ -4,7 +4,9 @@ import { Area, CartesianGrid, ComposedChart, Line, XAxis, YAxis, type DotItemDot
 import { ChartContainer, ChartTooltip, type ChartConfig } from '@/components/ui/chart';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { dateTicks, niceScale } from '@/lib/chart-scale';
-import { formatDay, formatDayShort, formatNumber, formatWithUnit } from '@/lib/format';
+import { useLocale, useMessages } from '@/i18n/client';
+import { uiMessages } from '@/i18n/messages/ui';
+import { getFormat } from '@/lib/format';
 import { cn } from '@/lib/utils';
 
 /**
@@ -114,8 +116,8 @@ export function ProgressChart({
   series,
   minSpan,
   forecast,
-  dateLabel = formatDay,
-  pointNoun = 'ölçüm günü',
+  dateLabel: dateLabelProp,
+  pointNoun: pointNounProp,
   yAxisWidth = 40,
   chartClassName = 'h-52',
   className,
@@ -149,12 +151,17 @@ export function ProgressChart({
   chartClassName?: string;
   className?: string;
 }) {
+  const locale = useLocale();
+  const t = useMessages(uiMessages).charts;
+  const { number, dayShort, withUnit, day } = getFormat(locale);
+  const dateLabel = dateLabelProp ?? day;
+  const pointNoun = pointNounProp ?? t.defaultNoun;
   const projected = series.length === 1 && forecast && forecast.length > 1 ? forecast : undefined;
   const config: ChartConfig = {
     ...Object.fromEntries(
       series.map((item, slot) => [item.key, { label: item.label, theme: SLOT_COLORS[slot] ?? SLOT_COLORS[0] }]),
     ),
-    ...(projected ? { [FORECAST_KEY]: { label: 'Tahmin', theme: SLOT_COLORS[0] } } : {}),
+    ...(projected ? { [FORECAST_KEY]: { label: t.forecast, theme: SLOT_COLORS[0] } } : {}),
   };
   const rows = mergeRows(series, projected);
   const actualTimes = mergeRows(series).map((row) => row.time);
@@ -168,26 +175,26 @@ export function ProgressChart({
   const values = [...measured, ...(projected ?? []).flatMap((point) => [point.low, point.high])];
   // Sıfır koruması veriye bakar, banda değil: negatif olmayan ölçümün ekseni tahmin yüzünden eksiye inmez.
   const scale = niceScale(Math.min(...values), Math.max(...values), { minSpan, nonNegative: Math.min(...measured) >= 0 });
-  const format = (value: number) => formatWithUnit(value, unit);
+  const format = (value: number) => withUnit(value, unit);
   // Olası aralık birimiyle ("82,1–86,3 cm", "%8–%12"); ekranda tek sayıya çökmüşse ("0–0") yazılmaz.
   const band = (low: number, high: number) => {
-    const [from, to] = [formatNumber(low), formatNumber(high)];
+    const [from, to] = [number(low), number(high)];
     if (from === to) return '';
-    return unit === '%' ? ` (%${from}–%${to})` : ` (${from}–${to} ${unit})`;
+    return t.band(from, to, unit);
   };
   const labelOf = (key: string) => series.find((item) => item.key === key)?.label ?? key;
 
   const latest = series.map((item) => ({ item, point: item.points.at(-1) }));
-  const summary = `${title}: ${actualTimes.length} ${pointNoun}. ${latest
+  const latestText = latest
     .map(({ item, point }) =>
-      point ? `${series.length > 1 ? `${item.label} son değer` : 'Son değer'} ${format(point.value)}, ${dateLabel(point.date)}` : '',
+      point ? t.lineLatest(series.length > 1 ? item.label : null, format(point.value), dateLabel(point.date)) : '',
     )
     .filter(Boolean)
-    .join('; ')}.${
-    projected
-      ? ` Tahmin ${dateLabel(projected.at(-1)!.date)}: ${format(projected.at(-1)!.value)}${band(projected.at(-1)!.low, projected.at(-1)!.high)}.`
-      : ''
-  }`;
+    .join('; ');
+  const forecastText = projected
+    ? t.lineForecast(dateLabel(projected.at(-1)!.date), format(projected.at(-1)!.value), band(projected.at(-1)!.low, projected.at(-1)!.high))
+    : null;
+  const summary = `${t.countLine(title, number(actualTimes.length), pointNoun)} ${latestText}.${forecastText ? ` ${forecastText}` : ''}`;
 
   return (
     <figure className={cn('flex flex-col gap-2', className)}>
@@ -205,7 +212,7 @@ export function ProgressChart({
             {projected ? (
               <li className="flex items-center gap-1.5">
                 <SeriesMark slot={-1} className={SLOT_TEXT[0]} />
-                Tahmin ve olası aralık
+                {t.forecastBand}
               </li>
             ) : null}
           </ul>
@@ -222,7 +229,7 @@ export function ProgressChart({
             domain={[first - pad, last + pad]}
             // Etiketler ölçüm günlerinde; tahmin varsa son tahmin günü de (`dateTicks`).
             ticks={dateTicks(actualTimes, { extra: projected ? last : undefined })}
-            tickFormatter={(time: number) => formatDayShort(toDay(time), withYear)}
+            tickFormatter={(time: number) => dayShort(toDay(time), withYear)}
             tickLine={false}
             axisLine={false}
             tickMargin={8}
@@ -234,7 +241,7 @@ export function ProgressChart({
             domain={scale.domain}
             ticks={scale.ticks}
             allowDataOverflow={false}
-            tickFormatter={(value: number) => formatNumber(value)}
+            tickFormatter={(value: number) => number(value)}
             tickLine={false}
             axisLine={false}
             tickMargin={4}
@@ -256,7 +263,7 @@ export function ProgressChart({
                         <div key={key} className="flex items-center justify-between gap-3">
                           <span className="flex items-center gap-1.5 text-muted-foreground">
                             <SeriesMark slot={-1} className={SLOT_TEXT[0]} />
-                            Tahmin
+                            {t.forecast}
                           </span>
                           <span className="font-medium text-foreground tabular-nums">
                             {format(item.value)}
@@ -294,7 +301,7 @@ export function ProgressChart({
           {projected ? (
             <Line
               dataKey={FORECAST_KEY}
-              name="Tahmin"
+              name={t.forecast}
               type="linear"
               stroke={`var(--color-${FORECAST_KEY})`}
               strokeWidth={2}
@@ -328,16 +335,16 @@ export function ProgressChart({
 
       <details className="group text-sm">
         <summary className="w-fit cursor-pointer text-xs text-muted-foreground underline-offset-4 hover:underline touch:py-3.5">
-          Değerleri tablo olarak göster
+          {t.showTable}
         </summary>
         <Table className="mt-2">
           <caption className="sr-only">{title}</caption>
           <TableHeader>
             <TableRow>
-              <TableHead>Tarih</TableHead>
+              <TableHead>{t.date}</TableHead>
               {series.map((item) => (
                 <TableHead key={item.key} className="text-right">
-                  {series.length > 1 ? item.label : 'Değer'}
+                  {series.length > 1 ? item.label : t.value}
                 </TableHead>
               ))}
             </TableRow>
@@ -345,8 +352,8 @@ export function ProgressChart({
           <TableBody>
             {projected
               ? projected.slice(1).reverse().map((point) => (
-                  <TableRow key={`tahmin-${point.date}`} className="text-muted-foreground">
-                    <TableCell>{dateLabel(point.date)} (tahmin)</TableCell>
+                  <TableRow key={`forecast-${point.date}`} className="text-muted-foreground">
+                    <TableCell>{dateLabel(point.date)} {t.forecastShort}</TableCell>
                     <TableCell className="text-right tabular-nums">
                       {format(point.value)}
                       {band(point.low, point.high)}

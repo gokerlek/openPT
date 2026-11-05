@@ -2,6 +2,8 @@
 
 import { useEffect, useId, useRef } from 'react';
 import { Checkbox } from '@/components/ui/checkbox';
+import { useMessages } from '@/i18n/client';
+import { uiMessages } from '@/i18n/messages/ui';
 import { cn } from '@/lib/utils';
 
 /**
@@ -99,6 +101,7 @@ const TAP_SLOP = 4;
  * Kalem sayfayı kaydırabildiği için kalem basılıyken `touchmove` engellenir.
  */
 export function CardGrabber({ tone = 'default', dragging = false, inactive = false, onTap, className, ref, onPointerDown, ...props }: GrabberProps) {
+  const t = useMessages(uiMessages).move;
   const own = useRef<HTMLDivElement | null>(null);
   const penDown = useRef(false);
   const down = useRef<{ x: number; y: number } | null>(null);
@@ -124,7 +127,7 @@ export function CardGrabber({ tone = 'default', dragging = false, inactive = fal
       data-slot="card-grabber"
       aria-hidden
       tabIndex={-1}
-      title={inactive ? undefined : 'Sürükleyerek taşı'}
+      title={inactive ? undefined : t.drag}
       data-dragging={dragging || undefined}
       data-inactive={inactive || undefined}
       className={cn(

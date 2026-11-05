@@ -3,6 +3,8 @@
 import { useRouter } from 'next/navigation';
 import { Field as FormField, Form, setInput, useForm } from '@formisch/react';
 import { rememberClient } from '@/app/giris/remembered-client';
+import { useMessages } from '@/i18n/client';
+import { authMessages } from '@/i18n/messages/auth';
 import { Button } from '@/components/ui/button';
 import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
@@ -18,6 +20,7 @@ import { joinSchema, type JoinInput } from '@/lib/schemas/auth';
  * belirleme) geçer: adresten kod düşer, yenilense de kod yeniden denenmez. Hata alanın altında.
  */
 export function JoinForm({ clientId, initialCode }: { clientId: string; initialCode: string }) {
+  const t = useMessages(authMessages).join;
   const router = useRouter();
   const form = useForm({ schema: joinSchema, initialInput: { code: initialCode } });
 
@@ -39,7 +42,7 @@ export function JoinForm({ clientId, initialCode }: { clientId: string; initialC
       <FormField of={form} path={['code']}>
         {(field) => (
           <Field data-invalid={Boolean(field.errors || join.error) || undefined}>
-            <FieldLabel htmlFor="code">Davet kodu</FieldLabel>
+            <FieldLabel htmlFor="code">{t.codeLabel}</FieldLabel>
             <Input
               {...field.props}
               id="code"
@@ -51,14 +54,14 @@ export function JoinForm({ clientId, initialCode }: { clientId: string; initialC
               aria-invalid={Boolean(field.errors || join.error) || undefined}
               onChange={(event) => setInput(form, { path: ['code'], input: event.currentTarget.value })}
             />
-            <FieldDescription>Antrenörünün verdiği {INVITE_CODE_LENGTH} haneli kod. Bir kez kullanılır.</FieldDescription>
+            <FieldDescription>{t.codeHint(INVITE_CODE_LENGTH)}</FieldDescription>
             <FieldError>{field.errors?.[0] ?? join.error?.message}</FieldError>
           </Field>
         )}
       </FormField>
       <Button type="submit" size="lg" className="h-12 w-full text-base" disabled={join.isPending || join.isSuccess}>
         {join.isPending || join.isSuccess ? <Spinner data-icon="inline-start" /> : null}
-        Devam
+        {t.continue}
       </Button>
     </Form>
   );

@@ -1,4 +1,8 @@
 import { NextResponse } from 'next/server';
+import { messageOf } from '@/i18n/errors';
+import { localeFromRequest } from '@/i18n/locale';
+import { commonMessages } from '@/i18n/messages/common';
+import { setupMessages } from '@/i18n/messages/setup';
 import { readPtSession } from '@/lib/session';
 import { appRepo, GithubError } from '@/lib/github/client';
 import { createAppRepo } from '@/lib/github/repos';
@@ -15,10 +19,11 @@ import { defaultConfig, type AppConfig } from '@/lib/schemas/config';
  *
  * Aynı istek iki kez gelirse ikincisi hiçbir şeyi bozmaz.
  */
-export async function POST() {
+export async function POST(request: Request) {
+  const locale = localeFromRequest(request);
   const session = await readPtSession();
   if (session?.role !== 'pt') {
-    return NextResponse.json({ error: 'Bu işlem için yetkin yok.' }, { status: 403 });
+    return NextResponse.json({ error: commonMessages(locale).errors.status[403] }, { status: 403 });
   }
 
   const repo = appRepo();
@@ -49,7 +54,7 @@ export async function POST() {
   } catch (error) {
     const failure = error instanceof GithubError ? error : null;
     return NextResponse.json(
-      { error: failure?.message ?? 'Kurulum tamamlanamadı.' },
+      { error: messageOf(failure, locale) ?? setupMessages(locale).api.setupFailed },
       { status: failure?.status ?? 502 },
     );
   }

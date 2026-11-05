@@ -1,6 +1,7 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { GithubError, writeToFreshRepo } from './errors.ts';
+import { githubErrorText, GithubError, writeToFreshRepo } from './errors.ts';
+import { installMessages } from '../../i18n/messages/install/index.ts';
 
 describe('yeni repoya ilk yazma', () => {
   test('404/409 birkaç kez denenir; 404’te yeniden denemeden önce erişim bir kez yenilenir', async () => {
@@ -54,5 +55,17 @@ describe('yeni repoya ilk yazma', () => {
     );
     assert.equal(attempt, 4);
     await assert.rejects(writeToFreshRepo(async () => { throw new GithubError('izin yok', 403); }, async () => undefined), /izin yok/);
+  });
+});
+
+describe('kullanıcıya giden GitHub hata metni', () => {
+  test('yalnız GithubError dile göre söylenir; Octokit, fetch ya da TypeError ham mesajı sızdırmaz', () => {
+    const localized = new GithubError((locale) => installMessages(locale).github.onlyClientRepos, 403);
+    assert.equal(githubErrorText(localized, 'tr'), 'Yalnız danışan repoları silinebilir.');
+    assert.equal(githubErrorText(localized, 'en'), 'Only client repos can be deleted.');
+    assert.equal(githubErrorText(new GithubError('düz metin', 500), 'en'), 'düz metin');
+    assert.equal(githubErrorText(new TypeError('fetch failed'), 'en'), null);
+    assert.equal(githubErrorText(Object.assign(new Error('Octokit: Bad credentials'), { status: 401 }), 'tr'), null);
+    assert.equal(githubErrorText('metin', 'tr'), null);
   });
 });

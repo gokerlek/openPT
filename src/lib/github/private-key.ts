@@ -1,3 +1,6 @@
+import { LocalizedError } from '../../i18n/errors.ts';
+import { githubAccessMessages } from '../../i18n/messages/github-access/index.ts';
+
 /**
  * GitHub uygulamasının özel anahtarı (PEM) — saf: ortam ve ağ yok. Hem sunucu (`env.ts`) hem kurulum
  * sihirbazı (tarayıcıda, `installation/wizard.ts`) kullanır.
@@ -7,7 +10,7 @@
  * satır sonları boşluğa döner. Hepsi aynı PEM'e çevrilir; PEM'e benzemeyen değer reddedilir.
  */
 
-export class PrivateKeyError extends Error {}
+export class PrivateKeyError extends LocalizedError {}
 
 const PEM = /-----BEGIN ((?:RSA |EC )?PRIVATE KEY)-----([\s\S]*?)-----END \1-----/;
 const BASE64 = /^[A-Za-z0-9+/]+={0,2}$/;
@@ -22,7 +25,7 @@ export function normalizePrivateKey(raw: string): string {
   const body = match?.[2]?.replace(/\s+/g, '') ?? '';
   // Mesaj değeri tekrarlamaz: hata günlüğe ya da ekrana düşerse anahtar parçası da düşmesin.
   if (!label || !BASE64.test(body)) {
-    throw new PrivateKeyError('GitHub uygulamasının özel anahtarı PEM biçiminde değil. GitHub’dan indirdiğin .pem dosyasının tamamını kullan.');
+    throw new PrivateKeyError((l) => githubAccessMessages(l).privateKey);
   }
   return `-----BEGIN ${label}-----\n${body.match(/.{1,64}/g)!.join('\n')}\n-----END ${label}-----\n`;
 }

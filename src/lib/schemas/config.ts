@@ -1,4 +1,6 @@
 import * as v from 'valibot';
+import { setupMessages } from '../../i18n/messages/setup/index.ts';
+import { msg } from '../../i18n/valibot.ts';
 import { paletteSchema } from '../theme-palette.ts';
 
 /**
@@ -12,13 +14,14 @@ export const CONFIG_PATH = 'pulsecoach.config.json';
 
 /**
  * Köşe yuvarlaklığı seçenekleri. Tema tek bir `--radius` değişkeni kullanır;
- * bütün bileşenlerin köşeleri bundan türer (sm = ×0.6, xl = ×1.4 ...).
+ * bütün bileşenlerin köşeleri bundan türer (sm = ×0.6, xl = ×1.4 ...). `label` Türkçe (eski çağrılar); arayüz
+ * adı `setupMessages(locale).radius[key]`'den alır.
  */
 export const RADIUS_OPTIONS = {
-  sharp: { label: 'Keskin', value: '0rem' },
-  subtle: { label: 'Hafif', value: '0.45rem' },
-  round: { label: 'Yuvarlak', value: '0.75rem' },
-  soft: { label: 'Yumuşak', value: '1rem' },
+  sharp: { label: setupMessages('tr').radius.sharp, value: '0rem' },
+  subtle: { label: setupMessages('tr').radius.subtle, value: '0.45rem' },
+  round: { label: setupMessages('tr').radius.round, value: '0.75rem' },
+  soft: { label: setupMessages('tr').radius.soft, value: '1rem' },
 } as const;
 
 export type RadiusKey = keyof typeof RADIUS_OPTIONS;
@@ -29,16 +32,16 @@ export const appConfigSchema = v.object({
   appName: v.pipe(
     v.string(),
     v.trim(),
-    v.minLength(1, 'Uygulama adı boş olamaz.'),
-    v.maxLength(40, 'Uygulama adı en fazla 40 karakter.'),
+    v.minLength(1, msg((l) => setupMessages(l).validation.appNameRequired)),
+    v.maxLength(40, msg((l) => setupMessages(l).validation.appNameMax)),
   ),
   /** Uygulama repo'sundaki logo yolu; yoksa harf işareti kullanılır. */
   logo: v.nullable(v.string()),
   /** Vurgu rengi; null ise tokenlardaki volt kalır. */
-  accent: v.nullable(v.pipe(v.string(), v.regex(/^#[0-9a-fA-F]{6}$/, 'Renk #RRGGBB biçiminde olmalı.'))),
+  accent: v.nullable(v.pipe(v.string(), v.regex(/^#[0-9a-fA-F]{6}$/, msg((l) => setupMessages(l).colors.hexInvalid)))),
   theme: v.picklist(['dark', 'light', 'system']),
   /** Eski kurulumlarda yok: varsayılan temanınki (hafif). */
-  radius: v.optional(v.picklist(RADIUS_KEYS, 'Geçerli bir köşe seçeneği seç.'), 'subtle'),
+  radius: v.optional(v.picklist(RADIUS_KEYS, msg((l) => setupMessages(l).validation.radius)), 'subtle'),
   palette: v.optional(v.nullable(paletteSchema)),
   timeZone: v.pipe(v.string(), v.minLength(1)),
   setupCompleted: v.boolean(),

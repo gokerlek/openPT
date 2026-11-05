@@ -1,3 +1,5 @@
+import {LocalizedError} from '../../i18n/errors.ts';
+import {installMessages} from '../../i18n/messages/install/index.ts';
 export const UPSTREAM = 'gokerlek/openPT';
 export const WORKFLOW = 'axon-update.yml';
 export function sameOrigin(request:Request) {return request.headers.get('origin')===new URL(request.url).origin;}
@@ -10,9 +12,9 @@ export function newerRelease(tag:string,current:string) {
   return false;
 }
 export function codeRepository(value:string|undefined,owner:string,dataRepo:string) {
-  if (!value || !/^[\w-]+\/[\w.-]+$/.test(value)) throw new Error('Kod reposu tanımlı değil. AXON_CODE_REPO değişkenini kullanıcı/repo biçiminde ekle.');
+  if (!value || !/^[\w-]+\/[\w.-]+$/.test(value)) throw new LocalizedError(l=>installMessages(l).updates.noCodeRepo);
   const [account,repo] = value.split('/');
-  if(account!.toLowerCase()!==owner.toLowerCase() || repo!.toLowerCase()===dataRepo.toLowerCase() || repo!.toLowerCase().startsWith('client-') || ['.','..'].includes(repo!) || value.toLowerCase()===UPSTREAM.toLowerCase()) throw new Error('Yalnız kendi ayrı kod repon güncellenebilir.');
+  if(account!.toLowerCase()!==owner.toLowerCase() || repo!.toLowerCase()===dataRepo.toLowerCase() || repo!.toLowerCase().startsWith('client-') || ['.','..'].includes(repo!) || value.toLowerCase()===UPSTREAM.toLowerCase()) throw new LocalizedError(l=>installMessages(l).updates.ownRepoOnly);
   return value;
 }
 export function validUpdateCommit(commit:{parents:{sha:string}[];message:string},head:string,tag:string) {
