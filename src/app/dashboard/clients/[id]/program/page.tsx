@@ -43,7 +43,7 @@ import {
 import { deloadHints, loadComparison, thisWeekLoad } from '@/lib/program-insights';
 import { readProgramFile } from '@/lib/programs';
 import { weekLabel } from '@/lib/progress-text';
-import { isFaded, pendingProposals, proposalKindLabels } from '@/lib/proposals';
+import { isFaded, pendingProposals, proposalKindLabels, proposalTextIn } from '@/lib/proposals';
 import { readProposals } from '@/lib/proposals-store';
 import { CLIENT_ID_PATTERN } from '@/lib/schemas/client';
 import { readIndex } from '@/lib/session-files-core';
@@ -235,13 +235,14 @@ export default async function ProgramPage({ params }: { params: Promise<{ id: st
       ([rowId, note]) => [rowId, `${note.text} · ${format.dayShort(todayIn(timeZone, new Date(note.at)))}`],
     ),
   );
-  // Danışandan öneriler (§6.4): bekleyenler, en yeni üstte; gün adı programdan.
+  // Danışandan öneriler (§6.4): bekleyenler, en yeni üstte; gün adı programdan. Metin PT'nin dilinde, yapıdan (kayıtlı
+  // metin danışanın dilinde; yapı eksikse o gösterilir).
   const dayNames = new Map(program.phases.flatMap((phase) => phase.days.map((day) => [day.id, day.name] as const)));
   const proposalViews: ProposalView[] = proposals
     ? pendingProposals(proposals.file).map((item) => ({
         id: item.id,
         sessionId: item.sessionId,
-        text: item.text,
+        text: proposalTextIn(item, locale, (exerciseId) => byId.get(exerciseId)?.trackingType),
         ...(item.why ? { why: item.why } : {}),
         meta: [dayNames.get(item.dayId), format.date(item.at, timeZone)].filter(Boolean).join(' · '),
         kindLabel: proposalKindLabels(locale)[item.kind],

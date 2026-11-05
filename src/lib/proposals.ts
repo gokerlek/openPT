@@ -1,15 +1,19 @@
-import { DEFAULT_LOCALE, type Locale } from '../i18n/locale.ts';
+import { localizedLibraryTitle } from '../data/library-titles.ts';
+import { DEFAULT_LOCALE, LOCALES, type Locale } from '../i18n/locale.ts';
+import { clientWorkoutMessages } from '../i18n/messages/client-workout/index.ts';
 import { programLogMessages } from '../i18n/messages/program-log/index.ts';
 import { msg } from '../i18n/valibot.ts';
 import * as v from 'valibot';
 import { effectiveSets, sameSets } from './client-targets.ts';
+import { getFormat } from './format.ts';
 import { applyProgramEdit, type DiffContext } from './program-diff.ts';
 import type { ClientTargets, ProgramChange, ProgramIdSource, ProgramPhase, ProgramState } from './program-plan.ts';
 import { DAY_ID_PATTERN, normalizeProgram, programIdSource } from './program-plan.ts';
-import { SESSION_ID_PATTERN } from './schemas/session.ts';
+import type { TrackingType } from './progression.ts';
+import { SESSION_ID_PATTERN, type FeedbackDecision } from './schemas/session.ts';
 import { canonicalJson } from './session-merge.ts';
 import { rowSetsSchema } from './schemas/template.ts';
-import { resizeSets, SET_LIMITS } from './set-plan.ts';
+import { resizeSets, SET_LIMITS, setsText } from './set-plan.ts';
 import { countRows, randomId, ROW_ID_PATTERN, settleKind, TEMPLATE_LIMITS, type PlanExercise, type TemplateBlock } from './template-plan.ts';
 
 /**
@@ -366,9 +370,74 @@ export function applyProposal(program: Program, proposal: Proposal, ids: Program
   }
 }
 
-/** Onaylanan önerinin program geçmişindeki notu (farkın yanında): "Danışanın önerisi: Leg Press 3 → 4 set". */
-export function approvalNote(proposal: Pick<Proposal, 'text'>, locale: Locale = DEFAULT_LOCALE): string {
-  return programLogMessages(locale).proposals.approvalNote(proposal.text);
+/** Önerinin metni (bitişte kaydedilir; PT'nin kartı, bildirim): "Leg Press 3 → 4 set", "Bench Press yerine Dumbbell Press". */
+export function proposalText(
+  decision: Pick<FeedbackDecision, 'kind' | 'title' | 'trackingType' | 'count' | 'target' | 'swap'> & { entryTitle?: string },
+  locale: Locale = DEFAULT_LOCALE,
+): string {
+  const t = clientWorkoutMessages(locale).feedback;
+  const f = getFormat(locale);
+  switch (decision.kind) {
+    case 'sets':
+    case 'algo_sets':
+      return t.proposalSets(decision.title, f.number(decision.count?.from ?? 0), f.number(decision.count?.to ?? 0), decision.count?.to ?? 0);
+    case 'target':
+      return decision.target
+        ? `${decision.title} ${setsText(decision.target.from, decision.trackingType, null, locale)} → ${setsText(decision.target.to, decision.trackingType, null, locale)}`
+        : decision.title;
+    case 'swap':
+      return t.swap(decision.title, decision.swap?.title ?? decision.entryTitle ?? '').trim();
+    case 'remove':
+      return t.remove(decision.title);
+    case 'add':
+      return t.add(decision.entryTitle ?? decision.title);
+    default:
+      return decision.title;
+  }
+}
+
+type StoredProposal = Pick<Proposal, 'text'> & Partial<Pick<Proposal, 'kind' | 'exerciseId' | 'title' | 'from' | 'to' | 'target' | 'swap'>>;
+
+/**
+ * Kayıtlı önerinin metni okuyanın dilinde (PT'nin kartı, onay notu). Kayıtlı `text` önerenin (danışanın) dilindedir; metin
+ * yapıdan yeniden kurulur (`proposalText`), hazır hareketlerin adları okuyanın dilinde (`localizedLibraryTitle`). Yapı
+ * eksikse (eski kayıt, hedefte bilinmeyen kayıt türü) ya da kayıtlı metin yapıdan hiçbir dilde aynen çıkmıyorsa (kırpılmış,
+ * elle düzenlenmiş) kayıtlı metin döner: Türkçe kaydedilmiş öneri Türkçe okuyana hep aynen görünür.
+ */
+export function proposalTextIn(
+  proposal: StoredProposal,
+  locale: Locale = DEFAULT_LOCALE,
+  trackingTypeOf: (exerciseId: string) => TrackingType | undefined = () => undefined,
+): string {
+  const { kind, exerciseId, title, from, to, target, swap } = proposal;
+  if (!kind || !exerciseId || !title) return proposal.text;
+  const trackingType = trackingTypeOf(exerciseId);
+  const count = from !== undefined && to !== undefined ? { from, to } : undefined;
+  const missing = kind === 'sets' || kind === 'algo_sets' ? !count : kind === 'target' ? !target || !trackingType : kind === 'swap' ? !swap : false;
+  if (missing) return proposal.text;
+  const decision = (titleOf: (id: string, snapshot: string) => string) => ({
+    kind,
+    title: titleOf(exerciseId, title),
+    trackingType: trackingType ?? 'weight_reps',
+    ...(count ? { count } : {}),
+    ...(target ? { target } : {}),
+    ...(swap ? { swap: { ...swap, title: titleOf(swap.exerciseId, swap.title) } } : {}),
+  });
+  const asStored = decision((_id, snapshot) => snapshot);
+  if (!LOCALES.some((language) => proposalText(asStored, language) === proposal.text)) return proposal.text;
+  return proposalText(decision((id, snapshot) => localizedLibraryTitle(id, snapshot, locale)), locale);
+}
+
+/**
+ * Onaylanan önerinin program geçmişindeki notu (farkın yanında), yazanın (PT'nin) dilinde: "Danışanın önerisi: Leg Press
+ * 3 → 4 set". Öneri metni yapıdan kurulur (`proposalTextIn`); `trackingTypeOf` hedef önerisinin setlerini yazmak için.
+ */
+export function approvalNote(
+  proposal: StoredProposal,
+  locale: Locale = DEFAULT_LOCALE,
+  trackingTypeOf?: (exerciseId: string) => TrackingType | undefined,
+): string {
+  return programLogMessages(locale).proposals.approvalNote(proposalTextIn(proposal, locale, trackingTypeOf));
 }
 
 export type ApprovalPlan =
@@ -411,7 +480,7 @@ export function planApproval(input: {
     { phased: program.phased, currentPhaseId: program.current.phaseId, phases: normalized.phases },
     { ...input.ctx, locale },
     now,
-    [{ text: approvalNote(proposal, locale) }],
+    [{ text: approvalNote(proposal, locale, (exerciseId) => input.library.exercises.get(exerciseId)?.trackingType) }],
   );
   const revision = result?.program.revision ?? program.revision;
   const proposals = decideProposal(file, id, { status: 'approved', at: now, revision }) ?? file;

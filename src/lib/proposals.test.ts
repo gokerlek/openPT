@@ -1,20 +1,26 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
+import type { Locale } from '../i18n/locale.ts';
 import type { DiffContext } from './program-diff.ts';
+import { proposalText } from './program-feedback.ts';
 import { programIdSource, type ProgramPhase, type ProgramState } from './program-plan.ts';
 import {
   applyProposal,
+  approvalNote,
   clientOutcomes,
   decideProposal,
   isFaded,
   parseProposals,
   pendingProposals,
   planApproval,
+  proposalTextIn,
   serializeProposals,
   upsertProposals,
   type Proposal,
   type ProposalInput,
+  type ProposalKind,
 } from './proposals.ts';
+import type { TrackingType } from './progression.ts';
 import type { SetSpec } from './set-plan.ts';
 import type { PlanExercise } from './template-plan.ts';
 
@@ -302,5 +308,91 @@ describe('onay: kayıt yolu', () => {
     assert.equal(planApproval({ program: stored(), file: file(), id: 'pr_zzzzzz', library, ctx, now }).status, 'missing');
     const declined = parseProposals({ version: 1, items: [proposal({ status: 'declined', decidedAt: now.toISOString() })] });
     assert.equal(planApproval({ program: stored(), file: declined, id: 'pr_aaaaaa', library, ctx, now }).status, 'decided');
+  });
+});
+
+describe('öneri okuyanın dilinde: yapıdan, kayıtlı metne düşerek (PT kartı, onay notu)', () => {
+  const tracking = (id: string): TrackingType | undefined =>
+    (({ 'halter-bench-press': 'weight_reps', 'leg-press': 'weight_reps', plank: 'duration', sinav: 'bodyweight_reps', 'benim-hareketim': 'weight_reps' }) as Record<string, TrackingType>)[id];
+  type Decision = Parameters<typeof proposalText>[0] & { exerciseId: string; kind: ProposalKind };
+  const decisions: Decision[] = [
+    { kind: 'sets', exerciseId: 'halter-bench-press', title: 'Halter Bench Press', trackingType: 'weight_reps', count: { from: 3, to: 4 } },
+    { kind: 'algo_sets', exerciseId: 'halter-bench-press', title: 'Halter Bench Press', trackingType: 'weight_reps', count: { from: 4, to: 5 } },
+    { kind: 'target', exerciseId: 'leg-press', title: 'Leg Press', trackingType: 'weight_reps', target: { from: sets(3, 8, 12), to: sets(3, 10, 14) } },
+    { kind: 'target', exerciseId: 'plank', title: 'Plank', trackingType: 'duration', target: { from: sets(3, 30, 30), to: sets(3, 45, 45) } },
+    { kind: 'swap', exerciseId: 'halter-bench-press', title: 'Halter Bench Press', trackingType: 'weight_reps', swap: { exerciseId: 'sinav', title: 'Şınav' } },
+    { kind: 'remove', exerciseId: 'sinav', title: 'Şınav', trackingType: 'bodyweight_reps' },
+    { kind: 'add', exerciseId: 'sinav', title: 'Şınav', trackingType: 'bodyweight_reps' },
+    { kind: 'sets', exerciseId: 'benim-hareketim', title: 'Benim Hareketim', trackingType: 'weight_reps', count: { from: 2, to: 3 } },
+  ];
+  /** Bitişteki gibi kaydedilmiş öneri: metin önerenin dilinde (`planProgramFeedback`). */
+  const stored = (decision: Decision, language: Locale, over: Partial<Proposal> = {}): Proposal =>
+    proposal({
+      exerciseId: decision.exerciseId,
+      title: decision.title,
+      kind: decision.kind,
+      from: decision.count?.from,
+      to: decision.count?.to,
+      ...(decision.target ? { target: decision.target } : {}),
+      ...(decision.swap ? { swap: decision.swap } : {}),
+      text: proposalText(decision, language),
+      ...over,
+    });
+
+  test('Türkçe kaydedilmiş öneri Türkçe PT\'ye aynen (kart ve onay notu)', () => {
+    for (const decision of decisions) {
+      const item = stored(decision, 'tr');
+      assert.equal(proposalTextIn(item, 'tr', tracking), item.text);
+      assert.equal(approvalNote(item, 'tr', tracking), `Danışanın önerisi: ${item.text}`);
+    }
+  });
+
+  test('İngilizce PT Türkçe kaydedilmiş öneriyi kendi dilinde görür; hazır hareket adları da İngilizce', () => {
+    const [setsDecision, , target, , swap, remove, , custom] = decisions;
+    assert.equal(proposalTextIn(stored(setsDecision!, 'tr'), 'en', tracking), 'Barbell Bench Press 3 → 4 sets');
+    assert.equal(approvalNote(stored(setsDecision!, 'tr'), 'en', tracking), "Client's suggestion: Barbell Bench Press 3 → 4 sets");
+    assert.equal(proposalTextIn(stored(swap!, 'tr'), 'en', tracking), 'Push-Up instead of Barbell Bench Press');
+    assert.equal(proposalTextIn(stored(remove!, 'tr'), 'en', tracking), 'Push-Up: remove or replace');
+    assert.equal(proposalTextIn(stored(target!, 'tr'), 'en', tracking), proposalText(target!, 'en'));
+    // PT'nin kendi hareketi: adı yazıldığı gibi, cümle okuyanın dilinde.
+    assert.equal(proposalTextIn(stored(custom!, 'tr'), 'en', tracking), 'Benim Hareketim 2 → 3 sets');
+  });
+
+  test('İngilizce kaydedilmiş öneri Türkçe PT\'ye Türkçe', () => {
+    const english = { ...decisions[4]!, title: 'Barbell Bench Press', swap: { exerciseId: 'sinav', title: 'Push-Up' } };
+    assert.equal(proposalTextIn(stored(english, 'en'), 'tr', tracking), 'Halter Bench Press yerine Şınav');
+    assert.equal(proposalTextIn(stored({ ...decisions[0]!, title: 'Barbell Bench Press' }, 'en'), 'tr', tracking), 'Halter Bench Press 3 → 4 set');
+  });
+
+  test('yapı eksikse ya da kayıtlı metin yapıdan çıkmıyorsa kayıtlı metin aynen', () => {
+    assert.equal(proposalTextIn({ text: 'Leg Press 3 → 4 sets' }, 'tr'), 'Leg Press 3 → 4 sets');
+    assert.equal(proposalTextIn(stored(decisions[0]!, 'tr', { from: undefined }), 'en', tracking), 'Halter Bench Press 3 → 4 set');
+    assert.equal(proposalTextIn(stored(decisions[4]!, 'tr', { swap: undefined }), 'en', tracking), 'Halter Bench Press yerine Şınav');
+    // Kayıt türü bilinmiyor (hareket kütüphaneden silinmiş): hedef metni kurulamaz.
+    assert.equal(proposalTextIn(stored(decisions[2]!, 'tr'), 'en', () => undefined), proposalText(decisions[2]!, 'tr'));
+    // Kırpılmış ya da elle düzenlenmiş metin yapıdan çıkmaz.
+    assert.equal(proposalTextIn(stored(decisions[0]!, 'tr', { text: 'Halter Bench Press 3 → 4 set…' }), 'en', tracking), 'Halter Bench Press 3 → 4 set…');
+  });
+
+  test('İngilizce PT onaylayınca program geçmişindeki not İngilizce', () => {
+    const exercises = new Map<string, PlanExercise>(
+      ['push-up', 'leg-press', 'face-pull', 'curl'].map((id) => [id, { id, title: id, category: 'compound', trackingType: 'weight_reps', equipment: 'machine', primaryMuscles: [], secondaryMuscles: [] }]),
+    );
+    const ctx: DiffContext = { exercises: new Map([...exercises].map(([id, item]) => [id, { title: item.title, trackingType: item.trackingType }])), devices: new Map([['kizak', { name: 'Kızak' }]]) };
+    const state: ProgramState = {
+      version: 2,
+      phased: false,
+      revision: 4,
+      createdAt: '2026-09-01T10:00:00.000Z',
+      updatedAt: '2026-09-20T10:00:00.000Z',
+      phases: program().phases,
+      current: { phaseId: 'p_aaaaaa', startedAt: '2026-09-01T10:00:00.000Z' },
+      rotation: { lastDayId: 'd_aaaaaa', lastCompletedAt: '2026-09-26T16:00:00.000Z' },
+      log: [],
+    };
+    const plan = planApproval({ program: state, file: parseProposals({ version: 1, items: [proposal()] }), id: 'pr_aaaaaa', library: { exercises, deviceIds: new Set(['kizak']) }, ctx, now: new Date('2026-09-27T10:00:00.000Z'), random: sequence(), locale: 'en' });
+    assert.equal(plan.status, 'approved');
+    if (plan.status !== 'approved') return;
+    assert.equal(plan.program?.log[0]?.changes.at(-1)?.text, "Client's suggestion: Leg Press 3 → 4 sets");
   });
 });

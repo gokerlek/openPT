@@ -4,7 +4,7 @@ import { locateRow, plainSets, setClientTarget, sameSets, targetLabel } from './
 import { getFormat } from './format.ts';
 import { appendLog, capChanges, type ClientTargets, type ProgramChange, type ProgramLogEntry, type ProgramPhase } from './program-plan.ts';
 import { gridOf, isOverload, type SuggestionReason, type TrackingType } from './progression.ts';
-import { parseProposals, serializeProposals, upsertProposals, type ProposalInput, type ProposalKind } from './proposals.ts';
+import { parseProposals, proposalText, serializeProposals, upsertProposals, type ProposalInput, type ProposalKind } from './proposals.ts';
 import type {
   FeedbackAnswer,
   FeedbackDecision,
@@ -18,6 +18,9 @@ import { setsText, SET_LIMITS, type SetSpec } from './set-plan.ts';
 import { FALLBACK_REST_SECONDS, TEMPLATE_LIMITS, type TemplateRow } from './template-plan.ts';
 import { entryForRow, type Stamp } from './workout-cursor.ts';
 import { extraKey, type ExtraRows, type RowPrevious, type WorkoutDay, type WorkoutRow } from './workout-plan.ts';
+
+/** Önerinin metni `proposals.ts`'te (kayıtlı öneri de aynı kuralla okunur); eski çağıranlar için buradan da. */
+export { proposalText };
 
 /**
  * Program güncelleme (tasarım §2.7 c, §6; PT kararı 6) — saf. Bitişte plan ile yapılanın farkı çıkarılır
@@ -562,32 +565,6 @@ export function consistent(decision: FeedbackDecision, doc: SessionDoc): Session
     case 'algo_sets':
     case 'remove':
       return decision.rowId && (entry.rowId === decision.rowId || entry.swappedFrom === decision.rowId) ? entry : null;
-  }
-}
-
-/** Önerinin metni (PT'nin kartı, bildirim): "Leg Press 3 → 4 set", "Bench Press yerine Dumbbell Press". */
-export function proposalText(
-  decision: Pick<FeedbackDecision, 'kind' | 'title' | 'trackingType' | 'count' | 'target' | 'swap'> & { entryTitle?: string },
-  locale: Locale = DEFAULT_LOCALE,
-): string {
-  const t = clientWorkoutMessages(locale).feedback;
-  const f = getFormat(locale);
-  switch (decision.kind) {
-    case 'sets':
-    case 'algo_sets':
-      return t.proposalSets(decision.title, f.number(decision.count?.from ?? 0), f.number(decision.count?.to ?? 0), decision.count?.to ?? 0);
-    case 'target':
-      return decision.target
-        ? `${decision.title} ${setsText(decision.target.from, decision.trackingType, null, locale)} → ${setsText(decision.target.to, decision.trackingType, null, locale)}`
-        : decision.title;
-    case 'swap':
-      return t.swap(decision.title, decision.swap?.title ?? decision.entryTitle ?? '').trim();
-    case 'remove':
-      return t.remove(decision.title);
-    case 'add':
-      return t.add(decision.entryTitle ?? decision.title);
-    default:
-      return decision.title;
   }
 }
 
