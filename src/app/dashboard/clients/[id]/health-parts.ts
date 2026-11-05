@@ -1,3 +1,5 @@
+// Göreli ve uzantılı içe aktarma: modül `node --test` ile de sınanır (`health-parts.test.ts`).
+import { healthMessages } from '../../../../i18n/messages/health/index.ts';
 import type { HealthField } from '@/lib/schemas/client';
 
 export type HealthPart = {
@@ -13,10 +15,13 @@ export type HealthPart = {
  * bir onay parçasıdır. Sekmenin bağlantısı modülde seçili ilk parçadır. Kamera ölçümü sihirbazının adresi
  * ölçümlerin altında kalır (`measurements/camera`) ama Hareket'in eylemidir: aynı `screening` onayı.
  */
+const LABELS = healthMessages('tr').parts.labels;
+
+/** `label` Türkçe (eski çağrılar); şerit adı okuyanın dilinde `healthMessages(locale).parts.labels[field]`. */
 export const HEALTH_PARTS: readonly HealthPart[] = [
-  { field: 'conditions', path: 'constraints', label: 'Kısıtlar' },
-  { field: 'measurements', path: 'measurements', label: 'Ölçümler' },
-  { field: 'screening', path: 'screening', label: 'Hareket', also: ['measurements/camera'] },
+  { field: 'conditions', path: 'constraints', label: LABELS.conditions },
+  { field: 'measurements', path: 'measurements', label: LABELS.measurements },
+  { field: 'screening', path: 'screening', label: LABELS.screening, also: ['measurements/camera'] },
 ];
 
 /** `prefix`'in kendisi ya da alt adresi; `measurements-x` `measurements`'ın altı değildir. */

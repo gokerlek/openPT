@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server';
 import * as v from 'valibot';
+import { localeFromRequest, type Locale } from '@/i18n/locale';
+import { healthMessages } from '@/i18n/messages/health';
+import { langConfig } from '@/i18n/valibot';
 import {
   ackClientChange,
   clearConstraint,
@@ -26,8 +29,8 @@ async function target(context: Context): Promise<{ id: string; kid: string } | n
 }
 
 /** Eylem → kaydın yeni hali (saf eylemler `constraints.ts`'te). */
-function apply(record: HealthRecord, kid: string, patch: ConstraintPatch, now: string): HealthRecord {
-  const base = { now, baseUpdatedAt: patch.baseUpdatedAt };
+function apply(record: HealthRecord, kid: string, patch: ConstraintPatch, now: string, locale: Locale): HealthRecord {
+  const base = { now, baseUpdatedAt: patch.baseUpdatedAt, locale };
   switch (patch.action) {
     case 'edit':
       return editConstraint(record, kid, patch.constraint, base);
@@ -53,29 +56,33 @@ function apply(record: HealthRecord, kid: string, patch: ConstraintPatch, now: s
  * güncellemesini gördü, yönlendirme, görüş. Kısıt o arada değiştiyse (`baseUpdatedAt`) 412.
  */
 export async function PATCH(request: Request, context: Context) {
-  if (!(await isPt())) return forbidden();
+  const locale = localeFromRequest(request);
+  const t = healthMessages(locale).constraintApi;
+  if (!(await isPt())) return forbidden(locale);
   const found = await target(context);
-  if (!found) return notFound('Kısıt bulunamadı.');
-  const parsed = v.safeParse(constraintPatchSchema, await readBody(request));
-  if (!parsed.success) return invalid(parsed.issues);
+  if (!found) return notFound(t.notFound, locale);
+  const parsed = v.safeParse(constraintPatchSchema, await readBody(request), langConfig(locale));
+  if (!parsed.success) return invalid(parsed.issues, locale);
 
   try {
-    await updateHealth(found.id, 'conditions', (record) => apply(record, found.kid, parsed.output, new Date().toISOString()), 'Kısıt güncellendi');
+    await updateHealth(found.id, 'conditions', (record) => apply(record, found.kid, parsed.output, new Date().toISOString(), locale), 'Kısıt güncellendi');
     return NextResponse.json({ ok: true });
   } catch (error) {
-    return failed(error, 'Kısıt kaydedilemedi.');
+    return failed(error, t.saveFailed, locale);
   }
 }
 
 /** Yanlış kaydı çıkarır (kayıtta "silindi"; izinleri de). Git geçmişinde danışanın repo'sunda kalır. */
-export async function DELETE(_request: Request, context: Context) {
-  if (!(await isPt())) return forbidden();
+export async function DELETE(request: Request, context: Context) {
+  const locale = localeFromRequest(request);
+  const t = healthMessages(locale).constraintApi;
+  if (!(await isPt())) return forbidden(locale);
   const found = await target(context);
-  if (!found) return notFound('Kısıt bulunamadı.');
+  if (!found) return notFound(t.notFound, locale);
   try {
-    await updateHealth(found.id, 'conditions', (record) => removeConstraint(record, found.kid, { now: new Date().toISOString() }), 'Kısıt silindi');
+    await updateHealth(found.id, 'conditions', (record) => removeConstraint(record, found.kid, { now: new Date().toISOString(), locale }), 'Kısıt silindi');
     return NextResponse.json({ ok: true });
   } catch (error) {
-    return failed(error, 'Kısıt silinemedi.');
+    return failed(error, t.deleteFailed, locale);
   }
 }
