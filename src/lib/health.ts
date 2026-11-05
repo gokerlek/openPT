@@ -1,5 +1,8 @@
 import 'server-only';
 import * as v from 'valibot';
+import { messageOf, type Localizable, type LocalizedText } from '../i18n/errors';
+import { DEFAULT_LOCALE, type Locale } from '../i18n/locale';
+import { healthMessages } from '../i18n/messages/health';
 import { readClient } from './clients';
 import { ConstraintError } from './constraints';
 import { clientRepoName, GithubError } from './github/client';
@@ -30,6 +33,26 @@ import { healthRecordSchema, type HealthRecord } from './schemas/health';
 
 export const HEALTH_PATH = 'health.json';
 
+/**
+ * Sağlık kaydının GitHub hatası, kullanıcıya giden metni okuyanın dilinde (`messageOf`). `GithubError` olarak
+ * yakalanır; `.message` Türkçe kalır (günlük ve testler).
+ */
+class HealthError extends GithubError implements Localizable {
+  readonly text: LocalizedText;
+  constructor(text: LocalizedText, status: number) {
+    super(text(DEFAULT_LOCALE), status);
+    this.text = text;
+  }
+
+  localized(locale: Locale): string {
+    return this.text(locale);
+  }
+}
+
+function recordText(locale: Locale) {
+  return healthMessages(locale).record;
+}
+
 export function emptyHealthRecord(): HealthRecord {
   return { version: 2, checkIns: [], measurements: [] };
 }
@@ -42,7 +65,7 @@ export async function readHealth(clientId: string): Promise<{ record: HealthReco
   const stored = await readJson<unknown>(clientRepoName(clientId), HEALTH_PATH);
   if (!stored) return null;
   const parsed = v.safeParse(healthRecordSchema, stored.content);
-  if (!parsed.success) throw new GithubError(`${HEALTH_PATH} beklenen biçimde değil.`, 500);
+  if (!parsed.success) throw new HealthError((locale) => recordText(locale).malformed(HEALTH_PATH), 500);
   return { record: parsed.output, sha: stored.sha };
 }
 
@@ -58,20 +81,20 @@ export type MeasurementsView = HealthPartView;
  * PT ekranları için bir sağlık parçası. Kilitliyken dosyaya hiç gidilmez: onay yokken sağlık verisi
  * işlenmez (gösterim de işlemedir). Dosya yoksa boş kayıt.
  */
-export async function loadHealthPart(client: Client, field: HealthField): Promise<HealthPartView> {
+export async function loadHealthPart(client: Client, field: HealthField, locale: Locale = DEFAULT_LOCALE): Promise<HealthPartView> {
   const lock = healthLock(client, field);
   if (lock) return { state: 'locked', lock };
   try {
     const stored = await readHealth(client.id);
     return { state: 'ok', record: stored?.record ?? emptyHealthRecord() };
   } catch (error) {
-    if (error instanceof GithubError && error.status === 500) return { state: 'broken', problem: error.message };
+    if (error instanceof GithubError && error.status === 500) return { state: 'broken', problem: messageOf(error, locale) ?? error.message };
     throw error;
   }
 }
 
-export function loadMeasurements(client: Client): Promise<MeasurementsView> {
-  return loadHealthPart(client, 'measurements');
+export function loadMeasurements(client: Client, locale: Locale = DEFAULT_LOCALE): Promise<MeasurementsView> {
+  return loadHealthPart(client, 'measurements', locale);
 }
 
 /**
@@ -91,7 +114,7 @@ export async function readHealthIfAllowed(client: Client, fields: readonly Healt
 /** Parça bu danışan için yazılamıyorsa nedeniyle birlikte 403. */
 function assertAllowed(client: Pick<Client, 'modules' | 'consents'>, field: HealthField): void {
   const lock = healthLock(client, field);
-  if (lock) throw new GithubError(`Kaydedilemez: ${healthLockInfo(field, lock).title.toLocaleLowerCase('tr')}.`, 403);
+  if (lock) throw new HealthError((locale) => recordText(locale).cannotSave(healthLockInfo(field, lock, locale).title), 403);
 }
 
 /**
@@ -107,7 +130,7 @@ export async function updateHealth(
   message: string,
 ): Promise<HealthRecord> {
   const stored = await readClient(clientId);
-  if (!stored) throw new GithubError('Danışan bulunamadı.', 404);
+  if (!stored) throw new HealthError((locale) => recordText(locale).clientNotFound, 404);
   const fields: readonly HealthField[] = typeof field === 'string' ? [field] : field;
   for (const item of fields) assertAllowed(stored.client, item);
 
@@ -119,7 +142,7 @@ export async function updateHealth(
     try {
       next = change(base);
     } catch (error) {
-      if (error instanceof ConstraintError) throw new GithubError(error.message, error.status);
+      if (error instanceof ConstraintError) throw new HealthError(error.text, error.status);
       throw error;
     }
     // Eylem kaydı değiştirmediyse yazılmaz (yalnız biçim çevirisi için commit atılmaz).
@@ -164,7 +187,7 @@ export async function replaceMeasurementDay(
     'measurements',
     (record) => {
       if (!record.measurements.some((entry) => entry.date === input.date)) {
-        throw new GithubError('Bu tarihte ölçüm yok; silinmiş olabilir.', 404);
+        throw new HealthError((locale) => recordText(locale).measurementMissing, 404);
       }
       return { ...withSex(record, input.sex), measurements: replaceMeasurements(record.measurements, input.date, input.values) };
     },
@@ -179,7 +202,7 @@ export async function deleteMeasurementDay(clientId: string, date: string): Prom
     'measurements',
     (record) => {
       if (!record.measurements.some((entry) => entry.date === date)) {
-        throw new GithubError('Bu tarihte ölçüm yok; zaten silinmiş olabilir.', 404);
+        throw new HealthError((locale) => recordText(locale).measurementAlreadyDeleted, 404);
       }
       return { ...record, measurements: removeMeasurementDate(record.measurements, date) };
     },

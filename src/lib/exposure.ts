@@ -1,4 +1,5 @@
 import { DEFAULT_LOCALE, type Locale } from '../i18n/locale.ts';
+import { healthMessages } from '../i18n/messages/health/index.ts';
 import type { TrainingExperience } from './schemas/client.ts';
 import type { SessionIndex, SessionIndexRow } from './schemas/session.ts';
 
@@ -36,12 +37,8 @@ import type { SessionIndex, SessionIndexRow } from './schemas/session.ts';
 export const STAGES = ['intro', 'novice', 'intermediate', 'advanced'] as const;
 export type Stage = (typeof STAGES)[number];
 
-export const STAGE_LABELS: Record<Stage, string> = {
-  intro: 'Tanışma',
-  novice: 'Başlangıç',
-  intermediate: 'Orta',
-  advanced: 'İleri',
-};
+/** Türkçe adlar (eski çağrılar); arayüz `stageLabels(locale)` kullanır. */
+export const STAGE_LABELS: Record<Stage, string> = healthMessages('tr').exposureStages;
 
 export type ExposureTuning = {
   /** Tanışma: bitmiş seans sayısı bu sayıya eşit ya da altında. */
@@ -208,8 +205,7 @@ export function exposuresOf(
   return new Map([...new Set(exerciseIds)].map((id) => [id, exposureOf(id, index, now, options)]));
 }
 
-/* --- dil: imza dondurma (i18n planı §7 F). Sahibi görev çevirir; şimdilik Türkçe döner. --- */
-
-export function stageLabels(_locale: Locale = DEFAULT_LOCALE): Record<Stage, string> {
-  return STAGE_LABELS;
+/** Aşamaların adları okuyanın dilinde. */
+export function stageLabels(locale: Locale = DEFAULT_LOCALE): Record<Stage, string> {
+  return healthMessages(locale).exposureStages;
 }

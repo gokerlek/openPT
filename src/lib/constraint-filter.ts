@@ -1,4 +1,5 @@
 import { DEFAULT_LOCALE, type Locale } from '../i18n/locale.ts';
+import { healthMessages } from '../i18n/messages/health/index.ts';
 import {
   activeConstraints,
   AVOID_TAGS,
@@ -6,6 +7,7 @@ import {
   awaitsOpinion,
   conditionsOf,
   constraintsOf,
+  isPaired,
   overridable,
   overridesOf,
   pendingReports,
@@ -13,8 +15,6 @@ import {
   regionWorked,
   severeUnreviewed,
   TRIGGER_AVOID,
-  TRIGGER_LABELS,
-  yourRegion,
   type CareTags,
   type ConstraintRegion,
   type ConstraintSide,
@@ -92,7 +92,7 @@ export const EMPTY_CARE: CareInput = { active: [], reports: [], overrides: [], t
  */
 export function careInputOf(
   record: Pick<HealthRecord, 'constraints' | 'conditions' | 'surgeryDate' | 'overrides' | 'checkIns'>,
-  options: { today: string; painConsent: boolean },
+  options: { today: string; painConsent: boolean; /** Gerekçelerin dili; yoksa Türkçe. */ locale?: Locale | undefined },
 ): CareInput {
   const active = activeConstraints(record);
   const ids = new Set(active.map((item) => item.id));
@@ -107,6 +107,7 @@ export function careInputOf(
     }
   }
   return {
+    ...(options.locale ? { locale: options.locale } : {}),
     active,
     reports: pendingReports(record),
     overrides: overridesOf(record).filter((item) => ids.has(item.source)),
@@ -126,9 +127,10 @@ function dayNumber(date: string): number {
   return Math.floor(Date.UTC(y ?? 1970, (m ?? 1) - 1, d ?? 1) / DAY_MS);
 }
 
-/** Kısıtın kendi bağlamı: iki ameliyat tarihi birbirine karışmaz. */
-export function contextFor(constraint: Constraint, input: Pick<CareInput, 'today' | 'symptomDirection'>): FilterContext {
+/** Kısıtın kendi bağlamı: iki ameliyat tarihi birbirine karışmaz. Dil verildiyse kuralların bulguları o dilde. */
+export function contextFor(constraint: Constraint, input: Pick<CareInput, 'today' | 'symptomDirection' | 'locale'>): FilterContext {
   const context: FilterContext = {};
+  if (input.locale) context.locale = input.locale;
   const surgery = constraint.details?.surgeryDate;
   if (surgery) {
     const days = dayNumber(input.today) - dayNumber(surgery);
@@ -142,13 +144,16 @@ export function contextFor(constraint: Constraint, input: Pick<CareInput, 'today
 
 const ORDER: Record<Decision, number> = { block: 3, warn: 2, cue: 1 };
 
-function lower(text: string): string {
-  return text.toLocaleLowerCase('tr');
+/** Süzgecin metinleri okuyanın dilinde. */
+function careText(locale: Locale | undefined) {
+  return healthMessages(locale ?? DEFAULT_LOCALE).care;
 }
 
 /** Bir kısıtın bu hareketteki gerekçeleri ve değerlendirilemeyen kuralları. */
 function constraintReasons(tags: CareTags, constraint: Constraint, input: CareInput): { reasons: CareReason[]; unassessed: number } {
-  const label = regionText(constraint);
+  const label = regionText(constraint, input.locale);
+  const t = careText(input.locale).reasons;
+  const avoidLabels = healthMessages(input.locale ?? DEFAULT_LOCALE).constraints.avoid;
   const reasons: CareReason[] = [];
   let unassessed = 0;
   const context = contextFor(constraint, input);
@@ -163,14 +168,14 @@ function constraintReasons(tags: CareTags, constraint: Constraint, input: CareIn
     const avoid = AVOID_TAGS[tag];
     const hit = avoidMatch(tag, tags, constraint.region);
     if (hit) {
-      reasons.push({ constraintId: constraint.id, label, decision: avoid.decision, message: `${label}: ${lower(avoid.label)}`, kind: 'avoid' });
+      reasons.push({ constraintId: constraint.id, label, decision: avoid.decision, message: t.avoid(label, avoidLabels[tag]), kind: 'avoid' });
     } else if (hit === null) {
       if (tags.pattern && avoid.families.includes(tags.pattern)) {
         reasons.push({
           constraintId: constraint.id,
           label,
           decision: 'warn',
-          message: `${label}: etiket eksik; ${lower(avoid.label)} olabilir`,
+          message: t.fallback(label, avoidLabels[tag]),
           kind: 'fallback',
         });
       } else {
@@ -183,7 +188,7 @@ function constraintReasons(tags: CareTags, constraint: Constraint, input: CareIn
       constraintId: constraint.id,
       label,
       decision: 'warn',
-      message: `${label}: sağlık profesyonelinin görüşü bekleniyor`,
+      message: t.referral(label),
       kind: 'referral',
     });
   }
@@ -192,7 +197,7 @@ function constraintReasons(tags: CareTags, constraint: Constraint, input: CareIn
       constraintId: constraint.id,
       label,
       decision: 'warn',
-      message: `${label}: danışan şiddetli kötüleşti dedi; sen bakana kadar dikkat`,
+      message: t.severe(label),
       kind: 'severe',
     });
   }
@@ -204,8 +209,10 @@ function constraintReasons(tags: CareTags, constraint: Constraint, input: CareIn
  * zorlayan bu harekete değmiyorsa bölgeyi çalıştıran hareket de dikkat alır (bildirim sonrası metin danışana zaten
  * "bu bölgeyi zorlayan hareketleri yapma" der, §2.4).
  */
-function reportReasons(tags: CareTags, report: Constraint): CareReason[] {
-  const label = regionText(report);
+function reportReasons(tags: CareTags, report: Constraint, locale: Locale | undefined): CareReason[] {
+  const label = regionText(report, locale);
+  const t = careText(locale).reasons;
+  const triggers = healthMessages(locale ?? DEFAULT_LOCALE).constraints.triggers;
   const reasons: CareReason[] = [];
   for (const trigger of report.triggers ?? []) {
     const tag = TRIGGER_AVOID[trigger];
@@ -215,7 +222,7 @@ function reportReasons(tags: CareTags, report: Constraint): CareReason[] {
         constraintId: report.id,
         label,
         decision: 'warn',
-        message: `Danışan bildirdi (karar bekliyor): ${label} · ${lower(TRIGGER_LABELS[trigger])}`,
+        message: t.reportTrigger(label, triggers[trigger]),
         kind: 'report',
       });
     }
@@ -225,7 +232,7 @@ function reportReasons(tags: CareTags, report: Constraint): CareReason[] {
       constraintId: report.id,
       label,
       decision: 'warn',
-      message: `Danışan bildirdi (karar bekliyor): ${label} · şiddetli; bölgeyi çalıştırıyor`,
+      message: t.reportSevere(label),
       kind: 'report',
     });
   }
@@ -255,7 +262,7 @@ export function evaluateCare(tags: CareTags & { id: string }, input: CareInput):
       if (overridable(constraint)) overridableBy.push(constraint.id);
     }
   }
-  for (const report of input.reports) reasons.push(...reportReasons(tags, report));
+  for (const report of input.reports) reasons.push(...reportReasons(tags, report, input.locale));
   reasons.sort((a, b) => ORDER[b.decision] - ORDER[a.decision]);
   const decision = reasons[0]?.decision ?? null;
   return { decision, reasons, silenced, unassessed: decision === 'block' ? 0 : unassessed, untagged: !isTagged(tags), blockedBy, overridableBy };
@@ -327,6 +334,7 @@ const KIND_ORDER: Record<RowCareKind, number> = { avoid: 5, referral: 4, severe:
  * notuyla). Etiketi eksik kalıp yedeği dikkat olarak not üretir; eksik bilgi ve etiketsiz hareket not üretmez.
  */
 export function rowCareOf(result: CareResult, input: CareInput): RowCare | null {
+  // Satırın etiketi (`label`) sunucudan danışana taşınır: okuyanın dilinde (`input.locale`).
   const byId = new Map([...input.active, ...input.reports].map((item) => [item.id, item]));
   let best: { kind: RowCareKind; constraint: Constraint } | null = null;
   const consider = (kind: RowCareKind, id: string) => {
@@ -346,7 +354,7 @@ export function rowCareOf(result: CareResult, input: CareInput): RowCare | null 
   const { kind, constraint } = best as { kind: RowCareKind; constraint: Constraint };
   return {
     kind,
-    label: regionText(constraint),
+    label: regionText(constraint, input.locale),
     region: constraint.region,
     ...(constraint.side ? { side: constraint.side } : {}),
     ...(kind === 'note' && constraint.clientNote ? { note: constraint.clientNote } : {}),
@@ -354,48 +362,39 @@ export function rowCareOf(result: CareResult, input: CareInput): RowCare | null 
 }
 
 /** Kartın sheet'i: başlık "Sol diz için not" ve metin (danışana, telaşsız; "yasak", "risk", tanı adı yok). */
-export function rowCareText(care: RowCare, _locale: Locale = DEFAULT_LOCALE): { title: string; text: string } {
-  const title = `${care.label} için not`;
-  const where = { region: care.region, side: care.side };
-  const yours = yourRegion(where, 'gen');
+export function rowCareText(care: RowCare, locale: Locale = DEFAULT_LOCALE): { title: string; text: string } {
+  const t = careText(locale).row;
+  const title = t.title(care.label);
+  // Taraf yalnız çift bölgede söylenir ("sol dizin"); eski kayıtta tek bölgeye yazılmış taraf okunmaz.
+  const where = care.side && isPaired(care.region) ? { region: care.region, side: care.side } : { region: care.region };
   switch (care.kind) {
     case 'avoid':
-      return care.own
-        ? { title, text: `Bu hareket şu an ${yours} için önerilmiyor. Bugün geç ya da antrenörüne sor.` }
-        : { title, text: `Antrenörün bu hareketi ${yours} için değiştirecek. Bugün 'Değiştir'den bir muadil seç.` };
+      return { title, text: care.own ? t.avoidOwn(where) : t.avoid(where) };
     case 'referral':
-      return { title, text: 'Antrenörün bu bölge için sağlık profesyonelinin görüşünü bekliyor. Ağrı yaparsa hareketi geç.' };
+      return { title, text: t.referral };
     case 'report':
-      return { title, text: `Bildirdiğin ${care.label.toLocaleLowerCase('tr')} için zorlayabilir; ağrı yaparsa geç.` };
+      return { title, text: t.report(care.label) };
     case 'severe':
-      return {
-        title,
-        text: `Kötüleştiğini bildirdiğin ${care.label.toLocaleLowerCase('tr')} için zorlayabilir. Antrenörün bakana kadar ağrı yaparsa geç ya da Değiştir'e dokun.`,
-      };
+      return { title, text: t.severe(care.label) };
     default:
-      return {
-        title,
-        text:
-          care.note ??
-          (care.own
-            ? `${yours.charAt(0).toLocaleUpperCase('tr')}${yours.slice(1)} için dikkatli ol; ağrısız aralıkta kal, ağrı artarsa hareketi geç.`
-            : `Antrenörün bu hareketi ${yourRegion(where, 'acc')} düşünerek planladı. Ağrısız aralıkta kal; ağrı artarsa hareketi geç ya da Değiştir'e dokun.`),
-      };
+      return { title, text: care.note ?? (care.own ? t.noteOwn(where) : t.note(where)) };
   }
 }
 
 /** Bugün önizlemesinde hareketin kısıt satırı: "Sol diz için dikkat: Back Squat"; önerilmeyende "değiştir". */
-export function careLine(care: RowCare, title: string, _locale: Locale = DEFAULT_LOCALE): string {
+export function careLine(care: RowCare, title: string, locale: Locale = DEFAULT_LOCALE): string {
   // Kendi programda hareketi danışan seçti: "değiştir" yerine "önerilmiyor" (antrenman kartıyla aynı dil, `rowCareText`).
-  const verb = care.kind === 'avoid' ? (care.own ? 'önerilmiyor' : 'değiştir') : 'dikkat';
-  return `${care.label} için ${verb}: ${title}`;
+  const t = careText(locale).line;
+  if (care.kind !== 'avoid') return t.caution(care.label, title);
+  return care.own ? t.notRecommended(care.label, title) : t.swap(care.label, title);
 }
 
 /** "Değiştir"deki kısa satır ("Sol diz için dikkatli"). */
-export function optionCareText(result: CareResult, _locale: Locale = DEFAULT_LOCALE): string | null {
+export function optionCareText(result: CareResult, locale: Locale = DEFAULT_LOCALE): string | null {
   const first = result.reasons.find((reason) => reason.decision === 'warn' || reason.decision === 'cue');
   if (!first) return null;
-  return first.kind === 'report' || first.kind === 'severe' ? `Bildirdiğin ${first.label.toLocaleLowerCase('tr')} için dikkatli` : `${first.label} için dikkatli`;
+  const t = careText(locale).option;
+  return first.kind === 'report' || first.kind === 'severe' ? t.reported(first.label) : t.caution(first.label);
 }
 
 /* --- PT: sheet, önizleme, çelişkiler --- */
@@ -413,7 +412,7 @@ export type SheetCare = {
 };
 
 export function sheetCareOf(result: CareResult, input: CareInput): SheetCare {
-  const labels = new Map(input.active.map((item) => [item.id, regionText(item)]));
+  const labels = new Map(input.active.map((item) => [item.id, regionText(item, input.locale)]));
   return {
     group: careGroup(result),
     decision: result.decision,
@@ -446,11 +445,11 @@ export type EditorCare = {
 };
 
 export function editorCareOf(clientId: string, items: readonly (CareTags & { id: string })[], input: CareInput): EditorCare {
-  const severe = [...input.active, ...input.reports].filter(severeUnreviewed).map((item) => regionText(item));
+  const severe = [...input.active, ...input.reports].filter(severeUnreviewed).map((item) => regionText(item, input.locale));
   return {
     clientId,
-    summary: input.active.map((item) => regionText(item)),
-    pending: input.reports.map((item) => regionText(item)),
+    summary: input.active.map((item) => regionText(item, input.locale)),
+    pending: input.reports.map((item) => regionText(item, input.locale)),
     ...(severe.length > 0 ? { severe } : {}),
     map: careMap(items, input),
   };

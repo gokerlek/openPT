@@ -1,7 +1,8 @@
 import { DEFAULT_LOCALE, type Locale } from '../i18n/locale.ts';
+import { healthMessages } from '../i18n/messages/health/index.ts';
 import { healthFieldState } from './client-status.ts';
 import { MEASUREMENTS, MEASUREMENT_IDS, type MeasurementId } from './measurements.ts';
-import { HEALTH_FIELD_INFO, type Client, type HealthField } from './schemas/client.ts';
+import { healthFieldInfo, type Client, type HealthField } from './schemas/client.ts';
 import type { MeasurementEntry } from './schemas/health.ts';
 
 /**
@@ -187,46 +188,9 @@ export function measurementLock(client: Pick<Client, 'modules' | 'consents'>): M
   return healthLock(client, 'measurements');
 }
 
-/** Kilit metinlerinde parçanın adı: belirtme hâli ("“Kısıtlar”ı seç"), kaydın adı ve açılınca ne olur. */
-const PART_WORDS: Record<HealthField, { accusative: string; record: string; entry: string }> = {
-  conditions: { accusative: '“Kısıtlar”ı', record: 'kısıt', entry: 'kısıt girebilirsin' },
-  readiness: { accusative: '“Hazır oluşluk”u', record: 'hazır oluşluk', entry: 'hazır oluşluk sorulur' },
-  check_in: { accusative: '“Ağrı takibi”ni', record: 'ağrı kaydı', entry: 'ağrı soruları sorulur' },
-  measurements: { accusative: '“Ölçümler”i', record: 'ölçüm', entry: 'ölçüm girebilirsin' },
-  screening: { accusative: '“Hareket taraması”nı', record: 'kamera ölçümü ve hareket testi', entry: 'kamera ölçümü alıp hareket testi girebilirsin' },
-};
-
-/** Kilidin başlığı ve ne yapılacağı, parçanın adıyla. */
-export function healthLockInfo(field: HealthField, lock: HealthLock): { title: string; description: string } {
-  const label = HEALTH_FIELD_INFO[field].label;
-  const words = PART_WORDS[field];
-  switch (lock) {
-    case 'off':
-      return {
-        title: 'Sağlık modülü kapalı',
-        description: `${label} sağlık verisidir; modül kapalıyken kayıt tutulmaz. Danışanın düzenleme sayfasında sağlık modülünü açıp ${words.accusative} seç; danışan bir sonraki girişinde onaylayınca ${words.entry}.`,
-      };
-    case 'not_selected':
-      return {
-        title: `${label} seçili değil`,
-        description: `Sağlık modülü açık ama “${label}” parçası seçili değil. Danışanın düzenleme sayfasında seç; danışan bir sonraki girişinde yeni kapsamı onaylayınca ${words.entry}.`,
-      };
-    case 'pending':
-      return {
-        title: 'Danışanın onayı bekleniyor',
-        description: `Danışan ilk girişinde neyin tutulacağını görüp onaylayacak. Onaylayana kadar ${words.record} kaydedilmez ve eski kayıtlar gösterilmez.`,
-      };
-    case 'declined':
-      return {
-        title: 'Danışan onay vermedi',
-        description: `Danışan sağlık verisi tutulmasına onay vermedi; ${words.record} kaydedilmez ve eski kayıtlar gösterilmez. Fikrini değiştirirse kendi ekranından onay verebilir.`,
-      };
-    case 'outdated':
-      return {
-        title: 'Onay yenilenecek',
-        description: `Danışanın onayı bu parçanın güncel kapsamını ya da metnini kapsamıyor; bir sonraki girişinde yeniden sorulacak. O zamana kadar ${words.record} kaydedilmez ve eski kayıtlar gösterilmez.`,
-      };
-  }
+/** Kilidin başlığı ve ne yapılacağı, parçanın adıyla (okuyanın dilinde). */
+export function healthLockInfo(field: HealthField, lock: HealthLock, locale: Locale = DEFAULT_LOCALE): { title: string; description: string } {
+  return healthMessages(locale).record.lock(field, lock, healthFieldInfo(locale)[field].label);
 }
 
 export const MEASUREMENT_LOCK_INFO: Record<MeasurementLock, { title: string; description: string }> = {
