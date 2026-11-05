@@ -1,4 +1,6 @@
 import * as v from 'valibot';
+import { DEFAULT_LOCALE, type Locale } from '../../i18n/locale.ts';
+import { catalogMessages } from '../../i18n/messages/catalog/index.ts';
 import { HEART_RATE_MAX, HEART_RATE_MIN } from '../heart-rate.ts';
 
 /**
@@ -17,11 +19,12 @@ export const CLIENT_NOTE_MAX = 500;
 
 export const CLIENT_STATUSES = ['active', 'paused', 'archived'] as const;
 export type ClientStatus = (typeof CLIENT_STATUSES)[number];
-export const CLIENT_STATUS_LABELS: Record<ClientStatus, string> = {
-  active: 'Aktif',
-  paused: 'Duraklatıldı',
-  archived: 'Arşivde',
-};
+export function clientStatusLabels(locale: Locale = DEFAULT_LOCALE): Record<ClientStatus, string> {
+  return catalogMessages(locale).clientStatuses;
+}
+
+/** Türkçe adlar (eski çağrılar); arayüz `clientStatusLabels(locale)` kullanır. */
+export const CLIENT_STATUS_LABELS: Record<ClientStatus, string> = clientStatusLabels('tr');
 
 /**
  * Sağlık modülünün parçaları. PT danışanı açarken hangilerinin tutulacağını seçer;
@@ -29,25 +32,12 @@ export const CLIENT_STATUS_LABELS: Record<ClientStatus, string> = {
  */
 export const HEALTH_FIELDS = ['conditions', 'readiness', 'check_in', 'measurements', 'screening'] as const;
 export type HealthField = (typeof HEALTH_FIELDS)[number];
-export const HEALTH_FIELD_INFO: Record<HealthField, { label: string; description: string }> = {
-  conditions: {
-    label: 'Kısıtlar',
-    description: 'Sakatlık, rahatsızlık ve kaçınılacak hareketler; antrenörün programı bunlara göre yazar, sen de bildirebilirsin.',
-  },
-  readiness: {
-    label: 'Hazır oluşluk',
-    description: 'Antrenman öncesi uyku, enerji, kas ağrısı ve stres (1–5); kötü günde yük önerisi hafifler.',
-  },
-  check_in: {
-    label: 'Ağrı takibi',
-    description: 'Ağrı seviyesi, belirtilerin yönü ve kırmızı bayrak soruları; ağrı artarsa yük durur.',
-  },
-  measurements: { label: 'Ölçümler', description: 'Beden çevreleri, performans testleri ve anket skorları.' },
-  screening: {
-    label: 'Hareket taraması',
-    description: 'Temel hareketlerin sonucu, sağ-sol farkı ve ağrı notu; antrenörün nereden başlayacağını buna göre seçer.',
-  },
-};
+export function healthFieldInfo(locale: Locale = DEFAULT_LOCALE): Record<HealthField, { label: string; description: string }> {
+  return catalogMessages(locale).healthFields;
+}
+
+/** Türkçe metinler (eski çağrılar); arayüz `healthFieldInfo(locale)` kullanır. */
+export const HEALTH_FIELD_INFO: Record<HealthField, { label: string; description: string }> = healthFieldInfo('tr');
 
 /**
  * Parça başına onay metninin sürümü (tasarım `kisit-tarama.md` §5.1): bir parçanın metni ya da amacı değişince
@@ -74,11 +64,12 @@ export const AI_CONSENT_VERSION = '2026-10-v2';
  */
 export const TRAINING_EXPERIENCES = ['new', 'six_months', 'one_year'] as const;
 export type TrainingExperience = (typeof TRAINING_EXPERIENCES)[number];
-export const TRAINING_EXPERIENCE_LABELS: Record<TrainingExperience, string> = {
-  new: 'Yeni başlıyor',
-  six_months: '6 ay ve üstü',
-  one_year: '1 yıl ve üstü',
-};
+export function trainingExperienceLabels(locale: Locale = DEFAULT_LOCALE): Record<TrainingExperience, string> {
+  return catalogMessages(locale).trainingExperiences;
+}
+
+/** Türkçe adlar (eski çağrılar); arayüz `trainingExperienceLabels(locale)` kullanır. */
+export const TRAINING_EXPERIENCE_LABELS: Record<TrainingExperience, string> = trainingExperienceLabels('tr');
 
 export const clientIdSchema = v.pipe(v.string(), v.regex(CLIENT_ID_PATTERN, 'Danışan kimliği geçersiz.'));
 

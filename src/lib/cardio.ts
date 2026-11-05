@@ -1,3 +1,5 @@
+import { DEFAULT_LOCALE, intlLocale, type Locale } from '../i18n/locale.ts';
+import { catalogMessages } from '../i18n/messages/catalog/index.ts';
 import type { TrackingType } from './progression.ts';
 import type { MeasurementEntry } from './schemas/health.ts';
 
@@ -62,14 +64,19 @@ export function walkKcal(set: CardioValues, bodyMassKg: number | undefined): num
  * Mesafe bu sürede yapılabilir mi (insan sınırı, `CARDIO_SPEED_MAX_KMH`): yapılamıyorsa nedeni, yapılabiliyorsa null.
  * Mesafe yoksa denetim yok; mesafe varken süre 0 olamaz. "1 saniyede 1000 metre" yazılmasın.
  */
-export function cardioSpeedIssue(kind: CardioKind, set: Pick<CardioValues, 'seconds' | 'distanceM'>): string | null {
+export function cardioSpeedIssue(
+  kind: CardioKind,
+  set: Pick<CardioValues, 'seconds' | 'distanceM'>,
+  locale: Locale = DEFAULT_LOCALE,
+): string | null {
+  const t = catalogMessages(locale).cardio;
   const { seconds, distanceM } = set;
   if (!distanceM || distanceM <= 0) return null;
-  if (!seconds || seconds <= 0) return 'Mesafe için süre de girilmeli.';
+  if (!seconds || seconds <= 0) return t.needsTime;
   const max = CARDIO_SPEED_MAX_KMH[kind];
   // km/sa = m / sn × 3,6; tam sınır geçer (çarpımla: kayan nokta yuvarlaması sınırı aşmış saymasın).
   if (distanceM * 3600 <= max * 1000 * seconds) return null;
-  return `${distanceText(distanceM)} bu sürede olmaz: ${kind === 'walk' ? 'yürüyüş ve koşuda' : 'kardiyoda'} hız en fazla ${max} km/sa.`;
+  return t.tooFast(distanceText(distanceM, locale), kind === 'walk', max);
 }
 
 /** Setlerin toplam kalorisi (yürüyüş/koşu olmayanlar 0). */
@@ -77,18 +84,18 @@ export function totalKcal(sets: readonly CardioValues[], bodyMassKg: number | un
   return sets.reduce((sum, set) => sum + (walkKcal(set, bodyMassKg) ?? 0), 0);
 }
 
-function decimal(value: number, digits: number): string {
-  return value.toLocaleString('tr-TR', { maximumFractionDigits: digits, useGrouping: false });
+function decimal(value: number, digits: number, locale: Locale): string {
+  return value.toLocaleString(intlLocale(locale), { maximumFractionDigits: digits, useGrouping: false });
 }
 
 /** "800 m"; 1000 m'den sonra km, en çok iki ondalık: "3 km", "2,5 km", "3,25 km". */
-export function distanceText(meters: number): string {
-  return meters < 1000 ? `${decimal(meters, 0)} m` : `${decimal(meters / 1000, 2)} km`;
+export function distanceText(meters: number, locale: Locale = DEFAULT_LOCALE): string {
+  return meters < 1000 ? `${decimal(meters, 0, locale)} m` : `${decimal(meters / 1000, 2, locale)} km`;
 }
 
-/** "%5", "%2,5". */
-export function inclineText(pct: number): string {
-  return `%${decimal(pct, 1)}`;
+/** "%5", "%2,5" (İngilizce "5%", "2.5%"). */
+export function inclineText(pct: number, locale: Locale = DEFAULT_LOCALE): string {
+  return catalogMessages(locale).percent(decimal(pct, 1, locale));
 }
 
 /** Saniye → dakika (en çok bir ondalık): hedef ve giriş yürüyüş/koşuda dakikadır. */
@@ -106,18 +113,18 @@ export function durationClock(totalSeconds: number): string {
 }
 
 /** Mesafe ve eğim parçaları; 0 ya da olmayan mesafe yazılmaz, eğim 0 da yazılmaz. */
-export function cardioParts(set: Pick<CardioValues, 'distanceM' | 'inclinePct'>): string[] {
+export function cardioParts(set: Pick<CardioValues, 'distanceM' | 'inclinePct'>, locale: Locale = DEFAULT_LOCALE): string[] {
   return [
-    ...(set.distanceM ? [distanceText(set.distanceM)] : []),
-    ...(set.inclinePct ? [inclineText(set.inclinePct)] : []),
+    ...(set.distanceM ? [distanceText(set.distanceM, locale)] : []),
+    ...(set.inclinePct ? [inclineText(set.inclinePct, locale)] : []),
   ];
 }
 
 /** Kardiyo setinin metni: "30:00 · 3 km · %5 · ≈ 253 kcal"; olmayan parça yazılmaz. */
-export function cardioText(set: CardioValues, kcal?: number | null): string {
+export function cardioText(set: CardioValues, kcal?: number | null, locale: Locale = DEFAULT_LOCALE): string {
   return [
     ...(set.seconds !== undefined ? [durationClock(set.seconds)] : []),
-    ...cardioParts(set),
+    ...cardioParts(set, locale),
     ...(kcal ? [`≈ ${kcal} kcal`] : []),
   ].join(' · ');
 }

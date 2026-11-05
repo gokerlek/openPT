@@ -1,3 +1,5 @@
+import { DEFAULT_LOCALE, intlLocale, type Locale } from '../i18n/locale.ts';
+import { catalogMessages } from '../i18n/messages/catalog/index.ts';
 import { distanceText, inclineText, minutesOf, type CardioKind } from './cardio.ts';
 import { isFullLoad, type SetTarget, type TrackingType } from './progression.ts';
 
@@ -204,12 +206,12 @@ export function amrapIndexes(sets: readonly SetSpec[]): number[] {
 /* --- anlatım --- */
 
 /** Düzenleyicide yazılırken boş ya da bozuk değer gelebilir: anlatım çökmesin diye "?". */
-function count(value: number): string {
-  return Number.isFinite(value) ? value.toLocaleString('tr-TR') : '?';
+function count(value: number, locale: Locale): string {
+  return Number.isFinite(value) ? value.toLocaleString(intlLocale(locale)) : '?';
 }
 
-function range(set: Pick<SetSpec, 'min' | 'max'>): string {
-  return set.min === set.max ? count(set.min) : `${count(set.min)}–${count(set.max)}`;
+function range(set: Pick<SetSpec, 'min' | 'max'>, locale: Locale): string {
+  return set.min === set.max ? count(set.min, locale) : `${count(set.min, locale)}–${count(set.max, locale)}`;
 }
 
 /** Yüzde yalnız ağırlıklı harekette anlamlı: başka türde (elle yazılmış) yüzde yok sayılır. */
@@ -230,15 +232,18 @@ function cardioPart(values: readonly (number | undefined)[], text: (value: numbe
 }
 
 /** Kardiyo hedefinin mesafesi ve eğimi ("3 km", "%5"); eğim 0 yazılmaz. */
-export function cardioTargetParts(sets: readonly SetSpec[]): string[] {
+export function cardioTargetParts(sets: readonly SetSpec[], locale: Locale = DEFAULT_LOCALE): string[] {
   return [
-    cardioPart(sets.map((set) => set.distanceM), distanceText),
-    cardioPart(sets.map((set) => set.inclinePct || undefined), inclineText),
+    cardioPart(sets.map((set) => set.distanceM), (value) => distanceText(value, locale)),
+    cardioPart(sets.map((set) => set.inclinePct || undefined), (value) => inclineText(value, locale)),
   ].filter((part): part is string => part !== null);
 }
 
-function positions(indexes: readonly number[]): string {
-  return indexes.map((index) => `${index + 1}.`).join(', ');
+/** Hedefin birimi: yürüyüş/koşuda dakika, süreli harekette saniye, değilse tekrar. */
+function unitOf(trackingType: TrackingType, cardio: CardioKind | null, list: readonly SetSpec[], locale: Locale): string {
+  const t = catalogMessages(locale).time;
+  if (cardio === 'walk') return t.minutesUnit;
+  return trackingType === 'duration' ? t.secondsUnit : t.reps(Math.max(0, ...list.map((set) => set.max)));
 }
 
 /**
@@ -252,44 +257,47 @@ export function formatSets(
   trackingType: TrackingType,
   audience: 'pt' | 'client' = 'pt',
   cardio: CardioKind | null = null,
+  locale: Locale = DEFAULT_LOCALE,
 ): string {
   const list = timedSets(effective(sets, trackingType), cardio);
-  const unit = cardio === 'walk' ? 'dk' : trackingType === 'duration' ? 'sn' : 'tekrar';
-  const text = formatList(list, unit, audience === 'client');
-  return text && [text, ...cardioTargetParts(list)].join(' · ');
+  const text = formatList(list, unitOf(trackingType, cardio, list, locale), audience === 'client', locale);
+  return text && [text, ...cardioTargetParts(list, locale)].join(' · ');
 }
 
-function formatList(list: readonly SetSpec[], unit: string, client: boolean): string {
+function formatList(list: readonly SetSpec[], unit: string, client: boolean, locale: Locale): string {
+  const t = catalogMessages(locale);
   const shape = setShape(list);
   const first = list[0];
   if (!first) return '';
+  const pct = (value: number) => t.percent(count(value, locale));
+  const positions = () => amrapIndexes(list).map((index) => index + 1);
 
   if (shape.kind === 'straight') {
-    const base = `${count(list.length)} × ${range(first)} ${unit}`;
+    const base = `${count(list.length, locale)} × ${range(first, locale)} ${unit}`;
     switch (shape.amrap) {
       case 'none':
         return base;
       case 'last':
-        if (list.length === 1) return `${base} · ${client ? 'yapabildiğin kadar' : 'AMRAP'}`;
-        return `${base} · ${client ? 'son sette yapabildiğin kadar' : 'son set AMRAP'}`;
+        if (list.length === 1) return `${base} · ${client ? t.setPlan.asManyAsYouCan : 'AMRAP'}`;
+        return `${base} · ${client ? t.setPlan.lastSetAsMany : t.setPlan.lastSetAmrap}`;
       case 'all':
-        return `${base} · ${client ? 'her sette yapabildiğin kadar' : 'hepsi AMRAP'}`;
+        return `${base} · ${client ? t.setPlan.everySetAsMany : t.setPlan.allAmrap}`;
       case 'some':
-        return `${base} · ${client ? `${positions(amrapIndexes(list))} sette yapabildiğin kadar` : `AMRAP: ${positions(amrapIndexes(list))} set`}`;
+        return `${base} · ${client ? t.setPlan.someSetsAsMany(positions()) : t.setPlan.someAmrap(positions())}`;
     }
   }
 
-  const steps = `${list.map((set) => `${range(set)}${set.amrap ? '+' : ''}`).join(' / ')} ${unit}`;
+  const steps = `${list.map((set) => `${range(set, locale)}${set.amrap ? '+' : ''}`).join(' / ')} ${unit}`;
   const pcts = list.map(pctOf);
   const load =
     shape.kind === 'pyramid'
-      ? ` · piramit %${count(pcts[0] as number)} → %100`
+      ? ` · ${t.setPlan.pyramid(pct(pcts[0] as number), pct(100))}`
       : shape.kind === 'backoff'
-        ? ` · back-off %${count(pcts[1] as number)}`
-        : pcts.some((pct) => pct < 100)
-          ? ` · yük ${pcts.map((pct) => `%${count(pct)}`).join(' / ')}`
+        ? ` · ${t.setPlan.backoff(pct(pcts[1] as number))}`
+        : pcts.some((value) => value < 100)
+          ? ` · ${t.setPlan.load(pcts.map(pct).join(' / '))}`
           : '';
-  const amrapNote = client && shape.amrap !== 'none' ? ' · +: yapabildiğin kadar' : '';
+  const amrapNote = client && shape.amrap !== 'none' ? ` · +: ${t.setPlan.asManyAsYouCan}` : '';
   return `${steps}${load}${amrapNote}`;
 }
 
@@ -297,34 +305,42 @@ function formatList(list: readonly SetSpec[], unit: string, client: boolean): st
  * Program geçmişi için kısa biçim: "3×8–12", "3×30–60 sn, son set AMRAP",
  * "12/10/8 (piramit %80/%90/%100)", "5/8/8 (back-off %85)", "8–12/8–12 (yük %70/%100)".
  */
-export function setsText(sets: readonly SetSpec[], trackingType: TrackingType, cardio: CardioKind | null = null): string {
+export function setsText(
+  sets: readonly SetSpec[],
+  trackingType: TrackingType,
+  cardio: CardioKind | null = null,
+  locale: Locale = DEFAULT_LOCALE,
+): string {
+  const t = catalogMessages(locale).time;
   const list = timedSets(effective(sets, trackingType), cardio);
-  const text = shortList(list, cardio === 'walk' ? ' dk' : trackingType === 'duration' ? ' sn' : '');
-  return text && [text, ...cardioTargetParts(list)].join(' · ');
+  const text = shortList(list, cardio === 'walk' ? ` ${t.minutesUnit}` : trackingType === 'duration' ? ` ${t.secondsUnit}` : '', locale);
+  return text && [text, ...cardioTargetParts(list, locale)].join(' · ');
 }
 
-function shortList(list: readonly SetSpec[], seconds: string): string {
+function shortList(list: readonly SetSpec[], seconds: string, locale: Locale): string {
+  const t = catalogMessages(locale);
   const shape = setShape(list);
   const first = list[0];
   if (!first) return '';
+  const pct = (value: number) => t.percent(count(value, locale));
 
   if (shape.kind === 'straight') {
-    const base = `${count(list.length)}×${range(first)}${seconds}`;
+    const base = `${count(list.length, locale)}×${range(first, locale)}${seconds}`;
     switch (shape.amrap) {
       case 'none':
         return base;
       case 'last':
-        return list.length === 1 ? `${base}, AMRAP` : `${base}, son set AMRAP`;
+        return list.length === 1 ? `${base}, AMRAP` : `${base}, ${t.setPlan.lastSetAmrap}`;
       case 'all':
-        return `${base}, hepsi AMRAP`;
+        return `${base}, ${t.setPlan.allAmrap}`;
       case 'some':
-        return `${base}, AMRAP: ${positions(amrapIndexes(list))} set`;
+        return `${base}, ${t.setPlan.someAmrap(amrapIndexes(list).map((index) => index + 1))}`;
     }
   }
 
-  const steps = `${list.map((set) => `${range(set)}${set.amrap ? '+' : ''}`).join('/')}${seconds}`;
+  const steps = `${list.map((set) => `${range(set, locale)}${set.amrap ? '+' : ''}`).join('/')}${seconds}`;
   const pcts = list.map(pctOf);
-  if (shape.kind === 'pyramid') return `${steps} (piramit ${pcts.map((pct) => `%${count(pct)}`).join('/')})`;
-  if (shape.kind === 'backoff') return `${steps} (back-off %${count(pcts[1] as number)})`;
-  return pcts.some((pct) => pct < 100) ? `${steps} (yük ${pcts.map((pct) => `%${count(pct)}`).join('/')})` : steps;
+  if (shape.kind === 'pyramid') return `${steps} (${t.setPlan.pyramidList(pcts.map(pct).join('/'))})`;
+  if (shape.kind === 'backoff') return `${steps} (${t.setPlan.backoff(pct(pcts[1] as number))})`;
+  return pcts.some((value) => value < 100) ? `${steps} (${t.setPlan.load(pcts.map(pct).join('/'))})` : steps;
 }

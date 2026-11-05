@@ -1,3 +1,5 @@
+import { DEFAULT_LOCALE, intlLocale, type Locale } from '../i18n/locale.ts';
+import { catalogMessages } from '../i18n/messages/catalog/index.ts';
 import { progressionOf, type ProgressionRule, type ProgressionScheme, type TrackingType } from './progression.ts';
 import { cardioKind } from './cardio.ts';
 import { SET_LIMITS, referenceSet, uniformSets, type SetSpec } from './set-plan.ts';
@@ -26,18 +28,17 @@ export const ROW_ID_PATTERN = /^r_[a-z0-9]{6}$/;
 export const BLOCK_KINDS = ['single', 'superset', 'circuit', 'complex'] as const;
 export type BlockKind = (typeof BLOCK_KINDS)[number];
 
-export const BLOCK_KIND_LABELS: Record<BlockKind, string> = {
-  single: 'Tek hareket',
-  superset: 'Süperset',
-  circuit: 'Devre',
-  complex: 'Kompleks',
-};
+export function blockKindLabels(locale: Locale = DEFAULT_LOCALE): Record<BlockKind, string> {
+  return catalogMessages(locale).blocks.kinds;
+}
 
-export const BLOCK_KIND_HINTS: Record<Exclude<BlockKind, 'single'>, string> = {
-  superset: 'İki hareket arka arkaya; dinlenme turun sonunda.',
-  circuit: 'İstasyonlar arasında kısa geçiş; dinlenme turun sonunda.',
-  complex: 'Aynı ağırlıkla ara vermeden; dinlenme turun sonunda.',
-};
+export function blockKindHints(locale: Locale = DEFAULT_LOCALE): Record<Exclude<BlockKind, 'single'>, string> {
+  return catalogMessages(locale).blocks.hints;
+}
+
+/** Türkçe adlar (eski çağrılar); arayüz `blockKindLabels(locale)` / `blockKindHints(locale)` kullanır. */
+export const BLOCK_KIND_LABELS: Record<BlockKind, string> = blockKindLabels('tr');
+export const BLOCK_KIND_HINTS: Record<Exclude<BlockKind, 'single'>, string> = blockKindHints('tr');
 
 /** Blok türüne göre hareket sayısı. */
 export const BLOCK_ROWS: Record<BlockKind, { min: number; max: number }> = {
@@ -134,17 +135,10 @@ export type PlanExercise = {
 /** Antrenman ekranının set sırası: hangi satır, kaçıncı tur, ardından ne kadar dinlenme. */
 export type SetSlot = { blockId: string; rowId: string; round: number; restAfterSeconds: number };
 
-const SHAPE_MESSAGES: Record<BlockKind, string> = {
-  single: 'Tek hareketlik blokta bir hareket olur.',
-  superset: 'Süperset iki hareketten oluşur.',
-  circuit: 'Devre 3 ile 8 hareket arasında olur.',
-  complex: 'Kompleks 2 ile 6 hareket arasında olur.',
-};
-
 /** Blok türü hareket sayısına uymuyorsa sebebi; uyuyorsa `null`. */
-export function blockShapeProblem(kind: BlockKind, rowCount: number): string | null {
+export function blockShapeProblem(kind: BlockKind, rowCount: number, locale: Locale = DEFAULT_LOCALE): string | null {
   const { min, max } = BLOCK_ROWS[kind];
-  return rowCount >= min && rowCount <= max ? null : SHAPE_MESSAGES[kind];
+  return rowCount >= min && rowCount <= max ? null : catalogMessages(locale).blocks.shapeProblems[kind];
 }
 
 /**
@@ -177,13 +171,18 @@ export function roundsOf(block: Pick<TemplateBlock, 'rows'>): number {
  * Grupta seti erken biten hareketler: "Leg Curl 3 sette biter; sonraki turlarda atlanır."
  * Bütün hareketlerin set sayısı aynıysa (ya da tek harekette) `null`.
  */
-export function groupSkipNote(block: Pick<TemplateBlock, 'kind' | 'rows'>, titleOf: (row: TemplateRow) => string): string | null {
+export function groupSkipNote(
+  block: Pick<TemplateBlock, 'kind' | 'rows'>,
+  titleOf: (row: TemplateRow) => string,
+  locale: Locale = DEFAULT_LOCALE,
+): string | null {
   if (block.kind === 'single') return null;
+  const t = catalogMessages(locale).blocks;
   const rounds = roundsOf(block);
   const short = block.rows.filter((row) => row.sets.length < rounds);
   if (short.length === 0) return null;
-  const list = short.map((row) => `${titleOf(row)} ${count(row.sets.length)}`).join(', ');
-  return `${list} sette biter; sonraki turlarda atlanır.`;
+  const list = short.map((row) => t.skipItem(titleOf(row), row.sets.length, count(row.sets.length, locale))).join(', ');
+  return t.skipNote(list);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -504,47 +503,51 @@ export function templateSummary(
   return { rows, workingSets, groups, missingRowIds, deviceIds, minutes: estimateMinutes(counted, exercises) };
 }
 
-function count(value: number): string {
-  return value.toLocaleString('tr-TR');
+function count(value: number, locale: Locale = DEFAULT_LOCALE): string {
+  return value.toLocaleString(intlLocale(locale));
 }
 
 /** "8–12 tekrar", "5 tekrar", "30–60 sn". */
-export function formatTarget(target: TemplateTarget, trackingType: TrackingType): string {
-  const unit = trackingType === 'duration' ? 'sn' : 'tekrar';
-  return target.min === target.max ? `${count(target.min)} ${unit}` : `${count(target.min)}–${count(target.max)} ${unit}`;
+export function formatTarget(target: TemplateTarget, trackingType: TrackingType, locale: Locale = DEFAULT_LOCALE): string {
+  const t = catalogMessages(locale).time;
+  const unit = trackingType === 'duration' ? t.secondsUnit : t.reps(target.max);
+  return target.min === target.max
+    ? `${count(target.min, locale)} ${unit}`
+    : `${count(target.min, locale)}–${count(target.max, locale)} ${unit}`;
 }
 
 /** "Ara yok", "45 sn", "1 dk", "1 dk 30 sn". */
-export function formatRest(seconds: number): string {
-  if (seconds <= 0) return 'Ara yok';
+export function formatRest(seconds: number, locale: Locale = DEFAULT_LOCALE): string {
+  const t = catalogMessages(locale).time;
+  if (seconds <= 0) return t.noRest;
   const minutes = Math.floor(seconds / 60);
   const rest = seconds % 60;
-  if (minutes === 0) return `${rest} sn`;
-  return rest === 0 ? `${minutes} dk` : `${minutes} dk ${rest} sn`;
-}
-
-function restPhrase(seconds: number, where: string): string {
-  return seconds > 0 ? `${where}${formatRest(seconds)} dinlenme` : `${where}dinlenme yok`;
+  if (minutes === 0) return t.seconds(String(rest));
+  return rest === 0 ? t.minutes(String(minutes)) : t.minutesSeconds(String(minutes), String(rest));
 }
 
 /**
  * Bloğun tek satırlık anlatımı (detayda grup başlığı, düzenleyicide ipucu). `sets`: tek
  * harekette set sayısı, grupta tur; çağıran `{ ...block, sets: roundsOf(block) }` verir.
  */
-export function describeBlock(block: Pick<TemplateBlock, 'kind' | 'restSeconds' | 'transitionSeconds'> & { sets: number }): string {
-  const rounds = `${count(block.sets)} tur`;
+export function describeBlock(
+  block: Pick<TemplateBlock, 'kind' | 'restSeconds' | 'transitionSeconds'> & { sets: number },
+  locale: Locale = DEFAULT_LOCALE,
+): string {
+  const t = catalogMessages(locale).blocks;
+  const rest = (afterRound: boolean) => t.rest(block.restSeconds > 0 ? formatRest(block.restSeconds, locale) : null, afterRound);
+  const rounds = t.rounds(block.sets, count(block.sets, locale));
   switch (block.kind) {
     case 'single':
-      return `${count(block.sets)} set · ${restPhrase(block.restSeconds, '')}`;
+      return `${t.sets(block.sets, count(block.sets, locale))} · ${rest(false)}`;
     case 'superset':
-      return `${rounds} · ${restPhrase(block.restSeconds, 'tur sonunda ')}`;
+      return `${rounds} · ${rest(true)}`;
     case 'circuit': {
       const transition = block.transitionSeconds ?? DEFAULT_TRANSITION_SECONDS;
-      const between = transition > 0 ? `istasyon arası ${formatRest(transition)}` : 'istasyon arası ara yok';
-      return `${rounds} · ${between} · ${restPhrase(block.restSeconds, 'tur sonunda ')}`;
+      return `${rounds} · ${t.betweenStations(transition > 0 ? formatRest(transition, locale) : null)} · ${rest(true)}`;
     }
     case 'complex':
-      return `${rounds} · ara vermeden, aynı ağırlıkla · ${restPhrase(block.restSeconds, 'tur sonunda ')}`;
+      return `${rounds} · ${t.complexNote} · ${rest(true)}`;
   }
 }
 
@@ -566,16 +569,18 @@ export function normalizeTemplate(
   body: TemplateBody,
   ctx: { exercises: ReadonlyMap<string, PlanExercise>; deviceIds: ReadonlySet<string> },
   options: { storedRows?: ReadonlyMap<string, Pick<TemplateRow, 'rule' | 'deviceId'>> } = {},
+  locale: Locale = DEFAULT_LOCALE,
 ): { blocks: TemplateBlock[]; errors: Record<string, string> } {
+  const t = catalogMessages(locale).blocks;
   const errors: Record<string, string> = {};
   const blocks = body.blocks.map((block, i): TemplateBlock => {
     const rows = block.rows.map((row, j): TemplateRow => {
       const at = `blocks.${i}.rows.${j}`;
       const exercise = ctx.exercises.get(row.exerciseId);
-      if (!exercise) errors[`${at}.exerciseId`] = 'Bu egzersiz kütüphanede yok; kartı sil, yerine yenisini ekle.';
+      if (!exercise) errors[`${at}.exerciseId`] = t.missingExercise;
       const sets = row.sets.map((set, k): SetSpec => {
         if (exercise && REPS_TRACKING.has(exercise.trackingType) && set.max > TEMPLATE_LIMITS.repsMax) {
-          errors[`${at}.sets.${k}.max`] = `Tekrar hedefi en fazla ${TEMPLATE_LIMITS.repsMax}.`;
+          errors[`${at}.sets.${k}.max`] = t.repsMax(TEMPLATE_LIMITS.repsMax);
         }
         // Egzersiz yoksa (hata zaten bildirildi) yüzde olduğu gibi kalır.
         const keepPct = set.loadPct !== undefined && set.loadPct < 100 && (!exercise || exercise.trackingType === 'weight_reps');
@@ -592,7 +597,7 @@ export function normalizeTemplate(
       });
       const stored = options.storedRows?.get(row.id);
       let deviceId = row.deviceId;
-      if (deviceId !== undefined && !ctx.deviceIds.has(deviceId)) errors[`${at}.deviceId`] = 'Bu cihaz artık yok.';
+      if (deviceId !== undefined && !ctx.deviceIds.has(deviceId)) errors[`${at}.deviceId`] = t.missingDevice;
       if (exercise && deviceId === exercise.deviceId && deviceId !== stored?.deviceId) deviceId = undefined;
 
       let rule = row.rule;

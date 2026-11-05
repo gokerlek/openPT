@@ -1,3 +1,5 @@
+import { DEFAULT_LOCALE, type Locale } from '../i18n/locale.ts';
+
 /**
  * Eğilim, tahmin ve plato — ölçüm ve kuvvet grafiklerinin ortak hesabı.
  *
@@ -328,4 +330,11 @@ export type RangePreset = keyof typeof RANGE_PRESETS;
 export function rangeStart(preset: RangePreset, today: string): string | undefined {
   const days = RANGE_PRESETS[preset].days;
   return days === null ? undefined : dateOf(dayNumber(today) - days);
+}
+
+/* --- dil: imza dondurma (i18n planı §7 F). Sahibi görev çevirir; şimdilik Türkçe döner. --- */
+
+/** Hazır aralıkların adları okuyanın dilinde (`RANGE_PRESETS`). */
+export function rangePresets(_locale: Locale = DEFAULT_LOCALE): typeof RANGE_PRESETS {
+  return RANGE_PRESETS;
 }

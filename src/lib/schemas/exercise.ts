@@ -1,4 +1,6 @@
 import * as v from 'valibot';
+import { DEFAULT_LOCALE, type Locale } from '../../i18n/locale.ts';
+import { catalogMessages } from '../../i18n/messages/catalog/index.ts';
 import { MOVEMENT_PATTERNS } from '../alternatives.ts';
 import { DEEP_MUSCLE_MAX, DEEP_MUSCLES } from '../deep-muscles.ts';
 import { parseCondition } from '../conditions.ts';
@@ -242,20 +244,15 @@ export type ExerciseInput = v.InferOutput<typeof exerciseFormSchema>;
 export type Equipment = (typeof EQUIPMENT)[number];
 export type Muscle = (typeof MUSCLES)[number];
 
-/** Kasların bölgeleri (Göğüs, Omuz, Sırt…): kas listelerini sıralamak ve gruplamak için. */
-export const MUSCLE_GROUPS: readonly { id: string; label: string; muscles: readonly Muscle[] }[] = [
-  { id: 'chest', label: 'Göğüs', muscles: ['chest_upper', 'chest_lower'] },
-  { id: 'shoulders', label: 'Omuz', muscles: ['delt_front', 'delt_side', 'delt_rear'] },
-  {
-    id: 'back',
-    label: 'Sırt',
-    muscles: ['traps_upper', 'traps_mid', 'traps_lower', 'lats_upper', 'lats_mid', 'lats_lower', 'erectors', 'quadratus'],
-  },
-  { id: 'arms', label: 'Kol', muscles: ['biceps', 'triceps_long', 'triceps_lateral', 'forearm_flexors', 'forearm_extensors'] },
-  { id: 'core', label: 'Karın', muscles: ['abs_upper', 'abs_lower', 'obliques', 'serratus'] },
+/** Kasların bölgeleri (Göğüs, Omuz, Sırt…): kas listelerini sıralamak ve gruplamak için. Adlar `catalog` sözlüğünde. */
+const MUSCLE_GROUP_PARTS = [
+  { id: 'chest', muscles: ['chest_upper', 'chest_lower'] },
+  { id: 'shoulders', muscles: ['delt_front', 'delt_side', 'delt_rear'] },
+  { id: 'back', muscles: ['traps_upper', 'traps_mid', 'traps_lower', 'lats_upper', 'lats_mid', 'lats_lower', 'erectors', 'quadratus'] },
+  { id: 'arms', muscles: ['biceps', 'triceps_long', 'triceps_lateral', 'forearm_flexors', 'forearm_extensors'] },
+  { id: 'core', muscles: ['abs_upper', 'abs_lower', 'obliques', 'serratus'] },
   {
     id: 'legs',
-    label: 'Kalça ve bacak',
     muscles: [
       'glutes',
       'glute_medius',
@@ -270,27 +267,43 @@ export const MUSCLE_GROUPS: readonly { id: string; label: string; muscles: reado
       'tibialis',
     ],
   },
-  { id: 'neck', label: 'Boyun', muscles: ['neck', 'nape'] },
-  { id: 'other', label: 'Diğer', muscles: ['cardio'] },
-];
+  { id: 'neck', muscles: ['neck', 'nape'] },
+  { id: 'other', muscles: ['cardio'] },
+] as const satisfies readonly { id: string; muscles: readonly Muscle[] }[];
+
+export function muscleGroups(locale: Locale = DEFAULT_LOCALE): readonly { id: string; label: string; muscles: readonly Muscle[] }[] {
+  const labels = catalogMessages(locale).muscleGroups;
+  return MUSCLE_GROUP_PARTS.map((group) => ({ id: group.id, label: labels[group.id], muscles: group.muscles }));
+}
+
+/** Türkçe bölgeler (eski çağrılar); arayüz `muscleGroups(locale)` kullanır. */
+export const MUSCLE_GROUPS: readonly { id: string; label: string; muscles: readonly Muscle[] }[] = muscleGroups('tr');
 
 /**
  * Birden çok parçadan oluşan kaslar. Özetlerde bütün parçaları seçiliyse tek ad
  * yazılır: "Üst kanat, Orta kanat, Alt kanat" yerine "Kanat" (`src/lib/muscles.ts`).
  */
-export const MUSCLE_FAMILIES: readonly { label: string; muscles: readonly Muscle[] }[] = [
-  { label: 'Göğüs', muscles: ['chest_upper', 'chest_lower'] },
-  { label: 'Omuz', muscles: ['delt_front', 'delt_side', 'delt_rear'] },
-  { label: 'Trapez', muscles: ['traps_upper', 'traps_mid', 'traps_lower'] },
-  { label: 'Kanat', muscles: ['lats_upper', 'lats_mid', 'lats_lower'] },
-  { label: 'Bel', muscles: ['erectors', 'quadratus'] },
-  { label: 'Triceps', muscles: ['triceps_long', 'triceps_lateral'] },
-  { label: 'Ön kol', muscles: ['forearm_flexors', 'forearm_extensors'] },
-  { label: 'Karın', muscles: ['abs_upper', 'abs_lower'] },
-  { label: 'Arka bacak', muscles: ['hamstrings_medial', 'hamstrings_lateral'] },
-  { label: 'Baldır', muscles: ['gastroc_medial', 'gastroc_lateral', 'soleus'] },
-  { label: 'Boyun', muscles: ['neck', 'nape'] },
-];
+const MUSCLE_FAMILY_PARTS = [
+  { id: 'chest', muscles: ['chest_upper', 'chest_lower'] },
+  { id: 'shoulders', muscles: ['delt_front', 'delt_side', 'delt_rear'] },
+  { id: 'traps', muscles: ['traps_upper', 'traps_mid', 'traps_lower'] },
+  { id: 'lats', muscles: ['lats_upper', 'lats_mid', 'lats_lower'] },
+  { id: 'lowerBack', muscles: ['erectors', 'quadratus'] },
+  { id: 'triceps', muscles: ['triceps_long', 'triceps_lateral'] },
+  { id: 'forearms', muscles: ['forearm_flexors', 'forearm_extensors'] },
+  { id: 'abs', muscles: ['abs_upper', 'abs_lower'] },
+  { id: 'hamstrings', muscles: ['hamstrings_medial', 'hamstrings_lateral'] },
+  { id: 'calves', muscles: ['gastroc_medial', 'gastroc_lateral', 'soleus'] },
+  { id: 'neck', muscles: ['neck', 'nape'] },
+] as const satisfies readonly { id: string; muscles: readonly Muscle[] }[];
+
+export function muscleFamilies(locale: Locale = DEFAULT_LOCALE): readonly { label: string; muscles: readonly Muscle[] }[] {
+  const labels = catalogMessages(locale).muscleFamilies;
+  return MUSCLE_FAMILY_PARTS.map((family) => ({ label: labels[family.id], muscles: family.muscles }));
+}
+
+/** Türkçe aileler (eski çağrılar ve muadil sıralamasının anahtarı, `familyOf`); arayüz `muscleFamilies(locale)` kullanır. */
+export const MUSCLE_FAMILIES: readonly { label: string; muscles: readonly Muscle[] }[] = muscleFamilies('tr');
 
 /**
  * Önceki sürümlerden kalan kas değerleri (12'li grup ve 24'lü liste) → yeni parçalar.
@@ -357,60 +370,19 @@ function migrateStoredExercise(input: unknown): unknown {
 /** Repo'daki `data/exercises.json`: eski alan ve kas adları okunurken yenisine çevrilir. */
 export const customExercisesSchema = v.array(v.pipe(v.unknown(), v.transform(migrateStoredExercise), exerciseSchema));
 
-export const EQUIPMENT_LABELS: Record<Equipment, string> = {
-  barbell: 'Halter',
-  dumbbell: 'Dambıl',
-  machine: 'Makine',
-  cable: 'Kablo',
-  band: 'Direnç bandı',
-  kettlebell: 'Kettlebell',
-  bodyweight: 'Vücut ağırlığı',
-  cardio_machine: 'Kardiyo aleti',
-};
+export function equipmentLabels(locale: Locale = DEFAULT_LOCALE): Record<Equipment, string> {
+  return catalogMessages(locale).equipment;
+}
 
-export const CATEGORY_LABELS: Record<Category, string> = {
-  compound: 'Bileşik',
-  isolation: 'İzolasyon',
-  conditioning: 'Kondisyon',
-  warmup: 'Isınma',
-  cooldown: 'Soğuma',
-};
+export function categoryLabels(locale: Locale = DEFAULT_LOCALE): Record<Category, string> {
+  return catalogMessages(locale).categories;
+}
 
-export const MUSCLE_LABELS: Record<Muscle, string> = {
-  chest_upper: 'Üst göğüs',
-  chest_lower: 'Alt göğüs',
-  delt_front: 'Ön omuz',
-  delt_side: 'Yan omuz',
-  delt_rear: 'Arka omuz',
-  traps_upper: 'Üst trapez',
-  traps_mid: 'Orta trapez',
-  traps_lower: 'Alt trapez',
-  lats_upper: 'Üst kanat',
-  lats_mid: 'Orta kanat',
-  lats_lower: 'Alt kanat',
-  erectors: 'Bel dikleştiricileri',
-  quadratus: 'Kuadratus (QL)',
-  biceps: 'Biceps',
-  triceps_long: 'Triceps uzun baş',
-  triceps_lateral: 'Triceps dış baş',
-  forearm_flexors: 'Ön kol bükücüleri',
-  forearm_extensors: 'Ön kol açıcıları',
-  abs_upper: 'Üst karın',
-  abs_lower: 'Alt karın',
-  obliques: 'Yan karın',
-  serratus: 'Serratus',
-  glutes: 'Kalça',
-  glute_medius: 'Yan kalça',
-  hip_flexors: 'Kalça fleksörü',
-  quadriceps: 'Ön bacak',
-  adductors: 'İç bacak',
-  hamstrings_medial: 'Arka bacak (iç)',
-  hamstrings_lateral: 'Arka bacak (dış)',
-  gastroc_medial: 'Baldır (iç)',
-  gastroc_lateral: 'Baldır (dış)',
-  soleus: 'Soleus',
-  tibialis: 'Kaval',
-  neck: 'Boyun ön yüzü (SCM)',
-  nape: 'Ense (üst trapez/levator)',
-  cardio: 'Kardiyo',
-};
+export function muscleLabels(locale: Locale = DEFAULT_LOCALE): Record<Muscle, string> {
+  return catalogMessages(locale).muscles;
+}
+
+/** Türkçe adlar (eski çağrılar); arayüz `equipmentLabels(locale)` / `categoryLabels` / `muscleLabels` kullanır. */
+export const EQUIPMENT_LABELS: Record<Equipment, string> = equipmentLabels('tr');
+export const CATEGORY_LABELS: Record<Category, string> = categoryLabels('tr');
+export const MUSCLE_LABELS: Record<Muscle, string> = muscleLabels('tr');

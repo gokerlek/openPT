@@ -1,3 +1,4 @@
+import { DEFAULT_LOCALE, type Locale } from '../i18n/locale.ts';
 import * as v from 'valibot';
 import { canRecordHealth } from './client-status.ts';
 import { todayIn } from './format.ts';
@@ -143,6 +144,8 @@ export const BROKEN_HEALTH = Symbol('broken-health');
 export const BROKEN_PROPOSALS = Symbol('broken-proposals');
 
 export type FinishInput = {
+  /** Yanıt ve kayıt metinlerinin dili (yazanın dili); yoksa Türkçe. */
+  locale?: Locale;
   /** Kayıttaki etkin belge; dosya yoksa null (çevrimdışı bitiş: ilk yazma bitiş). */
   stored: SessionDoc | null;
   incoming: SessionDoc;
@@ -346,7 +349,12 @@ export function planFinish(input: FinishInput): FinishPlan {
  * `PATCH`: silme (kalıcı iz), başka cihazda bitirilen seansa telefondaki setleri ekleme (kimlikle;
  * silinenler geri gelmez), seans zorluğu (son yazan kazanır), su dokunuşları. Hepsi birleştirmeden geçer.
  */
-export function applyPatch(stored: SessionDoc, body: PatchBody, now: Date): { doc: SessionDoc; changed: boolean; message: string } {
+export function applyPatch(
+  stored: SessionDoc,
+  body: PatchBody,
+  now: Date,
+  _locale: Locale = DEFAULT_LOCALE,
+): { doc: SessionDoc; changed: boolean; message: string } {
   const variants: SessionDoc[] = [stored];
   if (body.addSets?.length) variants.push({ ...stored, entries: body.addSets });
   if (body.waterTaps?.length) variants.push({ ...stored, waterTaps: body.waterTaps });

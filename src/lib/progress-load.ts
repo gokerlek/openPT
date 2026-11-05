@@ -1,3 +1,4 @@
+import type { Locale } from '../i18n/locale.ts';
 import { buildInsights, type HealthParts, type ProgressInsights } from './progress-insights.ts';
 import { buildProgressView, digestSession, PROGRESS_MAX_SESSIONS, type ProgressView, type SessionDigest } from './progress.ts';
 import type { TrainingExperience } from './schemas/client.ts';
@@ -29,7 +30,7 @@ import { parseWaterFile, WATER_PATH } from './water.ts';
  * başarılar ve seri — grafik bölümü (`insights`) yok.
  */
 export type ProgressScope = 'full' | 'records';
-export type ProgressOptions = { scope?: ProgressScope };
+export type ProgressOptions = { scope?: ProgressScope; /** Metinlerin dili; yoksa Türkçe. */ locale?: Locale };
 
 type ProgressError = { status: 'error'; message: string };
 export type ProgressLoad = { status: 'ok'; view: ProgressView; insights: ProgressInsights } | ProgressError;

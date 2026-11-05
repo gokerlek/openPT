@@ -1,4 +1,5 @@
 import 'server-only';
+import { DEFAULT_LOCALE, type Locale } from '../i18n/locale.ts';
 import { canRecordHealth, healthFieldState } from './client-status';
 import { careInputOf, careStampOf, editorCareOf, type CareInput, type EditorCare } from './constraint-filter';
 import { constraintsOf, type CareTags } from './constraints';
@@ -14,7 +15,7 @@ import { screeningMarks } from './screening-care';
  */
 
 /** Süzgecin girdisi; onay yoksa ya da dosya okunamıyorsa null. */
-export async function loadCareInput(client: Client, today: string): Promise<CareInput | null> {
+export async function loadCareInput(client: Client, today: string, _locale: Locale = DEFAULT_LOCALE): Promise<CareInput | null> {
   if (!canRecordHealth(client, 'conditions')) return null;
   const record = await readHealthIfAllowed(client, ['conditions']).catch(() => null);
   return record ? careInputOf(record, { today, painConsent: canRecordHealth(client, 'check_in') }) : null;
@@ -31,7 +32,7 @@ export async function loadEditorCare(
   client: Client,
   items: readonly (CareTags & { id: string; title: string })[],
   today: string,
-  options: { screening?: boolean } = {},
+  options: { screening?: boolean; /** Metinlerin dili; yoksa Türkçe. */ locale?: Locale } = {},
 ): Promise<EditorCare | null> {
   const state = healthFieldState(client, 'conditions');
   const conditionsSelected = state !== 'off' && state !== 'not_selected';
@@ -66,7 +67,7 @@ export type TodayCare = { stamp: string; input: CareInput | null };
  * ile aynı hesap; onay yoksa boş), `input` süzgecin girdisi (`loadCareInput` ile aynı; onay yoksa ya da dosya
  * okunamıyorsa null).
  */
-export async function loadTodayCare(client: Client, today: string): Promise<TodayCare> {
+export async function loadTodayCare(client: Client, today: string, _locale: Locale = DEFAULT_LOCALE): Promise<TodayCare> {
   if (!canRecordHealth(client, 'conditions')) return { stamp: '', input: null };
   const record = await readHealthIfAllowed(client, ['conditions']).catch(() => null);
   return {

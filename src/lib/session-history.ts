@@ -1,3 +1,4 @@
+import { DEFAULT_LOCALE, type Locale } from '../i18n/locale.ts';
 import { formatDay, formatKg, formatNumber, todayIn } from './format.ts';
 import { sessionDayText } from './own-program-text.ts';
 import { EFFORT_LABELS } from './progression.ts';
@@ -173,7 +174,7 @@ function skipText(reason: SkipReason | undefined): string {
  * Antrenmanın detayı: setleri olan ya da geçilen hareketler, yapılış sırasıyla. `bodyMassKg` (ölçüm onayıyla, seansın
  * günündeki kilo) verilirse yürüyüş/koşu setinin metninde kalori de (`cardio.ts`).
  */
-export function sessionDetail(doc: SessionDoc, timeZone: string, bodyMassKg?: number): SessionDetail {
+export function sessionDetail(doc: SessionDoc, timeZone: string, bodyMassKg?: number, _locale: Locale = DEFAULT_LOCALE): SessionDetail {
   const exercises: DetailExercise[] = [];
   for (const entry of entriesInOrder(doc)) {
     const working = entry.sets.filter((set) => set.type === 'working');

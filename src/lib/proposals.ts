@@ -1,3 +1,4 @@
+import { DEFAULT_LOCALE, type Locale } from '../i18n/locale.ts';
 import * as v from 'valibot';
 import { effectiveSets, sameSets } from './client-targets.ts';
 import { applyProgramEdit, type DiffContext } from './program-diff.ts';
@@ -313,7 +314,7 @@ function removeRow(phases: readonly ProgramPhase[], rowId: string): ProgramPhase
  * - `remove`: satır çıkar; günün tek hareketi çıkarılamaz.
  * - `add`: günün sonuna tek hareketlik blok (yeni kimliklerle); gün doluysa uygulanmaz.
  */
-export function applyProposal(program: Program, proposal: Proposal, ids: ProgramIdSource): ApplyProposalResult {
+export function applyProposal(program: Program, proposal: Proposal, ids: ProgramIdSource, _locale: Locale = DEFAULT_LOCALE): ApplyProposalResult {
   const phases = program.phases;
   if (proposal.kind === 'add') {
     const day = phases.flatMap((phase) => phase.days).find((item) => item.id === proposal.dayId);
@@ -417,4 +418,10 @@ export function planApproval(input: {
   const revision = result?.program.revision ?? program.revision;
   const proposals = decideProposal(file, id, { status: 'approved', at: now, revision }) ?? file;
   return { status: 'approved', program: result?.program ?? null, proposals, changes: result?.changes ?? [], revision };
+}
+
+/* --- dil: imza dondurma (i18n planı §7 F). Sahibi görev çevirir; şimdilik Türkçe döner. --- */
+
+export function outcomeLabels(_locale: Locale = DEFAULT_LOCALE): Record<Exclude<ProposalStatus, 'pending'>, string> {
+  return OUTCOME_LABELS;
 }

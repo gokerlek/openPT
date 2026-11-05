@@ -1,12 +1,13 @@
+import { DEFAULT_LOCALE, type Locale } from '../i18n/locale.ts';
 import {
   cleanWeekdays,
   dayOnWeekday,
   hasAssignments,
   phaseWeekdays,
-  WEEKDAY_NAMES,
-  WEEKDAY_SHORT,
   WEEKDAYS,
   weekAssignments,
+  weekdayLabels,
+  weekdayShortLabels,
   type AssignableDay,
   type Weekday,
 } from './day-assignments.ts';
@@ -36,6 +37,8 @@ export {
   WEEKDAY_NAMES,
   WEEKDAY_SHORT,
   WEEKDAYS,
+  weekdayLabels,
+  weekdayShortLabels,
   weekdaysChangeText,
   weekdaysText,
   type Weekday,
@@ -159,16 +162,18 @@ export function upcomingAssigned(
 }
 
 /** "Sal · Alt vücut, Per · Üst vücut"; atama yoksa boş. */
-export function assignmentsText(days: readonly AssignableDay[]): string {
+export function assignmentsText(days: readonly AssignableDay[], locale: Locale = DEFAULT_LOCALE): string {
+  const short = weekdayShortLabels(locale);
   return weekAssignments(days)
-    .map(({ weekday, day }) => `${WEEKDAY_SHORT[weekday as Weekday]} · ${day.name}`)
+    .map(({ weekday, day }) => `${short[weekday as Weekday]} · ${day.name}`)
     .join(', ');
 }
 
 /** "Salı, Perşembe" (PT'nin program kartı, sheet satırı); pazartesiden sıralı. */
-export function weekdayNamesText(list: readonly number[]): string {
+export function weekdayNamesText(list: readonly number[], locale: Locale = DEFAULT_LOCALE): string {
+  const names = weekdayLabels(locale);
   return normalizeWeekdays(list)
-    .map((weekday) => WEEKDAY_NAMES[weekday])
+    .map((weekday) => names[weekday])
     .join(', ');
 }
 

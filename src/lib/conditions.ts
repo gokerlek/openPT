@@ -10,7 +10,12 @@
  *
  * Tür (`kind`): tanı (`diagnosis`, varsayılan) bir sağlık profesyonelinin koyduğu şeydir; bulgu (`finding`)
  * PT'nin gözlemidir (postür, hareket taraması). Kısıt formunda ayrı seçicilerde çıkar; danışan bulguyu görmez.
+ *
+ * Adlar ve notlar `catalog` sözlüğünde (`conditionInfo(id, locale)`); klinik İngilizce bir uzmanın gözünden geçmeli.
  */
+
+import { DEFAULT_LOCALE, type Locale } from '../i18n/locale.ts';
+import { catalogMessages } from '../i18n/messages/catalog/index.ts';
 
 export const CONDITION_REGIONS = ['spine', 'neck', 'shoulder', 'elbow', 'wrist', 'hip', 'knee', 'ankle', 'systemic'] as const;
 export type ConditionRegion = (typeof CONDITION_REGIONS)[number];
@@ -34,148 +39,77 @@ export type ConditionInfo = {
   note?: string;
 };
 
-export const CONDITIONS = {
+/** Kuralların kodları: bölge, tür, kırmızı bayrak, niteleyiciler. Ad ve not `catalog` sözlüğünde. */
+const CONDITION_RULES = {
   // --- Omurga ---
-  lumbar_disc_herniation: {
-    label: 'Lomber disk hernisi',
-    region: 'spine',
-    qualifiers: ['acute', 'stable'],
-    note: 'Yüklü fleksiyon ve fleksiyon+rotasyon birleşimi disk hasarını ilerletir.',
-  },
-  lumbar_disc_herniation_with_radiculopathy: {
-    label: 'Radikülopatili disk hernisi (bacağa yayılan ağrı)',
-    region: 'spine',
-    redFlag: true,
-    note: 'Semptom periferikleşiyorsa (aşağı yayılıyorsa) program durur.',
-  },
-  flexion_intolerant_back: {
-    label: 'Fleksiyon intoleranslı bel',
-    region: 'spine',
-    note: 'Provokasyon testiyle doğrulanmış olmalı; genel fleksiyon yasağı herkese uygulanmaz.',
-  },
-  lumbar_spondylolisthesis: {
-    label: 'Spondilolistezis / kesme kuvvetine duyarlı omurga',
-    region: 'spine',
-    note: 'Yüksek shear ve yüklü ekstansiyon kaçınılır.',
-  },
-  lumbar_stenosis: {
-    label: 'Lomber stenoz',
-    region: 'spine',
-    note: 'Ekstansiyon intoleransı tipiktir; fleksiyon genelde rahatlatır.',
-  },
-  chronic_nonspecific_low_back_pain: {
-    label: 'Kronik non-spesifik bel ağrısı',
-    region: 'spine',
-    note: 'Yürüyüş bileşeni nüksü azaltır (WalkBack RKÇ).',
-  },
-  si_joint_pain: { label: 'Sakroiliak eklem ağrısı', region: 'hip' },
-  cauda_equina_or_progressive_neuro_deficit: {
-    label: 'Kauda ekina şüphesi / ilerleyici nörolojik defisit',
-    region: 'systemic',
-    redFlag: true,
-    note: 'Egzersiz yok; acil tıbbi değerlendirme.',
-  },
+  lumbar_disc_herniation: { region: 'spine', qualifiers: ['acute', 'stable'] },
+  lumbar_disc_herniation_with_radiculopathy: { region: 'spine', redFlag: true },
+  flexion_intolerant_back: { region: 'spine' },
+  lumbar_spondylolisthesis: { region: 'spine' },
+  lumbar_stenosis: { region: 'spine' },
+  chronic_nonspecific_low_back_pain: { region: 'spine' },
+  si_joint_pain: { region: 'hip' },
+  cauda_equina_or_progressive_neuro_deficit: { region: 'systemic', redFlag: true },
 
   // --- Boyun / üst sırt ---
-  cervical_pain: { label: 'Boyun ağrısı', region: 'neck' },
-  cervical_radiculopathy: { label: 'Servikal radikülopati', region: 'neck', redFlag: true, qualifiers: ['acute', 'stable'] },
-  upper_crossed_pattern: {
-    label: 'Üst çapraz patern (öne baş, yuvarlak omuz)',
-    region: 'neck',
-    kind: 'finding',
-    note: 'Bulgu; yasak değil. Skapular kontrol kurulana kadar baş üstü itişte uyarı.',
-  },
-  thoracic_extension_deficit: {
-    label: 'Torasik ekstansiyon kısıtı',
-    region: 'spine',
-    kind: 'finding',
-    note: 'Baş üstü hareketlerde açığı bel hiperekstansiyonu kapatır.',
-  },
+  cervical_pain: { region: 'neck' },
+  cervical_radiculopathy: { region: 'neck', redFlag: true, qualifiers: ['acute', 'stable'] },
+  upper_crossed_pattern: { region: 'neck', kind: 'finding' },
+  thoracic_extension_deficit: { region: 'spine', kind: 'finding' },
 
   // --- Omuz ---
-  subacromial_pain_syndrome: {
-    label: 'Subakromiyal ağrı sendromu (sıkışma)',
-    region: 'shoulder',
-    qualifiers: ['acute', 'severe'],
-    note: 'Ense arkası hareketler ve dar tutuş upright row kategorik olarak dışarıda.',
-  },
-  rotator_cuff_tendinopathy: { label: 'Rotator manşet tendinopatisi', region: 'shoulder', qualifiers: ['reactive'] },
-  anterior_shoulder_instability: {
-    label: 'Anterior omuz instabilitesi',
-    region: 'shoulder',
-    redFlag: true,
-    qualifiers: ['severe', 'postop'],
-    note: '90° abduksiyon + son aralık dış rotasyon (apprehension) pozisyonu yasak.',
-  },
-  multidirectional_shoulder_instability: { label: 'Multidireksiyonel omuz instabilitesi', region: 'shoulder' },
-  ac_joint_injury: { label: 'AC eklem sorunu', region: 'shoulder', qualifiers: ['severe'] },
-  scapular_dyskinesis: { label: 'Skapular diskinezi', region: 'shoulder', kind: 'finding', note: 'Tek başına bulgu; ağrısızsa yasak gerekçesi değildir.' },
+  subacromial_pain_syndrome: { region: 'shoulder', qualifiers: ['acute', 'severe'] },
+  rotator_cuff_tendinopathy: { region: 'shoulder', qualifiers: ['reactive'] },
+  anterior_shoulder_instability: { region: 'shoulder', redFlag: true, qualifiers: ['severe', 'postop'] },
+  multidirectional_shoulder_instability: { region: 'shoulder' },
+  ac_joint_injury: { region: 'shoulder', qualifiers: ['severe'] },
+  scapular_dyskinesis: { region: 'shoulder', kind: 'finding' },
 
   // --- Dirsek / el bileği ---
-  lateral_epicondylitis: { label: 'Lateral epikondilit (tenisçi dirseği)', region: 'elbow', qualifiers: ['acute'] },
-  wrist_pain: { label: 'El bileği ağrısı', region: 'wrist', qualifiers: ['severe'] },
+  lateral_epicondylitis: { region: 'elbow', qualifiers: ['acute'] },
+  wrist_pain: { region: 'wrist', qualifiers: ['severe'] },
 
   // --- Kalça ---
-  lower_crossed_pattern: {
-    label: 'Alt çapraz patern (anterior pelvik tilt)',
-    region: 'hip',
-    kind: 'finding',
-    note: 'Bulgu; tek postür fotoğrafına dayanıyorsa karar verdirmez.',
-  },
-  hip_impingement_fai: { label: 'Kalça sıkışması (FAI)', region: 'hip', note: 'Derin kalça fleksiyonunda semptom verir.' },
+  lower_crossed_pattern: { region: 'hip', kind: 'finding' },
+  hip_impingement_fai: { region: 'hip' },
 
   // --- Diz ---
-  patellofemoral_pain: { label: 'Patellofemoral ağrı (ön diz ağrısı)', region: 'knee', qualifiers: ['severe'] },
-  patellar_tendinopathy: { label: 'Patellar tendinopati', region: 'knee', qualifiers: ['reactive'] },
-  acl_reconstruction_early: {
-    label: 'ACL rekonstrüksiyonu erken dönem (0–12 hafta)',
-    region: 'knee',
-    redFlag: true,
-    note: 'Açık zincir diz ekstansiyonu haftaya ve ROM penceresine bağlı.',
-  },
-  knee_osteoarthritis: { label: 'Diz osteoartriti', region: 'knee', qualifiers: ['severe'] },
-  degenerative_meniscal_tear: { label: 'Dejeneratif menisküs yırtığı (kilitlenme yok)', region: 'knee' },
-  acute_meniscus_tear: { label: 'Akut menisküs yırtığı', region: 'knee', redFlag: true, note: 'Kilitlenme/blokaj varsa egzersiz yok.' },
-  meniscus_repair_postop: { label: 'Menisküs onarımı sonrası', region: 'knee', redFlag: true },
-  acute_knee_effusion: { label: 'Dizde akut şişlik (efüzyon)', region: 'knee', note: 'Efüzyon kuadriseps inhibisyonu yapar; yük artırılmaz.' },
-  dynamic_knee_valgus: { label: 'Dinamik diz valgusu', region: 'knee', kind: 'finding', note: 'Bulgu; nöromüsküler çalışmayla düzeltilir.' },
+  patellofemoral_pain: { region: 'knee', qualifiers: ['severe'] },
+  patellar_tendinopathy: { region: 'knee', qualifiers: ['reactive'] },
+  acl_reconstruction_early: { region: 'knee', redFlag: true },
+  knee_osteoarthritis: { region: 'knee', qualifiers: ['severe'] },
+  degenerative_meniscal_tear: { region: 'knee' },
+  acute_meniscus_tear: { region: 'knee', redFlag: true },
+  meniscus_repair_postop: { region: 'knee', redFlag: true },
+  acute_knee_effusion: { region: 'knee' },
+  dynamic_knee_valgus: { region: 'knee', kind: 'finding' },
 
   // --- Ayak bileği ---
-  ankle_dorsiflexion_restriction: {
-    label: 'Ayak bileği dorsifleksiyon kısıtı',
-    region: 'ankle',
-    kind: 'finding',
-    note: 'Derin squat’ta topuk yükseltilmezse açık belden kapanır.',
-  },
+  ankle_dorsiflexion_restriction: { region: 'ankle', kind: 'finding' },
 
   // --- Sistemik ---
-  hypertension: {
-    label: 'Hipertansiyon',
-    region: 'systemic',
-    qualifiers: ['controlled', 'uncontrolled'],
-    note: 'Valsalva ile ağır eksenel yük kan basıncını ani yükseltir.',
-  },
-  pregnancy_second_third_trimester: { label: 'Gebelik (2. ve 3. trimester)', region: 'systemic' },
+  hypertension: { region: 'systemic', qualifiers: ['controlled', 'uncontrolled'] },
+  pregnancy_second_third_trimester: { region: 'systemic' },
   // Eski kayıtlarda okunur; hiçbir seçicide çıkmaz (taramadaki ağrı tanısız hareket kısıtı olur, `kisit-tarama.md` §4.4).
-  movement_screen_pain_flag: {
-    label: 'Hareket testinde ağrı',
-    region: 'systemic',
-    kind: 'finding',
-    redFlag: true,
-    note: 'Hareket testinde ağrı: önce değerlendirme.',
-  },
-} as const satisfies Record<string, ConditionInfo>;
+  movement_screen_pain_flag: { region: 'systemic', kind: 'finding', redFlag: true },
+} as const satisfies Record<string, Omit<ConditionInfo, 'label' | 'note'>>;
 
-export type ConditionId = keyof typeof CONDITIONS;
-export const CONDITION_IDS = Object.keys(CONDITIONS) as ConditionId[];
+export type ConditionId = keyof typeof CONDITION_RULES;
+export const CONDITION_IDS = Object.keys(CONDITION_RULES) as ConditionId[];
 
-/** Sözlük kaydı; `satisfies` metinleri daralttığı için erişim buradan yapılır. */
-export function conditionInfo(id: ConditionId): ConditionInfo {
-  return CONDITIONS[id];
+/** Sözlük kaydı, adı ve notu okuyanın dilinde. */
+export function conditionInfo(id: ConditionId, locale: Locale = DEFAULT_LOCALE): ConditionInfo {
+  const text: { label: string; note?: string } = catalogMessages(locale).conditions[id];
+  return { label: text.label, ...CONDITION_RULES[id], ...(text.note !== undefined ? { note: text.note } : {}) };
 }
 
+/** Türkçe sözlük (eski çağrılar); arayüz `conditionInfo(id, locale)` kullanır. */
+export const CONDITIONS: Record<ConditionId, ConditionInfo> = Object.fromEntries(
+  CONDITION_IDS.map((id) => [id, conditionInfo(id, 'tr')]),
+) as Record<ConditionId, ConditionInfo>;
+
 export function isConditionId(value: string): value is ConditionId {
-  return value in CONDITIONS;
+  return value in CONDITION_RULES;
 }
 
 /** Danışanın kaydındaki bir kısıt: kimlik + (varsa) şiddet/faz. */
@@ -196,18 +130,16 @@ export function formatCondition({ id, qualifier }: ClientCondition): string {
   return qualifier ? `${id}:${qualifier}` : id;
 }
 
-export function conditionLabel({ id, qualifier }: ClientCondition): string {
-  const base = conditionInfo(id).label;
-  const ek: Partial<Record<ConditionQualifier, string>> = {
-    acute: 'akut',
-    reactive: 'reaktif',
-    severe: 'şiddetli',
-    stable: 'sakin dönem',
-    controlled: 'kontrollü',
-    uncontrolled: 'kontrolsüz',
-    postop: 'ameliyat sonrası',
-  };
-  return qualifier && ek[qualifier] ? `${base} (${ek[qualifier]})` : base;
+export function conditionLabel({ id, qualifier }: ClientCondition, locale: Locale = DEFAULT_LOCALE): string {
+  const t = catalogMessages(locale);
+  const base = conditionInfo(id, locale).label;
+  const ek: Partial<Record<ConditionQualifier, string>> = t.conditionQualifiers;
+  return qualifier && ek[qualifier] ? t.conditionWithQualifier(base, ek[qualifier]) : base;
+}
+
+/** Niteleyicilerin adları ("akut", "şiddetli"). */
+export function conditionQualifierLabels(locale: Locale = DEFAULT_LOCALE): Record<ConditionQualifier, string> {
+  return catalogMessages(locale).conditionQualifiers;
 }
 
 /** Sağlık profesyoneline yönlendirme isteyen kısıtlar. */
@@ -229,8 +161,8 @@ export const EMERGENCY_CONDITION_ID: ConditionId = 'cauda_equina_or_progressive_
  * Danışanın göreceği tanı adı (tasarım `kisit-tarama.md` §5.2): yalnız tanı türünde, niteleyicisiz temel ad;
  * adında niteleyici ya da kuşku sözcüğü geçen tanı hiç yazılmaz. Kaynağın hekim olup olmadığına çağıran bakar.
  */
-export function clientSafeLabel(id: ConditionId): string | null {
-  const info = conditionInfo(id);
+export function clientSafeLabel(id: ConditionId, locale: Locale = DEFAULT_LOCALE): string | null {
   if (conditionKind(id) !== 'diagnosis') return null;
-  return /akut|şiddetli|kontrolsüz|şüphe/i.test(info.label) ? null : info.label;
+  // Karar dilden bağımsız: Türkçe addaki sözcüğe bakılır, gösterilen ad okuyanın dilinde.
+  return /akut|şiddetli|kontrolsüz|şüphe/i.test(conditionInfo(id, 'tr').label) ? null : conditionInfo(id, locale).label;
 }

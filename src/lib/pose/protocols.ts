@@ -1,3 +1,5 @@
+import { DEFAULT_LOCALE, type Locale } from '../../i18n/locale.ts';
+
 export const POSE_TASKS=['front','side','squat','knee','hinge','shoulder_flexion','shoulder_abduction','elbow','sit_stand'] as const;
 export type PoseTask=(typeof POSE_TASKS)[number];
 export const POSE_PROTOCOL=2 as const;
@@ -17,3 +19,13 @@ export const PROTOCOLS:Record<PoseTask,PoseProtocol>={
 };
 
 export const METRIC_LABELS: Record<string, string> = {shoulder_tilt:'Omuz eğimi',hip_tilt:'Kalça çizgisi',trunk_tilt:'Gövde eğimi',near_knee:'Diz',near_hip:'Kalça',near_shoulder:'Kol kaldırma',near_elbow:'Dirsek',left_shoulder:'Sol kol',right_shoulder:'Sağ kol'};
+
+/* --- dil: imza dondurma (i18n planı §7 F). Sahibi görev çevirir; şimdilik Türkçe döner. --- */
+
+export function protocols(_locale: Locale = DEFAULT_LOCALE): Record<PoseTask, PoseProtocol> {
+  return PROTOCOLS;
+}
+
+export function metricLabels(_locale: Locale = DEFAULT_LOCALE): Record<string, string> {
+  return METRIC_LABELS;
+}

@@ -1,5 +1,8 @@
+import { DEFAULT_LOCALE, type Locale } from '../i18n/locale.ts';
+import { catalogMessages } from '../i18n/messages/catalog/index.ts';
+
 /**
- * Programların hafta günlerine atanması (Faz 3) — saf, içe aktarmasız (`program-plan.ts` ve `training-days.ts`
+ * Programların hafta günlerine atanması (Faz 3) — saf; yalnız sözlüğü içe aktarır (`program-plan.ts` ve `training-days.ts`
  * ikisi de okur). Evrenin her programı (günü) bir ya da birkaç ISO hafta gününe atanır (1 = Pazartesi … 7 = Pazar);
  * bir hafta günü evrede en çok bir programa. `weekdays` alanı yoksa program atanmamış; boş dizi düzenleyicide
  * "bütün günler kaldırıldı" demektir, dosyaya yazılmaz. Hafta günü sabitleri ve metinleri de burada.
@@ -8,16 +11,19 @@
 export const WEEKDAYS = [1, 2, 3, 4, 5, 6, 7] as const;
 export type Weekday = (typeof WEEKDAYS)[number];
 
-export const WEEKDAY_SHORT: Record<Weekday, string> = { 1: 'Pzt', 2: 'Sal', 3: 'Çar', 4: 'Per', 5: 'Cum', 6: 'Cmt', 7: 'Paz' };
-export const WEEKDAY_NAMES: Record<Weekday, string> = {
-  1: 'Pazartesi',
-  2: 'Salı',
-  3: 'Çarşamba',
-  4: 'Perşembe',
-  5: 'Cuma',
-  6: 'Cumartesi',
-  7: 'Pazar',
-};
+/** Kısa gün adları: "Pzt" / "Mon". */
+export function weekdayShortLabels(locale: Locale = DEFAULT_LOCALE): Record<Weekday, string> {
+  return catalogMessages(locale).weekdays.short;
+}
+
+/** Gün adları: "Pazartesi" / "Monday". */
+export function weekdayLabels(locale: Locale = DEFAULT_LOCALE): Record<Weekday, string> {
+  return catalogMessages(locale).weekdays.long;
+}
+
+/** Türkçe adlar (eski çağrılar); arayüz `weekdayShortLabels(locale)` / `weekdayLabels(locale)` kullanır. */
+export const WEEKDAY_SHORT: Record<Weekday, string> = weekdayShortLabels('tr');
+export const WEEKDAY_NAMES: Record<Weekday, string> = weekdayLabels('tr');
 
 /**
  * Atanabilir gün (program). Alanı yazan işlevler `D & AssignableDay` döner: alanı olmayan bir gün türü verilse de
@@ -54,19 +60,21 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 /** "Pzt, Çar, Cum"; boşsa boş metin. */
-export function weekdaysText(list: readonly number[]): string {
+export function weekdaysText(list: readonly number[], locale: Locale = DEFAULT_LOCALE): string {
+  const short = weekdayShortLabels(locale);
   return sortedWeekdays(list)
-    .map((day) => WEEKDAY_SHORT[day])
+    .map((day) => short[day])
     .join(', ');
 }
 
-/** Program geçmişinin cümlesi: "Antrenman günleri: Pzt, Çar, Cum → Sal, Per, Cmt". */
-export function weekdaysChangeText(before: readonly number[], after: readonly number[]): string {
-  const from = weekdaysText(before);
-  const to = weekdaysText(after);
-  if (!from) return `Antrenman günleri: ${to}`;
-  if (!to) return `Antrenman günleri kaldırıldı (önce ${from})`;
-  return `Antrenman günleri: ${from} → ${to}`;
+/** Program geçmişinin cümlesi (yazanın dilinde saklanır): "Antrenman günleri: Pzt, Çar, Cum → Sal, Per, Cmt". */
+export function weekdaysChangeText(before: readonly number[], after: readonly number[], locale: Locale = DEFAULT_LOCALE): string {
+  const t = catalogMessages(locale).weekdays;
+  const from = weekdaysText(before, locale);
+  const to = weekdaysText(after, locale);
+  if (!from) return t.set(to);
+  if (!to) return t.removed(from);
+  return t.changed(from, to);
 }
 
 /** Evrenin atanmış günlerinin birleşimi, pazartesiden sıralı (`schedule.weekdays` bundan türer). */

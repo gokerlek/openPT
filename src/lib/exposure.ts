@@ -1,3 +1,4 @@
+import { DEFAULT_LOCALE, type Locale } from '../i18n/locale.ts';
 import type { TrainingExperience } from './schemas/client.ts';
 import type { SessionIndex, SessionIndexRow } from './schemas/session.ts';
 
@@ -205,4 +206,10 @@ export function exposuresOf(
   options: { experience?: TrainingExperience | undefined; tuning?: Readonly<ExposureTuning> } = {},
 ): Map<string, Exposure> {
   return new Map([...new Set(exerciseIds)].map((id) => [id, exposureOf(id, index, now, options)]));
+}
+
+/* --- dil: imza dondurma (i18n planı §7 F). Sahibi görev çevirir; şimdilik Türkçe döner. --- */
+
+export function stageLabels(_locale: Locale = DEFAULT_LOCALE): Record<Stage, string> {
+  return STAGE_LABELS;
 }

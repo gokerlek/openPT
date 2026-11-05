@@ -1,3 +1,4 @@
+import type { Locale } from '../i18n/locale.ts';
 import {freezeWeeklyGoals} from './weekly-goals';
 import 'server-only';
 import { unstable_cache } from 'next/cache';
@@ -30,8 +31,20 @@ type ProgressClientRecord = Pick<Client, 'id' | 'training' | 'modules' | 'consen
  * `{ scope: 'records' }` (danışanın Rekorlar'ı): yalnız rekorlar, başarılar ve seri için gerekenler; `health.json`,
  * `water.json` ve planlanan gün okunmaz, grafik bölümü kurulmaz (`RecordsLoad`, `insights` yok).
  */
-export function loadProgress(client: ProgressClientRecord, now: Date, today: string, timeZone: string, options?: { scope?: 'full' }): Promise<ProgressLoad>;
-export function loadProgress(client: ProgressClientRecord, now: Date, today: string, timeZone: string, options: { scope: 'records' }): Promise<RecordsLoad>;
+export function loadProgress(
+  client: ProgressClientRecord,
+  now: Date,
+  today: string,
+  timeZone: string,
+  options?: { scope?: 'full'; locale?: Locale },
+): Promise<ProgressLoad>;
+export function loadProgress(
+  client: ProgressClientRecord,
+  now: Date,
+  today: string,
+  timeZone: string,
+  options: { scope: 'records'; locale?: Locale },
+): Promise<RecordsLoad>;
 export function loadProgress(
   client: ProgressClientRecord,
   now: Date,

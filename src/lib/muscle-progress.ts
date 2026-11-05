@@ -1,3 +1,4 @@
+import { DEFAULT_LOCALE, type Locale } from '../i18n/locale.ts';
 import {epley} from './personal-records.ts';
 import { classifyChange, measurementTrends, type ChangeKind, type LineKey } from './measurement-trends.ts';
 import type { MeasurementId } from './measurements.ts';
@@ -355,4 +356,11 @@ export function circumferenceByWindow(entries: readonly MeasurementEntry[], toda
   return Object.fromEntries(
     STRENGTH_WINDOW_KEYS.map((window) => [window, circumferenceChanges(entries, { from: strengthWindowStart(window, today), to: today })]),
   ) as Record<StrengthWindow, CircumferenceChange[]>;
+}
+
+/* --- dil: imza dondurma (i18n planı §7 F). Sahibi görev çevirir; şimdilik Türkçe döner. --- */
+
+/** Pencerelerin adları okuyanın dilinde (`STRENGTH_WINDOWS`). */
+export function strengthWindows(_locale: Locale = DEFAULT_LOCALE): typeof STRENGTH_WINDOWS {
+  return STRENGTH_WINDOWS;
 }

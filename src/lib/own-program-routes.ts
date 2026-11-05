@@ -1,3 +1,4 @@
+import { DEFAULT_LOCALE, type Locale } from '../i18n/locale.ts';
 import * as v from 'valibot';
 import { originGuard, postGuard } from './client-auth-routes.ts';
 import { BLOCKED_TEXT } from './exercise-caution.ts';
@@ -40,7 +41,7 @@ function fieldsOf(issues: readonly v.BaseIssue<unknown>[]): Record<string, strin
 }
 
 /** Kaydın sonucu yanıta (danışan ve PT uçları ortak). */
-export function saveResponse(result: OwnSaveResult, by: 'client' | 'pt'): SessionRouteResult {
+export function saveResponse(result: OwnSaveResult, by: 'client' | 'pt', _locale: Locale = DEFAULT_LOCALE): SessionRouteResult {
   switch (result.status) {
     case 'created':
       return {

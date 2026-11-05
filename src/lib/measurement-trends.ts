@@ -1,3 +1,4 @@
+import { DEFAULT_LOCALE, type Locale } from '../i18n/locale.ts';
 import {
   ENDURANCE_NOISE,
   MEASUREMENT_IDS,
@@ -145,6 +146,7 @@ function lineChange(points: readonly Point[], rule: NoiseRule | null): LineChang
 export function measurementTrends(
   entries: readonly MeasurementEntry[],
   { from, to }: { from?: string | undefined; to?: string | undefined } = {},
+  _locale: Locale = DEFAULT_LOCALE,
 ): MeasurementTrend[] {
   const trends: MeasurementTrend[] = [];
   for (const id of MEASUREMENT_IDS) {
@@ -276,7 +278,7 @@ const ALERT_ORDER: Record<MeasurementAlert['kind'], number> = { declining: 0, pl
  * kartında Eylül'de "son 4 hafta" diye Mart'ın eğilimi çıkmasın). `today`: uygulamanın saat
  * dilimindeki gün (`todayIn`).
  */
-export function measurementAlerts(entries: readonly MeasurementEntry[], today: string): MeasurementAlert[] {
+export function measurementAlerts(entries: readonly MeasurementEntry[], today: string, _locale: Locale = DEFAULT_LOCALE): MeasurementAlert[] {
   const since = rangeStart('4h', today);
   const alerts: MeasurementAlert[] = [];
   for (const trend of measurementTrends(entries)) {

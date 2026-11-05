@@ -1,4 +1,7 @@
 import type { Category, Equipment } from '@/lib/schemas/exercise';
+import { DEFAULT_LOCALE, type Locale } from '../i18n/locale.ts';
+import { catalogMessages } from '../i18n/messages/catalog/index.ts';
+import { getFormat } from './format.ts';
 
 /**
  * İlerleme (progressive overload) — bir sonraki antrenmanın ve setin önerisi.
@@ -84,27 +87,22 @@ export type Effort = (typeof EFFORTS)[number] | 'unknown';
 /** Zorluk → yedekte kalan tekrar tahmini (RIR). */
 export const EFFORT_RIR: Record<Effort, number> = { easy: 4, good: 2, hard: 1, fail: 0, unknown: 0 };
 
-export const EFFORT_LABELS: Record<Effort, string> = {
-  easy: 'Kolay',
-  good: 'İyi',
-  hard: 'Zor',
-  fail: 'Başaramadım',
-  unknown: 'Belirtilmedi',
-};
+export function effortLabels(locale: Locale = DEFAULT_LOCALE): Record<Effort, string> {
+  return catalogMessages(locale).progression.efforts;
+}
 
-export const PROGRESSION_LABELS: Record<ProgressionScheme, string> = {
-  double: 'Çift ilerleme',
-  linear: 'Doğrusal',
-  none: 'İlerleme yok',
-};
+export function progressionLabels(locale: Locale = DEFAULT_LOCALE): Record<ProgressionScheme, string> {
+  return catalogMessages(locale).progression.schemes;
+}
 
-export const RIR_LABELS: Record<number, string> = {
-  0: 'Tükenişe kadar',
-  1: '1 tekrar yedekte',
-  2: '2 tekrar yedekte',
-  3: '3 tekrar yedekte',
-  4: '4 tekrar yedekte',
-};
+export function rirLabels(locale: Locale = DEFAULT_LOCALE): Record<number, string> {
+  return catalogMessages(locale).progression.rir;
+}
+
+/** Türkçe adlar (eski çağrılar); arayüz `effortLabels(locale)` / `progressionLabels` / `rirLabels` kullanır. */
+export const EFFORT_LABELS: Record<Effort, string> = effortLabels('tr');
+export const PROGRESSION_LABELS: Record<ProgressionScheme, string> = progressionLabels('tr');
+export const RIR_LABELS: Record<number, string> = rirLabels('tr');
 
 /** Satırın bir seti (şablon ve programda saklanır). */
 export type SetTarget = {
@@ -193,30 +191,12 @@ export type SuggestionReason =
 
 export type Suggestion = Plan & { reason: SuggestionReason };
 
-export const REASON_LABELS: Record<SuggestionReason, string> = {
-  first_time: 'İlk kez: rahat bir ağırlıkla başla.',
-  range_increase: 'Tekrar aralığı değişti: ağırlık son antrenmandan çevrildi, en çok iki adım artıyor.',
-  increase: 'Hedefe ulaşıldı: ağırlık artıyor.',
-  add_rep: 'Aynı ağırlık, bir tekrar daha.',
-  add_time: 'Aynı hareket, biraz daha uzun.',
-  hold: 'Hedefin altında kaldı: aynı ağırlıkla tekrar dene.',
-  incomplete: 'Antrenman tamamlanmadı: artış yok, aynı ağırlıkla tekrar dene.',
-  decrease: 'Çok zorladı: ağırlık biraz azalıyor.',
-  deload: 'Üst üste tıkandı: hafif bir antrenman.',
-  harder_variant: 'Aralığın tepesine ulaşıldı: ağırlık ekle ya da zor bir varyasyona geç.',
-  device_max: 'Cihazın en ağır ayarındasın: tekrarları artır ya da zor bir varyasyona geç.',
-  no_progression: 'Bu hareket için ilerleme yok.',
-  confirm_increase: 'Tepeye ulaştın; bir kez daha yap, sonra artır.',
-  calibrate: 'Aradan sonra ilk antrenman: son ağırlığın biraz altında ayar.',
-  reps_first: 'Sonraki ağırlık büyük bir sıçrama: önce tekrar ekle.',
-  lighter_retry: 'Geçen sefer plandan hafifti: planı bir kez daha dene.',
-  lighten: 'Bugün hafif: ağırlık yaklaşık %15 az, 3 ve üstü setli harekette bir set eksik.',
-  pain_hold: 'Ağrı ya da irritabilite yükselmiş: artırma yok, aynı yükte kal.',
-  pain_reduce: 'Ağrı eşiği aşıldı ya da 24 saatte geçmedi: yük %15 azaldı.',
-  pain_reduce_unavailable:
-    'Ağrı eşiği aşıldı ya da 24 saatte geçmedi; yük azaltılamadı (zaten en hafif ayarda): tekrar ya da set sayısını azalt.',
-  paused: 'Bugün yük verilmiyor: önce değerlendirme gerekli.',
-};
+export function reasonLabels(locale: Locale = DEFAULT_LOCALE): Record<SuggestionReason, string> {
+  return catalogMessages(locale).progression.reasons;
+}
+
+/** Türkçe gerekçeler (eski çağrılar); arayüz `reasonLabels(locale)` kullanır. */
+export const REASON_LABELS: Record<SuggestionReason, string> = reasonLabels('tr');
 
 /** Kaç antrenman üst üste tıkanınca hafifletilir. */
 export const DELOAD_AFTER_FAILED = 3;
@@ -1143,19 +1123,12 @@ export function rescalePlan(
 }
 
 /** Set düzeninin kuralları (düzenleyicide kural anlatımının altında); düz sette `null`. */
-export function describeSetRules(sets: readonly SetTarget[], spec: LoadSpec): string | null {
+export function describeSetRules(sets: readonly SetTarget[], spec: LoadSpec, locale: Locale = DEFAULT_LOCALE): string | null {
+  const t = catalogMessages(locale).progression;
   const weighted = usesWeight(spec);
   const parts: string[] = [];
-  if (weighted && sets.some((set) => !isFullLoad(set))) {
-    parts.push('Yüzdeli setler tam yükteki setin ağırlığını izler; ağırlık artışına yalnız tam yükteki setler karar verir.');
-  }
-  if (sets.some((set) => set.amrap)) {
-    parts.push(
-      `AMRAP sette zorluk düğmesi tıkanma sayılmaz; alt sınırın altında kalınırsa tıkanma sayılır.${
-        weighted ? ` Aralığın ${AMRAP_EXTRA_REPS}+ tekrar üstüne çıkılırsa ağırlık iki adım artar.` : ''
-      }`,
-    );
-  }
+  if (weighted && sets.some((set) => !isFullLoad(set))) parts.push(t.percentSets);
+  if (sets.some((set) => set.amrap)) parts.push(t.amrapSets(weighted ? t.amrapWeighted(AMRAP_EXTRA_REPS) : ''));
   return parts.length > 0 ? parts.join(' ') : null;
 }
 
@@ -1218,32 +1191,22 @@ export function isOverload(targetKg: number, enteredKg: number): boolean {
   return enteredKg > overloadLimitKg(targetKg);
 }
 
-function kg(value: number): string {
-  return `${value.toLocaleString('tr-TR', { maximumFractionDigits: 2 })} kg`;
-}
-
 /** Kuralın düz cümleyle anlatımı (formda ve detayda PT için). */
-export function describeRule(rule: ProgressionRule, spec: LoadSpec): string {
+export function describeRule(rule: ProgressionRule, spec: LoadSpec, locale: Locale = DEFAULT_LOCALE): string {
+  const t = catalogMessages(locale).progression;
   const isDuration = spec.trackingType === 'duration';
-  const unit = isDuration ? 'sn' : 'tekrar';
-  const range = rule.targetMin === rule.targetMax ? `${rule.targetMin} ${unit}` : `${rule.targetMin}–${rule.targetMax} ${unit}`;
+  const range = t.range(rule.targetMin, rule.targetMax, isDuration);
 
-  if (rule.scheme === 'none') return `Hedef ${range}. İlerleme yok: her antrenmanda aynı hedef.`;
+  if (rule.scheme === 'none') return t.noProgression(range);
 
-  const effort =
-    isDuration ? '' : rule.targetRir === 0 ? ' Setler tükenişe kadar yapılır.' : ` Set sonunda ~${rule.targetRir} tekrar yedekte kalsın.`;
+  const effort = isDuration ? '' : rule.targetRir === 0 ? t.toFailure : t.inReserve(rule.targetRir);
 
   if (usesWeight(spec)) {
-    const amount = spec.loadsKg?.length ? 'cihazdaki bir sonraki ağırlığa çıkar' : `${kg(spec.loadStepKg)} artar`;
-    const growth =
-      rule.scheme === 'linear'
-        ? `Her başarılı antrenmanda ağırlık ${amount}.`
-        : `Bütün setlerde ${rule.targetMax} tekrara ulaşınca ağırlık ${amount} ve tekrar hedefi yeniden ${rule.targetMin} olur; ulaşılmadıysa aynı ağırlıkla bir tekrar daha.`;
-    return `Hedef ${range}. ${growth} Hedefin altında kalınırsa ağırlık korunur; ${DELOAD_AFTER_FAILED} antrenman üst üste tıkanırsa %${Math.round((1 - DELOAD_FACTOR) * 100)} hafifletilir.${effort}`;
+    const amount = spec.loadsKg?.length ? t.nextDeviceWeight : t.stepUp(getFormat(locale).kg(spec.loadStepKg));
+    const growth = rule.scheme === 'linear' ? t.linearGrowth(amount) : t.doubleGrowth(rule.targetMax, amount, rule.targetMin);
+    return t.weighted(range, growth, DELOAD_AFTER_FAILED, Math.round((1 - DELOAD_FACTOR) * 100), effort);
   }
 
-  const growth = isDuration
-    ? `Her antrenmanda ${DURATION_STEP_SECONDS} sn eklenir; ${rule.targetMax} sn'ye ulaşınca zor bir varyasyona geç.`
-    : `Her antrenmanda bir tekrar eklenir; ${rule.targetMax} tekrara ulaşınca ağırlık ekle ya da zor bir varyasyona geç.`;
-  return `Hedef ${range}. ${growth}${effort}`;
+  const growth = isDuration ? t.durationGrowth(DURATION_STEP_SECONDS, rule.targetMax) : t.repsGrowth(rule.targetMax);
+  return t.plain(range, growth, effort);
 }

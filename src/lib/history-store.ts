@@ -1,4 +1,5 @@
 import 'server-only';
+import { DEFAULT_LOCALE, type Locale } from '../i18n/locale.ts';
 import { listDevices } from './devices';
 import { listExercises } from './exercises';
 import { exerciseSetWeights, groupMuscles, isBodyMuscle } from './muscles';
@@ -25,7 +26,7 @@ import { nextTimeLines, sessionChanges, sessionSummary, summaryWeek, type Change
 export type SessionLoad<T> = { status: 'ok'; value: T } | { status: 'missing' | 'deleted' | 'active' };
 
 /** Geçmiş listesi (index'ten, tek okuma). */
-export async function loadHistory(clientId: string, timeZone: string): Promise<HistoryList> {
+export async function loadHistory(clientId: string, timeZone: string, _locale: Locale = DEFAULT_LOCALE): Promise<HistoryList> {
   const { index } = await readIndex(sessionRepo(clientId));
   return historyList(index, new Date(), timeZone);
 }
@@ -67,6 +68,7 @@ async function programOf(clientId: string, doc: Pick<SessionDoc, 'program'> | nu
 export async function loadDetail(
   clientId: string,
   id: string,
+  _locale: Locale = DEFAULT_LOCALE,
 ): Promise<SessionLoad<{ doc: SessionDoc; changes: ChangeLine[]; program: SessionProgram | null }>> {
   const loaded = await readFinished(clientId, id);
   if (loaded.status !== 'ok') return loaded;

@@ -1,3 +1,4 @@
+import { DEFAULT_LOCALE, type Locale } from '../i18n/locale.ts';
 import { healthFieldState } from './client-status.ts';
 import { MEASUREMENTS, MEASUREMENT_IDS, type MeasurementId } from './measurements.ts';
 import { HEALTH_FIELD_INFO, type Client, type HealthField } from './schemas/client.ts';
@@ -235,3 +236,9 @@ export const MEASUREMENT_LOCK_INFO: Record<MeasurementLock, { title: string; des
   declined: healthLockInfo('measurements', 'declined'),
   outdated: healthLockInfo('measurements', 'outdated'),
 };
+
+/* --- dil: imza dondurma (i18n planı §7 F). Sahibi görev çevirir; şimdilik Türkçe döner. --- */
+
+export function sideLabels(_locale: Locale = DEFAULT_LOCALE): Record<Side, string> {
+  return SIDE_LABELS;
+}

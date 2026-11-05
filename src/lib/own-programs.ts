@@ -1,3 +1,4 @@
+import { DEFAULT_LOCALE, type Locale } from '../i18n/locale.ts';
 import { withClientTargets } from './client-targets.ts';
 import { cleanWeekdays, phaseWeekdays } from './day-assignments.ts';
 import { applyProgramEdit, type DiffContext } from './program-diff.ts';
@@ -111,7 +112,7 @@ function nameKey(name: string): string {
 }
 
 /** Adın sorunu (formda ve sunucuda aynı): boş, uzun, ayrılmış ya da başka programda var; yoksa null. */
-export function ownNameProblem(name: string, others: readonly string[]): string | null {
+export function ownNameProblem(name: string, others: readonly string[], _locale: Locale = DEFAULT_LOCALE): string | null {
   const trimmed = name.trim();
   if (!trimmed) return 'Ad gir.';
   if (trimmed.length > OWN_PROGRAM_NAME_MAX) return `En fazla ${OWN_PROGRAM_NAME_MAX} karakter.`;
@@ -121,7 +122,7 @@ export function ownNameProblem(name: string, others: readonly string[]): string 
 }
 
 /** Varsayılan ad: "Programım", sonra "Programım 2"… */
-export function defaultOwnName(taken: readonly string[]): string {
+export function defaultOwnName(taken: readonly string[], _locale: Locale = DEFAULT_LOCALE): string {
   return uniqueName(DEFAULT_OWN_NAME, taken);
 }
 
@@ -378,4 +379,11 @@ export function ownSummaryOf(program: Pick<OwnProgram, 'phases' | 'schedule'>): 
     weekdays,
     ...(weekdays.length === 0 && phase?.daysPerWeek !== undefined ? { daysPerWeek: phase.daysPerWeek } : {}),
   };
+}
+
+/* --- dil: imza dondurma (i18n planı §7 F). Sahibi görev çevirir; şimdilik Türkçe döner. --- */
+
+/** PT'nin programının danışandaki adı, okuyanın dilinde (`PT_PROGRAM_NAME`). Ad denetimi her dilin adını ayırmalı. */
+export function ptProgramName(_locale: Locale = DEFAULT_LOCALE): string {
+  return PT_PROGRAM_NAME;
 }

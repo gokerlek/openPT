@@ -1,3 +1,4 @@
+import { DEFAULT_LOCALE, type Locale } from '../i18n/locale.ts';
 import {freezeWeeklyGoals} from './weekly-goals';
 import {readIndex} from './session-files-core';
 import {sessionRepo} from './session-files';
@@ -92,7 +93,11 @@ export async function writeProgramFile(
 }
 
 /** Farkın cümleleri için egzersiz adları ve kayıt türleri, cihaz adları. */
-export function programDiffContext(exercises: readonly ExerciseWithSource[], devices: readonly DeviceWithSource[]): DiffContext {
+export function programDiffContext(
+  exercises: readonly ExerciseWithSource[],
+  devices: readonly DeviceWithSource[],
+  _locale: Locale = DEFAULT_LOCALE,
+): DiffContext {
   return {
     exercises: new Map(exercises.map((exercise) => [exercise.id, { title: exercise.title, trackingType: exercise.trackingType }])),
     devices: new Map(devices.map((device) => [device.id, { name: device.name }])),

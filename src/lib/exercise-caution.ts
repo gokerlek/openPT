@@ -1,3 +1,4 @@
+import { DEFAULT_LOCALE, type Locale } from '../i18n/locale.ts';
 import { evaluateCare, hasCare, type CareInput } from './constraint-filter.ts';
 import type { CareTags } from './constraints.ts';
 
@@ -57,4 +58,10 @@ export function blockedAdditions(phases: Phases, blocked: ReadonlySet<string>, b
     ),
   );
   return found;
+}
+
+/* --- dil: imza dondurma (i18n planı §7 F). Sahibi görev çevirir; şimdilik Türkçe döner. --- */
+
+export function blockedText(_locale: Locale = DEFAULT_LOCALE): string {
+  return BLOCKED_TEXT;
 }

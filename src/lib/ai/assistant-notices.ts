@@ -1,8 +1,9 @@
+import { DEFAULT_LOCALE, type Locale } from '../../i18n/locale.ts';
 import * as v from 'valibot';
 import { assistantStoreSchema } from './assistant-contract.ts';
 import type { OwnIndex } from '../own-program-index.ts';
 import { NOTICE_WINDOW_DAYS, type PtNotice } from '../notices.ts';
-export function assistantNotices(raw: unknown, permissionHash: string, own: OwnIndex | null, now: Date): PtNotice[] {
+export function assistantNotices(raw: unknown, permissionHash: string, own: OwnIndex | null, now: Date, _locale: Locale = DEFAULT_LOCALE): PtNotice[] {
   const parsed = v.safeParse(assistantStoreSchema, raw); if (!parsed.success) return [];
   return parsed.output.drafts.flatMap(draft => {
     const item = own?.items.find(i => i.id === draft.programId && i.shared);

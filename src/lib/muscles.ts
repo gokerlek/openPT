@@ -1,5 +1,7 @@
+import { DEFAULT_LOCALE, type Locale } from '../i18n/locale.ts';
+import { catalogMessages } from '../i18n/messages/catalog/index.ts';
 import { rankAlternatives, type AlternativeCandidate } from './alternatives.ts';
-import { MUSCLE_FAMILIES, MUSCLE_LABELS, MUSCLES, type Exercise, type Muscle } from './schemas/exercise.ts';
+import { MUSCLE_FAMILIES, MUSCLES, muscleFamilies, muscleLabels, type Exercise, type Muscle } from './schemas/exercise.ts';
 
 /**
  * Kas yardımcıları — kas haritası ve kas süzgeci ortak kullanır.
@@ -19,11 +21,12 @@ export function isBodyMuscle(muscle: Muscle): muscle is BodyMuscle {
 export const MUSCLE_ROLES = ['primary', 'secondary', 'stabilizer'] as const;
 export type MuscleRole = (typeof MUSCLE_ROLES)[number];
 
-export const ROLE_LABELS: Record<MuscleRole, string> = {
-  primary: 'Hedef',
-  secondary: 'Yardımcı',
-  stabilizer: 'Dengeleyici',
-};
+export function roleLabels(locale: Locale = DEFAULT_LOCALE): Record<MuscleRole, string> {
+  return catalogMessages(locale).muscleRoles;
+}
+
+/** Türkçe roller (eski çağrılar); arayüz `roleLabels(locale)` kullanır. */
+export const ROLE_LABELS: Record<MuscleRole, string> = roleLabels('tr');
 
 /**
  * Haftalık yükte bir setin kasa düşen payı ("kesirli set"): hedef 1, yardımcı 0,5,
@@ -63,23 +66,25 @@ export function works(exercise: Worked, muscle: Muscle): boolean {
  * Kas listesinin okunur özeti: bir kasın bütün parçaları varsa tek ad yazılır
  * ("Üst kanat, Orta kanat, Alt kanat" → "Kanat"). Sıra, listedeki ilk görünüşe göre.
  */
-export function summarizeMuscles(muscles: readonly Muscle[]): string[] {
-  return groupMuscles(muscles).map((group) => group.label);
+export function summarizeMuscles(muscles: readonly Muscle[], locale: Locale = DEFAULT_LOCALE): string[] {
+  return groupMuscles(muscles, locale).map((group) => group.label);
 }
 
 /** `summarizeMuscles`'ın grupları: her adın altındaki kaslar (aile tamamsa bütün parçaları, değilse kasın kendisi). */
-export function groupMuscles(muscles: readonly Muscle[]): { label: string; muscles: Muscle[] }[] {
+export function groupMuscles(muscles: readonly Muscle[], locale: Locale = DEFAULT_LOCALE): { label: string; muscles: Muscle[] }[] {
   const present = new Set(muscles);
   const groups: { label: string; muscles: Muscle[] }[] = [];
   const done = new Set<Muscle>();
+  const families = muscleFamilies(locale);
+  const labels = muscleLabels(locale);
   for (const muscle of muscles) {
     if (done.has(muscle)) continue;
-    const family = MUSCLE_FAMILIES.find((item) => item.muscles.includes(muscle));
+    const family = families.find((item) => item.muscles.includes(muscle));
     if (family && family.muscles.every((part) => present.has(part))) {
       groups.push({ label: family.label, muscles: [...family.muscles] });
       for (const part of family.muscles) done.add(part);
     } else {
-      groups.push({ label: MUSCLE_LABELS[muscle], muscles: [muscle] });
+      groups.push({ label: labels[muscle], muscles: [muscle] });
       done.add(muscle);
     }
   }
@@ -106,7 +111,7 @@ const FAMILY_OF = new Map<string, string>(
   MUSCLE_FAMILIES.flatMap((family) => family.muscles.map((muscle) => [muscle, family.label] as const)),
 );
 
-/** Kasın ailesi (üst kanat → "Kanat"); ailesi olmayan kas kendisidir. */
+/** Kasın ailesi (üst kanat → "Kanat"); ailesi olmayan kas kendisidir. Sıralama anahtarı: Türkçe kalır (ekranda gösterilmez). */
 export function familyOf(muscle: string): string {
   return FAMILY_OF.get(muscle) ?? muscle;
 }

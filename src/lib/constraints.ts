@@ -1,3 +1,4 @@
+import { DEFAULT_LOCALE, type Locale } from '../i18n/locale.ts';
 import type { MovementPattern } from './alternatives.ts';
 import {
   CONDITION_IDS,
@@ -487,7 +488,7 @@ export function hasFilterEffect(constraint: Pick<Constraint, 'avoid' | 'conditio
 /* --- metinler --- */
 
 /** "Sol diz", "Bel", "İki omuz". */
-export function regionText(constraint: Pick<Constraint, 'region' | 'side'>): string {
+export function regionText(constraint: Pick<Constraint, 'region' | 'side'>, _locale: Locale = DEFAULT_LOCALE): string {
   const label = REGION_LABELS[constraint.region];
   if (!constraint.side || !isPaired(constraint.region)) return label;
   const prefix = constraint.side === 'left' ? 'Sol' : constraint.side === 'right' ? 'Sağ' : 'İki';
@@ -516,7 +517,7 @@ export function yourRegion(constraint: Pick<Constraint, 'region' | 'side'>, form
 }
 
 /** PT'nin başlığı: "Sol diz · Patellofemoral ağrı (şiddetli)"; tanı yoksa gözlem, o da yoksa tür. */
-export function constraintTitle(constraint: Constraint): string {
+export function constraintTitle(constraint: Constraint, _locale: Locale = DEFAULT_LOCALE): string {
   const [first] = conditionsOf(constraint);
   return `${regionText(constraint)} · ${first ? conditionLabel(first) : TYPE_LABELS[constraint.type]}`;
 }
@@ -1011,7 +1012,11 @@ function reportFields(input: ReportInput, today: string) {
 }
 
 /** Danışan yeni bir şey bildirir. */
-export function reportConstraint(record: HealthRecord, input: ReportInput, ctx: { id: string; now: string; today: string }): HealthRecord {
+export function reportConstraint(
+  record: HealthRecord,
+  input: ReportInput,
+  ctx: { id: string; now: string; today: string; /** Geçmiş cümlesinin dili; yoksa Türkçe. */ locale?: Locale },
+): HealthRecord {
   const list = constraintsOf(record);
   if (list.some((item) => item.id === ctx.id)) throw new ConstraintError('Kimlik çakıştı; yeniden dene.', 409);
   if (list.filter(isPendingReport).length >= 5) throw new ConstraintError('Antrenörünün bakmadığı 5 bildirimin var; önce onları beklemelisin.', 409);
@@ -1029,7 +1034,7 @@ function ownPending(record: HealthRecord, id: string) {
 }
 
 /** Danışan bekleyen bildirimini düzeltir. */
-export function editReport(record: HealthRecord, id: string, input: ReportInput, ctx: { now: string; today: string }): HealthRecord {
+export function editReport(record: HealthRecord, id: string, input: ReportInput, ctx: { now: string; today: string; locale?: Locale }): HealthRecord {
   const { list, index, constraint } = ownPending(record, id);
   const { region: _r, side: _s, type: _t, severity: _sv, onset: _o, onsetApprox: _oa, triggers: _tr, reportNote: _rn, ...base } = constraint;
   const next = { ...base, ...reportFields(input, ctx.today), updatedAt: ctx.now } as Constraint;
@@ -1037,7 +1042,7 @@ export function editReport(record: HealthRecord, id: string, input: ReportInput,
 }
 
 /** Danışan bekleyen bildirimini geri çeker (kayıttan çıkar; satır kalır). */
-export function withdrawReport(record: HealthRecord, id: string, ctx: { now: string }): HealthRecord {
+export function withdrawReport(record: HealthRecord, id: string, ctx: { now: string; locale?: Locale }): HealthRecord {
   const { constraint } = ownPending(record, id);
   const next: HealthRecord = { ...record, constraints: constraintsOf(record).filter((item) => item.id !== id) };
   return log(next, ctx.now, 'client', id, 'withdrawn', `Bildirim geri çekildi: ${regionText(constraint)}`);
@@ -1049,7 +1054,7 @@ const SEVERITY_RANK: Record<Severity, number> = { mild: 1, moderate: 2, severe: 
  * "Kötüleşti" (güvenli yön, hemen yazılır): şiddet görünür, PT'nin Dikkat maddesi doğar. Şiddet yalnız artar. PT
  * bakmadan ikinci kez kötüleşirse başlangıç ilk bakılmamış şiddettir ("hafif → şiddetli", aradaki "orta" değil).
  */
-export function reportWorse(record: HealthRecord, id: string, severity: Severity, ctx: { now: string }): HealthRecord {
+export function reportWorse(record: HealthRecord, id: string, severity: Severity, ctx: { now: string; locale?: Locale }): HealthRecord {
   const { list, index, constraint } = findConstraint(record, id);
   if (!isActive(constraint)) throw new ConstraintError('Bu kısıt artık etkin değil.', 409);
   const before = constraint.severity;
@@ -1070,7 +1075,7 @@ export function reportWorse(record: HealthRecord, id: string, severity: Severity
  * "Düzeldi": kısıt PT onaylayana kadar kapanmaz (gevşeten yön). PT'nin bakmadığı bir kötüleşme varsa şiddeti
  * güncellemede kalır: "şiddetli"nin dikkati "Düzeldi" ile değil PT'nin kararıyla kalkar (`severeUnreviewed`).
  */
-export function reportBetter(record: HealthRecord, id: string, ctx: { now: string }): HealthRecord {
+export function reportBetter(record: HealthRecord, id: string, ctx: { now: string; locale?: Locale }): HealthRecord {
   const { list, index, constraint } = findConstraint(record, id);
   if (!isActive(constraint)) throw new ConstraintError('Bu kısıt artık etkin değil.', 409);
   const worse = constraint.clientChange?.severity ? constraint.clientChange : null;
@@ -1109,7 +1114,7 @@ export type ClientConstraintView = {
  * Danışanın Sağlık sayfasındaki kısıtları (§5.2): bölge · taraf · tür · şiddet · antrenörün notu; tanı adı yalnız
  * hekim kaynaklı ve niteleyicisiz; gözlem ve PT'nin notu hiç yok.
  */
-export function clientConstraintView(constraint: Constraint): ClientConstraintView {
+export function clientConstraintView(constraint: Constraint, _locale: Locale = DEFAULT_LOCALE): ClientConstraintView {
   const state: ClientConstraintState = constraint.declined
     ? 'declined'
     : constraint.status === 'resolved'
@@ -1143,7 +1148,7 @@ export function clientConstraintView(constraint: Constraint): ClientConstraintVi
  * Bildirimden sonraki metin (§2.4): şiddetli ya da bu hafta başlayan yeni sakatlıkta bölgeyi zorlayan hareketleri
  * yapmaması ve gerekirse görünmesi söylenir; öteki durumlarda dikkatli olması.
  */
-export function afterReportText(input: Pick<ReportInput, 'severity' | 'type' | 'since'>): string {
+export function afterReportText(input: Pick<ReportInput, 'severity' | 'type' | 'since'>, _locale: Locale = DEFAULT_LOCALE): string {
   const serious = input.severity === 'severe' || (input.type === 'injury' && input.since === 'week');
   return serious
     ? "Antrenörüne iletildi. Antrenörün bakana kadar bu bölgeyi zorlayan hareketleri yapma; ağrı günlük hayatını etkiliyorsa bir sağlık profesyoneline görün."
@@ -1186,4 +1191,38 @@ export function redFlagStep(constraint: Constraint): 'refer' | 'opinion' | 'clea
   if (!isRedFlag(constraint)) return null;
   if (constraint.clearance) return 'cleared';
   return constraint.referredAt ? 'opinion' : 'refer';
+}
+
+/* --- dil: imza dondurma (i18n planı §7 F). Sahibi görev çevirir; şimdilik Türkçe döner. --- */
+
+export function regionLabels(_locale: Locale = DEFAULT_LOCALE): Record<ConstraintRegion, string> {
+  return REGION_LABELS;
+}
+
+export function typeClientLabels(_locale: Locale = DEFAULT_LOCALE): Record<ConstraintType, string> {
+  return TYPE_CLIENT_LABELS;
+}
+
+export function severityLabels(_locale: Locale = DEFAULT_LOCALE): Record<Severity, string> {
+  return SEVERITY_LABELS;
+}
+
+export function severityDescriptions(_locale: Locale = DEFAULT_LOCALE): Record<Severity, string> {
+  return SEVERITY_DESCRIPTIONS;
+}
+
+export function triggerLabels(_locale: Locale = DEFAULT_LOCALE): Record<Trigger, string> {
+  return TRIGGER_LABELS;
+}
+
+export function onsetChoiceLabels(_locale: Locale = DEFAULT_LOCALE): Record<OnsetChoice, string> {
+  return ONSET_CHOICE_LABELS;
+}
+
+export function reportSafety(_locale: Locale = DEFAULT_LOCALE): typeof REPORT_SAFETY {
+  return REPORT_SAFETY;
+}
+
+export function emergencyText(_locale: Locale = DEFAULT_LOCALE): string {
+  return EMERGENCY_TEXT;
 }

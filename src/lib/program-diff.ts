@@ -1,3 +1,4 @@
+import { DEFAULT_LOCALE, type Locale } from '../i18n/locale.ts';
 import {
   appendLog,
   capChanges,
@@ -41,6 +42,8 @@ import {
  */
 
 export type DiffContext = {
+  /** Geçmiş cümlelerinin dili (yazanın dili); yoksa Türkçe. */
+  locale?: Locale;
   exercises: ReadonlyMap<string, { title: string; trackingType: TrackingType; pattern?: string | undefined; locomotion?: boolean | undefined }>;
   devices: ReadonlyMap<string, { name: string }>;
 };
@@ -431,7 +434,7 @@ export function formatChangeSummary(changes: readonly ProgramChange[]): string {
  * Commit mesajı: konu satırı özet (en fazla 72 karakter), birden çok değişiklik varsa ya
  * da konu kırpıldıysa gövdede her değişiklik bir satır (kırpılmadan). Git geçmişi tam kayıttır.
  */
-export function commitMessage(kind: LogKind, changes: readonly ProgramChange[]): string {
+export function commitMessage(kind: LogKind, changes: readonly ProgramChange[], _locale: Locale = DEFAULT_LOCALE): string {
   const summary = formatChangeSummary(changes);
   const full = summary
     ? kind === 'create'

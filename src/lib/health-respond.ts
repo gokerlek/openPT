@@ -1,4 +1,5 @@
 import 'server-only';
+import { DEFAULT_LOCALE, type Locale } from '../i18n/locale.ts';
 import { NextResponse } from 'next/server';
 import type * as v from 'valibot';
 import { ConstraintError } from './constraints';
@@ -22,7 +23,7 @@ export function notFound(message = 'Bulunamadı.') {
   return NextResponse.json({ error: message }, { status: 404 });
 }
 
-export function failed(error: unknown, fallback: string) {
+export function failed(error: unknown, fallback: string, _locale: Locale = DEFAULT_LOCALE) {
   if (error instanceof ConstraintError) return NextResponse.json({ error: error.message }, { status: error.status });
   const failure = error instanceof GithubError ? error : null;
   if (!failure) console.error(`[sağlık] ${fallback}`, error instanceof Error ? error.name : 'bilinmeyen hata');

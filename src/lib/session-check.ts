@@ -1,3 +1,4 @@
+import type { Locale } from '../i18n/locale.ts';
 import {
   applyTolerance,
   assessTolerance,
@@ -517,7 +518,10 @@ export type DayAdjustment = {
  * Set artışı adayları (`setIncrease`, §5.6) hazır oluşluk düşükse ("Planı koru" dense de) ve planı değişen
  * satırda düşer; `changed` boş olsa da gün bu yüzden değişebilir.
  */
-export function adjustDay(day: WorkoutDay, input: { outcome: StartOutcome; lighten: boolean; mode: ToleranceMode }): DayAdjustment {
+export function adjustDay(
+  day: WorkoutDay,
+  input: { outcome: StartOutcome; lighten: boolean; mode: ToleranceMode; /** Gerekçelerin dili; yoksa Türkçe. */ locale?: Locale },
+): DayAdjustment {
   const { outcome, lighten } = input;
   if (outcome.stop) return { day, lighter: false, changed: [] };
   const rows: Record<string, WorkoutRow> = {};

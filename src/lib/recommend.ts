@@ -1,3 +1,4 @@
+import type { Locale } from '../i18n/locale.ts';
 import { stageAtLeast, type Exposure, type Stage } from './exposure.ts';
 import { formatKg, formatNumber, formatSignedWithUnit } from './format.ts';
 import {
@@ -565,6 +566,8 @@ export function muscleSetsSince(
  * 6. Satır 10 seti aşmaz (`SET_LIMITS.perRow`).
  */
 export function setIncreaseCandidates(input: {
+  /** Gerekçelerin dili; yoksa Türkçe. */
+  locale?: Locale;
   rows: readonly SetIncreaseRow[];
   index: Pick<SessionIndex, 'items'>;
   now: Date;

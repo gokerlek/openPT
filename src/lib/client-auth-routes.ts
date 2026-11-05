@@ -1,3 +1,4 @@
+import { DEFAULT_LOCALE, type Locale } from '../i18n/locale.ts';
 import * as v from 'valibot';
 import { INVITE_CODE_LENGTH, normalizeInviteCode, PASSWORD_MAX_LENGTH } from './client-status.ts';
 import type { loginWithPassword, redeemInvite, setClientPassword } from './clients-core.ts';
@@ -33,7 +34,7 @@ function refererOrigin(referer: string | null): string | null {
  * Yalnız bu siteden: köken başlığı yoksa Referer'ın kökeni; ikisi de yoksa ya da başka bir kökense 403.
  * Gövdesiz durum değiştiren istekler (DELETE) yalnız buna bakar.
  */
-export function originGuard(headers: Headers, expectedOrigin: string): RouteResult | null {
+export function originGuard(headers: Headers, expectedOrigin: string, _locale: Locale = DEFAULT_LOCALE): RouteResult | null {
   const source = headers.get('origin') ?? refererOrigin(headers.get('referer'));
   return source === expectedOrigin ? null : { status: 403, body: { error: 'Bu istek bu siteden gelmedi.' } };
 }
@@ -43,7 +44,7 @@ export function originGuard(headers: Headers, expectedOrigin: string): RouteResu
  * SameSite=Lax'ı tek savunma kalmasın). Köken başlığı yoksa Referer'ın kökeni; ikisi de yoksa ya da
  * başka bir kökense 403. JSON değilse 415: `text/plain` form gönderimi de ayrıştırılmasın.
  */
-export function postGuard(headers: Headers, expectedOrigin: string): RouteResult | null {
+export function postGuard(headers: Headers, expectedOrigin: string, _locale: Locale = DEFAULT_LOCALE): RouteResult | null {
   const blocked = originGuard(headers, expectedOrigin);
   if (blocked) return blocked;
   const type = headers.get('content-type')?.trim().toLowerCase() ?? '';
@@ -160,6 +161,8 @@ export async function setPasswordRoute(
     session: ClientSession | null;
     setPassword(session: ClientSession, password: string): ReturnType<typeof setClientPassword>;
     log: Log;
+    /** Yanıt mesajlarının dili (`localeFromRequest`); yoksa Türkçe. */
+    locale?: Locale;
   },
   input: unknown,
 ): Promise<RouteResult> {

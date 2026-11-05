@@ -31,7 +31,7 @@ export default async function ClientHealthPage() {
   let open: ClientConstraintView[] = [];
   let closed: ClientConstraintView[] = [];
   if (conditions && record) {
-    const views = constraintsOf(record).map(clientConstraintView);
+    const views = constraintsOf(record).map((constraint) => clientConstraintView(constraint));
     open = views.filter((view) => view.state === 'pending' || view.state === 'confirmed' || view.state === 'seen');
     closed = views.filter((view) => view.state === 'resolved' || view.state === 'declined');
   }

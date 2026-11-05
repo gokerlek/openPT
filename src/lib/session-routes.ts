@@ -1,3 +1,4 @@
+import type { Locale } from '../i18n/locale.ts';
 import * as v from 'valibot';
 import { originGuard, postGuard } from './client-auth-routes.ts';
 import { describeError, GithubError } from './github/errors.ts';
@@ -36,6 +37,8 @@ export const SLOW_REMAINING = 500;
 const DEFAULT_RETRY_AFTER = 60;
 
 export type SessionRouteDeps = {
+  /** Yanıt mesajlarının dili (`localeFromRequest`); yoksa Türkçe. */
+  locale?: Locale;
   session: ClientSession | null;
   /** Oturumun hâlâ geçerli olduğu danışan kaydı (`sessionClient`); yoksa null. */
   loadClient(session: ClientSession): Promise<Client | null>;

@@ -1,3 +1,4 @@
+import { DEFAULT_LOCALE, type Locale } from '../i18n/locale.ts';
 import type { MovementPattern } from './alternatives.ts';
 import { awaitsOpinion, ConstraintError, isActive, isPaired, type AvoidTagId, type ConstraintRegion } from './constraints.ts';
 import type { Constraint, HealthRecord, Screening, ScreeningSide, ScreeningTests } from './schemas/health.ts';
@@ -666,12 +667,12 @@ export function painHistory(screenings: readonly Screening[]): { rows: PainRow[]
 }
 
 /** Testin yalın adı ("Kalça menteşesi"; kurulum ekinin öncesi). */
-export function testName(testId: ScreeningTestId): string {
+export function testName(testId: ScreeningTestId, _locale: Locale = DEFAULT_LOCALE): string {
   return SCREENING_TESTS[testId].title.split(',')[0] ?? SCREENING_TESTS[testId].title;
 }
 
 /** "Kol kaldırma (sağ)". */
-export function cellTitle(testId: ScreeningTestId, side: SideKey, short = false): string {
+export function cellTitle(testId: ScreeningTestId, side: SideKey, short = false, _locale: Locale = DEFAULT_LOCALE): string {
   const name = short ? SCREENING_TESTS[testId].short : testName(testId);
   return side === 'center' ? name : `${name} (${SIDE_KEY_LABELS[side].toLocaleLowerCase('tr')})`;
 }
@@ -807,6 +808,7 @@ export function clientScreeningRows(
   screening: Pick<Screening, 'tests'>,
   previous: Screening | null,
   labels: Record<Outcome, string> = OUTCOME_CLIENT_LABELS,
+  _locale: Locale = DEFAULT_LOCALE,
 ): ClientScreeningRow[] {
   const rows: ClientScreeningRow[] = [];
   for (const testId of SCREENING_TEST_IDS) {
@@ -841,7 +843,11 @@ export type ProgressScreening = {
  * toplam yok. Danışana Sağlık sayfasındaki metinler (`OUTCOME_CLIENT_LABELS`), PT'ye tarama sayfasının sözcükleri
  * (`OUTCOME_LABELS`). Eski biçimdeki tarama (başka protokol) sayılmaz; tarama yoksa null.
  */
-export function progressScreening(screenings: readonly Screening[] | undefined, viewer: 'client' | 'pt'): ProgressScreening | null {
+export function progressScreening(
+  screenings: readonly Screening[] | undefined,
+  viewer: 'client' | 'pt',
+  _locale: Locale = DEFAULT_LOCALE,
+): ProgressScreening | null {
   const list = newestFirst(screenings ?? []).filter((item) => item.protocol === SCREENING_PROTOCOL);
   const latest = list[0];
   if (!latest) return null;

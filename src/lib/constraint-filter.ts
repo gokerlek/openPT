@@ -1,3 +1,4 @@
+import { DEFAULT_LOCALE, type Locale } from '../i18n/locale.ts';
 import {
   activeConstraints,
   AVOID_TAGS,
@@ -73,6 +74,8 @@ export type CareResult = {
 export type SymptomDirection = NonNullable<FilterContext['symptomDirection']>;
 
 export type CareInput = {
+  /** Gerekçelerin dili; yoksa Türkçe. */
+  locale?: Locale;
   active: readonly Constraint[];
   reports: readonly Constraint[];
   overrides: readonly Override[];
@@ -351,7 +354,7 @@ export function rowCareOf(result: CareResult, input: CareInput): RowCare | null 
 }
 
 /** Kartın sheet'i: başlık "Sol diz için not" ve metin (danışana, telaşsız; "yasak", "risk", tanı adı yok). */
-export function rowCareText(care: RowCare): { title: string; text: string } {
+export function rowCareText(care: RowCare, _locale: Locale = DEFAULT_LOCALE): { title: string; text: string } {
   const title = `${care.label} için not`;
   const where = { region: care.region, side: care.side };
   const yours = yourRegion(where, 'gen');
@@ -382,14 +385,14 @@ export function rowCareText(care: RowCare): { title: string; text: string } {
 }
 
 /** Bugün önizlemesinde hareketin kısıt satırı: "Sol diz için dikkat: Back Squat"; önerilmeyende "değiştir". */
-export function careLine(care: RowCare, title: string): string {
+export function careLine(care: RowCare, title: string, _locale: Locale = DEFAULT_LOCALE): string {
   // Kendi programda hareketi danışan seçti: "değiştir" yerine "önerilmiyor" (antrenman kartıyla aynı dil, `rowCareText`).
   const verb = care.kind === 'avoid' ? (care.own ? 'önerilmiyor' : 'değiştir') : 'dikkat';
   return `${care.label} için ${verb}: ${title}`;
 }
 
 /** "Değiştir"deki kısa satır ("Sol diz için dikkatli"). */
-export function optionCareText(result: CareResult): string | null {
+export function optionCareText(result: CareResult, _locale: Locale = DEFAULT_LOCALE): string | null {
   const first = result.reasons.find((reason) => reason.decision === 'warn' || reason.decision === 'cue');
   if (!first) return null;
   return first.kind === 'report' || first.kind === 'severe' ? `Bildirdiğin ${first.label.toLocaleLowerCase('tr')} için dikkatli` : `${first.label} için dikkatli`;
@@ -443,11 +446,11 @@ export type EditorCare = {
 };
 
 export function editorCareOf(clientId: string, items: readonly (CareTags & { id: string })[], input: CareInput): EditorCare {
-  const severe = [...input.active, ...input.reports].filter(severeUnreviewed).map(regionText);
+  const severe = [...input.active, ...input.reports].filter(severeUnreviewed).map((item) => regionText(item));
   return {
     clientId,
-    summary: input.active.map(regionText),
-    pending: input.reports.map(regionText),
+    summary: input.active.map((item) => regionText(item)),
+    pending: input.reports.map((item) => regionText(item)),
     ...(severe.length > 0 ? { severe } : {}),
     map: careMap(items, input),
   };

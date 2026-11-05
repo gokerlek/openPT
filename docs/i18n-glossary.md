@@ -108,6 +108,55 @@ Every English string must use these terms. Plan: `docs/plans/2026-11-05-coklu-di
 | sağlık takibi | health tracking | |
 | onay | consent | |
 
+## Catalog vocabulary (namespace `catalog`, settled in F2)
+
+| Turkish | English | Notes |
+|---|---|---|
+| kas grubu adları: Göğüs, Omuz, Sırt, Kol, Karın, Kalça ve bacak, Boyun | Chest, Shoulders, Back, Arms, Core, Glutes and legs, Neck | Muscle regions (`muscleGroups`). |
+| Kanat (üst/orta/alt) | Lats (upper/middle/lower) | |
+| Ön omuz / Yan omuz / Arka omuz | Front / Side / Rear delts | |
+| Bel dikleştiricileri | Spinal erectors | |
+| Ön bacak / Arka bacak / İç bacak | Quadriceps / Hamstrings / Adductors | |
+| Kalça (kas) / Yan kalça | Glutes / Glute medius | "Kalça" as a joint or region: hip. |
+| Baldır | Calves | |
+| Karın (aile) / Üst karın / Yan karın | Abs / Upper abs / Obliques | |
+| hedef / yardımcı / dengeleyici | primary / secondary / stabilizer | Muscle roles. |
+| hareket kalıbı adları | horizontal push, hip hinge, single-leg, anti-rotation… | See `catalog/en.ts` `patterns`. |
+| tek hareket / süperset / devre / kompleks | single exercise / superset / circuit / complex | Block kinds. |
+| tur | round | "3 rounds". |
+| istasyon arası | between stations | |
+| ara yok, dinlenme yok | no rest | |
+| tükenişe kadar | to failure | |
+| N tekrar yedekte | N reps in reserve | |
+| çift ilerleme / doğrusal | double progression / linear | |
+| tıkanma | stall | |
+| hafifletme | deload | Lighter workout after stalls. |
+| zorluk (Kolay/İyi/Zor/Başaramadım) | effort (Easy/Good/Hard/Failed) | |
+| yapabildiğin kadar | as many as you can | Client wording of AMRAP. |
+| piramit / back-off / yük % | pyramid / back-off / load % | |
+| ağırlık bloklu makine | weight-stack machine | |
+| plaka yüklemeli makine | plate-loaded machine | |
+| blok (ağırlık) | stack | "Stack 5–100 kg in 5 kg steps". |
+| kızak | sled | |
+| makara | pulley | |
+| ara ağırlık | add-on weight | |
+| en küçük artış | smallest increment | |
+| mesafe / eğim | distance / incline | |
+| evre (varsayılan ad "Evre 1") | phase ("Phase 1") | Default names are data: written in the writer's language; collision checks match every language. |
+| program (varsayılan ad "Program A") | "Program A" | Same in both languages. |
+| … kopyası | … copy | |
+| Haftada N gün | N days a week | |
+| N. hafta / M | Week N of M | |
+| süresiz | open-ended | |
+| bulgu / tanı | finding / diagnosis | Clinical. |
+| kırmızı bayrak | red flag | |
+| niteleyici: akut, reaktif, şiddetli, sakin dönem, kontrollü, kontrolsüz, ameliyat sonrası | acute, reactive, severe, quiet phase, controlled, uncontrolled, post-op | |
+| hazır oluşluk | readiness | Health module part. |
+| ağrı takibi | pain tracking | |
+| hareket taraması | movement screening | |
+| Aktif / Duraklatıldı / Arşivde | Active / Paused / Archived | Client status. |
+| Yeni başlıyor / 6 ay ve üstü / 1 yıl ve üstü | Just starting / 6 months or more / 1 year or more | Training experience. |
+
 ## Units on screen
 
 | Turkish | English |

@@ -1,3 +1,5 @@
+import { DEFAULT_LOCALE, type Locale } from '../i18n/locale.ts';
+
 /**
  * Periyodik ölçümler — PT'nin danışan başına tuttuğu ikinci katman.
  *
@@ -76,7 +78,7 @@ export const MEASUREMENTS = {
 export type MeasurementId = keyof typeof MEASUREMENTS;
 export const MEASUREMENT_IDS = Object.keys(MEASUREMENTS) as MeasurementId[];
 
-export function measurementDef(id: MeasurementId): MeasurementDef {
+export function measurementDef(id: MeasurementId, _locale: Locale = DEFAULT_LOCALE): MeasurementDef {
   return MEASUREMENTS[id];
 }
 
@@ -171,4 +173,15 @@ export function enduranceRatios(
     sideToFlexor: round(sideS / flexorS),
     reference: ENDURANCE_REFERENCE[sex],
   };
+}
+
+/* --- dil: imza dondurma (i18n planı §7 F). Sahibi görev çevirir; şimdilik Türkçe döner. --- */
+
+/** Ölçüm tanımları okuyanın dilinde (`MEASUREMENTS`). */
+export function measurementDefs(_locale: Locale = DEFAULT_LOCALE): typeof MEASUREMENTS {
+  return MEASUREMENTS;
+}
+
+export function measurementUnitLabels(_locale: Locale = DEFAULT_LOCALE): Record<MeasurementDef['unit'], string> {
+  return MEASUREMENT_UNIT_LABELS;
 }

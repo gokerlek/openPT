@@ -520,7 +520,7 @@ export function attentionItems(
       since: todayIn(ctx.timeZone, new Date(facts.schedule.since)),
     });
     if (missed.length > 0) {
-      const days = missed.map(shortDayText).join(', ');
+      const days = missed.map((day) => shortDayText(day)).join(', ');
       items.push({
         key: 'missed',
         kind: 'missed',

@@ -63,7 +63,7 @@ const namespaces = readdirSync(MESSAGES_DIR, { withFileTypes: true })
 
 describe('sözlükler iki dilde aynı şekilde', () => {
   test('alanlar bulundu', () => {
-    for (const name of ['common', 'shell']) assert.ok(namespaces.includes(name), name);
+    for (const name of ['catalog', 'common', 'shell']) assert.ok(namespaces.includes(name), name);
   });
 
   for (const name of namespaces) {

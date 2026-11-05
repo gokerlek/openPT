@@ -1,3 +1,4 @@
+import { DEFAULT_LOCALE, type Locale } from '../i18n/locale.ts';
 import { totalKcal } from './cardio.ts';
 import { formatKg, formatNumber } from './format.ts';
 import { sessionDayText } from './own-program-text.ts';
@@ -111,7 +112,7 @@ export function clockOf(iso: string, timeZone: string): string {
 const dayWithWeekday = new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'short', weekday: 'short', timeZone: 'UTC' });
 
 /** Takvim günü, haftanın günüyle: "26 Eyl Cmt" (gün bir an değil, tarihtir: UTC'de biçimlenir). */
-export function shortDayText(day: string): string {
+export function shortDayText(day: string, _locale: Locale = DEFAULT_LOCALE): string {
   return dayWithWeekday.format(new Date(`${day}T00:00:00Z`));
 }
 
@@ -127,7 +128,7 @@ export function topText(top: TopSet): string {
 }
 
 /** Süre: "45 dk", "1 sa 5 dk", "2 sa". */
-export function minutesText(minutes: number): string {
+export function minutesText(minutes: number, _locale: Locale = DEFAULT_LOCALE): string {
   const hours = Math.floor(minutes / 60);
   const rest = minutes % 60;
   if (hours === 0) return `${formatNumber(rest)} dk`;

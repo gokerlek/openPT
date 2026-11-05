@@ -1,3 +1,4 @@
+import { DEFAULT_LOCALE, type Locale } from '../i18n/locale.ts';
 import { formatDayShort, formatNumber } from './format.ts';
 import type { LogKind } from './program-plan.ts';
 import type { SessionIndex } from './schemas/session.ts';
@@ -23,7 +24,11 @@ export function sessionDayText(program: { dayName?: string | undefined; programN
  * günleri); gün atanmamışsa sıklık ("haftada 3"), o da yoksa "gün atanmadı". Haftalık sayı atanmış gün sayısıdır,
  * yoksa sıklık (`weekTarget` gibi).
  */
-export function programLine(input: { days: number; weekdays: readonly number[]; daysPerWeek?: number | undefined }, lastDate?: string | undefined): string {
+export function programLine(
+  input: { days: number; weekdays: readonly number[]; daysPerWeek?: number | undefined },
+  lastDate?: string | undefined,
+  _locale: Locale = DEFAULT_LOCALE,
+): string {
   const weekdays = weekdaysText(input.weekdays);
   const perWeek = weekdays ? normalizeWeekdays(input.weekdays).length : input.daysPerWeek;
   return [
@@ -68,7 +73,7 @@ export function ptUpdatedSince(program: { createdAt: string; updatedAt: string }
 }
 
 /** Geçmiş kaydının etiketi, görene göre (§7.3). */
-export function ownLogLabel(entry: { kind: LogKind; by?: 'pt' | undefined }, viewer: 'client' | 'pt'): string {
+export function ownLogLabel(entry: { kind: LogKind; by?: 'pt' | undefined }, viewer: 'client' | 'pt', _locale: Locale = DEFAULT_LOCALE): string {
   switch (entry.kind) {
     case 'create':
       return viewer === 'client' ? 'Oluşturuldu' : 'Danışan oluşturdu';

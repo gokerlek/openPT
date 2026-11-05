@@ -13,6 +13,10 @@
  * Node'un kendi test aracıyla çalışır).
  */
 
+import { DEFAULT_LOCALE, type Locale } from '../i18n/locale.ts';
+import { catalogMessages } from '../i18n/messages/catalog/index.ts';
+import { getFormat } from './format.ts';
+
 export const DEVICE_KINDS = [
   'selectorized',
   'cable',
@@ -26,17 +30,12 @@ export const DEVICE_KINDS = [
 ] as const;
 export type DeviceKind = (typeof DEVICE_KINDS)[number];
 
-export const DEVICE_KIND_LABELS: Record<DeviceKind, string> = {
-  selectorized: 'Ağırlık bloklu makine',
-  cable: 'Kablo',
-  plate_loaded: 'Plaka yüklemeli makine',
-  barbell: 'Bar',
-  dumbbell: 'Dambıl seti',
-  kettlebell: 'Kettlebell seti',
-  bodyweight: 'Ekipmansız istasyon',
-  band: 'Direnç bandı',
-  cardio: 'Kardiyo aleti',
-};
+export function deviceKindLabels(locale: Locale = DEFAULT_LOCALE): Record<DeviceKind, string> {
+  return catalogMessages(locale).deviceKinds;
+}
+
+/** Türkçe adlar (eski çağrılar); arayüz `deviceKindLabels(locale)` kullanır. */
+export const DEVICE_KIND_LABELS: Record<DeviceKind, string> = deviceKindLabels('tr');
 
 /** Cihaz türünün egzersizdeki genel ekipman karşılığı. */
 export const KIND_EQUIPMENT = {
@@ -145,34 +144,32 @@ export function effectiveLoadKg(device: Pick<DeviceLoadSettings, 'kind' | 'pulle
   return clean(displayedKg / ratio);
 }
 
-function kg(value: number): string {
-  return `${value.toLocaleString('tr-TR', { maximumFractionDigits: 2 })} kg`;
-}
-
 /** Cihazın ağırlık ayarının kısa anlatımı (liste ve detay için). */
-export function describeDeviceLoads(device: DeviceLoadSettings): string {
+export function describeDeviceLoads(device: DeviceLoadSettings, locale: Locale = DEFAULT_LOCALE): string {
+  const t = catalogMessages(locale).deviceLoads;
+  const kg = getFormat(locale).kg;
   const addOns = device.addOnsKg?.filter((value) => value > 0) ?? [];
-  const addOnText = addOns.length ? ` · ara ağırlık ${addOns.map((value) => `+${kg(value)}`).join(', ')}` : '';
+  const addOnText = addOns.length ? t.addOns(addOns.map((value) => `+${kg(value)}`).join(', ')) : '';
+  const stack = () => t.stack(kg(device.baseKg ?? 0), kg(device.maxKg ?? 0), kg(device.stepKg ?? 0), addOnText);
   switch (device.kind) {
     case 'selectorized':
-      return `Blok ${kg(device.baseKg ?? 0)}–${kg(device.maxKg ?? 0)}, ${kg(device.stepKg ?? 0)} adım${addOnText}`;
+      return stack();
     case 'cable': {
       const ratio = device.pulleyRatio ?? 1;
-      const pulley = ratio === 1 ? 'tek makara (1:1)' : `${ratio}:1 makara — kolda ${ratio === 2 ? 'yarısı' : `1/${ratio}'i`} hissedilir`;
-      return `Blok ${kg(device.baseKg ?? 0)}–${kg(device.maxKg ?? 0)}, ${kg(device.stepKg ?? 0)} adım${addOnText} · ${pulley}`;
+      return t.cable(stack(), ratio === 1 ? t.singlePulley : t.pulley(ratio));
     }
     case 'plate_loaded':
-      return `Kızak ${kg(device.baseKg ?? 0)}, en küçük artış ${kg(device.stepKg ?? 0)}${device.maxKg ? `, en çok ${kg(device.maxKg)}` : ''}`;
+      return t.plateLoaded(kg(device.baseKg ?? 0), kg(device.stepKg ?? 0), device.maxKg ? kg(device.maxKg) : null);
     case 'barbell':
-      return `Bar ${kg(device.baseKg ?? 0)}, en küçük artış ${kg(device.stepKg ?? 0)}`;
+      return t.barbell(kg(device.baseKg ?? 0), kg(device.stepKg ?? 0));
     case 'dumbbell':
     case 'kettlebell': {
       const weights = [...(device.weightsKg ?? [])].sort((a, b) => a - b);
-      if (weights.length === 0) return 'Ağırlık listesi boş';
-      return `${weights.length} ağırlık: ${kg(weights[0] as number)}–${kg(weights[weights.length - 1] as number)}`;
+      if (weights.length === 0) return t.noWeights;
+      return t.weights(weights.length, kg(weights[0] as number), kg(weights[weights.length - 1] as number));
     }
     default:
-      return 'Ağırlık ayarı yok';
+      return t.noSettings;
   }
 }
 

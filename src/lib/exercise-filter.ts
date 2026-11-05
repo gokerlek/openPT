@@ -1,3 +1,4 @@
+import type { Locale } from '../i18n/locale.ts';
 import {
   conditionInfo,
   type ClientCondition,
@@ -114,6 +115,8 @@ export type ExerciseTags = {
 
 /** Kuralların ihtiyaç duyduğu, egzersizde değil ortamda olan bilgiler. */
 export type FilterContext = {
+  /** Gerekçelerin dili; yoksa Türkçe. */
+  locale?: Locale;
   /** ACL rekonstrüksiyonundan bu yana geçen hafta. */
   weeksPostOp?: number;
   graftType?: 'hamstring' | 'patellar_tendon' | 'other';

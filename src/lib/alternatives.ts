@@ -1,3 +1,5 @@
+import { DEFAULT_LOCALE, type Locale } from '../i18n/locale.ts';
+import { catalogMessages } from '../i18n/messages/catalog/index.ts';
 import { KIND_EQUIPMENT, type DeviceKind } from './device-loads.ts';
 
 /**
@@ -53,37 +55,12 @@ export const MOVEMENT_PATTERNS = [
 ] as const;
 export type MovementPattern = (typeof MOVEMENT_PATTERNS)[number];
 
-export const PATTERN_LABELS: Record<MovementPattern, string> = {
-  horizontal_push: 'Yatay itiş',
-  vertical_push: 'Dikey itiş',
-  chest_fly: 'Göğüs açma',
-  horizontal_pull: 'Yatay çekiş',
-  vertical_pull: 'Dikey çekiş',
-  lateral_raise: 'Omuz kaldırma',
-  rear_delt: 'Arka omuz açma',
-  shrug: 'Trapez kaldırma',
-  squat: 'Squat',
-  hinge: 'Kalça menteşesi',
-  lunge: 'Tek bacak',
-  hip_extension: 'Kalça itişi',
-  hip_abduction: 'Kalça açma',
-  hip_adduction: 'Kalça kapama',
-  knee_extension: 'Diz açma',
-  knee_flexion: 'Diz bükme',
-  calf_raise: 'Baldır kaldırma',
-  elbow_flexion: 'Dirsek bükme',
-  elbow_extension: 'Dirsek açma',
-  carry: 'Taşıma',
-  core_flexion: 'Karın bükme',
-  core_stability: 'Karın sabitleme',
-  core_rotation: 'Gövde döndürme',
-  anti_extension: 'Anti-ekstansiyon (belin çökmesine direnç)',
-  anti_rotation: 'Anti-rotasyon (dönmeye direnç)',
-  anti_lateral_flexion: 'Anti-lateral fleksiyon (yana eğilmeye direnç)',
-  cardio: 'Kardiyo',
-  mobility: 'Mobilite ve esneme',
-  other: 'Diğer',
-};
+export function patternLabels(locale: Locale = DEFAULT_LOCALE): Record<MovementPattern, string> {
+  return catalogMessages(locale).patterns;
+}
+
+/** Türkçe adlar (eski çağrılar); arayüz `patternLabels(locale)` kullanır. */
+export const PATTERN_LABELS: Record<MovementPattern, string> = patternLabels('tr');
 
 /** Hesap için gereken alanlar (egzersiz şemasının alt kümesi). */
 export type AlternativeCandidate = {

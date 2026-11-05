@@ -1,3 +1,4 @@
+import { DEFAULT_LOCALE, type Locale } from '../../i18n/locale.ts';
 import * as v from 'valibot';
 import { MUSCLES, EQUIPMENT } from '../schemas/exercise.ts';
 import { programFormSchema } from '../schemas/program.ts';
@@ -23,3 +24,10 @@ export const assistantStoreSchema = v.object({ version: v.literal(1), drafts: v.
 export type AssistantStore = v.InferOutput<typeof assistantStoreSchema>;
 export const emptyAssistant = (): AssistantStore => ({ version: 1, drafts: [], reviews: [], requests: [] });
 export type AssistantView = { clientName: string; access: 'off' | 'ready'; connection: 'pt' | 'client' | null; global?: boolean; drafts: AssistantDraft[]; reviews: AssistantStore['reviews']; exercises: { id: string; title: string; equipment: string; trackingType?: string; primaryMuscles: string[] }[]; interpreted?: InterpretedGoal };
+
+/* --- dil: imza dondurma (i18n planı §7 F). Sahibi görev çevirir; şimdilik Türkçe döner. --- */
+
+/** Hedeflerin adları okuyanın dilinde (`GOAL_LABELS`). */
+export function goalLabels(_locale: Locale = DEFAULT_LOCALE): typeof GOAL_LABELS {
+  return GOAL_LABELS;
+}

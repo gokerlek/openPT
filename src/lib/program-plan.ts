@@ -11,6 +11,8 @@ import {
   weekdaysText,
   type AssignableDay,
 } from './day-assignments.ts';
+import { DEFAULT_LOCALE, LOCALES, type Locale } from '../i18n/locale.ts';
+import { catalogMessages } from '../i18n/messages/catalog/index.ts';
 import { todayIn } from './format.ts';
 import type { SetSpec } from './set-plan.ts';
 import { prepareForEditing, type IdSource } from './template-edit.ts';
@@ -75,17 +77,21 @@ export const PROGRAM_LIMITS = {
  */
 export const LOG_KINDS = ['create', 'edit', 'phase', 'client', 'share'] as const;
 export type LogKind = (typeof LOG_KINDS)[number];
-export const LOG_KIND_LABELS: Record<LogKind, string> = {
-  create: 'Oluşturuldu',
-  edit: 'Düzenlendi',
-  phase: 'Evre geçişi',
-  client: 'Danışan güncelledi',
-  share: 'Paylaşım',
-};
+export function logKindLabels(locale: Locale = DEFAULT_LOCALE): Record<LogKind, string> {
+  return catalogMessages(locale).program.logKinds;
+}
+
+/** Türkçe adlar (eski çağrılar); arayüz `logKindLabels(locale)` kullanır. */
+export const LOG_KIND_LABELS: Record<LogKind, string> = logKindLabels('tr');
 
 export const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
-/** Evresiz programın gizli evresinin (ve evreler kaldırılınca tek evrenin) adı. */
-export const DEFAULT_PHASE_NAME = 'Evre 1';
+/** Evresiz programın gizli evresinin (ve evreler kaldırılınca tek evrenin) adı; veriye yazanın dilinde yazılır. */
+export function defaultPhaseName(locale: Locale = DEFAULT_LOCALE): string {
+  return catalogMessages(locale).program.phaseName(1);
+}
+
+/** Türkçe ad (eski çağrılar); yazan `defaultPhaseName(locale)` kullanır. */
+export const DEFAULT_PHASE_NAME = defaultPhaseName('tr');
 
 // Yapısal tipler: Valibot şemasının çıktısı (`schemas/program.ts`) bunlara atanabilir.
 /** Günün geldiği şablon: o anki adıyla; şablon sonra değişse ya da silinse de program değişmez. */
@@ -239,20 +245,26 @@ const DAY_LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
  * harf. Harf eski "Gün X" adıyla da alınmış sayılır ("Gün A", "Gün B" olan programa eklenen "Program C" olur; iki "A"
  * şeritte ayırt edilemezdi). Özel adlar sayılmaz; harfler bitince "Program n".
  */
-export function nextDayName(days: readonly { name: string }[]): string {
+export function nextDayName(days: readonly { name: string }[], locale: Locale = DEFAULT_LOCALE): string {
   const taken = new Set(days.map((day) => nameKey(day.name)));
+  // Harf her dilin varsayılan adıyla ve saklanan eski "Gün X" adıyla alınmış sayılır.
+  const free = (letter: string) =>
+    !taken.has(nameKey(`Gün ${letter}`)) && LOCALES.every((code) => !taken.has(nameKey(catalogMessages(code).program.dayName(letter))));
+  const name = catalogMessages(locale).program.dayName;
   for (const letter of DAY_LETTERS) {
-    if (!taken.has(nameKey(`Program ${letter}`)) && !taken.has(nameKey(`Gün ${letter}`))) return `Program ${letter}`;
+    if (free(letter)) return name(letter);
   }
-  return `Program ${days.length + 1}`;
+  return name(String(days.length + 1));
 }
 
 /** Sıradaki evre adı: "Evre n", n evre sayısının bir fazlasından başlayıp boş olana kadar. */
-export function nextPhaseName(phases: readonly { name: string }[]): string {
+export function nextPhaseName(phases: readonly { name: string }[], locale: Locale = DEFAULT_LOCALE): string {
   const taken = new Set(phases.map((phase) => nameKey(phase.name)));
+  // Numara her dilin varsayılan adıyla alınmış sayılır ("Evre 2" varken "Phase 2" de verilmez).
+  const used = (n: number) => LOCALES.some((code) => taken.has(nameKey(catalogMessages(code).program.phaseName(n))));
   let n = phases.length + 1;
-  while (taken.has(nameKey(`Evre ${n}`))) n += 1;
-  return `Evre ${n}`;
+  while (used(n)) n += 1;
+  return catalogMessages(locale).program.phaseName(n);
 }
 
 /** Kullanılmayan ad: önce kendisi, sonra "ad 2", "ad 3"…; en fazla 40 karakter. */
@@ -271,29 +283,29 @@ export function uniqueName(base: string, taken: readonly string[]): string {
 /* --- oluşturma --- */
 
 /** Düzenleyicinin boş iskeleti: evresiz, tek gün, hareketsiz (hareket eklenmeden kaydedilmez). */
-export function blankProgramBody(ids: ProgramIdSource): ProgramBody {
+export function blankProgramBody(ids: ProgramIdSource, locale: Locale = DEFAULT_LOCALE): ProgramBody {
   const phaseId = ids('p');
   return {
     phased: false,
     currentPhaseId: phaseId,
-    phases: [{ id: phaseId, name: DEFAULT_PHASE_NAME, days: [{ id: ids('d'), name: nextDayName([]), blocks: [] }] }],
+    phases: [{ id: phaseId, name: defaultPhaseName(locale), days: [{ id: ids('d'), name: nextDayName([], locale), blocks: [] }] }],
   };
 }
 
 /** Yeni evre: sıradaki adla, süresiz, tek boş günle; sıklık son evreninki. */
-export function blankPhase(phases: Phases, ids: ProgramIdSource): ProgramPhase {
+export function blankPhase(phases: Phases, ids: ProgramIdSource, locale: Locale = DEFAULT_LOCALE): ProgramPhase {
   const daysPerWeek = phases.at(-1)?.daysPerWeek;
   return {
     id: ids('p'),
-    name: nextPhaseName(phases),
+    name: nextPhaseName(phases, locale),
     ...(daysPerWeek !== undefined ? { daysPerWeek } : {}),
-    days: [{ id: ids('d'), name: nextDayName([]), blocks: [] }],
+    days: [{ id: ids('d'), name: nextDayName([], locale), blocks: [] }],
   };
 }
 
 /** Evreye boş gün. */
-export function blankDay(phase: Pick<ProgramPhase, 'days'>, ids: ProgramIdSource): ProgramDay {
-  return { id: ids('d'), name: nextDayName(phase.days), blocks: [] };
+export function blankDay(phase: Pick<ProgramPhase, 'days'>, ids: ProgramIdSource, locale: Locale = DEFAULT_LOCALE): ProgramDay {
+  return { id: ids('d'), name: nextDayName(phase.days, locale), blocks: [] };
 }
 
 /** Şablondan gün: bloklar yeni kimlikle kopyalanır (notlar kalır; şablon notları geneldir). */
@@ -302,10 +314,11 @@ export function dayFromTemplate(
   template: TemplateOption,
   ids: ProgramIdSource,
   now: Date,
+  locale: Locale = DEFAULT_LOCALE,
 ): ProgramDay {
   return {
     id: ids('d'),
-    name: nextDayName(phase.days),
+    name: nextDayName(phase.days, locale),
     blocks: reIdBlocks(template.blocks, ids),
     source: { templateId: template.id, templateName: template.name, at: now.toISOString() },
   };
@@ -323,8 +336,9 @@ export function dayFromTemplateForEditing(
   ids: ProgramIdSource,
   now: Date,
   deviceIds: ReadonlySet<string>,
+  locale: Locale = DEFAULT_LOCALE,
 ): { day: ProgramDay; droppedDeviceRowIds: string[] } {
-  const day = dayFromTemplate(phase, template, ids, now);
+  const day = dayFromTemplate(phase, template, ids, now, locale);
   const prepared = prepareForEditing(day, deviceIds);
   return { day: { ...day, blocks: prepared.blocks }, droppedDeviceRowIds: prepared.droppedDeviceRowIds };
 }
@@ -342,20 +356,20 @@ export function displayDays<T extends { weekdays?: readonly number[] | undefined
     .map((item) => item.day);
 }
 
-export function copyDay(phase: Pick<ProgramPhase, 'days'>, day: ProgramDay, ids: ProgramIdSource): ProgramDay {
+export function copyDay(phase: Pick<ProgramPhase, 'days'>, day: ProgramDay, ids: ProgramIdSource, locale: Locale = DEFAULT_LOCALE): ProgramDay {
   return {
     id: ids('d'),
-    name: nextDayName(phase.days),
+    name: nextDayName(phase.days, locale),
     blocks: reIdBlocks(day.blocks, ids),
     ...(day.source ? { source: { ...day.source } } : {}),
   };
 }
 
 /** Evrenin kopyası: "… kopyası" adıyla, aynı süre ve sıklık; günler yeni kimlikle, adları, atamaları ve kaynakları aynı. */
-export function copyPhase(phases: Phases, phase: ProgramPhase, ids: ProgramIdSource): ProgramPhase {
+export function copyPhase(phases: Phases, phase: ProgramPhase, ids: ProgramIdSource, locale: Locale = DEFAULT_LOCALE): ProgramPhase {
   return {
     id: ids('p'),
-    name: uniqueName(`${phase.name} kopyası`, phases.map((item) => item.name)),
+    name: uniqueName(catalogMessages(locale).program.copyName(phase.name), phases.map((item) => item.name)),
     ...(phase.weeks !== undefined ? { weeks: phase.weeks } : {}),
     ...(phase.daysPerWeek !== undefined ? { daysPerWeek: phase.daysPerWeek } : {}),
     // Atamalar da kopyalanır: kopya evre ayrı bir evre, günleri öteki evrenin günleriyle çakışmaz.
@@ -382,16 +396,16 @@ export function sourceNames(phases: Phases): string[] {
  * Oluşturma kaydının cümlesi: hangi şablonlardan (gün sırasıyla). Geçmişin sınırına (300
  * karakter) sığmayan adlar "… ve n şablon daha" olur; hepsi günlerin kaynağında durur.
  */
-export function creationChange(body: Pick<ProgramBody, 'phases'>): ProgramChange {
+export function creationChange(body: Pick<ProgramBody, 'phases'>, locale: Locale = DEFAULT_LOCALE): ProgramChange {
+  const t = catalogMessages(locale).program;
   const names = sourceNames(body.phases);
-  if (names.length === 0) return { text: 'Program oluşturuldu' };
+  if (names.length === 0) return { text: t.created };
   const text = (shown: number) => {
     const quoted = names
       .slice(0, shown)
       .map((name) => `'${name}'`)
       .join(', ');
-    const rest = names.length - shown;
-    return `Program oluşturuldu: ${quoted} ${shown === 1 ? 'şablonundan' : 'şablonlarından'}${rest > 0 ? ` … ve ${rest} şablon daha` : ''}`;
+    return t.createdFrom(quoted, shown, names.length - shown);
   };
   let shown = names.length;
   while (shown > 1 && text(shown).length > PROGRAM_LIMITS.changeText) shown -= 1;
@@ -403,7 +417,7 @@ export function creationChange(body: Pick<ProgramBody, 'phases'>): ProgramChange
  * evrenin atamalarının birleşimi (yoksa alan yok); gövdenin program düzeyindeki `weekdays`'i okunmaz (eski gövde
  * daha önce atanmıştır: `upgradeProgramBody`, `bodyWithAssignments`).
  */
-export function createProgramRecord(body: ProgramBody, now: Date): ProgramState {
+export function createProgramRecord(body: ProgramBody, now: Date, locale: Locale = DEFAULT_LOCALE): ProgramState {
   const at = now.toISOString();
   const current = body.phases.find((phase) => phase.id === body.currentPhaseId) ?? body.phases[0];
   const weekdays = phaseWeekdays(current?.days ?? []);
@@ -417,7 +431,7 @@ export function createProgramRecord(body: ProgramBody, now: Date): ProgramState 
     current: { phaseId: body.currentPhaseId, startedAt: at },
     rotation: {},
     ...(weekdays.length > 0 ? { schedule: { weekdays } } : {}),
-    log: appendLog([], { at, revision: 1, kind: 'create', changes: [creationChange(body)] }),
+    log: appendLog([], { at, revision: 1, kind: 'create', changes: [creationChange(body, locale)] }),
   };
 }
 
@@ -434,12 +448,13 @@ export function sameProgramBase(a: ProgramBase, b: ProgramBase): boolean {
 }
 
 /** Şablondan program: evresiz, şablonla dolu tek program ("Program A"). */
-export function createProgramFromTemplate(template: TemplateOption, ids: ProgramIdSource, now: Date): ProgramState {
+export function createProgramFromTemplate(template: TemplateOption, ids: ProgramIdSource, now: Date, locale: Locale = DEFAULT_LOCALE): ProgramState {
   const phaseId = ids('p');
-  const day = dayFromTemplate({ days: [] }, template, ids, now);
+  const day = dayFromTemplate({ days: [] }, template, ids, now, locale);
   return createProgramRecord(
-    { phased: false, currentPhaseId: phaseId, phases: [{ id: phaseId, name: DEFAULT_PHASE_NAME, days: [day] }] },
+    { phased: false, currentPhaseId: phaseId, phases: [{ id: phaseId, name: defaultPhaseName(locale), days: [day] }] },
     now,
+    locale,
   );
 }
 
@@ -569,6 +584,7 @@ function unassigned(day: ProgramDay): ProgramDay {
 export function mergePhases(
   phases: Phases,
   currentPhaseId: string,
+  locale: Locale = DEFAULT_LOCALE,
 ): { phases: ProgramPhase[]; renamed: { dayId: string; from: string; to: string }[] } {
   const current = phases.find((phase) => phase.id === currentPhaseId) ?? phases[0];
   if (!current) return { phases: [], renamed: [] };
@@ -586,7 +602,7 @@ export function mergePhases(
     phases: [
       {
         id: current.id,
-        name: DEFAULT_PHASE_NAME,
+        name: defaultPhaseName(locale),
         ...(current.daysPerWeek !== undefined ? { daysPerWeek: current.daysPerWeek } : {}),
         days,
       },
@@ -693,12 +709,12 @@ export function prepareProgramForEditing(
  * duruyor ve PT ona başka cihaz seçmedi. "Kaydedince kalıcı olur" yalnız kaydedilecek iş varken
  * (`unsaved`: Kaydet görünür). Sayılacak satır yoksa `null`.
  */
-export function droppedDeviceNotice(phases: Phases, noted: ReadonlySet<string>, unsaved: boolean): string | null {
+export function droppedDeviceNotice(phases: Phases, noted: ReadonlySet<string>, unsaved: boolean, locale: Locale = DEFAULT_LOCALE): string | null {
   const count = phases
     .flatMap((phase) => phase.days.flatMap((day) => day.blocks.flatMap((block) => block.rows)))
     .filter((row) => noted.has(row.id) && row.deviceId === undefined).length;
   if (count === 0) return null;
-  return `${count} satırın cihazı silinmiş; egzersizin kendi cihazına döndü.${unsaved ? ' Kaydedince kalıcı olur.' : ''}`;
+  return catalogMessages(locale).program.droppedDevices(count, unsaved);
 }
 
 /** Kütüphanede olmayan egzersize bağlı satırlar, gün gün. */
@@ -798,15 +814,16 @@ export function phaseStatus(program: Pick<ProgramState, 'phases' | 'current'>, n
 }
 
 /** "3. hafta · süresiz", "3. hafta / 6", "Süresi doldu (6 hafta)". */
-export function phaseStatusLabel(status: PhaseStatus): string {
+export function phaseStatusLabel(status: PhaseStatus, locale: Locale = DEFAULT_LOCALE): string {
+  const t = catalogMessages(locale).program;
   switch (status.kind) {
     case 'open':
-      return `${status.week}. hafta · süresiz`;
+      return t.phaseOpen(status.week);
     case 'running':
-      return `${status.week}. hafta / ${status.weeks}`;
+      return t.phaseRunning(status.week, status.weeks);
     case 'due':
     case 'ended':
-      return `Süresi doldu (${status.weeks} hafta)`;
+      return t.phaseEnded(status.weeks);
   }
 }
 
@@ -821,8 +838,8 @@ export function phaseProgress(program: Pick<ProgramState, 'phases' | 'current'>,
 /* --- sıklık ve haftalık yük --- */
 
 /** "Haftada 3 gün"; sıklık yoksa `null`. */
-export function frequencyLabel(daysPerWeek?: number): string | null {
-  return daysPerWeek === undefined ? null : `Haftada ${daysPerWeek} gün`;
+export function frequencyLabel(daysPerWeek?: number, locale: Locale = DEFAULT_LOCALE): string | null {
+  return daysPerWeek === undefined ? null : catalogMessages(locale).program.frequency(daysPerWeek);
 }
 
 /** Bir turdaki her günün haftada kaç kez yapıldığı: sıklık ÷ gün sayısı; sıklık yoksa `null`. */
@@ -984,8 +1001,8 @@ export function keepStoredAssignments<B extends AssignableBody>(body: B, stored:
 }
 
 /** Evre geçişinin cümlesi (hem fark hem geçiş kaydı). */
-export function currentPhaseChange(fromName: string, toName: string): ProgramChange {
-  return { text: `Şu anki evre: '${fromName}' → '${toName}'` };
+export function currentPhaseChange(fromName: string, toName: string, locale: Locale = DEFAULT_LOCALE): ProgramChange {
+  return { text: catalogMessages(locale).program.currentPhase(fromName, toName) };
 }
 
 /**
@@ -1004,9 +1021,13 @@ export function appendLog(log: readonly ProgramLogEntry[], entry: ProgramLogEntr
 }
 
 /** Tek kayıtta en fazla 60 değişiklik; fazlası "… ve n değişiklik daha" olur (tamamı commit'te). */
-export function capChanges(changes: readonly ProgramChange[], max: number = PROGRAM_LIMITS.changesPerEntry): ProgramChange[] {
+export function capChanges(
+  changes: readonly ProgramChange[],
+  max: number = PROGRAM_LIMITS.changesPerEntry,
+  locale: Locale = DEFAULT_LOCALE,
+): ProgramChange[] {
   if (changes.length <= max) return [...changes];
-  return [...changes.slice(0, max - 1), { text: `… ve ${changes.length - (max - 1)} değişiklik daha` }];
+  return [...changes.slice(0, max - 1), { text: catalogMessages(locale).program.moreChanges(changes.length - (max - 1)) }];
 }
 
 /**
@@ -1019,14 +1040,15 @@ export function settleSchedule(
   stored: Pick<ProgramState, 'schedule' | 'clientSchedule'>,
   days: readonly ProgramDay[],
   at: string,
+  locale: Locale = DEFAULT_LOCALE,
 ): { schedule: ProgramSchedule | undefined; changes: string[] } {
   const before = cleanWeekdays(stored.schedule?.weekdays);
   const after = phaseWeekdays(days);
   const unionChanged = !sameWeekdays(before, after);
   const layer = stored.clientSchedule;
   const changes = [
-    ...(unionChanged ? [weekdaysChangeText(before, after)] : []),
-    ...(layer ? [`Danışanın günleri kaldırıldı (${weekdaysText(layer.weekdays)})`] : []),
+    ...(unionChanged ? [weekdaysChangeText(before, after, locale)] : []),
+    ...(layer ? [catalogMessages(locale).program.clientDaysRemoved(weekdaysText(layer.weekdays, locale))] : []),
   ];
   if (after.length === 0) return { schedule: undefined, changes };
   if (changes.length === 0) return { schedule: stored.schedule, changes };
@@ -1038,16 +1060,16 @@ export function settleSchedule(
  * günleri yeni evrenin atamalarından (`settleSchedule`; danışanın eski katmanı düşer), geçmişe "Evre
  * geçişi" yazılır. Evre yoksa ya da zaten şu anki evreyse `null`.
  */
-export function startPhase(program: ProgramState, phaseId: string, now: Date): ProgramState | null {
+export function startPhase(program: ProgramState, phaseId: string, now: Date, locale: Locale = DEFAULT_LOCALE): ProgramState | null {
   const target = program.phases.find((phase) => phase.id === phaseId);
   if (!target || phaseId === program.current.phaseId) return null;
   const at = now.toISOString();
   const revision = program.revision + 1;
   const from = currentPhaseOf(program)?.phase.name ?? '';
   const { lastDayId: _dropped, ...rotation } = program.rotation;
-  const settled = settleSchedule(program, target.days, at);
+  const settled = settleSchedule(program, target.days, at, locale);
   const { schedule: _schedule, clientSchedule: _layer, ...rest } = program;
-  const changes = [currentPhaseChange(from, target.name), ...settled.changes.map((text): ProgramChange => ({ text }))];
+  const changes = [currentPhaseChange(from, target.name, locale), ...settled.changes.map((text): ProgramChange => ({ text }))];
   return {
     ...rest,
     ...(settled.schedule ? { schedule: settled.schedule } : {}),

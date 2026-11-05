@@ -1,3 +1,4 @@
+import type { Locale } from '../i18n/locale.ts';
 import { formatNumber } from './format.ts';
 import { deloadWeight, LIGHTEN_FACTOR, type LoadSpec, type Plan, type Suggestion } from './progression.ts';
 
@@ -136,6 +137,8 @@ export function assessTolerance({
   current: CheckIn;
   history?: readonly CheckIn[];
   mode?: ToleranceMode;
+  /** Gerekçelerin dili; yoksa Türkçe. */
+  locale?: Locale;
 }): ToleranceResult {
   const reasons: ToleranceReason[] = [];
 

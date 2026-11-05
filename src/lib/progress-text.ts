@@ -1,3 +1,4 @@
+import { DEFAULT_LOCALE, type Locale } from '../i18n/locale.ts';
 import { formatDay, formatDayShort, formatKg, formatNumber, formatSignedWithUnit, formatWithUnit } from './format.ts';
 import type { LineKey } from './measurement-trends.ts';
 import { MEASUREMENTS } from './measurements.ts';
@@ -184,7 +185,7 @@ export function recordPrevious(event: Pick<RecordEvent, 'kind' | 'previous'>): s
 }
 
 /** Hafta: "21–27 Eyl", ay değişirse "28 Eyl–4 Eki", yıl değişirse yıllı. */
-export function weekLabel(weekStart: string, weekEnd: string): string {
+export function weekLabel(weekStart: string, weekEnd: string, _locale: Locale = DEFAULT_LOCALE): string {
   const withYear = weekStart.slice(0, 4) !== weekEnd.slice(0, 4);
   if (!withYear && weekStart.slice(0, 7) === weekEnd.slice(0, 7)) return `${Number(weekStart.slice(8))}–${formatDayShort(weekEnd)}`;
   return `${formatDayShort(weekStart, withYear)}–${formatDayShort(weekEnd, withYear)}`;

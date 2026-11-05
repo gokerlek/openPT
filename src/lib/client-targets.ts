@@ -1,3 +1,4 @@
+import { DEFAULT_LOCALE, type Locale } from '../i18n/locale.ts';
 import type { ClientTarget, ClientTargets, ProgramChange, ProgramPhase } from './program-plan.ts';
 import type { TrackingType } from './progression.ts';
 import { isStraight, resizeSets, setShape, setsText, type SetSpec } from './set-plan.ts';
@@ -91,7 +92,7 @@ export function plainSets(sets: readonly SetSpec[]): boolean {
 }
 
 /** "10–14", "40–60 sn"; düz olmayan setlerde kısa biçim ("12/10/8+"). */
-export function targetLabel(sets: readonly SetSpec[], trackingType: TrackingType): string {
+export function targetLabel(sets: readonly SetSpec[], trackingType: TrackingType, _locale: Locale = DEFAULT_LOCALE): string {
   const first = sets[0];
   if (!first) return '';
   if (plainSets(sets)) {

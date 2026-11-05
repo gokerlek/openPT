@@ -1,6 +1,9 @@
-import { formatNumber } from './format.ts';
-import { BODY_MUSCLES, ROLE_LABELS, isBodyMuscle, summarizeMuscles, type BodyMuscle, type MuscleRole } from './muscles.ts';
-import { MUSCLE_LABELS, type Exercise, type Muscle } from './schemas/exercise.ts';
+import { DEFAULT_LOCALE, type Locale } from '../i18n/locale.ts';
+import { catalogMessages } from '../i18n/messages/catalog/index.ts';
+import { lower } from '../i18n/text.ts';
+import { getFormat } from './format.ts';
+import { BODY_MUSCLES, isBodyMuscle, roleLabels, summarizeMuscles, type BodyMuscle, type MuscleRole } from './muscles.ts';
+import { muscleLabels, type Exercise, type Muscle } from './schemas/exercise.ts';
 
 /**
  * Kas haritasının desen dili (tasarım `docs/plans/2026-11-03-ortak-liste-ve-kas-haritasi-design.md` §B): her harita aynı dört
@@ -26,14 +29,18 @@ export const LOAD_TIER_MIN: Record<LoadScale, { filled: number; striped: number 
   weekly: { filled: 10, striped: 5 },
 };
 
-export const LOAD_TIER_TITLES: Record<LoadScale, Record<MuscleTier, string>> = {
-  session: { filled: '3 set ve üstü', striped: '1,5–2,75 set', dotted: '1,5 setten az' },
-  weekly: { filled: '10 set ve üstü', striped: '5–9,75 set', dotted: '5 setten az' },
-};
+export function loadTierTitles(locale: Locale = DEFAULT_LOCALE): Record<LoadScale, Record<MuscleTier, string>> {
+  return catalogMessages(locale).muscleMap.loadTiers;
+}
 
 /** Yük haritalarının (şablon, program günü) açıklaması. */
-export const LOAD_DESCRIPTION =
-  'Kas başına çalışma seti: hedef 1, yardımcı 0,5, dengeleyici 0,25 sayılır; ısınma ve soğuma hareketleri sayılmaz.';
+export function loadDescription(locale: Locale = DEFAULT_LOCALE): string {
+  return catalogMessages(locale).muscleMap.loadDescription;
+}
+
+/** Türkçe metinler (eski çağrılar); arayüz `loadTierTitles(locale)` / `loadDescription(locale)` kullanır. */
+export const LOAD_TIER_TITLES: Record<LoadScale, Record<MuscleTier, string>> = loadTierTitles('tr');
+export const LOAD_DESCRIPTION = loadDescription('tr');
 
 export function loadTier(sets: number, scale: LoadScale): MuscleTier | null {
   if (!(sets > 0)) return null;
@@ -92,12 +99,6 @@ export function statusMarks(statuses: Partial<Record<BodyMuscle, MuscleStatusTon
   return marks;
 }
 
-const STATUS_TITLES: Record<MuscleStatusTone, string> = {
-  strong: 'Belirgin gelişme (%5 ve üstü)',
-  improved: 'Gelişme',
-  stable: 'Sabit',
-  declined: 'Gerileme',
-};
 
 /** Açıklamanın bir satırı: kas ve varsa set değeri, not ("az / yeterli / fazla") ve uyarı. */
 export type LegendRow = { key: string; label: string; sets?: number; note?: string; warn?: boolean };
@@ -108,46 +109,52 @@ export type MuscleLegendData = { groups: LegendGroup[]; cardioSets?: number };
 type LoadRow = { key: string; label: string; sets: number; note?: string; warn?: boolean };
 
 /** Yük satırları kademeye göre gruplu, her grupta setler büyükten küçüğe; boş grup ve sıfır satır yazılmaz. */
-export function loadLegend(rows: readonly LoadRow[], scale: LoadScale, cardioSets?: number): MuscleLegendData {
+export function loadLegend(rows: readonly LoadRow[], scale: LoadScale, cardioSets?: number, locale: Locale = DEFAULT_LOCALE): MuscleLegendData {
   const sorted = rows.filter((row) => row.sets > 0).sort((a, b) => b.sets - a.sets);
+  const titles = loadTierTitles(locale)[scale];
   const groups = TIER_ORDER.map((tier) => ({
     mark: tier,
-    title: LOAD_TIER_TITLES[scale][tier],
+    title: titles[tier],
     rows: sorted.filter((row) => loadTier(row.sets, scale) === tier),
   })).filter((group) => group.rows.length > 0);
   return cardioSets !== undefined && cardioSets > 0 ? { groups, cardioSets } : { groups };
 }
 
 /** Kas başına yükün açıklaması; kardiyo kas değildir, ayrı satıra gider. */
-export function muscleLoadLegend(load: Partial<Record<Muscle, number>>, scale: LoadScale): MuscleLegendData {
-  const rows = BODY_MUSCLES.map((muscle) => ({ key: muscle, label: MUSCLE_LABELS[muscle], sets: load[muscle] ?? 0 }));
-  return loadLegend(rows, scale, load.cardio);
+export function muscleLoadLegend(load: Partial<Record<Muscle, number>>, scale: LoadScale, locale: Locale = DEFAULT_LOCALE): MuscleLegendData {
+  const labels = muscleLabels(locale);
+  const rows = BODY_MUSCLES.map((muscle) => ({ key: muscle, label: labels[muscle], sets: load[muscle] ?? 0 }));
+  return loadLegend(rows, scale, load.cardio, locale);
 }
 
 /** Hareketin açıklaması: Hedef / Yardımcı / Dengeleyici, kas kas; set değeri yok. */
-export function roleLegend(exercise: Worked): MuscleLegendData {
+export function roleLegend(exercise: Worked, locale: Locale = DEFAULT_LOCALE): MuscleLegendData {
   const marks = roleMarks(exercise);
+  const roles = roleLabels(locale);
+  const labels = muscleLabels(locale);
   const groups = roleLists(exercise)
     .map(([role, muscles]) => ({
       mark: ROLE_TIER[role] as MuscleMark,
-      title: ROLE_LABELS[role],
+      title: roles[role],
       rows: muscles
         .filter((muscle): muscle is BodyMuscle => isBodyMuscle(muscle) && marks[muscle] === ROLE_TIER[role])
-        .map((muscle) => ({ key: muscle, label: MUSCLE_LABELS[muscle] })),
+        .map((muscle) => ({ key: muscle, label: labels[muscle] })),
     }))
     .filter((group) => group.rows.length > 0);
   return { groups };
 }
 
 /** Gelişimin açıklaması: dört karar hep yazılır (kası olmasa da), sonda "Veri az". */
-export function statusLegend(statuses: Partial<Record<BodyMuscle, MuscleStatusTone>>): MuscleLegendData {
+export function statusLegend(statuses: Partial<Record<BodyMuscle, MuscleStatusTone>>, locale: Locale = DEFAULT_LOCALE): MuscleLegendData {
+  const t = catalogMessages(locale).muscleMap;
+  const labels = muscleLabels(locale);
   const tones: MuscleStatusTone[] = ['strong', 'improved', 'stable', 'declined'];
   const groups: LegendGroup[] = tones.map((tone) => ({
     mark: STATUS_MARK[tone],
-    title: STATUS_TITLES[tone],
-    rows: BODY_MUSCLES.filter((muscle) => statuses[muscle] === tone).map((muscle) => ({ key: muscle, label: MUSCLE_LABELS[muscle] })),
+    title: t.statuses[tone],
+    rows: BODY_MUSCLES.filter((muscle) => statuses[muscle] === tone).map((muscle) => ({ key: muscle, label: labels[muscle] })),
   }));
-  return { groups: [...groups, { mark: 'empty', title: 'Veri az ya da çalışılmadı', rows: [] }] };
+  return { groups: [...groups, { mark: 'empty', title: t.noData, rows: [] }] };
 }
 
 /**
@@ -160,29 +167,34 @@ export function loadMapProps(
   scale: LoadScale,
   prefix: string,
   options: { legend?: boolean; rows?: readonly LoadRow[] } = {},
+  locale: Locale = DEFAULT_LOCALE,
 ): { marks: MuscleMarks; legend?: MuscleLegendData; label: string } {
+  const t = catalogMessages(locale).muscleMap;
   const worked = BODY_MUSCLES.filter((muscle) => (load[muscle] ?? 0) > 0).sort((a, b) => (load[b] ?? 0) - (load[a] ?? 0));
-  const label = worked.length > 0 ? `${prefix}: ${summarizeMuscles(worked.slice(0, 6)).join(', ')}` : `${prefix}: kas yükü yok`;
+  const label = worked.length > 0 ? t.loadLabel(prefix, summarizeMuscles(worked.slice(0, 6), locale).join(', ')) : t.noLoad(prefix);
   const marks = loadMarks(load, scale);
   if (options.legend === false) return { marks, label };
-  const legend = options.rows ? loadLegend(options.rows, scale, load.cardio) : muscleLoadLegend(load, scale);
+  const legend = options.rows ? loadLegend(options.rows, scale, load.cardio, locale) : muscleLoadLegend(load, scale, locale);
   return { marks, legend, label };
 }
 
 /** Hareket haritasının ortak propları: işaret, açıklama ve ekran okuyucu adı ("Çalışan kaslar: …"). */
-export function roleMapProps(exercise: Worked): { marks: MuscleMarks; legend: MuscleLegendData; label: string } {
+export function roleMapProps(exercise: Worked, locale: Locale = DEFAULT_LOCALE): { marks: MuscleMarks; legend: MuscleLegendData; label: string } {
+  const t = catalogMessages(locale).muscleMap;
   const marks = roleMarks(exercise);
   // Rol sırasıyla: önce hedef, sonra yardımcı, sonra dengeleyici.
-  const worked = roleLegend(exercise).groups.flatMap((group) => group.rows.map((row) => row.key as BodyMuscle));
-  const label = worked.length > 0 ? `Çalışan kaslar: ${summarizeMuscles(worked).join(', ')}` : 'Belirli bir kas grubu işaretlenmedi';
-  return { marks, legend: roleLegend(exercise), label };
+  const legend = roleLegend(exercise, locale);
+  const worked = legend.groups.flatMap((group) => group.rows.map((row) => row.key as BodyMuscle));
+  const label = worked.length > 0 ? t.worked(summarizeMuscles(worked, locale).join(', ')) : t.noneMarked;
+  return { marks, legend, label };
 }
 
 /** Kasın açıklamadaki kısa yazısı (haritada üstüne gelince): "Ön bacak · 6 set" ya da "Ön bacak · hedef"; yoksa `null`. */
-export function legendText(legend: MuscleLegendData, key: string): string | null {
+export function legendText(legend: MuscleLegendData, key: string, locale: Locale = DEFAULT_LOCALE): string | null {
+  const t = catalogMessages(locale).muscleMap;
   for (const group of legend.groups) {
     const row = group.rows.find((item) => item.key === key);
-    if (row) return `${row.label} · ${row.sets !== undefined ? `${formatNumber(row.sets)} set` : group.title.toLocaleLowerCase('tr')}`;
+    if (row) return `${row.label} · ${row.sets !== undefined ? t.sets(row.sets, getFormat(locale).number(row.sets)) : lower(locale, group.title)}`;
   }
   return null;
 }
