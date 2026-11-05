@@ -259,3 +259,4 @@ Every English string must use these terms. Plan: `docs/plans/2026-11-05-coklu-di
 | engelli / uyarı / ipucu (filtre kararı) | blocked / caution / give a cue | One term per decision across screens. |
 | AMRAP, bpm | AMRAP, bpm | Unchanged. |
 | metre | meters | US spelling. |
+| saat dilimi | time zone | Settings → Appearance; set from the browser at first setup. |

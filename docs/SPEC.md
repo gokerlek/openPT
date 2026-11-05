@@ -445,6 +445,8 @@ Chrome gerçek uygulama kurar, iPhone'da Safari → Paylaş → Ana Ekrana Ekle)
 
 **Hazır kütüphane:** egzersiz, cihaz ve aparatların İngilizcesi `src/data/*.en.ts`'te. Okunurken çevrilir (`listExercises(custom, locale)`). PT'nin kendi ya da düzenlediği kayıtlar ve düzenleme formları ham kaydı kullanır; böylece İngilizce metin PT'nin verisine yazılmaz.
 
+**Saat dilimi:** ilk kurulumda tarayıcıdan alınır (`src/lib/time-zone.ts` IANA adını doğrular) ve **Ayarlar → Görünüm**'den değişir. Daha önce kurulmuş kopyalar `Europe/Istanbul`'da kalır.
+
 **Kurulum ve AI:**
 - Kurulum komutu (`kur`) bilgisayarın diline göre konuşur; `KUR_LANG=tr|en` ile zorlanır.
 - AI koç, isteği yapanın dilinde yanıt verir. Taslak onayının özeti dilden bağımsızdır.

@@ -6,6 +6,22 @@ Antrenör programı hazırlar ve danışanını davet eder. Danışan telefonund
 
 > **Bir kurulum = bir antrenör.** Bu sürüm, herkesin aynı sitede GitHub ile kaydolup ayrı antrenör hesabı açtığı bir SaaS değildir. Yönetici girişi yalnız `GITHUB_OWNER` kullanıcısına açıktır. Başka bir antrenör kendi GitHub hesabı, Vercel projesi ve veri repolarıyla ayrı kurulum yapar. Danışanların GitHub hesabı gerekmez.
 
+## In English
+
+openPT is a mobile-first app for personal trainers to manage clients, workout programs and progress. Each trainer runs their own copy. The app deploys to the trainer's own Vercel project and keeps its data as JSON in private repositories on the trainer's GitHub account. There is no shared service and no database. Clients don't need a GitHub account; they use the app on their phone and can add it to the home screen.
+
+- **Install:**
+  - Run the one-line command in [Tek komut](#tek-komut) in a terminal (macOS or Linux, Node.js 20 or newer). It talks in your computer's language, Turkish or English. To force one, put `KUR_LANG=en ` (or `KUR_LANG=tr `) in front of it.
+  - Or use the **Deploy with Vercel** button below and follow the `/install` wizard.
+- **Language:**
+  - The app is in Turkish and English. On first visit it follows the browser language: Turkish browsers get Turkish, everything else gets English.
+  - Everyone can switch afterwards. Clients use **Settings → Language**; trainers use **Settings → App** or the user menu.
+  - Content the trainer writes stays exactly as written: program, day and template names, notes, client names, the brand name.
+  - Logged text stays in the language it was written in: the program change log, suggestions, AI rationale.
+- **Time zone:** taken from the browser during first setup, and you can change it in **Settings → Appearance**. Copies set up before this feature use `Europe/Istanbul` until you change it there.
+- **Health and screening wording:** the English text for limitations, movement tests, conditions and safety messages is a translation that has **not yet been reviewed by a clinician**. Have it checked before relying on it with clients. These features don't provide diagnosis or treatment.
+- **Docs:** the rest of this README and the documents in `docs/` are in Turkish for now.
+
 ## Kurulum
 
 İki yol var; ikisi de aynı sonucu verir: kendi Vercel projen, kendi GitHub hesabında özel repolar ve o hesapta sana ait küçük bir **GitHub uygulaması** (GitHub ile giriş ve veri erişimi bunun üzerinden). Anahtar kopyalaman, OAuth App açman gerekmez. **Ortak kurulum servisi, Vercel entegrasyonu, geliştiricinin anahtarı veya DB gerekmez.**
@@ -44,6 +60,7 @@ Geliştiricinin reposuna yalnız isteğe bağlı sürüm kontrolü/güncellemede
 - **Gelişim:** ölçümler, antrenman istatistikleri, set sırasında kişisel rekor ve önceki antrenmana göre hacim/set/tekrar artışı bildirimleri. Önceki set bilgisi gün/programdan bağımsız, aynı egzersiz ve cihazın son kaydından gelir.
 - **Sağlık ve hareket takibi:** onaya bağlı ağrı bildirimleri, kısıtlar, hareket taramaları ve program düzenlerken ilgili uyarılar. Bu takip özellikleri tanı veya tedavi hizmeti sunmaz.
 - **Görünüm:** isim/logo, altı hazır tema, açık/koyu mod, özel renkler ve canlı önizleme.
+- **Dil:** Türkçe ve İngilizce. İlk açılışta tarayıcının dili kullanılır, sonra herkes kendi ayarından seçer. PT'nin yazdığı içerik (program ve gün adları, notlar, danışan adları) yazıldığı dilde kalır. Saat dilimi ilk kurulumda tarayıcıdan alınır, **Ayarlar → Görünüm**'den değişir.
 - **Telefon kullanımı:** ana ekrana ekleme ve bağımsız uygulama görünümü. Tam çevrimdışı çalışma desteklenmez; veri işlemleri internet gerektirir.
 
 ## Nasıl çalışır?
