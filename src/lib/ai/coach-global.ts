@@ -9,12 +9,13 @@ import { appRepo, gh, owner } from '@/lib/github/client';
 import { readJson, writeJson } from '@/lib/github/files';
 import { geminiApiKey } from './gemini-key';
 import { coachContext, coachDeps } from './coach-service';
+import { generalFacts, generalHash, type GeneralSnapshot } from './coach-facts';
 import { type Client } from '@/lib/schemas/client';
 import { ASSISTANT_PATH } from './assistant-contract';
 import { coachAccess, COACH_PATH } from './coach-contract';
 import { EMPTY_CARE } from '@/lib/constraint-filter';
 import type { CoachInsight } from './coach-review';
-import { hashableFacts, type CoachExercise, type CoachFact } from './coach-engine';
+import type { CoachExercise } from './coach-engine';
 import type { SessionRepo } from '@/lib/session-files-core';
 
 export const PT_COACH_ID = 'c_ptgeneral';
@@ -44,7 +45,7 @@ export function generalCoachDeps(locale: Locale = DEFAULT_LOCALE) {
     let exercises: CoachExercise[] = [];
     const insights: CoachInsight[] = [];
     // Her danışanın özeti iki dilde tutulur: `shown` isteğin dilinde, `canonical` değişiklik denetimi için Türkçe.
-    const snapshots: { client: Client; shown: CoachFact[] | null; canonical: CoachFact[] | null }[] = [];
+    const snapshots: GeneralSnapshot[] = [];
     // Read sequentially to avoid exhausting GitHub's concurrent request quota on large rosters.
     for (const client of allowed) {
       try {
@@ -54,23 +55,8 @@ export function generalCoachDeps(locale: Locale = DEFAULT_LOCALE) {
         snapshots.push({ client, shown: snapshot.context.facts, canonical: snapshot.canonicalFacts });
       } catch { snapshots.push({ client, shown: null, canonical: null }); }
     }
-    const compose = (l: Locale, pick: (item: (typeof snapshots)[number]) => CoachFact[] | null) => {
-      const t = coachMessages(l).general;
-      const facts: CoachFact[] = [{ text: t.scope(clients.length, allowed.length), source: t.scopeSource }];
-      for (const item of snapshots) {
-        const own = pick(item);
-        if (!own) { facts.push({ text: t.unreadable(item.client.name), clientName: item.client.name, source: t.unreadableSource }); continue; }
-        const plain = own.filter(f => !f.exerciseId && !f.measurement).slice(0, 2);
-        const chosen = [...plain, ...own.filter(f => f.exerciseId).slice(0, 2), ...own.filter(f => f.measurement).slice(0, 2)];
-        facts.push(...chosen.map(f => ({ ...f, text: `${item.client.name}: ${f.text}`, clientName: item.client.name, source: `${f.source} · ${item.client.name}` })));
-      }
-      if (facts.length > 100) facts.push({ text: t.capped, source: t.cappedSource });
-      return facts;
-    };
-    const facts = compose(locale, item => item.shown);
-    // Karma dilden bağımsız (Türkçe özetlerden): dil değişince saklı değerlendirmeler kaybolmaz.
-    const canonical = hashableFacts(compose(DEFAULT_LOCALE, item => item.canonical));
-    return { context: { facts, insights: insights.slice(0, 20), exercises, care: EMPTY_CARE, today: '', existingExerciseIds: [], healthUnavailable: true, global: true }, hash: createHash('sha256').update(JSON.stringify(canonical)).digest('hex'), baseRevision: null };
+    const counts = { total: clients.length, allowed: allowed.length };
+    return { context: { facts: generalFacts(locale, snapshots, counts, 'shown'), insights: insights.slice(0, 20), exercises, care: EMPTY_CARE, today: '', existingExerciseIds: [], healthUnavailable: true, global: true }, hash: generalHash(deps.hash, snapshots, counts), baseRevision: null };
   };
   deps.classify = async (_id, _role, message, context, previous) => {
     const key = await geminiApiKey();

@@ -240,7 +240,7 @@ const en: Shape<typeof tr> = {
   general: {
     clientName: 'All clients',
     scope: (total: number, allowed: number) =>
-      `${allowed} of ${total} clients have AI support turned on. Health records are used only within the scope of the current health consent. The personal records of the others aren't used in this assessment.`,
+      `AI support is turned on for ${allowed} of ${plural('en', total, { one: `${total} client`, other: `${total} clients` })}. Health records are used only within the scope of the current health consent. The personal records of the others aren't used in this assessment.`,
     scopeSource: 'Client scope',
     unreadable: (name: string) => `${name}: the record couldn't be read; I'm not drawing conclusions from missing information.`,
     unreadableSource: 'Missing record',
