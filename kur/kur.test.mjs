@@ -74,6 +74,7 @@ function counterBytes() {
 function baseContext(overrides = {}) {
   const sleeps = [];
   return {
+    lang: 'tr',
     fetch: async (url) => {
       throw new Error(`Beklenmeyen istek: ${url}`);
     },
@@ -1272,4 +1273,269 @@ test('kaynak repo uygulamanın güncelleme kaynağı ve workflow adresiyle aynı
   assert.equal(core.match(/export const UPSTREAM = '([^']+)'/)?.[1], kur.DEFAULT_SOURCE);
   const workflow = readFileSync(new URL('../.github/workflows/axon-update.yml', import.meta.url), 'utf8');
   assert.ok(workflow.includes(`git fetch https://github.com/${kur.DEFAULT_SOURCE}.git `), 'workflow yanlış repodan çekiyor');
+});
+
+// ---------------------------------------------------------------------------------------------
+// İki dilli çıktı (Türkçe + İngilizce)
+// ---------------------------------------------------------------------------------------------
+
+const TURKISH_LETTERS = /[çğıİşöüÇĞŞÖÜ]/;
+
+/** İleti işlevi için örnek argümanlar: `x0`, `x1`, … (hangi parametrenin kullanıldığı çıktıdan okunur). */
+function sampleArgs(fn) {
+  return Array.from({ length: fn.length }, (_, index) => `x${index}`);
+}
+
+test('dil seçimi: KUR_LANG → LC_ALL → LC_MESSAGES → LANG → Intl; tr ile başlayan tr, gerisi en', () => {
+  const table = [
+    [{ KUR_LANG: 'tr' }, 'en-US', 'tr'],
+    [{ KUR_LANG: 'en', LC_ALL: 'tr_TR.UTF-8', LANG: 'tr_TR.UTF-8' }, 'tr-TR', 'en'],
+    [{ KUR_LANG: 'de', LANG: 'tr_TR.UTF-8' }, 'tr-TR', 'en'],
+    [{ KUR_LANG: 'TR' }, 'en-US', 'tr'],
+    [{ LC_ALL: 'tr_TR.UTF-8', LC_MESSAGES: 'en_US.UTF-8', LANG: 'en_US.UTF-8' }, 'en-US', 'tr'],
+    [{ LC_ALL: 'en_US.UTF-8', LC_MESSAGES: 'tr_TR.UTF-8', LANG: 'tr_TR.UTF-8' }, 'tr-TR', 'en'],
+    [{ LC_MESSAGES: 'tr_TR.UTF-8', LANG: 'en_US.UTF-8' }, 'en-US', 'tr'],
+    [{ LC_MESSAGES: 'en_US.UTF-8', LANG: 'tr_TR.UTF-8' }, 'tr-TR', 'en'],
+    [{ LANG: 'tr_TR.UTF-8' }, 'en-US', 'tr'],
+    [{ LANG: 'TR_TR' }, 'en-US', 'tr'],
+    [{ LANG: 'tr' }, 'en-US', 'tr'],
+    [{ LANG: 'en_GB.UTF-8' }, 'tr-TR', 'en'],
+    [{ LANG: 'C' }, 'tr-TR', 'en'],
+    [{ KUR_LANG: '', LC_ALL: '  ', LC_MESSAGES: '', LANG: 'tr_TR.UTF-8' }, 'en-US', 'tr'],
+    [{}, 'tr-TR', 'tr'],
+    [{}, 'en-US', 'en'],
+    [{}, 'de-DE', 'en'],
+    [{}, '', 'en'],
+    [{}, undefined, 'en'],
+    [undefined, 'tr-TR', 'tr'],
+    [undefined, undefined, 'en'],
+  ];
+  for (const [env, intlLocale, expected] of table) {
+    assert.equal(kur.detectLang(env, intlLocale), expected, `${JSON.stringify(env)} + ${intlLocale}`);
+  }
+});
+
+test('iletiler: İngilizce anahtarları Türkçe ile birebir aynı, türleri ve parametre sayıları eşit', () => {
+  const trKeys = Object.keys(kur.MESSAGES.tr).sort();
+  assert.deepEqual(Object.keys(kur.MESSAGES.en).sort(), trKeys);
+  assert.ok(trKeys.length > 200, 'beklenenden az ileti');
+  for (const key of trKeys) {
+    const tr = kur.MESSAGES.tr[key];
+    const en = kur.MESSAGES.en[key];
+    assert.equal(typeof en, typeof tr, `${key}: tür farklı`);
+    assert.ok(typeof tr === 'string' || typeof tr === 'function', `${key}: ileti metin ya da işlev olmalı`);
+    if (typeof tr === 'function') assert.equal(en.length, tr.length, `${key}: parametre sayısı farklı`);
+    else assert.ok(tr.length > 0 && en.length > 0, `${key}: boş ileti`);
+  }
+});
+
+test('iletiler: İngilizcede Türkçe harf yok; her işlev tüm parametrelerini kullanır', () => {
+  for (const lang of ['tr', 'en']) {
+    for (const [key, value] of Object.entries(kur.MESSAGES[lang])) {
+      const text = typeof value === 'function' ? value(...sampleArgs(value)) : value;
+      assert.equal(typeof text, 'string', `${lang} ${key}`);
+      if (lang === 'en') assert.doesNotMatch(text, TURKISH_LETTERS, `en ${key}: ${text}`);
+      if (typeof value === 'function') {
+        sampleArgs(value).forEach((arg) => assert.ok(text.includes(arg), `${lang} ${key}: ${arg} kullanılmıyor → ${text}`));
+      }
+    }
+  }
+});
+
+test('iletiler: kodda geçen her anahtar tanımlı, tanımlı her ileti kullanılıyor', () => {
+  const source = readFileSync(SOURCE_PATH, 'utf8');
+  const start = source.indexOf('export const MESSAGES = {');
+  const end = source.indexOf('export function t(');
+  assert.ok(start > 0 && end > start);
+  const code = source.slice(0, start) + source.slice(end);
+  const keys = new Set(Object.keys(kur.MESSAGES.tr));
+  const prefixes = new Set([...keys].map((key) => key.split('.')[0]));
+  const used = new Set();
+  for (const [, key] of code.matchAll(/'([a-zA-Z]+(?:\.[A-Za-z0-9]+)+)'/g)) {
+    if (prefixes.has(key.split('.')[0]) && !/\.(com|app)$/.test(key)) used.add(key);
+  }
+  for (const key of used) {
+    // `resultFor('page.x')` ve `deploy.${state}` anahtarları dinamik kurulur.
+    const dynamic = keys.has(`${key}.title`) || /^deploy\.[A-Z]+$/.test(key);
+    assert.ok(keys.has(key) || dynamic, `tanımsız ileti anahtarı: ${key}`);
+  }
+  for (const key of keys) {
+    const base = key.replace(/\.(title|body)$/, '');
+    const dynamic = /^deploy\.[A-Z]+$/.test(key);
+    assert.ok(used.has(key) || used.has(base) || dynamic, `kullanılmayan ileti: ${key}`);
+  }
+  assert.match(code, /`deploy\.\$\{state\}`/, 'yayın durumu adları dinamik anahtarla okunur');
+});
+
+test('ileti çözümü: dil verilmezse Türkçe; ref argümanları iç içe çözülür; hata metni dile göre', () => {
+  assert.equal(kur.t(undefined, 'step.done'), 'Bitti.');
+  assert.equal(kur.t('tr', 'step.done'), 'Bitti.');
+  assert.equal(kur.t('en', 'step.done'), 'Done.');
+  assert.equal(kur.t('de', 'step.done'), 'Bitti.', 'bilinmeyen dil Türkçe kalır; seçimi detectLang yapar');
+  const nested = kur.msg('api.unexpectedReply', kur.msg('what.createCommit'));
+  assert.equal(kur.render('tr', nested), 'Commit oluşturma: GitHub beklenmeyen bir yanıt verdi.');
+  assert.equal(kur.render('en', nested), 'Creating the commit: GitHub returned an unexpected response.');
+  assert.equal(kur.render('en', 'düz metin'), 'düz metin');
+  const error = new kur.KurError(kur.msg('source.notFound', 'a/b'), kur.msg('source.notFoundHint'));
+  assert.equal(error.message, 'Kaynak repo bulunamadı: a/b.');
+  assert.equal(error.text('en'), 'Source repo not found: a/b.');
+  assert.match(error.hint, /AXON_KUR_SOURCE/);
+  assert.match(error.hintText('en'), /AXON_KUR_SOURCE/);
+  const plain = new kur.KurError('Düz ileti', 'Düz ipucu');
+  assert.deepEqual([plain.text('en'), plain.hintText('en')], ['Düz ileti', 'Düz ipucu']);
+  const api = new kur.ApiError('GitHub', 404, { message: 'Not Found' }, kur.msg('what.readSource'));
+  assert.equal(api.message, 'Kaynak repoyu okuma başarısız oldu (404): Not Found');
+  assert.equal(api.text('en'), 'Reading the source repo failed (404): Not Found');
+  assert.equal(new kur.ApiError('Vercel', 500, null).text('en'), 'Vercel request failed (500)');
+});
+
+test('İngilizce saf çıktılar: sürüm, ad denetimi, hata özeti, megabayt, manifest ve yerel sayfalar', () => {
+  assert.match(kur.startupProblem('16.20.2', 'en'), /^The Node version on your computer \(16\.20\.2\) is too old; Node 20 or newer is required\. Install the current LTS release from https:\/\/nodejs\.org/);
+  assert.equal(kur.startupProblem('16.20.2'), kur.startupProblem('16.20.2', 'tr'), 'dil verilmezse Türkçe');
+  assert.equal(kur.validateProjectName('', 'en'), 'Enter a name.');
+  assert.equal(kur.validateProjectName('Buyuk', 'en'), 'Use only lowercase letters (a-z), digits and hyphens; no spaces or accented letters.');
+  assert.equal(kur.validateProjectName('Buyuk'), 'Yalnız küçük harf (a-z), rakam ve tire kullan; boşluk ve Türkçe harf olmaz.');
+  assert.match(kur.validateRepoName('..', 'en'), /^A repo name can only contain letters/);
+  assert.equal(kur.formatMegabytes(8_100_000), '7,7');
+  assert.equal(kur.formatMegabytes(8_100_000, 'en'), '7.7');
+
+  const vercel = kur.failureLines(new kur.ApiError('Vercel', 400, { error: { code: 'repo_not_found', message: 'Repository not found', action: 'Install GitHub App', link: 'https://github.com/apps/vercel/installations/new' } }, kur.msg('what.openProject')), 'en');
+  assert.deepEqual(vercel, [
+    'Setup could not be completed: Creating the Vercel project failed (400, repo_not_found): Repository not found',
+    'Vercel suggests: Install GitHub App — https://github.com/apps/vercel/installations/new',
+    'What to do: The request was rejected; fix it according to the message above and run the command again.',
+  ]);
+  assert.deepEqual(kur.failureLines(new kur.KurCancelled('eof'), 'en'), ['Setup stopped: the terminal input was closed (Ctrl+D).']);
+  assert.deepEqual(kur.failureLines(new kur.KurCancelled('sigint'), 'en'), ['Setup stopped.']);
+  assert.match(kur.failureLines(new kur.ApiError('GitHub', 403, { message: 'API rate limit exceeded' }), 'en').join('\n'), /You hit the GitHub rate limit\./);
+  assert.match(kur.failureLines(new kur.ApiError('Vercel', 503, null), 'en').join('\n'), /Vercel is having a temporary problem/);
+  assert.match(kur.failureLines(new TypeError('x is undefined'), 'en').join('\n'), /an unexpected error occurred \(TypeError: x is undefined\)/);
+  assert.match(kur.failureLines(new kur.NetworkError(kur.msg('net.unreachable', 'GitHub')), 'en').join('\n'), /Could not reach GitHub\.\nWhat to do: Check your internet connection/);
+  assert.deepEqual(kur.describeCreated({ githubApp: { name: 'openPT abc', settingsUrl: 'https://github.com/settings/apps/openpt-abc' }, codeRepo: 'https://github.com/c/openpt', dataRepo: 'https://github.com/c/openpt-data', vercelProject: 'https://vercel.com/c/s', env: true }, 'en'), [
+    'GitHub app "openPT abc": https://github.com/settings/apps/openpt-abc',
+    'Code repo: https://github.com/c/openpt',
+    'Data repo: https://github.com/c/openpt-data',
+    'Vercel project: https://vercel.com/c/s',
+    "The Vercel project's Production settings (env) were written.",
+  ]);
+
+  const options = { appName: 'openPT abc', productionUrl: 'https://salon.vercel.app', localBase: 'http://127.0.0.1:1' };
+  assert.equal(kur.buildManifest(options).description, "openPT kurulumun (https://salon.vercel.app): PT girişi ve GitHub'daki verilerine erişim.");
+  assert.equal(kur.buildManifest({ ...options, lang: 'en' }).description, 'Your openPT installation (https://salon.vercel.app): trainer sign-in and access to your data on GitHub.');
+  const manifest = kur.buildManifest(options);
+  const trPage = kur.manifestPage({ manifest, state: 's' });
+  assert.match(trPage, /^<!doctype html><html lang="tr">/);
+  assert.match(trPage, /<h1>GitHub uygulaması oluşturuluyor…<\/h1>/);
+  const enPage = kur.manifestPage({ manifest, state: 's', lang: 'en' });
+  assert.match(enPage, /^<!doctype html><html lang="en">/);
+  assert.match(enPage, /<title>openPT setup<\/title>/);
+  assert.match(enPage, /<h1>Creating the GitHub app…<\/h1>/);
+  assert.match(enPage, /<button type="submit">Continue to GitHub<\/button>/);
+  assert.doesNotMatch(enPage.replace(/value="[^"]*"/, ''), TURKISH_LETTERS);
+  assert.match(kur.resultPage('Tamam', 'Terminale dönebilirsin.', null), /<html lang="tr">/);
+  assert.match(kur.resultPage('Done', 'You can go back to the terminal.', { href: 'https://x.test/', label: 'Try again' }, 'en'), /<html lang="en">.*<a class="b" href="https:\/\/x\.test\/">Try again<\/a>/);
+});
+
+test('İngilizce yerel sayfalar: dil özniteliği ve metinler ctx.lang\'a uyar; zaman aşımı hatası İngilizce okunur', async () => {
+  const pages = [];
+  const ctx = baseContext({
+    lang: 'en',
+    open: async (url) => {
+      const base = new URL(url).origin;
+      pages.push(
+        realFetch(url).then((response) => response.text()),
+        realFetch(`${base}/baska`).then((response) => response.text()),
+        realFetch(`${base}/github/callback`).then((response) => response.text()),
+      );
+      return true;
+    },
+  });
+  let failure;
+  await kur.runGithubAppFlow(ctx, { appName: 'A', productionUrl: 'https://s.vercel.app', timeoutMs: 100 }).catch((error) => {
+    failure = error;
+  });
+  const [home, notFound, early] = await Promise.all(pages);
+  assert.match(home, /<html lang="en">.*Creating the GitHub app…/);
+  assert.match(notFound, /<html lang="en">.*<h1>Not found<\/h1><p>This page does not exist\.<\/p>/);
+  assert.match(early, /<h1>GitHub app first<\/h1>/);
+  assert.ok(failure instanceof kur.KurError);
+  assert.equal(failure.text('en'), 'Timed out waiting for the return from the browser.');
+  assert.match(failure.message, /süre doldu/, '.message Türkçe kalır');
+  const output = ctx.io.lines.join('\n');
+  assert.match(output, /→ Opening GitHub in the browser\. In order:/);
+  assert.match(output, /1\) Click the "Create GitHub App" button/);
+  assert.match(output, /If the browser did not open, open this address: http:\/\/127\.0\.0\.1:\d+\//);
+  assert.doesNotMatch(output, TURKISH_LETTERS);
+});
+
+test('İngilizce uçtan uca: ctx.lang "en" iken adımlar, özet ve commit İngilizce; sır ve Türkçe harf yok', async () => {
+  const world = createWorld();
+  world.ctx.lang = 'en';
+  world.ctx.io = fakeIo({ answers: [['App name', 'Salonum']] });
+  const result = await kur.kur(world.ctx);
+  assert.deepEqual(world.state.browserErrors, []);
+  assert.equal(result.siteUrl, 'https://salonum.vercel.app');
+  const output = world.ctx.io.lines.join('\n');
+  assert.match(output, /\[1\/8\] Preparing: checking the Node version/);
+  assert.match(output, /✓ Node 22\.1\.0; source gokerlek\/openPT v1\.2\.3 \(11 files, \d+\.\d MB\)/);
+  assert.match(output, /\[2\/8\] Signing in to your Vercel account…/);
+  assert.match(output, /✓ Vercel account: coachv \(team: coachv-projects\)/);
+  assert.match(output, /✓ Address is free: https:\/\/salonum\.vercel\.app/);
+  assert.match(output, /✓ GitHub app created: openPT abcdef/);
+  assert.match(output, /→ Uploading the code: 11 files/);
+  assert.match(output, /✓ Code repo \(private, v1\.2\.3\): https:\/\/github\.com\/coach\/openpt/);
+  assert.match(output, /✓ Data repo \(private\): https:\/\/github\.com\/coach\/openpt-data/);
+  assert.match(output, /Deployment status: queued/);
+  assert.match(output, /Deployment status: ready/);
+  assert.match(output, /\[8\/8\] Done\./);
+  assert.match(output, /Your address: https:\/\/salonum\.vercel\.app/);
+  assert.match(output, /Opened in the browser: sign in with GitHub\./);
+  assert.match(output, /Your GitHub app's settings: https:\/\/github\.com\/settings\/apps\/openpt-abcdef/);
+  assert.doesNotMatch(output, TURKISH_LETTERS);
+  assert.equal([...world.git.commits.values()][0].message, `openPT v1.2.3\n\nSource: gokerlek/openPT@${SOURCE_COMMIT}`);
+  assertNoSecrets(world, [world.state.envBody.find((item) => item.key === 'AUTH_SECRET').value]);
+});
+
+test('İngilizce uçtan uca hata: özet, ne yapmalı ve oluşturulanlar İngilizce; .message Türkçe kalır', async () => {
+  const world = createWorld({ envFails: true });
+  world.ctx.lang = 'en';
+  world.ctx.io = fakeIo({ answers: [['App name', 'Salonum']] });
+  const code = await kur.main(world.ctx);
+  assert.equal(code, 1);
+  const output = world.ctx.io.lines.join('\n');
+  assert.match(output, /^openPT setup — I'll explain each step as it happens\. Press Ctrl\+C to stop\./);
+  assert.match(output, /Setup could not be completed: Some settings could not be written to Vercel: GITHUB_APP_PRIVATE_KEY \(env_conflict\)/);
+  assert.match(output, /What to do: Open Settings → Environment Variables in the Vercel project/);
+  assert.match(output, /Created so far \(still in place\):/);
+  assert.match(output, /GitHub app "openPT abcdef": https:\/\/github\.com\/settings\/apps\/openpt-abcdef/);
+  assert.match(output, /Code repo: https:\/\/github\.com\/coach\/openpt/);
+  assert.match(output, /Data repo: https:\/\/github\.com\/coach\/openpt-data/);
+  assert.match(output, /Vercel project: https:\/\/vercel\.com\/coachv-projects\/salonum/);
+  assert.match(output, /you can delete the items above if you like\./);
+  assert.doesNotMatch(output, TURKISH_LETTERS);
+  assertNoSecrets(world);
+});
+
+test('İngilizce sürüm uyumu ve terminal: uyumsuz kaynakta İngilizce ipucu; evet/hayır sorusu İngilizce', async () => {
+  const world = createWorld({ capabilities: null });
+  world.ctx.lang = 'en';
+  assert.equal(await kur.main(world.ctx), 1);
+  const output = world.ctx.io.lines.join('\n');
+  assert.match(output, /Setup could not be completed: The openPT version to be installed \(v1\.2\.3\) does not support this setup path \(GitHub app\) yet\./);
+  assert.match(output, /What to do: This setup path will arrive with a newer openPT release; for now, use the Deploy button in the README\./);
+  assert.match(output, /Nothing has been created yet\./);
+
+  const input = new PassThrough();
+  const output2 = new PassThrough();
+  const written = [];
+  output2.on('data', (chunk) => written.push(String(chunk)));
+  const io = kur.terminalIo({ input, output: output2, lang: 'en' });
+  input.write('maybe\nn\n\n');
+  assert.equal(await io.confirm('Continue?', true), false);
+  assert.equal(await io.confirm('Again?', false), false, 'boş yanıt varsayılanı döner');
+  io.close();
+  const text = written.join('');
+  assert.match(text, /Continue\? \(Y\/n\): /);
+  assert.match(text, /Type "y" or "n"\./);
+  assert.match(text, /Again\? \(y\/N\): /);
 });
