@@ -3,10 +3,12 @@
 import { useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { formatDateTime } from '@/lib/format';
+import { getFormat } from '@/lib/format';
 import { ownLogLabel } from '@/lib/own-program-text';
 import { groupChanges } from '@/lib/program-diff';
-import { LOG_KIND_LABELS, type ProgramLogEntry } from '@/lib/program-plan';
+import { logKindLabels, type ProgramLogEntry } from '@/lib/program-plan';
+import { useLocale, useMessages } from '@/i18n/client';
+import { programEditorMessages } from '@/i18n/messages/program-editor';
 
 /**
  * Program geçmişi: her kayıtta otomatik yazılan özet, en yenisi üstte. Aynı günün
@@ -27,6 +29,9 @@ export function ChangeLog({
   step?: number;
   viewer?: 'client' | 'pt';
 }) {
+  const t = useMessages(programEditorMessages).changeLog;
+  const locale = useLocale();
+  const format = getFormat(locale);
   const [shown, setShown] = useState(initial);
   const visible = entries.slice(0, shown);
 
@@ -37,9 +42,9 @@ export function ChangeLog({
           <li key={`${entry.revision}-${entry.at}`} className="flex flex-col gap-1.5 py-3 first:pt-0 last:pb-0">
             <div className="flex flex-wrap items-center gap-2">
               <time dateTime={entry.at} className="text-sm text-muted-foreground tabular-nums">
-                {formatDateTime(entry.at, timeZone)}
+                {format.dateTime(entry.at, timeZone)}
               </time>
-              <Badge variant={entry.kind === 'edit' ? 'outline' : 'secondary'}>{viewer ? ownLogLabel(entry, viewer) : LOG_KIND_LABELS[entry.kind]}</Badge>
+              <Badge variant={entry.kind === 'edit' ? 'outline' : 'secondary'}>{viewer ? ownLogLabel(entry, viewer, locale) : logKindLabels(locale)[entry.kind]}</Badge>
             </div>
             <ul className="flex flex-col gap-1 text-sm">
               {groupChanges(entry.changes).map((group, index) => (
@@ -55,7 +60,7 @@ export function ChangeLog({
       </ol>
       {entries.length > shown ? (
         <Button type="button" variant="ghost" size="sm" className="self-start" onClick={() => setShown((count) => count + step)}>
-          Daha eskileri göster
+          {t.showOlder}
         </Button>
       ) : null}
     </div>

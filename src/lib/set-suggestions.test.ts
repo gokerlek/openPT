@@ -1,6 +1,7 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { FinishFeedback, SessionIndex, SessionIndexExercise, SessionIndexRow } from './schemas/session.ts';
+import type { Locale } from '../i18n/locale.ts';
 import { algoProposalsThisWeek, readinessFromHealth, setSuggestionsFor, verifyAlgoSets, type SuggestionExercise } from './set-suggestions.ts';
 import { EXERCISES, workoutDay } from './testing/workout-fixtures.ts';
 import type { WorkoutDay } from './workout-plan.ts';
@@ -39,7 +40,7 @@ const weights = (exercise: SuggestionExercise) => ({
   ...Object.fromEntries(exercise.primaryMuscles.map((muscle) => [muscle, 1])),
 });
 
-function suggestions(input: { day?: WorkoutDay; items?: SessionIndex; readinessScore?: number; proposals?: Parameters<typeof setSuggestionsFor>[0]['proposals']; sessionId?: string } = {}) {
+function suggestions(input: { day?: WorkoutDay; items?: SessionIndex; readinessScore?: number; proposals?: Parameters<typeof setSuggestionsFor>[0]['proposals']; sessionId?: string; locale?: Locale } = {}) {
   return setSuggestionsFor({
     day: input.day ?? workoutDay(),
     exercises: EXERCISES,
@@ -50,6 +51,7 @@ function suggestions(input: { day?: WorkoutDay; items?: SessionIndex; readinessS
     proposals: input.proposals ?? [],
     setWeightsOf: weights,
     sessionId: input.sessionId,
+    ...(input.locale ? { locale: input.locale } : {}),
   });
 }
 
@@ -59,6 +61,10 @@ describe('set artışı adayları: günün satırları (§5.6)', () => {
     assert.deepEqual(suggestions(), [
       { rowId: 'r_aaaaaa', from: 3, to: 4, why: '4 haftadır bu harekette; son 2 haftada ilerliyor. Hedef kasın son 7 günde 8 seti var (önerilen ~10).' },
     ]);
+  });
+
+  test('dil verilmezse ya da Türkçe verilirse gerekçe aynı Türkçe cümle (İngilizcesi `recommend.ts` çevrilince)', () => {
+    assert.equal(suggestions({ locale: 'tr' })[0]?.why, suggestions()[0]?.why);
   });
 
   test('hazır oluşluk 60\'ın altı ya da bu hafta kasa 2 öneri verildiyse aday yok', () => {

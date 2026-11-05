@@ -41,6 +41,27 @@ function closure(entries: readonly string[]): Set<string> {
   return seen;
 }
 
+/** Bir sözlüğe giden ilk içe aktarma yolu (hata iletisinde: paket neden şişti). */
+function chainTo(entries: readonly string[], namespace: string): string {
+  const parent = new Map<string, string | null>(entries.map((entry) => [entry, null]));
+  const queue = [...entries];
+  for (let file = queue.shift(); file; file = queue.shift()) {
+    if (relative(SRC, file).startsWith(`i18n/messages/${namespace}/`)) {
+      const chain: string[] = [];
+      for (let step: string | null | undefined = file; step; step = parent.get(step)) chain.unshift(relative(SRC, step));
+      return chain.join(' -> ');
+    }
+    for (const specifier of importsOf(file)) {
+      const resolved = resolveImport(file, specifier);
+      if (resolved && !parent.has(resolved)) {
+        parent.set(resolved, file);
+        queue.push(resolved);
+      }
+    }
+  }
+  return '(yol bulunamadı)';
+}
+
 function namespaces(files: Set<string>): string[] {
   return [...new Set([...files].flatMap((file) => relative(SRC, file).match(/^i18n\/messages\/([^/]+)\//)?.[1] ?? []))].sort();
 }
@@ -67,9 +88,29 @@ describe('sözlük paketleri', () => {
     ].filter((file) => /\.tsx?$/.test(file) && !/\.test\./.test(file) && statSync(file).isFile() && isClientModule(file));
     assert.ok(entries.length > 40, `${entries.length} istemci modülü`);
     const used = namespaces(closure(entries));
-    for (const forbidden of ['pt-clients', 'pt-shell', 'install', 'setup']) {
-      assert.ok(!used.includes(forbidden), `${forbidden} danışan paketine giriyor (${used.join(', ')})`);
+    for (const forbidden of ['pt-clients', 'pt-shell', 'install', 'setup', 'pt-library', 'pt-program']) {
+      assert.ok(!used.includes(forbidden), `${forbidden} danışan paketine giriyor: ${chainTo(entries, forbidden)}`);
     }
+  });
+
+  test('düzenleyici, şema ve kayıt mantığı antrenör paneli sözlüklerini (`pt-library`, `pt-program`) çekmez', () => {
+    // Danışan kendi programını aynı blok düzenleyicisiyle ve aynı şemalarla düzenler; paneli yalnız panel sayfaları çeker.
+    const entries = [
+      ...walk(join(SRC, 'components', 'block-editor')),
+      ...walk(join(SRC, 'components', 'program')),
+      ...['template', 'program', 'own-program', 'exercise', 'device', 'attachment'].map((name) => join(SRC, 'lib', 'schemas', `${name}.ts`)),
+      ...['exercise-filter', 'client-targets', 'program-diff', 'proposals', 'edit-messages', 'template-edit', 'draft-store'].map((name) => join(SRC, 'lib', `${name}.ts`)),
+    ].filter((file) => /\.tsx?$/.test(file) && !/\.test\./.test(file));
+    const used = namespaces(closure(entries));
+    for (const forbidden of ['pt-library', 'pt-program']) {
+      assert.ok(!used.includes(forbidden), `${forbidden} paylaşılan modüllere giriyor: ${chainTo(entries, forbidden)}`);
+    }
+  });
+
+  test('çıkış penceresi taslak silmek için düzenleyici bileşenini çekmez', () => {
+    const used = [...closure([join(SRC, 'app', 'me', 'logout-dialog.tsx')])].map((file) => relative(SRC, file));
+    assert.ok(!used.some((file) => file.startsWith('components/block-editor/')), used.join(', '));
+    assert.ok(used.includes('lib/draft-store.ts'), used.join(', '));
   });
 
   test('doğrulama mesajları küçük `client-validation` sözlüğünde: şema PT metnini çekmez', () => {

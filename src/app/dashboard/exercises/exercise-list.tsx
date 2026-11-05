@@ -32,11 +32,13 @@ import { Toggle } from '@/components/ui/toggle';
 import { ConditionPicker, formatConstraints, parseConstraints } from '@/components/condition-picker';
 import { TOUCH_TARGETS } from './touch-targets';
 import { conditionLabel, formatCondition } from '@/lib/conditions';
+import { lower } from '@/i18n/text';
+import { LOCALES } from '@/i18n/locale';
 import { careSummary, type EditorCare } from '@/lib/constraint-filter';
 import {
-  CONTEXT_LABELS,
-  DECISION_LABELS,
-  FILTER_GROUP_LABELS,
+  contextLabels,
+  decisionLabels,
+  filterGroupLabels,
   FILTER_GROUPS,
   inFilterView,
   requiresClearance,
@@ -50,7 +52,9 @@ import { muscleSearchNames } from '@/lib/muscle-names';
 import { countByMuscle, isBodyMuscle, parseMuscles, summarizeMuscles, works } from '@/lib/muscles';
 import { fetchJson } from '@/lib/query/errors';
 import { useServiceQuery } from '@/lib/query/use-service';
-import { EQUIPMENT_LABELS, MUSCLE_LABELS, type Exercise, type Muscle } from '@/lib/schemas/exercise';
+import { equipmentLabels, muscleLabels, type Exercise, type Muscle } from '@/lib/schemas/exercise';
+import { useLocale, useMessages } from '@/i18n/client';
+import { ptLibraryMessages } from '@/i18n/messages/pt-library';
 
 type ExerciseWithSource = Exercise & { source: 'library' | 'custom' };
 
@@ -63,7 +67,6 @@ const GROUP_ICONS: Record<FilterGroup, Icon> = {
   unassessed: Question,
 };
 const DECISION_ICONS: Record<Decision, Icon> = { block: Prohibit, warn: Warning, cue: Lightbulb };
-const UNTAGGED_HINT = 'Bu hareketin medikal etiketi yok; kısıtlara göre kontrol edilemedi.';
 
 /**
  * Egzersiz listesi: arama ve kas haritasıyla süzme. Her kart detay sayfasına gider;
@@ -89,8 +92,13 @@ export function ExerciseList({
    */
   clientCare?: { name: string; care: EditorCare } | null;
 }) {
+  const t = useMessages(ptLibraryMessages).exerciseList;
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const locale = useLocale();
+  const untaggedHint = t.untaggedHint;
+  const muscles = muscleLabels(locale);
+  const groupLabels = filterGroupLabels(locale);
   const selected = useMemo(() => parseMuscles(searchParams.get('muscle')), [searchParams]);
   const clientMode = Boolean(clientCare && !clientCare.care.unavailable);
   const constraints = useMemo(() => (clientCare ? [] : parseConstraints(searchParams.get('limit'))), [searchParams, clientCare]);
@@ -129,7 +137,7 @@ export function ExerciseList({
 
   const visible = useMemo(() => {
     // Ada ve kas adına göre, Türkçe harfler katlanarak (düzenleyicinin seçicisiyle aynı arama).
-    const matched = searchExercises(exercises, search, muscleSearchNames).filter(
+    const matched = searchExercises(exercises, search, (muscle) => muscleSearchNames(muscle, LOCALES)).filter(
       (item) => selected.length === 0 || selected.some((muscle) => works(item, muscle)),
     );
     if (selected.length === 0) return matched;
@@ -142,8 +150,8 @@ export function ExerciseList({
   // edilmedi, eksik bilgi); karar, eksik bilgi ve "kontrol edilmedi" kartta rozet, sayılar özet çiplerinde.
   // Yalnız danışan bağlamı (ameliyat haftası…) eksikse özet satırında bir kez söylenir.
   const summary = useMemo(
-    () => (clientMode && clientCare ? careSummary(exercises, clientCare.care.map) : summarizeFilter(constraints.length === 0 ? [] : exercises, constraints)),
-    [exercises, constraints, clientMode, clientCare],
+    () => (clientMode && clientCare ? careSummary(exercises, clientCare.care.map) : summarizeFilter(constraints.length === 0 ? [] : exercises, constraints, { locale })),
+    [exercises, constraints, clientMode, clientCare, locale],
   );
   const clearance = requiresClearance(constraints);
   const filterOn = clientMode || constraints.length > 0;
@@ -164,17 +172,12 @@ export function ExerciseList({
     <div className="flex flex-col gap-5">
       <TrainingTabs />
       <PageHeader
-        title="Egzersizler"
-        description={
-          <>
-            <span className="tabular-nums">{exercises.length}</span> egzersiz · <span className="tabular-nums">{customCount}</span>{' '}
-            tanesi senin
-          </>
-        }
+        title={t.title}
+        description={<span className="tabular-nums">{t.summary(exercises.length, customCount)}</span>}
         actions={
           <Button className="touch:min-h-11" nativeButton={false} render={<Link href="/dashboard/exercises/new" />}>
             <Plus data-icon="inline-start" />
-            Yeni egzersiz
+            {t.add}
           </Button>
         }
       />
@@ -190,14 +193,14 @@ export function ExerciseList({
             type="search"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            placeholder="Egzersiz ara"
-            aria-label="Egzersiz ara"
+            placeholder={t.search}
+            aria-label={t.search}
           />
         </InputGroup>
 
         {filtering ? (
           <p className="text-sm text-muted-foreground" aria-live="polite">
-            <span className="tabular-nums">{shown.length}</span> sonuç
+            <span className="tabular-nums">{t.resultCount(shown.length)}</span>
           </p>
         ) : null}
       </div>
@@ -205,8 +208,8 @@ export function ExerciseList({
       <div className={`grid gap-5 lg:grid-cols-[16rem_minmax(0,1fr)] lg:items-start ${TOUCH_TARGETS}`}>
         <Card className="lg:sticky lg:top-6">
           <CardHeader>
-            <CardTitle>Kas haritası</CardTitle>
-            <CardDescription>Kaslara dokunarak süz.</CardDescription>
+            <CardTitle>{t.mapTitle}</CardTitle>
+            <CardDescription>{t.mapHint}</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
             {/* Telefonda harita ekran genişliğinde büyük: parmakla seçilebilsin. */}
@@ -215,9 +218,9 @@ export function ExerciseList({
               selected={selectedBody}
               onToggle={toggle}
               counts={counts}
-              hint="Bir kasa dokun"
+              hint={t.mapTapHint}
               bodyClassName="h-[min(34rem,68svh)] lg:h-96"
-              label="Kas süzgeci"
+              label={t.mapLabel}
             />
 
             <div className="flex flex-col gap-3">
@@ -229,17 +232,17 @@ export function ExerciseList({
                 onPressedChange={() => toggle('cardio')}
                 disabled={counts.cardio === 0}>
                 <Heartbeat data-icon="inline-start" />
-                Kardiyo
+                {t.cardio}
                 <span className="ml-auto tabular-nums text-muted-foreground">{counts.cardio}</span>
               </Toggle>
 
               {selectedBody.length > 0 ? (
-                <div className="flex flex-wrap gap-1.5" aria-label="Seçili kaslar">
+                <div className="flex flex-wrap gap-1.5" aria-label={t.selectedMuscles}>
                   {selectedBody.map((muscle) => (
                     <RemovableChip
                       key={muscle}
-                      label={MUSCLE_LABELS[muscle]}
-                      removeLabel={`${MUSCLE_LABELS[muscle]} süzgecini kaldır`}
+                      label={muscles[muscle]}
+                      removeLabel={t.removeMuscleFilter(muscles[muscle])}
                       onRemove={() => toggle(muscle)}
                     />
                   ))}
@@ -248,7 +251,7 @@ export function ExerciseList({
 
               {selected.length > 0 ? (
                 <Button variant="ghost" size="sm" className="self-start" onClick={() => setSelected([])}>
-                  Seçimi temizle
+                  {t.clearSelection}
                 </Button>
               ) : null}
             </div>
@@ -265,11 +268,13 @@ export function ExerciseList({
               className="group/constraints">
               <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-xl p-(--card-spacing) outline-none select-none hover:bg-muted/40 focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:ring-inset motion-safe:transition-colors motion-safe:duration-100 [&::-webkit-details-marker]:hidden">
                 {/* `summary` içinde blok öğe geçersiz: CardTitle'ın görünümü bir `span`'de. */}
-                <span className="font-heading text-base leading-snug font-medium">Kısıtlar</span>
+                <span className="font-heading text-base leading-snug font-medium">{t.limitationsTitle}</span>
                 {constraintCount > 0 ? (
                   <Badge variant="secondary">
-                    <span className="tabular-nums">{constraintCount}</span>
-                    <span className="sr-only">{clientMode ? ' kayıtlı kısıt' : ' seçili kısıt'}</span>
+                    <span className="tabular-nums" aria-hidden>
+                      {constraintCount}
+                    </span>
+                    <span className="sr-only">{clientMode ? t.savedLimitations(constraintCount) : t.selectedLimitations(constraintCount)}</span>
                   </Badge>
                 ) : null}
                 <CaretDown
@@ -279,9 +284,7 @@ export function ExerciseList({
               </summary>
               <CardContent className="flex flex-col gap-3 pb-(--card-spacing)">
                 <CardDescription>
-                  Danışanın kısıtlarını seç; uygun olmayan hareketler işaretlenir, etiketi olmayanlar “kontrol
-                  edilmedi” diye görünür. “Eksik bilgi”: hareketin etiketi ya da kısıtın şiddeti gibi bir bilgi
-                  eksik, bazı kurallar değerlendirilemedi.
+                  {t.limitationsIntro}
                 </CardDescription>
                 {clientCare ? (
                   <div className="flex flex-col gap-1 text-sm">
@@ -290,16 +293,16 @@ export function ExerciseList({
                       {clientCare.care.unavailable
                         ? ` · ${clientCare.care.unavailable}`
                         : clientCare.care.summary.length > 0
-                          ? ` · kayıtlı kısıtları: ${clientCare.care.summary.join(' · ')}`
-                          : ' · etkin kısıt yok'}
-                      {clientCare.care.pending.length > 0 ? ` · karar bekleyen bildirim: ${clientCare.care.pending.join(' · ')}` : ''}
+                          ? t.savedList(clientCare.care.summary.join(' · '))
+                          : t.noActive}
+                      {clientCare.care.pending.length > 0 ? t.pendingList(clientCare.care.pending.join(' · ')) : ''}
                     </p>
                     <div className="flex flex-wrap gap-3">
                       <Link href={`/dashboard/clients/${clientCare.care.clientId}/constraints`} className="underline-offset-4 hover:underline">
-                        Kısıtlar ›
+                        {t.limitationsLink}
                       </Link>
                       <Link href="/dashboard/exercises" className="text-muted-foreground underline-offset-4 hover:underline">
-                        Danışansız göster
+                        {t.withoutClient}
                       </Link>
                     </div>
                   </div>
@@ -307,8 +310,8 @@ export function ExerciseList({
                   <div className="max-w-sm">
                     <ConditionPicker
                       id="constraint"
-                      placeholder="Kısıt ekle"
-                      label="Kısıt ekle"
+                      placeholder={t.limitationPlaceholder}
+                      label={t.limitationPlaceholder}
                       value={constraints.map(formatCondition)}
                       onChange={(next) => setParams({ limit: parseConstraints(next.join(',')) })}
                     />
@@ -318,7 +321,7 @@ export function ExerciseList({
                 {filterOn ? (
                   <div className="flex flex-col gap-3 text-sm">
                     {/* Her hareket tek kümede; çipe dokununca liste o kümeye süzülür, yeniden dokununca hepsi. */}
-                    <div className="flex flex-wrap gap-1.5" role="group" aria-label="Kısıt özeti: dokununca liste o kümeye süzülür">
+                    <div className="flex flex-wrap gap-1.5" role="group" aria-label={t.summaryLabel}>
                       {FILTER_GROUPS.map((group) => {
                         const GroupIcon = GROUP_ICONS[group];
                         return (
@@ -331,7 +334,7 @@ export function ExerciseList({
                             onPressedChange={showOnly(group)}
                             disabled={summary.counts[group] === 0 && activeView !== group}>
                             <GroupIcon data-icon="inline-start" aria-hidden />
-                            <span className="tabular-nums">{summary.counts[group]}</span> {FILTER_GROUP_LABELS[group]}
+                            <span className="tabular-nums">{summary.counts[group]}</span> {groupLabels[group]}
                           </Toggle>
                         );
                       })}
@@ -339,19 +342,16 @@ export function ExerciseList({
                     <div className="flex flex-col gap-1 text-muted-foreground" aria-live="polite">
                       {/* Kısıt değişince sayılar duyurulsun (çipler düğme; canlı bölgede değiller). */}
                       <p className="sr-only">
-                        {FILTER_GROUPS.map((group) => `${summary.counts[group]} ${FILTER_GROUP_LABELS[group]}`).join(', ')}
+                        {FILTER_GROUPS.map((group) => `${summary.counts[group]} ${groupLabels[group]}`).join(', ')}
                       </p>
                       {summary.warnedUnassessed > 0 ? (
                         <p>
-                          Uyarılı <span className="tabular-nums">{summary.warnedUnassessed}</span> harekette bazı kurallar
-                          eksik bilgi yüzünden değerlendirilemedi.
+                          {t.warnedUnassessed(summary.warnedUnassessed)}
                         </p>
                       ) : null}
                       {summary.pending.rules > 0 ? (
                         <p>
-                          Danışan bağlamı olmadan <span className="tabular-nums">{summary.pending.rules}</span> kural
-                          değerlendirilemedi (eksik: {summary.pending.needs.map((need) => CONTEXT_LABELS[need]).join(', ')});
-                          “uygun” sayılanlar bu kurallara göre kontrol edilmedi.
+                          {t.pendingRules(summary.pending.rules, summary.pending.needs.map((need) => contextLabels(locale)[need]).join(', '))}
                         </p>
                       ) : null}
                     </div>
@@ -359,8 +359,7 @@ export function ExerciseList({
                       <p className="flex items-start gap-1.5 text-destructive">
                         <WarningCircle aria-hidden className="mt-0.5 size-4 shrink-0" />
                         <span>
-                          Kırmızı bayrak: {clearance.map((condition) => conditionLabel(condition)).join(', ')} için program
-                          yazmadan önce danışanı bir sağlık profesyoneline yönlendir ve görüşünü al.
+                          {t.redFlag(clearance.map((condition) => conditionLabel(condition, locale)).join(', '))}
                         </span>
                       </p>
                     ) : null}
@@ -371,7 +370,7 @@ export function ExerciseList({
                         pressed={activeView === 'notBlocked'}
                         onPressedChange={showOnly('notBlocked')}
                         disabled={summary.counts.blocked === 0 && activeView !== 'notBlocked'}>
-                        Yasakları gizle
+                        {t.hideBlocked}
                       </Toggle>
                       <Toggle
                         variant="outline"
@@ -379,7 +378,7 @@ export function ExerciseList({
                         pressed={activeView === 'clear'}
                         onPressedChange={showOnly('clear')}
                         disabled={summary.counts.clear === 0 && activeView !== 'clear'}>
-                        Yalnız uygunları göster
+                        {t.onlySuitable}
                       </Toggle>
                     </div>
                   </div>
@@ -394,23 +393,23 @@ export function ExerciseList({
                 <EmptyMedia variant="icon">
                   <MagnifyingGlass />
                 </EmptyMedia>
-                <EmptyTitle>Uyan egzersiz yok</EmptyTitle>
+                <EmptyTitle>{t.emptyTitle}</EmptyTitle>
                 <EmptyDescription>
                   {activeView === 'all'
-                    ? 'Başka bir ad dene ya da kas seçimini değiştir.'
-                    : 'Bu kısıt kümesinde, aramaya ve kas seçimine uyan hareket yok.'}
+                    ? t.emptyAll
+                    : t.emptyView}
                 </EmptyDescription>
               </EmptyHeader>
               {selected.length > 0 || activeView !== 'all' ? (
                 <EmptyContent className="flex-row flex-wrap justify-center">
                   {activeView !== 'all' ? (
                     <Button variant="outline" size="sm" onClick={() => setView('all')}>
-                      Bütün hareketleri göster
+                      {t.showAll}
                     </Button>
                   ) : null}
                   {selected.length > 0 ? (
                     <Button variant="outline" size="sm" onClick={() => setSelected([])}>
-                      Seçimi temizle
+                      {t.clearSelection}
                     </Button>
                   ) : null}
                 </EmptyContent>
@@ -437,7 +436,7 @@ export function ExerciseList({
                       transition={{ type: 'spring', stiffness: 400, damping: 34 }}>
                       <Link
                         href={`/dashboard/exercises/${item.id}`}
-                        title={verdict?.message ?? (unchecked ? UNTAGGED_HINT : undefined)}
+                        title={verdict?.message ?? (unchecked ? untaggedHint : undefined)}
                         className="block h-full rounded-xl outline-none focus-visible:ring-3 focus-visible:ring-ring/50">
                         <Card
                           size="sm"
@@ -449,10 +448,10 @@ export function ExerciseList({
                             {/* `min-w-0`: uzun kas/ekipman satırı kısalır, rozetler kartın dışına taşmaz. */}
                             <CardDescription className="flex min-w-0 items-center gap-1.5">
                               <span className="truncate">
-                                {summarizeMuscles(item.primaryMuscles).join(', ')} ·{' '}
-                                {(item.deviceId && deviceNames[item.deviceId]) || EQUIPMENT_LABELS[item.equipment]}
+                                {summarizeMuscles(item.primaryMuscles, locale).join(', ')} ·{' '}
+                                {(item.deviceId && deviceNames[item.deviceId]) || equipmentLabels(locale)[item.equipment]}
                               </span>
-                              {item.video ? <YoutubeLogo className="size-4 shrink-0" aria-label="videolu" /> : null}
+                              {item.video ? <YoutubeLogo className="size-4 shrink-0" aria-label={t.hasVideo} /> : null}
                             </CardDescription>
                             {item.source === 'custom' || onlySecondary || verdict || unchecked ? (
                               // Rozetler en çok 9 rem: dar kartta alt satıra geçer, başlığa en az ~120 px kalır.
@@ -460,26 +459,26 @@ export function ExerciseList({
                                 {verdict?.decision && DecisionIcon ? (
                                   <Badge variant={verdict.decision === 'block' ? 'destructive' : 'outline'}>
                                     <DecisionIcon data-icon="inline-start" aria-hidden />
-                                    {DECISION_LABELS[verdict.decision].toLocaleLowerCase('tr')}
+                                    {lower(locale, decisionLabels(locale)[verdict.decision])}
                                   </Badge>
                                 ) : null}
                                 {unassessed > 0 ? (
                                   <Badge
                                     variant="outline"
-                                    title={`${unassessed} kural değerlendirilemedi: hareketin etiketi ya da kısıtın bir bilgisi (şiddet, greft tipi…) eksik.`}>
+                                    title={t.unassessedTitle(unassessed)}>
                                     <Question data-icon="inline-start" aria-hidden />
-                                    <span aria-hidden>eksik bilgi</span>
-                                    <span className="sr-only">{unassessed} kural değerlendirilemedi</span>
+                                    <span aria-hidden>{t.missingInfo}</span>
+                                    <span className="sr-only">{t.unassessedSr(unassessed)}</span>
                                   </Badge>
                                 ) : null}
                                 {unchecked ? (
-                                  <Badge variant="outline" className="text-muted-foreground" title={UNTAGGED_HINT}>
+                                  <Badge variant="outline" className="text-muted-foreground" title={untaggedHint}>
                                     <CircleDashed data-icon="inline-start" aria-hidden />
-                                    kontrol edilmedi
+                                    {t.unchecked}
                                   </Badge>
                                 ) : null}
-                                {onlySecondary ? <Badge variant="outline">yardımcı</Badge> : null}
-                                {item.source === 'custom' ? <Badge variant="secondary">senin</Badge> : null}
+                                {onlySecondary ? <Badge variant="outline">{t.secondary}</Badge> : null}
+                                {item.source === 'custom' ? <Badge variant="secondary">{t.mine}</Badge> : null}
                               </CardAction>
                             ) : null}
                           </CardHeader>

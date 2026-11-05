@@ -1,17 +1,19 @@
 import { WarningCircle } from '@phosphor-icons/react/dist/ssr';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { getMessages } from '@/i18n/server';
+import { ptProgramMessages } from '@/i18n/messages/pt-program';
 
 /** Okunamayan program dosyası: ne olduğu ve nasıl düzeltileceği (görünüm ve düzenleme ortak). */
-export function InvalidProgramAlert({ problem }: { problem: string }) {
+export async function InvalidProgramAlert({ problem }: { problem: string }) {
+  const t = (await getMessages(ptProgramMessages)).invalidProgramAlert;
   return (
     <Alert variant="destructive">
       <WarningCircle weight="fill" />
       <AlertTitle>
-        <code>program.json</code> geçersiz
+        <code>program.json</code>
+        {t.invalidSuffix}
       </AlertTitle>
-      <AlertDescription>
-        {problem} — GitHub&apos;da düzeltebilir ya da düzenleme sayfasından silip yeniden oluşturabilirsin.
-      </AlertDescription>
+      <AlertDescription>{t.description(problem)}</AlertDescription>
     </Alert>
   );
 }

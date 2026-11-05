@@ -5,6 +5,9 @@ import { useRouter } from 'next/navigation';
 import { ArrowCounterClockwise, Trash } from '@phosphor-icons/react';
 import { ConfirmDeleteDialog } from '@/components/confirm-delete-dialog';
 import { Button } from '@/components/ui/button';
+import { commonMessages } from '@/i18n/messages/common';
+import { useMessages } from '@/i18n/client';
+import { ptLibraryMessages } from '@/i18n/messages/pt-library';
 import { fetchJson } from '@/lib/query/errors';
 import { useServiceMutation } from '@/lib/query/use-service';
 
@@ -27,11 +30,13 @@ export function AttachmentActions({
 }) {
   const [open, setOpen] = useState(false);
   const router = useRouter();
+  const t = useMessages(ptLibraryMessages).attachmentActions;
+  const common = useMessages(commonMessages);
 
   const remove = useServiceMutation({
     fn: () => fetchJson<{ ok: true }>(`/api/attachments/${id}`, { method: 'DELETE' }),
     invalidate: [['attachments'], ['devices'], ['exercises']],
-    notify: { success: overridesLibrary ? 'Varsayılan sürüme dönüldü.' : 'Aparat silindi.' },
+    notify: { success: overridesLibrary ? t.resetDone : t.deleted },
     onSuccess: () => {
       // Varsayılana dönüldüyse aparat yerinde durur (hazır sürümüyle); silindiyse listeye dön.
       router.push(overridesLibrary ? `/dashboard/attachments/${id}` : '/dashboard/attachments');
@@ -45,16 +50,16 @@ export function AttachmentActions({
     <>
       <Button variant={overridesLibrary ? 'outline' : 'destructive'} onClick={() => setOpen(true)}>
         {overridesLibrary ? <ArrowCounterClockwise data-icon="inline-start" /> : <Trash data-icon="inline-start" />}
-        {overridesLibrary ? 'Varsayılana dön' : 'Sil'}
+        {overridesLibrary ? common.actions.resetToDefault : common.actions.delete}
       </Button>
       <ConfirmDeleteDialog
         open={open}
         onOpenChange={setOpen}
-        title={overridesLibrary ? `"${title}" varsayılana dönsün mü?` : `"${title}" silinsin mi?`}
+        title={overridesLibrary ? t.resetTitle(title) : t.deleteTitle(title)}
         body={overridesLibrary
-          ? 'Adı ve fotoğrafı hazır havuzdaki haline döner.'
-          : 'Fotoğrafı da silinir. Bu aparatı seçmiş cihazlardan ve egzersizlerden düşer; antrenman kaydı etkilenmez.'}
-        confirmLabel={overridesLibrary ? 'Varsayılana dön' : 'Sil'}
+          ? t.resetBody
+          : t.deleteBody}
+        confirmLabel={overridesLibrary ? common.actions.resetToDefault : common.actions.delete}
         confirmVariant={overridesLibrary ? 'default' : 'destructive'}
         busy={remove.isPending}
         onConfirm={() => remove.mutate()}

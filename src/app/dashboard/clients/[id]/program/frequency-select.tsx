@@ -6,6 +6,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { PROGRAM_LIMITS } from '@/lib/program-plan';
 import { cn } from '@/lib/utils';
 import type { ProgramFormStore } from './program-form';
+import { useMessages } from '@/i18n/client';
+import { ptProgramMessages } from '@/i18n/messages/pt-program';
+import { commonMessages } from '@/i18n/messages/common';
 
 /** Base UI boş metni "değer yok" sayar: "belirtilmedi" için boş olmayan bir işaret. */
 const NONE = 'none';
@@ -33,11 +36,13 @@ export function FrequencySelect({
   compact?: boolean;
   className?: string;
 }) {
+  const t = useMessages(ptProgramMessages).frequencySelect;
+  const common = useMessages(commonMessages);
   const field = useField(form, { path: ['phases', phaseIndex, 'daysPerWeek'] });
   const value = typeof field.input === 'number' ? String(field.input) : NONE;
   const items = [
-    { value: NONE, label: 'Belirtilmedi' },
-    ...DAYS.map((days) => ({ value: String(days), label: compact ? `${days} gün` : `Haftada ${days} gün` })),
+    { value: NONE, label: common.states.notSpecified },
+    ...DAYS.map((days) => ({ value: String(days), label: compact ? t.daysShort(days) : t.daysPerWeek(days) })),
   ];
   return (
     <Field data-invalid={Boolean(field.errors) || undefined} className={cn('gap-1.5', className)}>

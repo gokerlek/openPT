@@ -44,13 +44,13 @@ import { MedicalFields } from "./medical-fields";
 import { LibraryImpactNote, LoadFields } from "./load-fields";
 import { sameDevice, sameRule, toExercisePayload } from "./exercise-form-logic";
 import { TOUCH_TARGETS } from "./touch-targets";
-import { PATTERN_LABELS } from "@/lib/alternatives";
+import { patternLabels } from "@/lib/alternatives";
 import { attachmentChoices } from "@/lib/catalog-refs";
-import { DEVICE_KIND_LABELS, DEVICE_KINDS, KIND_EQUIPMENT } from "@/lib/device-loads";
-import { GRIP_LABELS, GRIP_WIDTH_LABELS } from "@/lib/grips";
+import { deviceKindLabels, DEVICE_KINDS, KIND_EQUIPMENT } from "@/lib/device-loads";
+import { gripLabels, gripWidthLabels } from "@/lib/grips";
 import type { Attachment } from "@/lib/schemas/attachment";
 import type { Device } from "@/lib/schemas/device";
-import { isBodyMuscle, ROLE_LABELS, type MuscleRole } from "@/lib/muscles";
+import { isBodyMuscle, roleLabels, type MuscleRole } from "@/lib/muscles";
 import { roleLegend, roleMarks } from "@/lib/muscle-tiers";
 import type { DeepMuscle } from "@/lib/deep-muscles";
 import {
@@ -63,23 +63,29 @@ import { ApiError, fetchJson } from "@/lib/query/errors";
 import { applyFieldErrors } from "@/lib/query/field-errors";
 import { useServiceMutation } from "@/lib/query/use-service";
 import {
-  CATEGORY_LABELS,
-  EQUIPMENT_LABELS,
+  categoryLabels,
+  equipmentLabels,
   MUSCLES,
-  MUSCLE_LABELS,
+  muscleLabels,
   exerciseFormSchema,
   type Exercise,
   type ExerciseInput,
   type Muscle,
 } from "@/lib/schemas/exercise";
-import { parseVideoUrl, UNRECOGNIZED_VIDEO_URL, videoUrl } from "@/lib/video";
+import { parseVideoUrl, videoUrl } from "@/lib/video";
+import { useLocale, useMessages } from '@/i18n/client';
+import { lower } from '@/i18n/text';
+import { ptLibraryMessages } from '@/i18n/messages/pt-library';
+import { libraryValidationMessages } from '@/i18n/messages/library-validation';
+import { commonMessages } from '@/i18n/messages/common';
 
 /** Zorunlu alan işareti: görünen yıldız, ekran okuyucuya "zorunlu". */
 function RequiredMark() {
+  const t = useMessages(ptLibraryMessages).exerciseForm;
   return (
     <>
       <span aria-hidden className="-ml-1 text-destructive">*</span>
-      <span className="sr-only">(zorunlu)</span>
+      <span className="sr-only">{t.required}</span>
     </>
   );
 }
@@ -120,11 +126,12 @@ function AlternativesField({
   pinned: string[];
   onToggle: (id: string) => void;
 }) {
+  const t = useMessages(ptLibraryMessages).exerciseForm;
   return (
     <FieldSet>
       <Field>
         <FieldDescription>
-          Seçmezsen uygulama zaten benzerlerini önerir; seçtiklerin listenin başında çıkar (en fazla 12).
+          {t.pinsHint}
         </FieldDescription>
         <ToggleTiles items={options} selected={pinned} onToggle={onToggle} max={12} />
       </Field>
@@ -168,13 +175,16 @@ export function ExerciseForm({
   /** Sabitlenebilecek muadiller (yalnız düzenlemede; yeni egzersizde henüz sıralanamaz). */
   alternativeOptions?: AlternativeOption[];
 }) {
+  const t = useMessages(ptLibraryMessages).exerciseForm;
+  const common = useMessages(commonMessages);
+  const locale = useLocale();
   const deviceById = new Map(devices.map((device) => [device.id, device]));
   const attachmentById = new Map(attachments.map((attachment) => [attachment.id, attachment]));
   // Seçilebilir aparatlar: cihaza takılı olup havuzda duranlar (cihazsızda hiçbiri).
   const choicesFor = (deviceId: string | undefined) =>
     attachmentChoices(deviceId ? deviceById.get(deviceId) : undefined, attachmentById);
   const deviceGroups = DEVICE_KINDS.map((kind) => ({
-    label: DEVICE_KIND_LABELS[kind],
+    label: deviceKindLabels(locale)[kind],
     options: devices
       .filter((device) => device.kind === kind)
       .map((device) => ({ value: device.id, label: device.name })),
@@ -209,19 +219,19 @@ export function ExerciseForm({
           body: JSON.stringify({ alternatives: pinned }),
         });
       } catch (error) {
-        return { id, pinsFailed: error instanceof ApiError ? error.message : "Muadiller kaydedilemedi." };
+        return { id, pinsFailed: error instanceof ApiError ? error.message : t.pinsFailed };
       }
       return { id, pinsFailed: null };
     },
     invalidate: [["exercises"]],
     notify: {
-      success: editing ? "Egzersiz güncellendi." : "Egzersiz eklendi.",
+      success: editing ? t.updated : t.added,
     },
     onError: (error) => applyFieldErrors(form as never, error),
     // Yeni kayıtta sunucunun ürettiği kimlikle detay sayfasına geçilir.
     onSuccess: ({ id, pinsFailed }) => {
       if (pinsFailed) {
-        toast.error(`Egzersiz kaydedildi ama muadiller güncellenemedi: ${pinsFailed}`);
+        toast.error(t.savedButPins(pinsFailed));
         router.push(`/dashboard/exercises/${id}/edit`);
       } else {
         router.push(`/dashboard/exercises/${id}`);
@@ -247,13 +257,15 @@ export function ExerciseForm({
       }
     >
       <p className="text-sm text-muted-foreground">
-        <span aria-hidden className="text-destructive">*</span> ile işaretli alanlar zorunlu.
+        {t.requiredNote.lead}
+        <span aria-hidden className="text-destructive">*</span>
+        {t.requiredNote.tail}
       </p>
 
       <Card>
         <CardHeader>
-          <CardTitle>Hareket</CardTitle>
-          <CardDescription>Danışanın gördüğü ad, açıklama, ipuçları ve video.</CardDescription>
+          <CardTitle>{t.moveTitle}</CardTitle>
+          <CardDescription>{t.moveDescription}</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-x-8 gap-y-5 lg:grid-cols-2">
           <div className="flex flex-col gap-5">
@@ -261,7 +273,7 @@ export function ExerciseForm({
             {(field) => (
               <Field data-invalid={Boolean(field.errors) || undefined}>
                 <FieldLabel htmlFor="title">
-                  Egzersiz adı
+                  {t.nameLabel}
                   <RequiredMark />
                 </FieldLabel>
                 <Input
@@ -279,12 +291,12 @@ export function ExerciseForm({
           <FormField of={form} path={["description"]}>
             {(field) => (
               <Field data-invalid={Boolean(field.errors) || undefined}>
-                <FieldLabel htmlFor="description">Açıklama</FieldLabel>
+                <FieldLabel htmlFor="description">{t.descriptionLabel}</FieldLabel>
                 <Textarea
                   {...field.props}
                   id="description"
                   value={field.input ?? ""}
-                  placeholder="Hareketin ne işe yaradığı, kısa."
+                  placeholder={t.descriptionPlaceholder}
                   rows={2}
                 />
                 <FieldError>{field.errors?.[0]}</FieldError>
@@ -296,15 +308,15 @@ export function ExerciseForm({
 
           <div className="flex flex-col gap-5">
           <Field>
-            <FieldLabel>İpuçları</FieldLabel>
+            <FieldLabel>{t.cuesLabel}</FieldLabel>
             <FieldArray of={form} path={["cues"]}>
               {(array) => (
                 <div className="flex flex-col gap-2">
                   <SortableList
                     items={array.items}
                     keyOf={(item) => item}
-                    nameOf={(item) => `${array.items.indexOf(item) + 1}. ipucu`}
-                    label="İpuçları"
+                    nameOf={(item) => t.cueName(array.items.indexOf(item) + 1)}
+                    label={t.cuesList}
                     className={array.items.length === 0 ? "hidden" : undefined}
                     onStep={(item, target) => {
                       const from = array.items.indexOf(item);
@@ -320,7 +332,7 @@ export function ExerciseForm({
                       const removeCue = () => {
                         const value = getInput(form, { path: ["cues", index] }) ?? "";
                         remove(form, { path: ["cues"], at: index });
-                        showUndoToast("İpucu silindi", () =>
+                        showUndoToast(t.cueDeleted, () =>
                           insert(form, { path: ["cues"], at: index, initialInput: value }),
                         );
                       };
@@ -336,8 +348,8 @@ export function ExerciseForm({
                                   {...field.props}
                                   id={`cue-${item}`}
                                   value={field.input ?? ""}
-                                  placeholder="Kürek kemiklerini sıkıştır"
-                                  aria-label={`${index + 1}. ipucu`}
+                                  placeholder={t.cuePlaceholder}
+                                  aria-label={t.cueName(index + 1)}
                                 />
                               )}
                             </FormField>
@@ -346,7 +358,7 @@ export function ExerciseForm({
                               variant="ghost"
                               size="icon"
                               className="touch:size-11"
-                              aria-label={`${index + 1}. ipucunu sil`}
+                              aria-label={t.cueRemove(index + 1)}
                               onClick={removeCue}
                             >
                               <Trash />
@@ -368,7 +380,7 @@ export function ExerciseForm({
                       }
                     >
                       <Plus data-icon="inline-start" />
-                      İpucu ekle
+                      {t.cueAdd}
                     </Button>
                   ) : null}
                 </div>
@@ -381,10 +393,10 @@ export function ExerciseForm({
               const link = field.input?.trim() ?? "";
               const video = link ? parseVideoUrl(link) : null;
               // Tanınmayan bağlantı yazarken de hata olarak görünür; gönderimde şema aynı cümleyi söyler.
-              const error = field.errors?.[0] ?? (link && !video ? UNRECOGNIZED_VIDEO_URL : null);
+              const error = field.errors?.[0] ?? (link && !video ? libraryValidationMessages(locale).exerciseSchema.videoLink : null);
               return (
                 <Field data-invalid={Boolean(error) || undefined}>
-                  <FieldLabel htmlFor="videoUrl">Video bağlantısı</FieldLabel>
+                  <FieldLabel htmlFor="videoUrl">{t.videoLabel}</FieldLabel>
                   <Input
                     {...field.props}
                     id="videoUrl"
@@ -402,14 +414,14 @@ export function ExerciseForm({
                     </FieldError>
                   ) : (
                     <FieldDescription id="videoUrl-hint">
-                      YouTube ya da Vimeo. Kendi videonu YouTube&apos;a “liste dışı” yükleyip bağlantısını yapıştırabilirsin.
+                      {t.videoHint}
                     </FieldDescription>
                   )}
                   {video ? (
                     <VideoEmbed
                       provider={video.provider}
                       id={video.id}
-                      title="Video önizlemesi"
+                      title={t.videoPreview}
                     />
                   ) : null}
                 </Field>
@@ -422,8 +434,8 @@ export function ExerciseForm({
 
       <Card>
         <CardHeader>
-          <CardTitle>Ekipman, cihaz ve tutuş</CardTitle>
-          <CardDescription>Hareketin neyle yapıldığı; ağırlık önerileri cihazın ayarlarından seçilir.</CardDescription>
+          <CardTitle>{t.gearTitle}</CardTitle>
+          <CardDescription>{t.gearDescription}</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="grid gap-4 sm:grid-cols-2">
@@ -431,19 +443,19 @@ export function ExerciseForm({
               {(field) => (
                 <Field data-invalid={Boolean(field.errors) || undefined}>
                   <FieldLabel htmlFor="pattern">
-                    Hareket kalıbı
+                    {t.patternLabel}
                     <RequiredMark />
                   </FieldLabel>
                   <LabeledSelect
                     id="pattern"
                     value={field.input}
-                    labels={PATTERN_LABELS}
-                    placeholder="Seç"
+                    labels={patternLabels(locale)}
+                    placeholder={t.pick}
                     onChange={(value) =>
                       setInput(form, { path: ["pattern"], input: value })
                     }
                   />
-                  <FieldDescription>Muadil önerileri buna göre sıralanır.</FieldDescription>
+                  <FieldDescription>{t.patternHint}</FieldDescription>
                   <FieldError>{field.errors?.[0]}</FieldError>
                 </Field>
               )}
@@ -451,12 +463,12 @@ export function ExerciseForm({
             <FormField of={form} path={["deviceId"]}>
               {(field) => (
                 <Field data-invalid={Boolean(field.errors) || undefined}>
-                  <FieldLabel htmlFor="deviceId">Cihaz</FieldLabel>
+                  <FieldLabel htmlFor="deviceId">{t.deviceLabel}</FieldLabel>
                   <GroupedSelect
                     id="deviceId"
                     value={field.input ?? ""}
                     groups={deviceGroups}
-                    empty="Cihazsız"
+                    empty={t.noDevice}
                     onChange={(value) => {
                       setInput(form, { path: ["deviceId"], input: value || undefined });
                       // Ekipman cihazın türünden gelir.
@@ -469,7 +481,7 @@ export function ExerciseForm({
                       }
                     }}
                   />
-                  <FieldDescription>Ağırlık önerileri cihazın ayarlanabilen ağırlıklarından seçilir.</FieldDescription>
+                  <FieldDescription>{t.deviceHint}</FieldDescription>
                   {/* Sunucunun alan hatası: cihaz silinmiş ya da dosyada okunamıyor. */}
                   <FieldError>{field.errors?.[0]}</FieldError>
                   {editing && !sameDevice(field.input, start.deviceId) ? <LibraryImpactNote /> : null}
@@ -485,12 +497,12 @@ export function ExerciseForm({
                   <FormField of={form} path={["attachmentId"]}>
                     {(field) => (
                       <Field data-invalid={Boolean(field.errors) || undefined}>
-                        <FieldLabel htmlFor="attachmentId">Aparat</FieldLabel>
+                        <FieldLabel htmlFor="attachmentId">{t.attachmentLabel}</FieldLabel>
                         <GroupedSelect
                           id="attachmentId"
                           value={field.input ?? ""}
-                          groups={[{ label: "Aparatlar", options }]}
-                          empty="Belirtilmemiş"
+                          groups={[{ label: t.attachmentsGroup, options }]}
+                          empty={t.notSpecified}
                           onChange={(value) =>
                             setInput(form, {
                               path: ["attachmentId"],
@@ -499,7 +511,7 @@ export function ExerciseForm({
                           }
                         />
                         <FieldDescription>
-                          Cihaza takılı aparatlar. Listede yoksa cihazı düzenleyip havuzdan ekle.
+                          {t.attachmentHint}
                         </FieldDescription>
                         <FieldError>{field.errors?.[0]}</FieldError>
                       </Field>
@@ -511,17 +523,17 @@ export function ExerciseForm({
             <FormField of={form} path={["grip"]}>
               {(field) => (
                 <Field>
-                  <FieldLabel htmlFor="grip">Tutuş</FieldLabel>
+                  <FieldLabel htmlFor="grip">{t.gripLabel}</FieldLabel>
                   <GroupedSelect
                     id="grip"
                     value={field.input ?? ""}
                     groups={[
                       {
-                        label: "Tutuş",
-                        options: Object.entries(GRIP_LABELS).map(([value, label]) => ({ value, label })),
+                        label: t.gripGroup,
+                        options: Object.entries(gripLabels(locale)).map(([value, label]) => ({ value, label })),
                       },
                     ]}
-                    empty="Belirtilmemiş"
+                    empty={t.notSpecified}
                     onChange={(value) =>
                       setInput(form, { path: ["grip"], input: (value || undefined) as ExerciseInput["grip"] })
                     }
@@ -532,17 +544,17 @@ export function ExerciseForm({
             <FormField of={form} path={["gripWidth"]}>
               {(field) => (
                 <Field>
-                  <FieldLabel htmlFor="gripWidth">Tutuş genişliği</FieldLabel>
+                  <FieldLabel htmlFor="gripWidth">{t.gripWidthLabel}</FieldLabel>
                   <GroupedSelect
                     id="gripWidth"
                     value={field.input ?? ""}
                     groups={[
                       {
-                        label: "Genişlik",
-                        options: Object.entries(GRIP_WIDTH_LABELS).map(([value, label]) => ({ value, label })),
+                        label: t.widthGroup,
+                        options: Object.entries(gripWidthLabels(locale)).map(([value, label]) => ({ value, label })),
                       },
                     ]}
-                    empty="Belirtilmemiş"
+                    empty={t.notSpecified}
                     onChange={(value) =>
                       setInput(form, { path: ["gripWidth"], input: (value || undefined) as ExerciseInput["gripWidth"] })
                     }
@@ -553,11 +565,11 @@ export function ExerciseForm({
             <FormField of={form} path={["equipment"]}>
               {(field) => (
                 <Field>
-                  <FieldLabel htmlFor="equipment">Ekipman</FieldLabel>
+                  <FieldLabel htmlFor="equipment">{t.equipmentTypeLabel}</FieldLabel>
                   <LabeledSelect
                     id="equipment"
                     value={field.input}
-                    labels={EQUIPMENT_LABELS}
+                    labels={equipmentLabels(locale)}
                     onChange={(value) => {
                       setInput(form, { path: ["equipment"], input: value });
                       // Adım ve taban ekipmana bağlı; PT sonra değiştirebilir.
@@ -572,11 +584,11 @@ export function ExerciseForm({
             <FormField of={form} path={["category"]}>
               {(field) => (
                 <Field>
-                  <FieldLabel htmlFor="category">Tür</FieldLabel>
+                  <FieldLabel htmlFor="category">{t.categoryLabel}</FieldLabel>
                   <LabeledSelect
                     id="category"
                     value={field.input}
-                    labels={CATEGORY_LABELS}
+                    labels={categoryLabels(locale)}
                     onChange={(value) => {
                       const tracking = getInput(form, { path: ["trackingType"] }) ?? "weight_reps";
                       const current = getInput(form, { path: ["progression"] }) as
@@ -606,10 +618,10 @@ export function ExerciseForm({
       <Card>
         <CardHeader>
           <CardTitle>
-            Çalışan kaslar <RequiredMark />
+            {t.musclesTitle} <RequiredMark />
           </CardTitle>
           <CardDescription>
-            En az bir hedef kas seç. Hedef, yardımcı ve dengeleyici kaslar — haftalık yük haritası bunları sayar.
+            {t.musclesDescription}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -700,13 +712,12 @@ export function ExerciseForm({
                       return (
                         <Field data-invalid={Boolean(errors) || undefined}>
                           <FieldDescription>
-                            Kasa dokun: hedef (dolu) → yardımcı (çizgili) → dengeleyici
-                            (noktalı) → kaldır. Birden çok kas aynı anda hedef olabilir.
+                            {t.musclesHint}
                           </FieldDescription>
                           <MuscleMap
                             layout="split"
                             marks={roleMarks(worked)}
-                            legend={roleLegend(worked)}
+                            legend={roleLegend(worked, locale)}
                             onRemoveRow={(muscle) => setRole(muscle as Muscle, null)}
                             deep={{ selected: deepSelected, onToggle: toggleDeep }}
                             selected={bodySelected}
@@ -714,15 +725,15 @@ export function ExerciseForm({
                             describe={(muscle) => {
                               const role = roleOf(muscle);
                               const next = NEXT[role ?? "none"];
-                              return `${MUSCLE_LABELS[muscle]} · ${
-                                role ? ROLE_LABELS[role].toLocaleLowerCase("tr") : "seçili değil"
-                              } — dokun: ${
-                                next ? ROLE_LABELS[next].toLocaleLowerCase("tr") + " yap" : "kaldır"
-                              }`;
+                              return t.describeMuscle(
+                                muscleLabels(locale)[muscle],
+                                role ? lower(locale, roleLabels(locale)[role]) : null,
+                                next ? lower(locale, roleLabels(locale)[next]) : null,
+                              );
                             }}
-                            hint="Kasa dokunarak seç"
+                            hint={t.mapHint}
                             bodyClassName="h-[22rem] lg:h-[26rem]"
-                            label="Çalışan kaslar"
+                            label={t.mapLabel}
                           />
                           <Toggle
                             variant="outline"
@@ -734,7 +745,7 @@ export function ExerciseForm({
                             }
                           >
                             <Heartbeat data-icon="inline-start" />
-                            Kardiyo hareketi
+                            {t.cardio}
                           </Toggle>
                           <FieldError>{errors?.[0] ?? deepField.errors?.[0]}</FieldError>
                         </Field>
@@ -752,8 +763,8 @@ export function ExerciseForm({
 
       <Card>
         <CardHeader>
-          <CardTitle>Yük ve ilerleme</CardTitle>
-          <CardDescription>Kayıt türü, ağırlık adımı ve bir sonraki sette ne önerileceği.</CardDescription>
+          <CardTitle>{t.loadTitle}</CardTitle>
+          <CardDescription>{t.loadDescription}</CardDescription>
         </CardHeader>
         <CardContent>
           <LoadFields form={form} deviceById={deviceById} startRule={editing ? start.progression : undefined} />
@@ -762,8 +773,8 @@ export function ExerciseForm({
 
       <Card>
         <CardHeader>
-          <CardTitle>Medikal etiketler</CardTitle>
-          <CardDescription>Hareketin nasıl çalıştığı: kinetik zincir, yük, açı pencereleri, kısıtlar.</CardDescription>
+          <CardTitle>{t.medicalTitle}</CardTitle>
+          <CardDescription>{t.medicalDescription}</CardDescription>
         </CardHeader>
         <CardContent>
           <MedicalFields form={form} />
@@ -773,16 +784,15 @@ export function ExerciseForm({
       {editing ? (
         <Card>
           <CardHeader>
-            <CardTitle>Muadiller</CardTitle>
-            <CardDescription>Alet doluysa ya da danışana uygun değilse yerine yapılacaklar.</CardDescription>
+            <CardTitle>{t.altTitle}</CardTitle>
+            <CardDescription>{t.altDescription}</CardDescription>
           </CardHeader>
           <CardContent>
             {alternativeOptions.length > 0 ? (
               <AlternativesField options={alternativeOptions} pinned={pinned} onToggle={togglePinned} />
             ) : (
               <p className="text-sm text-muted-foreground">
-                Aynı kas ailesini çalıştıran başka hareket bulunamadı, o yüzden sabitlenecek bir şey yok.
-                Hedef kasları ya da hareket kalıbını değiştirirsen liste yeniden hesaplanır.
+                {t.altNone}
               </p>
             )}
           </CardContent>
@@ -793,7 +803,7 @@ export function ExerciseForm({
       {hiddenError ? (
         <Alert variant="destructive">
           <WarningCircle />
-          <AlertTitle>Form gönderilemedi</AlertTitle>
+          <AlertTitle>{t.errorTitle}</AlertTitle>
           <AlertDescription>{hiddenError}</AlertDescription>
         </Alert>
       ) : null}
@@ -812,17 +822,17 @@ export function ExerciseForm({
             />
           }
         >
-          Vazgeç
+          {common.actions.cancel}
         </Button>
         <Button type="submit" disabled={save.isPending}>
           {save.isPending ? <Spinner data-icon="inline-start" /> : null}
-          {save.isPending ? "Kaydediliyor…" : "Kaydet"}
+          {save.isPending ? common.actions.saving : common.actions.save}
         </Button>
       </div>
     </Form>
     <UnsavedChangesGuard
       active={guarded}
-      description="Çıkarsan bu değişiklikler kaydedilmez."
+      description={t.guardDescription}
       onLeave={() => undefined}
     />
     </>

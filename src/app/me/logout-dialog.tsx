@@ -9,7 +9,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { discardDrafts } from '@/components/block-editor/editor-draft';
+import { discardDrafts } from '@/lib/draft-store';
 import { Button } from '@/components/ui/button';
 import { ownDraftPrefix } from '@/lib/unsaved-changes';
 

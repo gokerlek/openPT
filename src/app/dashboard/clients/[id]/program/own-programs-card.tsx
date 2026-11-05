@@ -5,7 +5,10 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from '@/components/ui/item';
-import { formatDayShort, todayIn } from '@/lib/format';
+import { getLocale } from '@/i18n/server';
+import { ptProgramMessages } from '@/i18n/messages/pt-program';
+import { getFormat, todayIn } from '@/lib/format';
+import type { Locale } from '@/i18n/locale';
 import { activeItem, type OwnIndex, type OwnIndexItem } from '@/lib/own-program-index';
 import { lastDateByProgram, programLine } from '@/lib/own-program-text';
 import type { SessionIndex } from '@/lib/schemas/session';
@@ -15,26 +18,28 @@ import type { SessionIndex } from '@/lib/schemas/session';
  * (dosya okunmaz): Bugün'ün programı kendi programken bilgi satırı, paylaşılmış programlar kartı.
  */
 
-function dayOf(iso: string, timeZone: string): string {
-  return formatDayShort(todayIn(timeZone, new Date(iso)));
+function dayOf(iso: string, timeZone: string, locale: Locale): string {
+  return getFormat(locale).dayShort(todayIn(timeZone, new Date(iso)));
 }
 
 /** "Danışan şu an kendi programıyla çalışıyor: Evde" — yalnız kalıcı seçim kendi programken. */
-export function OwnActiveAlert({ clientId, index, timeZone }: { clientId: string; index: OwnIndex | null; timeZone: string }) {
+export async function OwnActiveAlert({ clientId, index, timeZone }: { clientId: string; index: OwnIndex | null; timeZone: string }) {
+  const locale = await getLocale();
+  const t = ptProgramMessages(locale).ownProgramsCard;
   const item = activeItem(index);
   if (!item) return null;
   const at = index?.active?.at;
   return (
     <Alert>
       <Info weight="fill" />
-      <AlertTitle className="pr-28">Danışan şu an kendi programıyla çalışıyor: {item.name}</AlertTitle>
+      <AlertTitle className="pr-28">{t.activeTitle(item.name)}</AlertTitle>
       <AlertDescription>
-        {[item.shared ? 'Paylaşıldı' : 'Paylaşılmadı', at ? `seçim: ${dayOf(at, timeZone)}` : null].filter(Boolean).join(' · ')}
+        {[item.shared ? t.shared : t.notShared, at ? t.chosen(dayOf(at, timeZone, locale)) : null].filter(Boolean).join(' · ')}
       </AlertDescription>
       {item.shared ? (
         <AlertAction>
           <Button variant="outline" size="sm" nativeButton={false} render={<Link href={`/dashboard/clients/${clientId}/program/own/${item.id}`} />}>
-            Programı aç
+            {t.open}
           </Button>
         </AlertAction>
       ) : null}
@@ -43,14 +48,15 @@ export function OwnActiveAlert({ clientId, index, timeZone }: { clientId: string
 }
 
 /** Son değişikliği kim yaptı: PT'nin düzenlemesi danışanınkinden yeniyse "sen". */
-function lastChange(item: OwnIndexItem, timeZone: string): string {
+function lastChange(item: OwnIndexItem, timeZone: string, locale: Locale): string {
+  const t = ptProgramMessages(locale).ownProgramsCard;
   const pt = item.ptEditedAt ? Date.parse(item.ptEditedAt) : 0;
   const client = item.clientEditedAt ? Date.parse(item.clientEditedAt) : Date.parse(item.updatedAt);
-  return pt > client ? `sen · ${dayOf(item.ptEditedAt as string, timeZone)}` : `danışan · ${dayOf(item.clientEditedAt ?? item.updatedAt, timeZone)}`;
+  return pt > client ? t.byYou(dayOf(item.ptEditedAt as string, timeZone, locale)) : t.byClient(dayOf(item.clientEditedAt ?? item.updatedAt, timeZone, locale));
 }
 
 /** "Danışanın paylaştığı programlar (n)" — yalnız paylaşılmış program varsa. */
-export function SharedProgramsCard({
+export async function SharedProgramsCard({
   clientId,
   index,
   sessions,
@@ -61,6 +67,8 @@ export function SharedProgramsCard({
   sessions: Pick<SessionIndex, 'items'> | null;
   timeZone: string;
 }) {
+  const locale = await getLocale();
+  const t = ptProgramMessages(locale).ownProgramsCard;
   const shared = index?.items.filter((item) => item.shared) ?? [];
   if (shared.length === 0) return null;
   const active = activeItem(index)?.id ?? null;
@@ -68,8 +76,8 @@ export function SharedProgramsCard({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Danışanın paylaştığı programlar ({shared.length})</CardTitle>
-        <CardDescription>Danışanın kendi kurduğu, seninle paylaştığı programlar. Düzenleyebilirsin; değişiklik danışana bildirilir.</CardDescription>
+        <CardTitle>{t.title(shared.length)}</CardTitle>
+        <CardDescription>{t.description}</CardDescription>
       </CardHeader>
       <CardContent>
         <ul className="flex flex-col gap-2">
@@ -81,13 +89,13 @@ export function SharedProgramsCard({
                   <ItemContent className="min-w-0">
                     <ItemTitle className="break-words">
                       {item.name}
-                      {active === item.id ? <Badge variant="secondary">Bugün&apos;ün programı</Badge> : null}
+                      {active === item.id ? <Badge variant="secondary">{t.todayBadge}</Badge> : null}
                     </ItemTitle>
                     <ItemDescription className="tabular-nums">
-                      {programLine(item)}
-                      {lastDate ? ` · son antrenman ${formatDayShort(lastDate)}` : ''}
+                      {programLine(item, undefined, locale)}
+                      {lastDate ? t.lastWorkout(getFormat(locale).dayShort(lastDate)) : ''}
                     </ItemDescription>
-                    <ItemDescription>Son değişiklik: {lastChange(item, timeZone)}</ItemDescription>
+                    <ItemDescription>{t.lastChange(lastChange(item, timeZone, locale))}</ItemDescription>
                   </ItemContent>
                   <ItemActions>
                     <CaretRight className="size-4 text-muted-foreground" />

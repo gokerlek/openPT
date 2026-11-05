@@ -12,44 +12,47 @@ import { VideoEmbed } from '@/components/video-embed';
 import { getExercise, listExercises } from '@/lib/exercises';
 import { listAttachments } from '@/lib/attachments';
 import { listDevices } from '@/lib/devices';
-import { DEVICE_KIND_LABELS, DEVICE_KINDS, loadSpecFor } from '@/lib/device-loads';
+import { deviceKindLabels, DEVICE_KINDS, loadSpecFor } from '@/lib/device-loads';
 import { describeGrip } from '@/lib/grips';
 import { deviceSwapTarget } from '@/lib/alternatives';
 import Link from 'next/link';
-import { PATTERN_LABELS } from '@/lib/alternatives';
-import { formatKg } from '@/lib/format';
+import { patternLabels } from '@/lib/alternatives';
+import { getFormat } from '@/lib/format';
 import { exerciseAlternatives, familyOf, summarizeMuscles } from '@/lib/muscles';
-import { describeRule, progressionOf, PROGRESSION_LABELS } from '@/lib/progression';
-import { CATEGORY_LABELS, EQUIPMENT_LABELS } from '@/lib/schemas/exercise';
+import { describeRule, progressionLabels, progressionOf } from '@/lib/progression';
+import { categoryLabels, equipmentLabels } from '@/lib/schemas/exercise';
 import { AlternativesCard, type AlternativeRow, type DeviceSwap } from './alternatives-card';
 import { MedicalCard } from './medical-card';
 import { TOUCH_TARGETS } from '../touch-targets';
 import { EditButton } from '@/components/edit-button';
 import { requirePt } from '@/lib/guards';
-
-const TRACKING_LABELS = {
-  weight_reps: 'Ağırlık + tekrar',
-  bodyweight_reps: 'Vücut ağırlığı (tekrar)',
-  duration: 'Süre',
-} as const;
-
+import { getLocale } from '@/i18n/server';
+import type { Locale } from '@/i18n/locale';
+import { catalogMessages } from '@/i18n/messages/catalog';
+import { ptLibraryMessages } from '@/i18n/messages/pt-library';
 
 // Başlık (`generateMetadata`) ve sayfa aynı isteği paylaşır: liste bir kez okunur.
-const loadAll = cache(() => listExercises());
-const loadExercise = cache(async (id: string) => getExercise(id, await loadAll()));
+const loadAll = cache((locale: Locale) => listExercises(undefined, locale));
+const loadExercise = cache(async (id: string, locale: Locale) => getExercise(id, await loadAll(locale)));
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
+  const locale = await getLocale();
+  const t = ptLibraryMessages(locale).exercisePage;
   await requirePt();
-  const exercise = await loadExercise((await params).id);
-  return { title: exercise?.title ?? 'Egzersiz bulunamadı' };
+  const exercise = await loadExercise((await params).id, locale);
+  return { title: exercise?.title ?? t.notFound };
 }
 
 /** Egzersiz detayı — kendi sayfası (modal değil, SPEC §6). */
 export default async function ExerciseDetailPage({ params }: { params: Promise<{ id: string }> }) {
   await requirePt();
+  const locale = await getLocale();
+  const t = ptLibraryMessages(locale).exercisePage;
+  const format = getFormat(locale);
+  const patterns = patternLabels(locale);
   const { id } = await params;
-  const [all, devices, pool] = await Promise.all([loadAll(), listDevices(), listAttachments()]);
-  const exercise = await loadExercise(id);
+  const [all, devices, pool] = await Promise.all([loadAll(locale), listDevices(undefined, locale), listAttachments(undefined, locale)]);
+  const exercise = await loadExercise(id, locale);
   if (!exercise) notFound();
   const deviceById = new Map(devices.map((device) => [device.id, device]));
   const device = exercise.deviceId ? deviceById.get(exercise.deviceId) : undefined;
@@ -61,8 +64,8 @@ export default async function ExerciseDetailPage({ params }: { params: Promise<{
     equipment: other.equipment,
     // Grup: cihazı varsa cihazın adı ("Dambıl seti", "Chest press makinesi"), yoksa ekipman.
     device: other.deviceId ? (deviceById.get(other.deviceId)?.name ?? null) : null,
-    muscles: summarizeMuscles(other.primaryMuscles).join(', '),
-    pattern: samePattern && other.pattern ? PATTERN_LABELS[other.pattern] : null,
+    muscles: summarizeMuscles(other.primaryMuscles, locale).join(', '),
+    pattern: samePattern && other.pattern ? patterns[other.pattern] : null,
     pinned,
   }));
 
@@ -77,7 +80,7 @@ export default async function ExerciseDetailPage({ params }: { params: Promise<{
         return {
           deviceId: item.id,
           deviceName: item.name,
-          kindLabel: DEVICE_KIND_LABELS[kind],
+          kindLabel: deviceKindLabels(locale)[kind],
           exercise: match ? { id: match.id, title: match.title } : null,
         };
       }),
@@ -86,18 +89,18 @@ export default async function ExerciseDetailPage({ params }: { params: Promise<{
   // Motorun kullandığı yük tanımı: bar ve plaka yüklemelide adım ve taban cihazdan (liste vermese de).
   const loadSpec = loadSpecFor(exercise, device);
   const summary: [string, React.ReactNode][] = [
-    ['Hedef kaslar', summarizeMuscles(exercise.primaryMuscles).join(', ')],
+    [t.rowPrimary, summarizeMuscles(exercise.primaryMuscles, locale).join(', ')],
     ...(exercise.secondaryMuscles.length > 0
-      ? ([['Yardımcı kaslar', summarizeMuscles(exercise.secondaryMuscles).join(', ')]] as [string, React.ReactNode][])
+      ? ([[t.rowSecondary, summarizeMuscles(exercise.secondaryMuscles, locale).join(', ')]] as [string, React.ReactNode][])
       : []),
     ...(exercise.stabilizerMuscles.length > 0
-      ? ([['Dengeleyici kaslar', summarizeMuscles(exercise.stabilizerMuscles).join(', ')]] as [string, React.ReactNode][])
+      ? ([[t.rowStabilizers, summarizeMuscles(exercise.stabilizerMuscles, locale).join(', ')]] as [string, React.ReactNode][])
       : []),
-    ['Ekipman', EQUIPMENT_LABELS[exercise.equipment]],
+    [t.rowEquipmentType, equipmentLabels(locale)[exercise.equipment]],
     ...(device
       ? ([
           [
-            'Cihaz',
+            t.rowDevice,
             <Link key="cihaz" href={`/dashboard/devices/${device.id}`} className="underline underline-offset-4 relative touch:before:absolute touch:before:top-1/2 touch:before:left-1/2 touch:before:h-full touch:before:min-h-11 touch:before:w-full touch:before:min-w-11 touch:before:-translate-x-1/2 touch:before:-translate-y-1/2">
               {device.name}
             </Link>,
@@ -107,42 +110,42 @@ export default async function ExerciseDetailPage({ params }: { params: Promise<{
     ...(attachment
       ? ([
           [
-            'Aparat',
+            t.rowAttachment,
             <Link key="aparat" href={`/dashboard/attachments/${attachment.id}`} className="underline underline-offset-4 relative touch:before:absolute touch:before:top-1/2 touch:before:left-1/2 touch:before:h-full touch:before:min-h-11 touch:before:w-full touch:before:min-w-11 touch:before:-translate-x-1/2 touch:before:-translate-y-1/2">
               {attachment.name}
             </Link>,
           ],
         ] as [string, React.ReactNode][])
       : []),
-    ...(describeGrip(exercise.grip, exercise.gripWidth)
-      ? ([['Tutuş', describeGrip(exercise.grip, exercise.gripWidth)]] as [string, React.ReactNode][])
+    ...(describeGrip(exercise.grip, exercise.gripWidth, locale)
+      ? ([[t.rowGrip, describeGrip(exercise.grip, exercise.gripWidth, locale)]] as [string, React.ReactNode][])
       : []),
-    ...(exercise.pattern ? ([['Hareket kalıbı', PATTERN_LABELS[exercise.pattern]]] as [string, React.ReactNode][]) : []),
-    ['Tür', CATEGORY_LABELS[exercise.category]],
-    ['Kayıt', TRACKING_LABELS[exercise.trackingType]],
+    ...(exercise.pattern ? ([[t.rowPattern, patterns[exercise.pattern]]] as [string, React.ReactNode][]) : []),
+    [t.rowCategory, categoryLabels(locale)[exercise.category]],
+    [t.rowTracking, ptLibraryMessages(locale).trackingTypes[exercise.trackingType]],
     ...(exercise.trackingType === 'weight_reps' && !loadSpec.loadsKg
       ? ([
           [
-            'Ağırlık adımı / taban',
-            `${formatKg(loadSpec.loadStepKg)} / ${formatKg(loadSpec.minLoadKg)}${
-              loadSpec.maxLoadKg !== undefined ? ` · en çok ${formatKg(loadSpec.maxLoadKg)}` : ''
+            t.rowLoadStep,
+            `${format.kg(loadSpec.loadStepKg)} / ${format.kg(loadSpec.minLoadKg)}${
+              loadSpec.maxLoadKg !== undefined ? t.maxSuffix(format.kg(loadSpec.maxLoadKg)) : ''
             }`,
           ],
         ] as [string, React.ReactNode][])
       : []),
     [
-      'İlerleme',
-      `${PROGRESSION_LABELS[rule.scheme]} · ${rule.targetMin}–${rule.targetMax} ${exercise.trackingType === 'duration' ? 'sn' : 'tekrar'}`,
+      t.rowProgression,
+      `${progressionLabels(locale)[rule.scheme]} · ${rule.targetMin}–${rule.targetMax} ${exercise.trackingType === 'duration' ? catalogMessages(locale).time.secondsUnit : catalogMessages(locale).time.reps(rule.targetMax)}`,
     ],
   ];
 
   const origin =
-    exercise.source === 'library' ? 'Hazır kütüphane' : exercise.overridesLibrary ? 'Senin sürümün' : 'Senin egzersizin';
+    exercise.source === 'library' ? t.originLibrary : exercise.overridesLibrary ? t.originOverride : t.originCustom;
 
   return (
     <div className={`flex flex-col gap-6 ${TOUCH_TARGETS}`}>
       <PageHeader
-        crumbs={[{ label: 'Egzersizler', href: '/dashboard/exercises' }, { label: exercise.title }]}
+        crumbs={[{ label: t.crumbList, href: '/dashboard/exercises' }, { label: exercise.title }]}
         title={exercise.title}
         description={exercise.description || undefined}
         actions={<EditButton href={`/dashboard/exercises/${exercise.id}/edit`} />}
@@ -153,16 +156,16 @@ export default async function ExerciseDetailPage({ params }: { params: Promise<{
         <div className="flex flex-col gap-6">
           <Card>
             <CardHeader>
-              <CardTitle>Çalışan kaslar</CardTitle>
+              <CardTitle>{t.musclesTitle}</CardTitle>
               {exercise.primaryMuscles.includes('cardio') ? (
-                <CardDescription>Kardiyo hareketi; haritada yalnız yardımcı kaslar görünür.</CardDescription>
+                <CardDescription>{t.cardioNote}</CardDescription>
               ) : null}
             </CardHeader>
             <CardContent>
               <MuscleMap
                 layout="split"
                 bodyClassName="h-72"
-                {...roleMapProps(exercise)}
+                {...roleMapProps(exercise, locale)}
                 deep={{ selected: (exercise.activationTargets ?? []).filter(isDeepMuscle) }}
               />
             </CardContent>
@@ -170,9 +173,9 @@ export default async function ExerciseDetailPage({ params }: { params: Promise<{
 
           <Card>
             <CardHeader>
-              <CardTitle>Video</CardTitle>
+              <CardTitle>{t.videoTitle}</CardTitle>
               <CardDescription>
-                {exercise.video ? 'Hareketin doğru yapılışı.' : 'Bu egzersize henüz video bağlanmamış.'}
+                {exercise.video ? t.videoHint : t.videoEmpty}
               </CardDescription>
             </CardHeader>
             {exercise.video ? (
@@ -186,7 +189,7 @@ export default async function ExerciseDetailPage({ params }: { params: Promise<{
         <div className="flex flex-col gap-6">
           <Card>
             <CardHeader>
-              <CardTitle>Özet</CardTitle>
+              <CardTitle>{t.summaryTitle}</CardTitle>
               <CardDescription>{origin}</CardDescription>
             </CardHeader>
             <CardContent className="text-sm">
@@ -200,15 +203,15 @@ export default async function ExerciseDetailPage({ params }: { params: Promise<{
                   ))}
                 </TableBody>
               </Table>
-              <p className="mt-3 text-muted-foreground">{describeRule(rule, loadSpecFor(exercise, device))}</p>
+              <p className="mt-3 text-muted-foreground">{describeRule(rule, loadSpecFor(exercise, device), locale)}</p>
             </CardContent>
           </Card>
 
           {exercise.cues.length > 0 ? (
             <Card>
               <CardHeader>
-                <CardTitle>İpuçları</CardTitle>
-                <CardDescription>Harekete başlarken danışana hatırlatılır.</CardDescription>
+                <CardTitle>{t.cuesTitle}</CardTitle>
+                <CardDescription>{t.cuesHint}</CardDescription>
               </CardHeader>
               <CardContent>
                 <ItemGroup className="gap-2">

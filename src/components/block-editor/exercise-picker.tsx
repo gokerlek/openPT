@@ -28,10 +28,14 @@ import { Item, ItemActions, ItemContent, ItemDescription, ItemGroup, ItemTitle }
 import { Toggle } from '@/components/ui/toggle';
 import { searchExercises } from '@/lib/exercise-search';
 import { muscleSearchNames } from '@/lib/muscle-names';
+import { LOCALES } from '@/i18n/locale';
 import { exerciseAlternatives, summarizeMuscles, works } from '@/lib/muscles';
-import { EQUIPMENT_LABELS, MUSCLE_GROUPS } from '@/lib/schemas/exercise';
+import { equipmentLabels, muscleGroups } from '@/lib/schemas/exercise';
 import type { EditorDevice, PickerExercise } from '@/lib/template-edit';
 import { cn } from '@/lib/utils';
+import { useLocale, useMessages } from '@/i18n/client';
+import { programEditorMessages } from '@/i18n/messages/program-editor';
+import { commonMessages } from '@/i18n/messages/common';
 
 /** Ekranda en çok bu kadar sonuç; gerisi için arama daraltılır. */
 const RESULT_LIMIT = 50;
@@ -76,6 +80,8 @@ export function ExercisePicker({
   /** "Yine de ekle" izni kaydedildi. */
   onAllowed?: (exerciseId: string) => void;
 }) {
+  const t = useMessages(programEditorMessages).exercisePicker;
+  const locale = useLocale();
   const [query, setQuery] = useState('');
   const [group, setGroup] = useState<string | null>(null);
   const deferredQuery = useDeferredValue(query);
@@ -85,10 +91,10 @@ export function ExercisePicker({
   const available = useMemo(() => exercises.filter((exercise) => !exercise.blocked), [exercises]);
 
   const results = useMemo(() => {
-    const muscles = MUSCLE_GROUPS.find((item) => item.id === group)?.muscles ?? null;
+    const muscles = muscleGroups(locale).find((item) => item.id === group)?.muscles ?? null;
     const pool = muscles ? available.filter((exercise) => muscles.some((muscle) => works(exercise, muscle))) : available;
-    return searchExercises(pool, deferredQuery, muscleSearchNames);
-  }, [available, deferredQuery, group]);
+    return searchExercises(pool, deferredQuery, (muscle) => muscleSearchNames(muscle, LOCALES));
+  }, [available, deferredQuery, group, locale]);
 
   const suggestions = useMemo(() => {
     if (!replacing || !suggestFor) return [];
@@ -106,13 +112,12 @@ export function ExercisePicker({
   const renderItem = (exercise: PickerExercise) => {
     const count = usage.get(exercise.id) ?? 0;
     const device = exercise.deviceId ? devices.get(exercise.deviceId)?.name : undefined;
-    const verb = replacing ? 'seç' : 'ekle';
     const flag = flagOf(exercise);
     // Taramanın açık ağrısı kalıbındaki harekete dikkat ekler (yasak değil); bilgi rozeti ayrı satırda (§4.6).
     const mark = care && !replacing ? care.screening?.[exercise.id] : undefined;
     const reasons = [...(flag?.decision ? flag.messages : []), ...(mark?.pain ?? [])];
     const reason = reasons.length > 0 ? reasons.join(' · ') : null;
-    const tone = flag?.decision === 'cue' && !mark?.pain.length ? 'İpucu' : 'Dikkat';
+    const tone = flag?.decision === 'cue' && !mark?.pain.length ? t.toneCue : t.toneCaution;
     return (
       <Item
         key={exercise.id}
@@ -123,14 +128,14 @@ export function ExercisePicker({
           <button
             type="button"
             disabled={locked}
-            aria-label={`${exercise.title} ${verb}${reason ? ` · ${tone}: ${reason}` : ''}${mark?.info ? ` · ${mark.info.label}` : ''}`}
+            aria-label={t.rowAria(exercise.title, replacing, tone, reason, mark?.info?.label ?? null)}
             onClick={() => onPick(exercise)}
           />
         }>
         <ItemContent className="min-w-0">
           <ItemTitle className="w-full truncate">{exercise.title}</ItemTitle>
           <ItemDescription className="truncate text-xs">
-            {summarizeMuscles(exercise.primaryMuscles).join(', ')} · {device ?? EQUIPMENT_LABELS[exercise.equipment]}
+            {summarizeMuscles(exercise.primaryMuscles, locale).join(', ')} · {device ?? equipmentLabels(locale)[exercise.equipment]}
           </ItemDescription>
           {reason ? (
             <p title={reason} className="line-clamp-2 flex items-start gap-1 text-xs text-primary-text">
@@ -148,16 +153,16 @@ export function ExercisePicker({
           ) : null}
         </ItemContent>
         <ItemActions>
-          {exercise.caution ? <Badge variant="outline">Kısıtına uymayabilir</Badge> : null}
-          {flag?.group === 'untagged' ? <Badge variant="outline">kontrol edilmedi</Badge> : null}
-          {flag?.group === 'unassessed' ? <Badge variant="outline">eksik bilgi</Badge> : null}
-          {count > 0 ? <Badge variant="secondary">şablonda ×{count}</Badge> : null}
+          {exercise.caution ? <Badge variant="outline">{t.mayNotFit}</Badge> : null}
+          {flag?.group === 'untagged' ? <Badge variant="outline">{t.unchecked}</Badge> : null}
+          {flag?.group === 'unassessed' ? <Badge variant="outline">{t.missingInfo}</Badge> : null}
+          {count > 0 ? <Badge variant="secondary">{t.inTemplate(count)}</Badge> : null}
           {replacing ? (
-            <span className="text-xs font-medium text-primary-text">Seç</span>
+            <span className="text-xs font-medium text-primary-text">{t.pick}</span>
           ) : justAdded === exercise.id ? (
             <span className="flex items-center gap-1 text-xs font-medium text-primary-text animate-in duration-160 fade-in-0" aria-hidden>
               <Check className="size-3.5" />
-              Eklendi
+              {t.added}
             </span>
           ) : (
             <Plus className="size-4 text-muted-foreground" />
@@ -184,8 +189,8 @@ export function ExercisePicker({
             onKeyDown={(event) => {
               if (event.key === 'Enter' && !event.nativeEvent.isComposing) event.preventDefault();
             }}
-            placeholder="Egzersiz ya da kas ara"
-            aria-label="Egzersiz ya da kas ara"
+            placeholder={t.search}
+            aria-label={t.search}
             autoComplete="off"
           />
         </InputGroup>
@@ -194,8 +199,8 @@ export function ExercisePicker({
         <div
           className="-mx-4 flex gap-1.5 overflow-x-auto px-4 [scrollbar-width:none] sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0"
           role="group"
-          aria-label="Bölgeye göre süz">
-          {MUSCLE_GROUPS.map((item) => (
+          aria-label={t.filterAria}>
+          {muscleGroups(locale).map((item) => (
             <Toggle
               key={item.id}
               variant="outline"
@@ -211,26 +216,26 @@ export function ExercisePicker({
 
       <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto overscroll-contain px-4 py-3">
         {suggestions.length > 0 ? (
-          <section className="flex flex-col gap-2" aria-label="Önerilen muadiller">
-            <h3 className="text-xs font-medium text-muted-foreground">Önerilen muadiller</h3>
+          <section className="flex flex-col gap-2" aria-label={t.suggestedAria}>
+            <h3 className="text-xs font-medium text-muted-foreground">{t.suggestedAria}</h3>
             <ItemGroup className="gap-2">{suggestions.map(renderItem)}</ItemGroup>
           </section>
         ) : null}
 
         {shown.length > 0 ? (
-          <section className="flex flex-col gap-2" aria-label="Kütüphane">
-            {suggestions.length > 0 ? <h3 className="text-xs font-medium text-muted-foreground">Bütün kütüphane</h3> : null}
+          <section className="flex flex-col gap-2" aria-label={t.libraryAria}>
+            {suggestions.length > 0 ? <h3 className="text-xs font-medium text-muted-foreground">{t.allLibrary}</h3> : null}
             <ItemGroup className="gap-2">{shown.map(renderItem)}</ItemGroup>
             {open.length > shown.length ? (
               <p className="text-xs text-muted-foreground">
-                <span className="tabular-nums">{open.length}</span> sonuçtan {RESULT_LIMIT}&apos;si gösteriliyor; aramayı daralt.
+                {t.limited(open.length, RESULT_LIMIT)}
               </p>
             ) : null}
           </section>
         ) : null}
         {hidden.length > 0 && care ? (
           <details className="group rounded-lg border">
-            <summary className="flex min-h-11 cursor-pointer items-center px-3 text-sm font-medium">Bu danışana önerilmeyenler ({hidden.length})</summary>
+            <summary className="flex min-h-11 cursor-pointer items-center px-3 text-sm font-medium">{t.hiddenSummary(hidden.length)}</summary>
             <ul className="flex flex-col divide-y border-t">
               {hidden.slice(0, RESULT_LIMIT).map((exercise) => {
                 const flag = care.map[exercise.id];
@@ -251,7 +256,7 @@ export function ExercisePicker({
                         }}
                       />
                     ) : (
-                      <span className="text-xs text-muted-foreground">Sağlık profesyonelinin görüşü kaydedilene kadar izin verilemez.</span>
+                      <span className="text-xs text-muted-foreground">{t.lockedNote}</span>
                     )}
                   </li>
                 );
@@ -262,8 +267,8 @@ export function ExercisePicker({
         {shown.length === 0 && hidden.length === 0 ? (
           <Empty className="border p-4">
             <EmptyHeader>
-              <EmptyTitle>Uyan egzersiz yok</EmptyTitle>
-              <EmptyDescription>Başka bir ad ya da kas dene.</EmptyDescription>
+              <EmptyTitle>{t.emptyTitle}</EmptyTitle>
+              <EmptyDescription>{t.emptyDescription}</EmptyDescription>
             </EmptyHeader>
           </Empty>
         ) : null}
@@ -291,6 +296,8 @@ function AllowButton({
   disabled: boolean;
   onAllowed: (exercise: PickerExercise) => void;
 }) {
+  const t = useMessages(programEditorMessages).exercisePicker;
+  const common = useMessages(commonMessages);
   const [note, setNote] = useState('');
   const allow = useServiceMutation({
     fn: async () => {
@@ -301,27 +308,27 @@ function AllowButton({
         });
       }
     },
-    notify: { success: 'İzin kaydedildi.' },
+    notify: { success: t.allowed },
     onSuccess: () => onAllowed(exercise),
   });
   return (
     <AlertDialog>
-      <AlertDialogTrigger render={<Button size="sm" variant="outline" className="w-fit touch:h-11" disabled={disabled} />}>Yine de ekle</AlertDialogTrigger>
+      <AlertDialogTrigger render={<Button size="sm" variant="outline" className="w-fit touch:h-11" disabled={disabled} />}>{t.addAnyway}</AlertDialogTrigger>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>{exercise.title} bu danışana önerilmiyor</AlertDialogTitle>
+          <AlertDialogTitle>{t.notRecommendedTitle(exercise.title)}</AlertDialogTitle>
           <AlertDialogDescription>{messages.join(' · ')}</AlertDialogDescription>
         </AlertDialogHeader>
         <Field>
-          <FieldLabel htmlFor={`allow-${exercise.id}`}>Not (isteğe bağlı)</FieldLabel>
+          <FieldLabel htmlFor={`allow-${exercise.id}`}>{t.noteLabel}</FieldLabel>
           <Input id={`allow-${exercise.id}`} maxLength={140} value={note} onChange={(event) => setNote(event.currentTarget.value)} />
         </Field>
-        <p className="text-sm text-muted-foreground">İzin bu danışan ve bu hareket için kaydedilir; Kısıtlar’dan kaldırılabilir.</p>
+        <p className="text-sm text-muted-foreground">{t.allowHint}</p>
         <AlertDialogFooter>
-          <AlertDialogCancel>Vazgeç</AlertDialogCancel>
+          <AlertDialogCancel>{common.actions.cancel}</AlertDialogCancel>
           <AlertDialogAction disabled={allow.isPending} onClick={() => allow.mutate()}>
             {allow.isPending ? <Spinner data-icon="inline-start" /> : null}
-            Yine de ekle
+            {t.addAnyway}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

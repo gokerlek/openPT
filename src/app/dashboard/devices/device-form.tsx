@@ -18,7 +18,7 @@ import { Spinner } from '@/components/ui/spinner';
 import { Textarea } from '@/components/ui/textarea';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import {
-  DEVICE_KIND_LABELS,
+  deviceKindLabels,
   deviceLoads,
   PULLEY_RATIOS,
   takesAttachments,
@@ -43,6 +43,10 @@ import {
   type Device,
   type DeviceInput,
 } from '@/lib/schemas/device';
+import { useLocale, useMessages } from '@/i18n/client';
+import { getFormat } from '@/lib/format';
+import { ptLibraryMessages } from '@/i18n/messages/pt-library';
+import { commonMessages } from '@/i18n/messages/common';
 
 /** Tür seçilince gelen başlangıç ayarları (yaygın değerler; PT değiştirir). */
 const KIND_DEFAULTS: Record<DeviceKind, Partial<DeviceInput>> = {
@@ -56,23 +60,6 @@ const KIND_DEFAULTS: Record<DeviceKind, Partial<DeviceInput>> = {
   band: {},
   cardio: {},
 };
-
-/** Alan adları türe göre: blokta "ilk blok", plaka yüklemelide "kızak", barda "bar". */
-const BASE_LABELS: Partial<Record<DeviceKind, string>> = {
-  selectorized: 'İlk blok (kg)',
-  cable: 'İlk blok (kg)',
-  plate_loaded: 'Kızak ağırlığı (kg)',
-  barbell: 'Bar ağırlığı (kg)',
-};
-
-const PULLEY_HELP: Record<PulleyRatio, string> = {
-  1: 'Tek makara: seçilen ağırlık neyse kolda o hissedilir.',
-  2: 'Çift makara: blok yarı yol gider, kolda seçilenin yarısı hissedilir (20 kg → 10 kg).',
-  3: '3:1: kolda seçilenin üçte biri hissedilir.',
-  4: '4:1: kolda seçilenin dörtte biri hissedilir.',
-};
-
-const kgText = (value: number) => value.toLocaleString('tr-TR', { maximumFractionDigits: 2 });
 
 /** "2 4 6 12,5" → [2, 4, 6, 12.5]; ondalıkta virgül ya da nokta. */
 function parseWeights(text: string): number[] {
@@ -100,6 +87,7 @@ function AttachmentPicker({
   form: ReturnType<typeof useForm<typeof deviceFormSchema>>;
   pool: Attachment[];
 }) {
+  const t = useMessages(ptLibraryMessages).deviceForm;
   return (
     <FormField of={form} path={['attachments']}>
       {(field) => {
@@ -112,15 +100,14 @@ function AttachmentPicker({
 
         return (
           <FieldSet className="lg:col-span-2">
-            <FieldLegend>Aparatlar</FieldLegend>
+            <FieldLegend>{t.attachmentsLegend}</FieldLegend>
             <Field data-invalid={Boolean(field.errors) || undefined}>
               <FieldDescription>
-                Bu cihaza takılabilen tutamaçları havuzdan seç; egzersizde hangisiyle yapıldığı bunlardan seçilir.
-                Havuzda olmayan bir aparatın varsa{' '}
+                {t.poolNote.lead}
                 <Link href="/dashboard/attachments/new" className="font-medium text-foreground underline underline-offset-4">
-                  yeni aparat ekle
+                  {t.poolNote.link}
                 </Link>
-                .
+                {t.poolNote.tail}
               </FieldDescription>
               <ToggleTiles
                 items={pool.map((attachment) => ({ id: attachment.id, title: attachment.name, image: attachmentImageUrl(attachment) ?? null }))}
@@ -187,6 +174,10 @@ function NumberField({
  * değişir; altta cihazda ayarlanabilen ağırlıkların canlı önizlemesi var.
  */
 export function DeviceForm({ editing, attachments }: { editing: Device | null; attachments: Attachment[] }) {
+  const t = useMessages(ptLibraryMessages).deviceForm;
+  const locale = useLocale();
+  const format = getFormat(locale);
+  const common = useMessages(commonMessages);
   const router = useRouter();
   // Görsel formun şemasında yok; ayrı uçtan yönetilir. Havuzda artık olmayan (silinmiş)
   // aparat forma alınmaz: seçicide görünmez, kaldırılamaz olurdu ve sunucu da reddeder.
@@ -195,7 +186,7 @@ export function DeviceForm({ editing, attachments }: { editing: Device | null; a
     ? (({ id: _id, image: _image, ...rest }) => ({ ...rest, attachments: rest.attachments?.filter((id) => pool.has(id)) }))(editing)
     : BLANK;
   const form = useForm({ schema: deviceFormSchema, initialInput: start });
-  const [weightsText, setWeightsText] = useState((start.weightsKg ?? []).map(kgText).join(' '));
+  const [weightsText, setWeightsText] = useState((start.weightsKg ?? []).map(format.number).join(' '));
   const [image, setImage] = useState<ImageChange>(KEEP);
   const [imageError, setImageError] = useState<string | null>(null);
   const currentImageUrl = editing ? deviceImageUrl(editing) : null;
@@ -216,16 +207,16 @@ export function DeviceForm({ editing, attachments }: { editing: Device | null; a
           await fetchJson(`/api/devices/${id}/image`, { method: 'DELETE' });
         }
       } catch (error) {
-        return { id, imageFailed: error instanceof ApiError ? error.message : 'Görsel yüklenemedi.' };
+        return { id, imageFailed: error instanceof ApiError ? error.message : t.imageFailed };
       }
       return { id, imageFailed: null };
     },
     invalidate: [['devices'], ['exercises']],
-    notify: { success: editing ? 'Cihaz güncellendi.' : 'Cihaz eklendi.' },
+    notify: { success: editing ? t.updated : t.added },
     onError: (error) => applyFieldErrors(form as never, error),
     onSuccess: ({ id, imageFailed }) => {
       if (imageFailed) {
-        toast.error(`Cihaz kaydedildi ama görsel yüklenemedi: ${imageFailed}`);
+        toast.error(t.savedButImage(imageFailed));
         router.push(`/dashboard/devices/${id}/edit`);
       } else {
         router.push(`/dashboard/devices/${id}`);
@@ -242,8 +233,8 @@ export function DeviceForm({ editing, attachments }: { editing: Device | null; a
         <FormField of={form} path={['name']}>
           {(field) => (
             <Field data-invalid={Boolean(field.errors) || undefined}>
-              <FieldLabel htmlFor="name">Cihaz adı</FieldLabel>
-              <Input {...field.props} id="name" value={field.input ?? ''} placeholder="Ör. Technogym chest press" />
+              <FieldLabel htmlFor="name">{t.nameLabel}</FieldLabel>
+              <Input {...field.props} id="name" value={field.input ?? ''} placeholder={t.namePlaceholder} />
               <FieldError>{field.errors?.[0]}</FieldError>
             </Field>
           )}
@@ -252,11 +243,11 @@ export function DeviceForm({ editing, attachments }: { editing: Device | null; a
         <FormField of={form} path={['kind']}>
           {(field) => (
             <Field>
-              <FieldLabel htmlFor="kind">Tür</FieldLabel>
+              <FieldLabel htmlFor="kind">{t.kindLabel}</FieldLabel>
               <LabeledSelect
                 id="kind"
                 value={field.input}
-                labels={DEVICE_KIND_LABELS}
+                labels={deviceKindLabels(locale)}
                 onChange={(kind) => {
                   setInput(form, { path: ['kind'], input: kind });
                   // Yeni türün yaygın ayarları gelsin; PT sonra değiştirir.
@@ -267,7 +258,7 @@ export function DeviceForm({ editing, attachments }: { editing: Device | null; a
                   setInput(form, { path: ['addOnsKg'], input: defaults.addOnsKg ? [...defaults.addOnsKg] : undefined });
                   setInput(form, { path: ['pulleyRatio'], input: defaults.pulleyRatio });
                   setInput(form, { path: ['weightsKg'], input: defaults.weightsKg ? [...defaults.weightsKg] : undefined });
-                  setWeightsText((defaults.weightsKg ?? []).map(kgText).join(' '));
+                  setWeightsText((defaults.weightsKg ?? []).map(format.number).join(' '));
                 }}
               />
             </Field>
@@ -285,8 +276,8 @@ export function DeviceForm({ editing, attachments }: { editing: Device | null; a
         <FormField of={form} path={['notes']}>
           {(field) => (
             <Field>
-              <FieldLabel htmlFor="notes">Not</FieldLabel>
-              <Textarea {...field.props} id="notes" rows={2} value={field.input ?? ''} placeholder="Ör. pim ağırlığı eklenebilir" />
+              <FieldLabel htmlFor="notes">{t.notesLabel}</FieldLabel>
+              <Textarea {...field.props} id="notes" rows={2} value={field.input ?? ''} placeholder={t.notesPlaceholder} />
               <FieldError>{field.errors?.[0]}</FieldError>
             </Field>
           )}
@@ -299,29 +290,29 @@ export function DeviceForm({ editing, attachments }: { editing: Device | null; a
           const hasLoads = needsBase(kind) || needsWeights(kind);
           return (
             <FieldSet>
-              <FieldLegend>Ağırlık ayarı</FieldLegend>
+              <FieldLegend>{t.loadLegend}</FieldLegend>
               {!hasLoads && !takesAttachments(kind) ? (
                 <FieldDescription>
-                  Bu türde ağırlık ayarı yok; ilerleme tekrar ya da süreyle olur.
+                  {t.noLoad}
                 </FieldDescription>
               ) : null}
 
               {needsBase(kind) ? (
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <NumberField form={form} path="baseKg" label={BASE_LABELS[kind] ?? 'Başlangıç (kg)'} />
+                  <NumberField form={form} path="baseKg" label={(t.baseLabels as Partial<Record<DeviceKind, string>>)[kind] ?? t.baseDefault} />
                   {needsStep(kind) ? (
                     <NumberField
                       form={form}
                       path="stepKg"
-                      label={kind === 'selectorized' || kind === 'cable' ? 'Blok adımı (kg)' : 'En küçük artış (kg)'}
-                      description={kind === 'barbell' || kind === 'plate_loaded' ? 'İki yana birer en küçük plaka: 1,25 kg ise 2,5.' : undefined}
+                      label={kind === 'selectorized' || kind === 'cable' ? t.stackStep : t.smallestIncrement}
+                      description={kind === 'barbell' || kind === 'plate_loaded' ? t.plateHint : undefined}
                     />
                   ) : null}
                   {needsMax(kind) || kind === 'plate_loaded' ? (
                     <NumberField
                       form={form}
                       path="maxKg"
-                      label={kind === 'plate_loaded' ? 'En çok (kg, isteğe bağlı)' : 'En ağır blok (kg)'}
+                      label={kind === 'plate_loaded' ? t.maxOptional : t.maxStack}
                     />
                   ) : null}
                 </div>
@@ -331,25 +322,25 @@ export function DeviceForm({ editing, attachments }: { editing: Device | null; a
                 <FormField of={form} path={['addOnsKg']}>
                   {(field) => (
                     <Field>
-                      <FieldLabel>Ara ağırlıklar</FieldLabel>
+                      <FieldLabel>{t.addOnsLabel}</FieldLabel>
                       <ToggleGroup
                         multiple
                         variant="outline"
                         size="sm"
                         className="flex-wrap justify-start"
-                        aria-label="Ara ağırlıklar"
+                        aria-label={t.addOnsAria}
                         value={(field.input ?? []).map(String)}
                         onValueChange={(value) =>
                           setInput(form, { path: ['addOnsKg'], input: (value as string[]).map(Number).sort((a, b) => a - b) })
                         }>
                         {ADD_ON_OPTIONS.map((option) => (
                           <ToggleGroupItem key={option} value={String(option)} className="tabular-nums touch:h-11">
-                            +{kgText(option)} kg
+                            {t.addOnOption(format.number(option))}
                           </ToggleGroupItem>
                         ))}
                       </ToggleGroup>
                       <FieldDescription>
-                        Bloğa takılan küçük ağırlıklar. Birlikte de takılabilir; öneriler ara değerleri de kullanır.
+                        {t.addOnsHint}
                       </FieldDescription>
                       <FieldError>{field.errors?.[0]}</FieldError>
                     </Field>
@@ -361,12 +352,12 @@ export function DeviceForm({ editing, attachments }: { editing: Device | null; a
                 <FormField of={form} path={['pulleyRatio']}>
                   {(field) => (
                     <Field>
-                      <FieldLabel>Makara</FieldLabel>
+                      <FieldLabel>{t.pulleyLabel}</FieldLabel>
                       <ToggleGroup
                         variant="outline"
                         size="sm"
                         spacing={0}
-                        aria-label="Makara oranı"
+                        aria-label={t.pulleyAria}
                         value={[String(field.input ?? 1)]}
                         onValueChange={(value) => {
                           const next = Number(value[0]) as PulleyRatio;
@@ -374,11 +365,11 @@ export function DeviceForm({ editing, attachments }: { editing: Device | null; a
                         }}>
                         {PULLEY_RATIOS.map((ratio) => (
                           <ToggleGroupItem key={ratio} value={String(ratio)} className="px-3 tabular-nums touch:h-11">
-                            {ratio === 1 ? 'Tek (1:1)' : ratio === 2 ? 'Çift (2:1)' : `${ratio}:1`}
+                            {ratio === 1 ? t.pulleySingle : ratio === 2 ? t.pulleyDouble : `${ratio}:1`}
                           </ToggleGroupItem>
                         ))}
                       </ToggleGroup>
-                      <FieldDescription>{PULLEY_HELP[(field.input ?? 1) as PulleyRatio]}</FieldDescription>
+                      <FieldDescription>{t.pulleyHelp[(field.input ?? 1) as PulleyRatio]}</FieldDescription>
                     </Field>
                   )}
                 </FormField>
@@ -388,7 +379,7 @@ export function DeviceForm({ editing, attachments }: { editing: Device | null; a
                 <FormField of={form} path={['weightsKg']}>
                   {(field) => (
                     <Field data-invalid={Boolean(field.errors) || undefined}>
-                      <FieldLabel htmlFor="weightsKg">Setteki ağırlıklar (kg)</FieldLabel>
+                      <FieldLabel htmlFor="weightsKg">{t.weightsLabel}</FieldLabel>
                       <Textarea
                         id="weightsKg"
                         rows={2}
@@ -400,7 +391,7 @@ export function DeviceForm({ editing, attachments }: { editing: Device | null; a
                         }}
                         placeholder="2 4 6 8 10 12,5"
                       />
-                      <FieldDescription>Boşlukla ayır; ondalık için virgül. Sette olmayan ağırlık önerilmez.</FieldDescription>
+                      <FieldDescription>{t.weightsHint}</FieldDescription>
                       <FieldError>{field.errors?.[0]}</FieldError>
                     </Field>
                   )}
@@ -420,7 +411,7 @@ export function DeviceForm({ editing, attachments }: { editing: Device | null; a
       {hiddenError ? (
         <Alert variant="destructive" className="lg:col-span-2">
           <WarningCircle />
-          <AlertTitle>Form gönderilemedi</AlertTitle>
+          <AlertTitle>{t.errorTitle}</AlertTitle>
           <AlertDescription>{hiddenError}</AlertDescription>
         </Alert>
       ) : null}
@@ -430,11 +421,11 @@ export function DeviceForm({ editing, attachments }: { editing: Device | null; a
           variant="outline"
           nativeButton={false}
           render={<Link href={editing ? `/dashboard/devices/${editing.id}` : '/dashboard/devices'} />}>
-          Vazgeç
+          {common.actions.cancel}
         </Button>
         <Button type="submit" disabled={save.isPending}>
           {save.isPending ? <Spinner data-icon="inline-start" /> : null}
-          {save.isPending ? 'Kaydediliyor…' : 'Kaydet'}
+          {save.isPending ? common.actions.saving : common.actions.save}
         </Button>
       </div>
     </Form>
@@ -443,6 +434,8 @@ export function DeviceForm({ editing, attachments }: { editing: Device | null; a
 
 /** Cihazda ayarlanabilen ağırlıkların canlı önizlemesi (öneriler bunlardan seçilir). */
 function LoadsPreview({ form, kind }: { form: ReturnType<typeof useForm<typeof deviceFormSchema>>; kind: DeviceKind }) {
+  const t = useMessages(ptLibraryMessages).deviceForm;
+  const format = getFormat(useLocale());
   return (
     <FormField of={form} path={['baseKg']}>
       {(base) => (
@@ -466,22 +459,22 @@ function LoadsPreview({ form, kind }: { form: ReturnType<typeof useForm<typeof d
                         const shown = loads?.slice(0, 24) ?? [];
                         return (
                           <Field>
-                            <FieldLabel>Ayarlanabilen ağırlıklar</FieldLabel>
+                            <FieldLabel>{t.adjustableLabel}</FieldLabel>
                             {loads?.length ? (
                               <div className="flex flex-wrap gap-1.5">
                                 {shown.map((load) => (
                                   <Badge key={load} variant="secondary" className="tabular-nums">
-                                    {kgText(load)}
+                                    {format.number(load)}
                                   </Badge>
                                 ))}
                                 {loads.length > shown.length ? (
                                   <Badge variant="outline" className="tabular-nums">
-                                    +{loads.length - shown.length} ağırlık daha
+                                    {t.moreWeights(loads.length - shown.length)}
                                   </Badge>
                                 ) : null}
                               </div>
                             ) : (
-                              <FieldDescription>Ayarları doldurunca burada görünür.</FieldDescription>
+                              <FieldDescription>{t.adjustableEmpty}</FieldDescription>
                             )}
                           </Field>
                         );

@@ -25,9 +25,8 @@ import {
   moveMessage,
   selectedRowCount,
   selectionStatus,
-  SHEET_FULL_MESSAGE,
+  sheetFullMessage,
 } from '@/lib/edit-messages';
-import { formatNumber } from '@/lib/format';
 import { DRAG, DURATION, EASE, tween } from '@/lib/motion';
 import type { TemplateInput } from '@/lib/schemas/template';
 import {
@@ -51,7 +50,7 @@ import {
   type PickerExercise,
 } from '@/lib/template-edit';
 import { TEMPLATE_LIMITS, rowLabels, templateSummary, type TemplateBlock } from '@/lib/template-plan';
-import { BlockItem, FULL_MESSAGE, ItemPreview } from './block-items';
+import { BlockItem, ItemPreview } from './block-items';
 import { EditorDnd } from './drag/editor-dnd';
 import {
   EDITOR_HEADING_ID,
@@ -73,19 +72,20 @@ import {
 const NO_TARGETS: Readonly<Record<string, RowClientTarget>> = {};
 import { SaveButton } from './editor-save';
 import { ExerciseSheet, type PickerState } from './exercise-sheet';
+import { useLocale, useMessages } from '@/i18n/client';
+import { programEditorMessages } from '@/i18n/messages/program-editor';
+import { commonMessages } from '@/i18n/messages/common';
 
 /** Açıklama (SPEC §6, tasarım §2): dokunmatikte ve masaüstünde ayrı. */
-const DEFAULT_DESCRIPTION = (
-  <>
-    <span className="hidden touch:inline">
-      Karta dokun: düzenle. Üstteki çizgiden sürükle: sırala; bir kartın ortasına bırak: grupla. Sola kaydır: sil.
-    </span>
-    <span className="touch:hidden">
-      Karta tıkla: düzenle. Üstteki çizgiden sürükle: sırala; bir kartın ortasına bırak: grupla. Kartı sola çek: sil. Alt + ok
-      tuşları taşır.
-    </span>
-  </>
-);
+function DefaultDescription() {
+  const t = useMessages(programEditorMessages).blockEditor;
+  return (
+    <>
+      <span className="hidden touch:inline">{t.hintTouch}</span>
+      <span className="touch:hidden">{t.hintMouse}</span>
+    </>
+  );
+}
 
 /**
  * Başlığın sağındaki düğmeler [Seç · Grupla] ↔ [Tümünü seç][Grupla][Sil][Vazgeç] değişirken: eskisi hızla
@@ -227,11 +227,11 @@ export function BlockEditor({
   newIds,
   noteHint,
   libraryDescription,
-  title = 'Hareketler',
-  description = DEFAULT_DESCRIPTION,
+  title: titleProp,
+  description: descriptionProp,
   notice,
-  listLabel = 'Şablondaki hareketler',
-  addLabel = 'Hareket ekle',
+  listLabel: listLabelProp,
+  addLabel: addLabelProp,
   clientTargets = NO_TARGETS,
   variant = 'full',
   care = null,
@@ -267,6 +267,14 @@ export function BlockEditor({
   /** Programda danışanın kısıtları (`kisit-tarama.md` §3.2, §3.3): sheet'te işaret, kartta rozet. Şablonda yok. */
   care?: EditorCare | null;
 }) {
+  const t = useMessages(programEditorMessages).blockEditor;
+  const common = useMessages(commonMessages);
+  const locale = useLocale();
+  // Sheet'in "dolu" nedeni (`edit-messages.test.ts` kaynakta bu adı arar): isteğin dilinde.
+  const SHEET_FULL_MESSAGE = sheetFullMessage(locale);
+  const title = titleProp ?? t.title;
+  const description = descriptionProp ?? <DefaultDescription />;
+  const listLabel = listLabelProp ?? t.listLabel;
   const exerciseById = useMemo(() => new Map(exercises.map((exercise) => [exercise.id, exercise])), [exercises]);
   const deviceById = useMemo(() => new Map(devices.map((device) => [device.id, device])), [devices]);
   const blocks = useBlocks(form, path);
@@ -393,9 +401,9 @@ export function BlockEditor({
       const locate = undoPath ?? (() => path);
       if (options?.highlight) setHighlight(options.highlight);
       if (options?.focus !== undefined) focusFace(options.focus);
-      showGuardedUndo(message, { locate, read: readAt, write: writeAt, before }, { onUndone: () => announce('Geri alındı') });
+      showGuardedUndo(message, { locate, read: readAt, write: writeAt, before }, { onUndone: () => announce(t.undone) });
     },
-    [current, write, readAt, writeAt, path, undoPath, announce, focusFace],
+    [current, write, readAt, writeAt, path, undoPath, announce, focusFace, t.undone],
   );
 
   const openAdd = useCallback((event: React.MouseEvent<HTMLElement>) => {
@@ -445,10 +453,10 @@ export function BlockEditor({
     requestAnimationFrame(() => requestAnimationFrame(() => document.getElementById(setInputId(rowId, index, column))?.focus()));
   }, []);
 
-  const titleOf = useCallback((exerciseId: string) => exerciseById.get(exerciseId)?.title ?? 'Silinmiş egzersiz', [exerciseById]);
+  const titleOf = useCallback((exerciseId: string) => exerciseById.get(exerciseId)?.title ?? programEditorMessages(locale).editorContext.deletedExercise, [exerciseById, locale]);
 
   const actions = useMemo<ItemActions>(() => {
-    const titleFor = (blocksNow: readonly TemplateBlock[], itemId: string) => itemTitle(blocksNow, itemId, exerciseById);
+    const titleFor = (blocksNow: readonly TemplateBlock[], itemId: string) => itemTitle(blocksNow, itemId, exerciseById, locale);
     const isGroup = (blocksNow: readonly TemplateBlock[], itemId: string) =>
       blocksNow.some((block) => block.id === itemId && block.kind !== 'single');
     const memberOf = (blocksNow: readonly TemplateBlock[], itemId: string) =>
@@ -457,9 +465,9 @@ export function BlockEditor({
     const ungroup = (rowId: string) => {
       const before = current();
       if (!memberOf(before, rowId)) return;
-      if (before.length >= TEMPLATE_LIMITS.blocks) return announce(FULL_MESSAGE);
+      if (before.length >= TEMPLATE_LIMITS.blocks) return announce(programEditorMessages(locale).edit.templateFull);
       const title = titleFor(before, rowId);
-      updateWithUndo((now) => ungroupRow(now, rowId, exerciseById, newIds(now)), `${title} gruptan çıktı`, { focus: rowId, highlight: rowId });
+      updateWithUndo((now) => ungroupRow(now, rowId, exerciseById, newIds(now)), t.leftGroup(title), { focus: rowId, highlight: rowId });
       close(rowId);
     };
 
@@ -467,9 +475,9 @@ export function BlockEditor({
       const before = current();
       const group = before.find((block) => block.id === blockId && block.kind !== 'single');
       if (!group) return;
-      if (before.length - 1 + group.rows.length > TEMPLATE_LIMITS.blocks) return announce(FULL_MESSAGE);
+      if (before.length - 1 + group.rows.length > TEMPLATE_LIMITS.blocks) return announce(programEditorMessages(locale).edit.templateFull);
       const title = titleFor(before, blockId);
-      updateWithUndo((now) => dissolveGroup(now, blockId, exerciseById, newIds(now)), `${title} dağıtıldı`, {
+      updateWithUndo((now) => dissolveGroup(now, blockId, exerciseById, newIds(now)), t.dissolved(title), {
         focus: group.rows[0]?.id,
       });
       close(blockId);
@@ -481,7 +489,7 @@ export function BlockEditor({
         const whole = before.some((block) => block.id === itemId);
         const next = whole ? removeBlock(before, itemId) : removeRow(before, itemId, exerciseById);
         if (next === before) return;
-        updateWithUndo(() => next, `${titleFor(before, itemId)} silindi`, { focus: neighbourOf(before, itemId) ?? '' });
+        updateWithUndo(() => next, t.deleted(titleFor(before, itemId)), { focus: neighbourOf(before, itemId) ?? '' });
         close(itemId);
       },
       ungroup,
@@ -489,35 +497,35 @@ export function BlockEditor({
       step: (itemId, target) => {
         const before = current();
         const destination = stepDestination(before, itemId, target);
-        if (!destination) return announce(edgeMessage(before, itemId, target === 'up' || target === 'top', titleOf));
+        if (!destination) return announce(edgeMessage(before, itemId, target === 'up' || target === 'top', titleOf, locale));
         const next = moveItem(before, itemId, destination, exerciseById, newIds(before));
         if (next === before) return;
-        update(() => next, { announce: moveMessage(before, next, itemId, titleOf) });
+        update(() => next, { announce: moveMessage(before, next, itemId, titleOf, locale) });
         focusFace(itemId);
       },
       groupWithPrevious: (itemId) => {
         const before = current();
         const title = titleFor(before, itemId);
-        if (isGroup(before, itemId)) return announce('Grup başka bir gruba eklenemez');
-        if (memberOf(before, itemId)) return announce(`${title} zaten bir grupta; çıkarmak için Alt + sol ok`);
+        if (isGroup(before, itemId)) return announce(t.cantNest);
+        if (memberOf(before, itemId)) return announce(t.alreadyInGroup(title));
         const index = before.findIndex((block) => block.rows[0]?.id === itemId);
         const previous = before[index - 1];
-        if (!previous) return announce(`${title} ilk sırada; öncesinde gruplanacak hareket yok`);
+        if (!previous) return announce(t.firstCantGroup(title));
         const targetId = blockItemId(previous);
         const outcome = combineOutcome(before, itemId, targetId);
-        if (outcome === 'full') return announce('Grup dolu (8)');
+        if (outcome === 'full') return announce(t.groupFull);
         if (!isJoining(outcome)) return;
         const next = combineInto(before, itemId, targetId, exerciseById);
-        updateWithUndo(() => next, combineMessage(before, next, itemId, targetId, outcome, titleOf), { focus: itemId, highlight: itemId });
+        updateWithUndo(() => next, combineMessage(before, next, itemId, targetId, outcome, titleOf, locale), { focus: itemId, highlight: itemId });
       },
       split: (itemId) => {
         const before = current();
         if (isGroup(before, itemId)) return dissolve(itemId);
         if (memberOf(before, itemId)) return ungroup(itemId);
-        announce(`${titleFor(before, itemId)} bir grupta değil`);
+        announce(t.notInGroup(titleFor(before, itemId)));
       },
     };
-  }, [current, exerciseById, newIds, announce, update, updateWithUndo, close, focusFace, titleOf]);
+  }, [current, exerciseById, newIds, announce, update, updateWithUndo, close, focusFace, titleOf, locale, t]);
 
   const labels = useMemo(() => rowLabels({ blocks }), [blocks]);
   const summary = useMemo(() => templateSummary({ blocks }, exerciseById), [blocks, exerciseById]);
@@ -545,7 +553,7 @@ export function BlockEditor({
     setSelection(new Set());
     anchor.current = null;
     setSelecting(true);
-    announce('Seçim modu: gruplamak ya da silmek istediklerini seç');
+    announce(t.selectionOn);
     const first = blocks[0];
     if (first) focusFace(blockItemId(first));
   };
@@ -556,10 +564,10 @@ export function BlockEditor({
       setSelecting(false);
       setSelection(new Set());
       anchor.current = null;
-      if (options?.announce) announce('Seçim modundan çıkıldı');
+      if (options?.announce) announce(t.selectionOff);
       if (options?.returnFocus) focusSelectOnMount.current = true;
     },
-    [announce],
+    [announce, t.selectionOff],
   );
 
   const toggleSelect = useCallback<Editor['toggleSelect']>(
@@ -600,14 +608,14 @@ export function BlockEditor({
     if ((kind !== 'superset' && kind !== 'circuit') || !first) return;
     leaveSelection();
     // Grup ilk seçilen kartın yerinde ve kimliğiyle kurulur: vurgu ve odak onda.
-    updateWithUndo((now) => groupBlocks(now, ids), groupedMessage(before, ids, kind, titleOf), { highlight: first.id, focus: first.id });
+    updateWithUndo((now) => groupBlocks(now, ids), groupedMessage(before, ids, kind, titleOf, locale), { highlight: first.id, focus: first.id });
   };
 
   const removeSelected = () => {
     const { before, ids } = pickedNow();
     if (ids.size === 0) return;
     leaveSelection();
-    updateWithUndo((now) => removeBlocks(now, ids), bulkMessage(selectedRowCount(before, ids), 'removed'), {
+    updateWithUndo((now) => removeBlocks(now, ids), bulkMessage(selectedRowCount(before, ids), 'removed', locale), {
       focus: neighbourAfterRemoval(before, ids) ?? '',
     });
   };
@@ -636,7 +644,7 @@ export function BlockEditor({
     }
   };
 
-  const status = selectionStatus(selected.size, check, coarse ? 'touch' : 'mouse');
+  const status = selectionStatus(selected.size, check, coarse ? 'touch' : 'mouse', locale);
   const canGroup = check === 'superset' || check === 'circuit';
 
   // ─── Ekleme sheet'i: sona ya da grubun sonuna ────────────────────────────────────────
@@ -649,9 +657,9 @@ export function BlockEditor({
       if (!block || block.kind === 'single') return;
       returnFocus.current = event.currentTarget;
       lastAdded.current = null;
-      setPicker({ kind: 'addToGroup', blockId, title: addToGroupTitle(block.kind, blockIndex) });
+      setPicker({ kind: 'addToGroup', blockId, title: addToGroupTitle(block.kind, blockIndex, locale) });
     },
-    [current],
+    [current, locale],
   );
 
   /** Dokunulan egzersizi ekler (vurgu ve duyuru sheet kapanınca); durum satırının cümlesi, eklenemezse `null`. */
@@ -665,7 +673,7 @@ export function BlockEditor({
       if (next === before || !group || !joined || !rowId) return null;
       update(() => next);
       lastAdded.current = rowId;
-      const message = addedToGroupMessage(exercise.title, group.kind, joined.kind);
+      const message = addedToGroupMessage(exercise.title, group.kind, joined.kind, locale);
       announce(message);
       return message;
     }
@@ -674,15 +682,15 @@ export function BlockEditor({
     if (next.length === before.length || !rowId) return null;
     update(() => next);
     lastAdded.current = rowId;
-    return `${exercise.title} eklendi (${next.length}. sıra)`;
+    return t.added(exercise.title, next.length);
   };
 
   const sheet = (() => {
     if (picker?.kind === 'addToGroup') {
-      const { blocked, hint } = addToGroupHint(addToGroupOutcome(blocks, picker.blockId));
-      return { title: picker.title, description: 'Ada ya da kasa göre ara; dokununca grubun sonuna eklenir.', blocked, hint };
+      const { blocked, hint } = addToGroupHint(addToGroupOutcome(blocks, picker.blockId), locale);
+      return { title: picker.title, description: t.groupLibraryDescription, blocked, hint };
     }
-    return { title: 'Hareket ekle', description: libraryDescription, blocked: canAdd(blocks) ? null : SHEET_FULL_MESSAGE, hint: '' };
+    return { title: t.sheetTitle, description: libraryDescription, blocked: canAdd(blocks) ? null : SHEET_FULL_MESSAGE, hint: '' };
   })();
 
   // Açan düğme gitmişse (boş durumdaki düğme ilk eklemeden sonra kalkar) listenin altındaki "+ Hareket ekle".
@@ -779,7 +787,7 @@ export function BlockEditor({
                       size="sm"
                       className="touch:h-11"
                       onClick={() => (allSelected ? setSelection(new Set()) : selectAll())}>
-                      {allSelected ? 'Seçimi kaldır' : 'Tümünü seç'}
+                      {allSelected ? t.deselect : t.selectAll}
                     </Button>
                   </motion.span>
                   <motion.span variants={HEADER_ITEM} className="inline-flex">
@@ -790,7 +798,7 @@ export function BlockEditor({
                       className="touch:h-11 aria-disabled:cursor-default aria-disabled:opacity-50"
                       onClick={() => (canGroup ? groupSelected() : undefined)}>
                       <LinkSimple data-icon="inline-start" />
-                      Grupla ({selected.size})
+                      {t.groupButton(selected.size)}
                     </Button>
                   </motion.span>
                   <motion.span variants={HEADER_ITEM} className="inline-flex">
@@ -802,7 +810,7 @@ export function BlockEditor({
                       className="touch:h-11 aria-disabled:cursor-default aria-disabled:opacity-50"
                       onClick={() => (selected.size > 0 ? removeSelected() : undefined)}>
                       <Trash data-icon="inline-start" />
-                      Sil
+                      {common.actions.delete}
                     </Button>
                   </motion.span>
                   <motion.span variants={HEADER_ITEM} className="inline-flex">
@@ -812,7 +820,7 @@ export function BlockEditor({
                       size="sm"
                       className="touch:h-11"
                       onClick={() => leaveSelection({ announce: true, returnFocus: true })}>
-                      Vazgeç
+                      {common.actions.cancel}
                     </Button>
                   </motion.span>
                 </motion.div>
@@ -829,7 +837,7 @@ export function BlockEditor({
                       {/* Adı seçimin ne işe yaradığını da söyler: gruplamanın görünür yolu burası. */}
                       <Button ref={selectButton} type="button" variant="outline" size="sm" className="touch:h-11" onClick={enterSelection}>
                         <CheckSquare data-icon="inline-start" />
-                        Seç · Grupla
+                        {t.selectGroup}
                       </Button>
                     </motion.span>
                   ) : null}
@@ -861,17 +869,16 @@ export function BlockEditor({
             </AnimatePresence>
           </div>
           {hint === 'text' && !selectingNow ? (
-            <p className="col-span-2 text-sm text-muted-foreground">İpucu: kartı sola kaydır → sil</p>
+            <p className="col-span-2 text-sm text-muted-foreground">{t.tipSwipe}</p>
           ) : null}
           {groupHint && !selectingNow ? (
             <p className="col-span-2 flex items-start gap-1.5 text-sm text-muted-foreground">
               <LinkSimple aria-hidden className="mt-0.5 size-4 shrink-0" />
-              <span>İpucu: kartı üstteki çizgisinden tutup başka bir kartın ortasına bırak, süperset olur.</span>
+              <span>{t.tipDrag}</span>
             </p>
           ) : null}
           {blocks.length > 0 ? (
-            <p className="col-span-2 text-sm tabular-nums text-muted-foreground">
-              {formatNumber(summary.rows)} hareket · {formatNumber(summary.workingSets)} set · ≈ {formatNumber(summary.minutes)} dk
+            <p className="col-span-2 text-sm tabular-nums text-muted-foreground">{t.summary(summary.rows, summary.workingSets, summary.minutes)}
             </p>
           ) : null}
         </CardHeader>
@@ -899,25 +906,25 @@ export function BlockEditor({
                   type="button"
                   variant="outline"
                   aria-haspopup="dialog"
-                  aria-label={addLabel === 'Hareket ekle' ? undefined : addLabel}
+                  aria-label={addLabelProp}
                   data-reorder-hide
                   className="h-11 w-full border-dashed text-muted-foreground hover:text-foreground"
                   onClick={openAdd}>
                   <Plus data-icon="inline-start" />
-                  Hareket ekle
+                  {t.add}
                 </Button>
               )}
             </SwipeGroup>
           ) : (
             <Empty className="border border-dashed">
               <EmptyHeader>
-                <EmptyTitle>Henüz hareket yok</EmptyTitle>
-                <EmptyDescription>Kütüphaneden hareket ekle.</EmptyDescription>
+                <EmptyTitle>{t.emptyTitle}</EmptyTitle>
+                <EmptyDescription>{t.emptyDescription}</EmptyDescription>
               </EmptyHeader>
               <EmptyContent>
                 <Button ref={emptyAddRef} type="button" className="touch:h-11" aria-haspopup="dialog" onClick={openAdd}>
                   <Plus data-icon="inline-start" />
-                  Hareket ekle
+                  {t.add}
                 </Button>
               </EmptyContent>
             </Empty>

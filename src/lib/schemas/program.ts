@@ -1,4 +1,7 @@
 import * as v from 'valibot';
+import { type Locale } from '../../i18n/locale.ts';
+import { programValidationMessages } from '../../i18n/messages/program-validation/index.ts';
+import { msg } from '../../i18n/valibot.ts';
 import { weekdayConflicts } from '../day-assignments.ts';
 import {
   DAY_ID_PATTERN,
@@ -31,25 +34,28 @@ import { rowSetsSchema, templateBlockSchema } from './template.ts';
  * atanır. Düzenleyicinin şeması yalnız yeni biçimi kabul eder.
  */
 
+/** Doğrulama mesajları (`msg`: şemayı ayrıştıran isteğin diliyle). */
+const text = (locale: Locale) => programValidationMessages(locale).programSchema;
+
 const timestamp = v.pipe(v.string(), v.isoTimestamp());
-const int = (min: number, max: number, unit = '') =>
+const int = (min: number, max: number, unit?: 'weeks' | 'days') =>
   v.pipe(
-    v.number('Sayı gir.'),
-    v.integer('Tam sayı gir.'),
-    v.minValue(min, `En az ${min}${unit}.`),
-    v.maxValue(max, `En fazla ${max}${unit}.`),
+    v.number(msg((l) => text(l).enterNumber)),
+    v.integer(msg((l) => text(l).enterInteger)),
+    v.minValue(min, msg((l) => text(l).atLeastUnit(min, unit ? text(l).units[unit](min) : ''))),
+    v.maxValue(max, msg((l) => text(l).atMostUnit(max, unit ? text(l).units[unit](max) : ''))),
   );
 const positive = v.pipe(v.number(), v.integer(), v.minValue(1));
 
-export const phaseIdSchema = v.pipe(v.string(), v.regex(PHASE_ID_PATTERN, 'Evre kimliği geçersiz.'));
-export const dayIdSchema = v.pipe(v.string(), v.regex(DAY_ID_PATTERN, 'Gün kimliği geçersiz.'));
+export const phaseIdSchema = v.pipe(v.string(), v.regex(PHASE_ID_PATTERN, msg((l) => text(l).phaseIdInvalid)));
+export const dayIdSchema = v.pipe(v.string(), v.regex(DAY_ID_PATTERN, msg((l) => text(l).dayIdInvalid)));
 
 /** Günün blokları: şablonla aynı yapı; boş gün kaydedilmez. */
 export const dayBlocksSchema = v.pipe(
   v.array(templateBlockSchema),
-  v.minLength(1, 'Programa en az bir hareket ekle.'),
-  v.maxLength(TEMPLATE_LIMITS.blocks, `Bir günde en fazla ${TEMPLATE_LIMITS.blocks} blok olur.`),
-  v.check((blocks) => countRows(blocks) <= TEMPLATE_LIMITS.rows, `Bir günde en fazla ${TEMPLATE_LIMITS.rows} hareket olur.`),
+  v.minLength(1, msg((l) => text(l).dayBlocksMin)),
+  v.maxLength(TEMPLATE_LIMITS.blocks, msg((l) => text(l).dayBlocksMax(TEMPLATE_LIMITS.blocks))),
+  v.check((blocks) => countRows(blocks) <= TEMPLATE_LIMITS.rows, msg((l) => text(l).dayRowsMax(TEMPLATE_LIMITS.rows))),
 );
 
 /** Günün geldiği şablon: o anki adıyla; şablon sonra değişse ya da silinse de program değişmez. */
@@ -64,22 +70,22 @@ export const daySourceSchema = v.object({
  * `schedule.weekdays` şu anki evrenin atamalarının birleşimi.
  */
 export const weekdaysSchema = v.pipe(
-  v.array(v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(7)), 'Günleri seç.'),
+  v.array(v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(7)), msg((l) => text(l).pickWeekdays)),
   v.maxLength(7),
-  v.check((days) => new Set(days).size === days.length, 'Bir gün iki kez seçilmiş.'),
+  v.check((days) => new Set(days).size === days.length, msg((l) => text(l).weekdayTwice)),
 );
 /**
  * Danışanın eski gün katmanı (`clientSchedule`): en az bir gün. Faz 3'te danışan günleri değiştirmez (Karar 3);
  * şema yalnız eski dosyalar okunabilsin diye kalır.
  */
-export const clientWeekdaysSchema = v.pipe(weekdaysSchema, v.minLength(1, 'En az bir gün seç.'));
+export const clientWeekdaysSchema = v.pipe(weekdaysSchema, v.minLength(1, msg((l) => text(l).weekdaysMin)));
 
 /** Evrede bir hafta günü en çok bir programa: Bugün o günün tek programını gösterir. */
-export const DAY_CONFLICT = 'Aynı gün iki programa atanmış.';
+export const DAY_CONFLICT = msg((l) => text(l).dayConflict);
 
 export const programDaySchema = v.object({
   id: dayIdSchema,
-  name: v.pipe(v.string('Program adı gir.'), v.trim(), v.minLength(1, 'Program adı gir.'), v.maxLength(L.dayName, `En fazla ${L.dayName} karakter.`)),
+  name: v.pipe(v.string(msg((l) => text(l).dayNameRequired)), v.trim(), v.minLength(1, msg((l) => text(l).dayNameRequired)), v.maxLength(L.dayName, msg((l) => text(l).dayNameMax(L.dayName)))),
   /** Programın atandığı hafta günleri (Faz 3; ISO, 1 = Pazartesi); yoksa atanmamış. Evrede bir gün en çok bir programa. */
   weekdays: v.optional(weekdaysSchema),
   blocks: dayBlocksSchema,
@@ -89,42 +95,42 @@ export const programDaySchema = v.object({
 export const programPhaseSchema = v.object({
   id: phaseIdSchema,
   name: v.pipe(
-    v.string('Evre adı gir.'),
+    v.string(msg((l) => text(l).phaseNameRequired)),
     v.trim(),
-    v.minLength(1, 'Evre adı gir.'),
-    v.maxLength(L.phaseName, `En fazla ${L.phaseName} karakter.`),
+    v.minLength(1, msg((l) => text(l).phaseNameRequired)),
+    v.maxLength(L.phaseName, msg((l) => text(l).phaseNameMax(L.phaseName))),
   ),
   /** Süre (hafta); yoksa süresiz evre, geçiş önerilmez. */
-  weeks: v.optional(int(1, L.weeks, ' hafta')),
+  weeks: v.optional(int(1, L.weeks, 'weeks')),
   /** Haftada kaç gün; evresiz programda programın sıklığı. */
-  daysPerWeek: v.optional(int(1, L.daysPerWeek, ' gün')),
+  daysPerWeek: v.optional(int(1, L.daysPerWeek, 'days')),
   days: v.pipe(
     v.array(programDaySchema),
-    v.minLength(1, 'Evrede en az bir program olmalı.'),
-    v.maxLength(L.daysPerPhase, `Bir evrede en fazla ${L.daysPerPhase} antrenman olur.`),
-    v.check((days) => duplicateNames(days).length === 0, 'Bu evrede aynı adda iki program var.'),
+    v.minLength(1, msg((l) => text(l).phaseDaysMin)),
+    v.maxLength(L.daysPerPhase, msg((l) => text(l).phaseDaysMax(L.daysPerPhase))),
+    v.check((days) => duplicateNames(days).length === 0, msg((l) => text(l).phaseDayNames)),
     v.check((days) => weekdayConflicts(days).length === 0, DAY_CONFLICT),
   ),
 });
 
 export const programPhasesSchema = v.pipe(
   v.array(programPhaseSchema),
-  v.minLength(1, 'En az bir evre olmalı.'),
-  v.maxLength(L.phases, `En fazla ${L.phases} evre olur.`),
-  v.check((phases) => countDays(phases) <= L.days, `Programda en fazla ${L.days} gün olur.`),
-  v.check((phases) => duplicateNames(phases).length === 0, 'Evre adları farklı olmalı.'),
-  v.check((phases) => duplicateProgramIds(phases).length === 0, 'Evre, gün, blok ve satır kimlikleri benzersiz olmalı.'),
+  v.minLength(1, msg((l) => text(l).phasesMin)),
+  v.maxLength(L.phases, msg((l) => text(l).phasesMax(L.phases))),
+  v.check((phases) => countDays(phases) <= L.days, msg((l) => text(l).daysMax(L.days))),
+  v.check((phases) => duplicateNames(phases).length === 0, msg((l) => text(l).phaseNames)),
+  v.check((phases) => duplicateProgramIds(phases).length === 0, msg((l) => text(l).idsUnique)),
 );
 
 const bodyFields = {
-  phased: v.boolean('Evre seçimi okunamadı.'),
+  phased: v.boolean(msg((l) => text(l).phasedUnreadable)),
   currentPhaseId: phaseIdSchema,
   phases: programPhasesSchema,
   /** Eski sekme ve taslak: gün başına atama yoksa günler buradan türetilir (`upgradeProgramBody`). */
   weekdays: v.optional(weekdaysSchema),
 };
-const CURRENT_MISSING = 'Şu anki evre programda yok.';
-const UNPHASED_PROBLEM = 'Evresiz programda tek, süresiz gün listesi olur.';
+const CURRENT_MISSING = msg((l) => text(l).currentMissing);
+const UNPHASED_PROBLEM = msg((l) => text(l).unphasedOnly);
 
 const currentExists = (input: { currentPhaseId: string; phases: readonly { id: string }[] }) =>
   input.phases.some((phase) => phase.id === input.currentPhaseId);

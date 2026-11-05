@@ -12,6 +12,8 @@ import { sheetStatus } from '@/lib/edit-messages';
 import { DRAG } from '@/lib/motion';
 import type { EditorDevice, PickerExercise } from '@/lib/template-edit';
 import { ExercisePicker } from './exercise-picker';
+import { useMessages } from '@/i18n/client';
+import { programEditorMessages } from '@/i18n/messages/program-editor';
 
 /**
  * Sheet'in kipi: sona ekleme ya da bir grubun sonuna ekleme ("+ Gruba hareket ekle";
@@ -83,6 +85,7 @@ export function ExerciseSheet(props: SheetProps) {
  * bekleyen bildirimi ve taramanın açık ağrısı; kısıt onayı yoksa yalnız durum (veri değil).
  */
 function CareLines({ care }: { care: EditorCare }) {
+  const t = useMessages(programEditorMessages).exerciseSheet;
   const severe = care.severe ?? [];
   const pain = care.screeningPain ?? [];
   if (care.unavailable && pain.length === 0) return <p className="text-sm text-muted-foreground">{care.unavailable}</p>;
@@ -94,33 +97,33 @@ function CareLines({ care }: { care: EditorCare }) {
         <p className="flex items-start gap-1.5">
           <WarningCircle weight="fill" aria-hidden className="mt-0.5 size-4 shrink-0 text-destructive" />
           <span>
-            <span className="sr-only">Acil: </span>
-            Danışan şiddetli dedi: {severe.join(' · ')} · sen bakana kadar bölgeyi çalıştıran hareketler dikkat alıyor
+            <span className="sr-only">{t.urgent} </span>
+            {t.severeNote(severe.join(' · '))}
           </span>
         </p>
       ) : null}
       {care.summary.length > 0 ? (
         <p className="flex flex-wrap items-center gap-x-2">
-          <span>Kısıtlar: {care.summary.join(' · ')}</span>
+          <span>{t.limitations(care.summary.join(' · '))}</span>
           <Link href={`/dashboard/clients/${care.clientId}/constraints`} className="text-muted-foreground underline-offset-4 hover:underline">
-            Kısıtlar ›
+            {t.limitationsLink}
           </Link>
         </p>
       ) : null}
       {care.pending.length > 0 ? (
         <p className="flex items-start gap-1.5 text-muted-foreground">
           <WarningCircle weight="fill" className="mt-0.5 size-4 shrink-0 text-primary-text" />
-          Danışan bildirdi: {care.pending.join(' · ')} · karar bekliyor
+          {t.reported(care.pending.join(' · '))}
         </p>
       ) : null}
       {pain.length > 0 ? (
         <p className="flex flex-wrap items-center gap-x-2 text-muted-foreground">
           <span className="flex items-start gap-1.5">
             <PersonSimpleTaiChi weight="fill" aria-hidden className="mt-0.5 size-4 shrink-0 text-primary-text" />
-            Hareket testinde ağrı: {pain.join(' · ')} · kalıbındaki hareketler dikkat alıyor, yasak değil
+            {t.painNote(pain.join(' · '))}
           </span>
           <Link href={`/dashboard/clients/${care.clientId}/screening`} className="underline-offset-4 hover:underline">
-            Hareket ›
+            {t.screeningLink}
           </Link>
         </p>
       ) : null}
@@ -142,6 +145,7 @@ function SheetBody({
   care = null,
   onAllowed,
 }: SheetProps & { searchRef: React.RefObject<HTMLInputElement | null> }) {
+  const t = useMessages(programEditorMessages).exerciseSheet;
   const [status, setStatus] = useState('');
   const [justAdded, setJustAdded] = useState<string | null>(null);
 
@@ -183,7 +187,7 @@ function SheetBody({
         <p role="status" aria-live="polite" className="min-w-0 flex-1 text-sm text-muted-foreground">
           {sheetStatus(blocked, status, hint)}
         </p>
-        <SheetClose render={<Button type="button" className="touch:h-11" />}>Bitti</SheetClose>
+        <SheetClose render={<Button type="button" className="touch:h-11" />}>{t.done}</SheetClose>
       </SheetFooter>
     </>
   );

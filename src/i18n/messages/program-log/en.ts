@@ -1,0 +1,103 @@
+import { plural, type Shape } from '../../define.ts';
+import type tr from './tr.ts';
+
+const en: Shape<typeof tr> = {
+  /** src/lib/program-diff.ts — program geçmişi cümleleri ve commit mesajı. SAKLANIR: yazanın dilinde (DiffContext.locale); biçimi koddan ayrıştırılan yalnız "Program: " öneki (own-program-files.ts), iki dilde aynı. */
+  diff: {
+    seconds: (text: string) => `${text} s`,
+    none: 'none',
+    openEnded: 'open-ended',
+    weeks: (n: number, text: string) => `${text} ${plural('en', n, { one: 'week', other: 'weeks' })}`,
+    perWeek: (n: number, text: string) => `${text} ${plural('en', n, { one: 'day', other: 'days' })} a week`,
+    deletedDevice: 'deleted equipment',
+    amrapRemovedLast: 'last set AMRAP removed',
+    amrapRemoved: 'AMRAP removed',
+    amrapOne: 'AMRAP',
+    amrapLast: 'last set AMRAP',
+    amrapAll: 'all sets AMRAP',
+    amrapSome: (positions: readonly number[]) => `AMRAP on sets ${positions.join(', ')}`,
+    newGroup: (kind: string, names: string) => `New ${kind}: ${names}`,
+    groupKindChanged: (from: string, to: string, names: string) => `${from} → ${to}: ${names}`,
+    groupUpdated: (label: string, names: string) => `${label} updated: ${names}`,
+    groupRounds: (label: string, names: string, from: string, to: string, n: number) =>
+      `${label} (${names}): ${from} → ${to} ${plural('en', n, { one: 'round', other: 'rounds' })}`,
+    groupRest: (label: string, names: string, from: string, to: string) => `${label} (${names}): rest after the round ${from} → ${to}`,
+    groupTransition: (label: string, names: string, from: string, to: string) => `${label} (${names}): between stations ${from} → ${to}`,
+    groupDissolved: (label: string, names: string) => `${label} dissolved: ${names}`,
+    leftGroup: (name: string, rest: string) => `${name} removed from the group (rest ${rest})`,
+    rowRest: (name: string, from: string, to: string) => `${name} rest ${from} → ${to}`,
+    rowRule: (name: string, scheme: string, rir: string) => `${name} rule: ${scheme} · ${rir}`,
+    rirFallback: (rir: number) => `${rir} ${plural('en', rir, { one: 'rep', other: 'reps' })} in reserve`,
+    rowRuleReset: (name: string) => `${name} back to the exercise's rule`,
+    rowDevice: (name: string, device: string) => `${name} equipment: ${device}`,
+    rowDeviceReset: (name: string) => `${name} back to the exercise's equipment`,
+    rowNote: (name: string, excerpt: string) => `${name} note: “${excerpt}”`,
+    rowNoteRemoved: (name: string) => `${name} note removed`,
+    removed: (title: string) => `${title} removed`,
+    added: (title: string) => `${title} added`,
+    orderChanged: 'Exercise order changed',
+    frequency: (perWeek: string) => `Frequency: ${perWeek}`,
+    frequencyRemoved: (perWeek: string) => `Frequency removed (was ${perWeek})`,
+    frequencyChanged: (before: string, after: string, n: number) =>
+      `${before} → ${after} ${plural('en', n, { one: 'day', other: 'days' })} a week`,
+    phaseFrequency: (name: string, perWeek: string) => `'${name}' frequency: ${perWeek}`,
+    phaseFrequencyRemoved: (name: string, perWeek: string) => `'${name}' frequency removed (was ${perWeek})`,
+    phaseFrequencyChanged: (name: string, before: string, after: string, n: number) =>
+      `'${name}': ${before} → ${after} ${plural('en', n, { one: 'day', other: 'days' })} a week`,
+    dayRenamed: (from: string, to: string) => `Day name: '${from}' → '${to}'`,
+    dayWeekdays: (from: string, to: string) => `Weekdays: ${from} → ${to}`,
+    dayAddedFrom: (name: string, template: string) => `${name} added (from the '${template}' template)`,
+    dayAdded: (name: string) => `${name} added`,
+    dayDeleted: (name: string) => `${name} deleted`,
+    dayOrder: (names: string) => `Day order: ${names}`,
+    dayMoved: (name: string, phase: string) => `${name} moved to the '${phase}' phase`,
+    phased: (list: string) => `Split into phases: ${list}`,
+    unphased: (names: string) => `Phases removed; days are in a single list: ${names}`,
+    phaseRenamed: (from: string, to: string) => `Phase name: '${from}' → '${to}'`,
+    phaseDuration: (name: string, from: string, to: string) => `'${name}' duration: ${from} → ${to}`,
+    phaseAdded: (name: string, parts: string) => `Phase '${name}' added${parts ? ` (${parts})` : ''}`,
+    phaseDeleted: (name: string) => `Phase '${name}' deleted`,
+    phaseOrder: (names: string) => `Phase order: ${names}`,
+    currentPhase: (name: string) => `Current phase: '${name}'`,
+    commitProgram: (summary: string) => `Program: ${summary}`,
+    commitCreated: 'Program created',
+    commitUpdated: 'Program updated',
+  },
+  /** src/lib/client-targets.ts — danışanın hedefi: rozet metni ve PT kaydının (SAKLANIR, yazanın dilinde) cümleleri. */
+  targets: {
+    note: (label: string) => `target ${label}`,
+    adopted: (title: string) => `${title}: the client's target was adopted into the program`,
+    removed: (title: string, label: string) => `${title}: the client's target (${label}) was removed`,
+  },
+  /** src/lib/proposals.ts, proposals-store.ts — danışanın önerileri. `approvalNote` ve commit mesajları SAKLANIR (PT'nin dilinde); `outcomes` danışanın dilinde okunur. */
+  proposals: {
+    noteMax: 'The note can be 300 characters at most.',
+    kinds: {
+      sets: 'Set count',
+      target: 'Target',
+      swap: 'Exercise swap',
+      remove: 'Removal',
+      add: 'Addition',
+      algo_sets: 'Set increase · suggestion engine',
+    },
+    outcomes: {
+      approved: 'Your trainer approved your suggestion',
+      declined: 'Your trainer declined your suggestion',
+      stale: "Your suggestion couldn't be applied because the program changed",
+    },
+    stale: {
+      row: 'This exercise is no longer in the program.',
+      changed: 'The row changed in the meantime.',
+      day: 'This day is no longer in the program.',
+      full: 'The day is full; remove an exercise first.',
+      last: "It's the day's only exercise; it can't be removed.",
+      libraryMissing: "The exercise isn't in the library.",
+    },
+    approvalNote: (text: string) => `Client's suggestion: ${text}`,
+    commitStale: "Suggestion couldn't be applied (the program changed)",
+    commitApproved: 'Suggestion approved',
+    commitDeclined: (text: string) => `Suggestion declined: ${text}`,
+  },
+};
+
+export default en;

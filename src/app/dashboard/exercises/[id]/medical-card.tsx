@@ -4,16 +4,18 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Table, TableBody, TableCell, TableRow } from '@/components/ui/table';
 import { conditionLabel, parseCondition } from '@/lib/conditions';
 import {
-  AXIAL_LOAD_LABELS,
-  CONTRACTION_TYPE_LABELS,
-  JOINT_WINDOW_LABELS,
-  KINETIC_CHAIN_LABELS,
-  LOAD_VECTOR_LABELS,
-  RESISTANCE_PROFILE_LABELS,
-  SHEAR_LEVEL_LABELS,
-  SPINAL_ALIGNMENT_LABELS,
+  axialLoadLabels,
+  contractionTypeLabels,
+  jointWindowLabels,
+  kineticChainLabels,
+  loadVectorLabels,
+  resistanceProfileLabels,
+  shearLevelLabels,
+  spinalAlignmentLabels,
 } from '@/lib/exercise-filter';
 import type { Exercise } from '@/lib/schemas/exercise';
+import { getLocale } from '@/i18n/server';
+import { ptLibraryMessages } from '@/i18n/messages/pt-library';
 
 /**
  * Medikal etiketler — yalnız gösterir; değiştirmek için "Düzenle".
@@ -21,16 +23,18 @@ import type { Exercise } from '@/lib/schemas/exercise';
  * Etiket yoksa kart bunu açıkça söyler: süzgeç etiketsiz hareketi değerlendiremez,
  * sessizce "uygun" saymaz.
  */
-export function MedicalCard({ exercise }: { exercise: Exercise }) {
+export async function MedicalCard({ exercise }: { exercise: Exercise }) {
+  const locale = await getLocale();
+  const t = ptLibraryMessages(locale).medicalCard;
   const rows: [string, string][] = [
-    ...(exercise.kineticChain ? ([['Kinetik zincir', KINETIC_CHAIN_LABELS[exercise.kineticChain]]] as [string, string][]) : []),
-    ...(exercise.axialLoading ? ([['Eksenel yük', AXIAL_LOAD_LABELS[exercise.axialLoading]]] as [string, string][]) : []),
-    ...(exercise.shearForce ? ([['Kesme kuvveti', SHEAR_LEVEL_LABELS[exercise.shearForce]]] as [string, string][]) : []),
-    ...(exercise.spinalAlignment ? ([['Omurga hizası', SPINAL_ALIGNMENT_LABELS[exercise.spinalAlignment]]] as [string, string][]) : []),
-    ...(exercise.loadVector ? ([['Yük vektörü', LOAD_VECTOR_LABELS[exercise.loadVector]]] as [string, string][]) : []),
-    ...(exercise.contractionType ? ([['Kasılma tipi', CONTRACTION_TYPE_LABELS[exercise.contractionType]]] as [string, string][]) : []),
-    ...(exercise.resistanceProfile ? ([['Direnç profili', RESISTANCE_PROFILE_LABELS[exercise.resistanceProfile]]] as [string, string][]) : []),
-    ...(exercise.internalRotationUnderLoad ? ([['Yük altında iç rotasyon', 'Var']] as [string, string][]) : []),
+    ...(exercise.kineticChain ? ([[t.rowChain, kineticChainLabels(locale)[exercise.kineticChain]]] as [string, string][]) : []),
+    ...(exercise.axialLoading ? ([[t.rowAxial, axialLoadLabels(locale)[exercise.axialLoading]]] as [string, string][]) : []),
+    ...(exercise.shearForce ? ([[t.rowShear, shearLevelLabels(locale)[exercise.shearForce]]] as [string, string][]) : []),
+    ...(exercise.spinalAlignment ? ([[t.rowAlignment, spinalAlignmentLabels(locale)[exercise.spinalAlignment]]] as [string, string][]) : []),
+    ...(exercise.loadVector ? ([[t.rowVector, loadVectorLabels(locale)[exercise.loadVector]]] as [string, string][]) : []),
+    ...(exercise.contractionType ? ([[t.rowContraction, contractionTypeLabels(locale)[exercise.contractionType]]] as [string, string][]) : []),
+    ...(exercise.resistanceProfile ? ([[t.rowResistance, resistanceProfileLabels(locale)[exercise.resistanceProfile]]] as [string, string][]) : []),
+    ...(exercise.internalRotationUnderLoad ? ([[t.rowRotation, t.present]] as [string, string][]) : []),
   ];
 
   const windows = exercise.jointWindows ?? [];
@@ -41,26 +45,27 @@ export function MedicalCard({ exercise }: { exercise: Exercise }) {
   const names = (list: readonly string[]) =>
     list.map((value) => {
       const parsed = parseCondition(value);
-      return { key: value, label: parsed ? conditionLabel(parsed) : value };
+      return { key: value, label: parsed ? conditionLabel(parsed, locale) : value };
     });
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Medikal etiketler</CardTitle>
+        <CardTitle>{t.title}</CardTitle>
         <CardDescription>
           {empty
-            ? 'Bu hareket etiketlenmemiş: sakatlık süzgeci onu değerlendiremez, “uygun” da saymaz.'
-            : 'Sakatlık süzgeci bunlara bakar. Değiştirmek için “Düzenle”.'}
+            ? t.untagged
+            : t.tagged}
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-4 text-sm">
         {empty ? (
           <p className="text-muted-foreground">
+            {t.emptyNote.lead}
             <Link href={`/dashboard/exercises/${exercise.id}/edit`} className="underline underline-offset-4">
-              Düzenle
-            </Link>{' '}
-            diyerek kinetik zincir, eksenel yük ve omurga hizası gibi alanları doldurabilirsin.
+              {t.emptyNote.link}
+            </Link>
+            {t.emptyNote.tail}
           </p>
         ) : null}
 
@@ -79,11 +84,11 @@ export function MedicalCard({ exercise }: { exercise: Exercise }) {
 
         {windows.length > 0 ? (
           <div className="flex flex-col gap-2">
-            <span className="text-muted-foreground">Kritik açı pencereleri</span>
+            <span className="text-muted-foreground">{t.windowsLabel}</span>
             <div className="flex flex-wrap gap-1.5">
               {windows.map((window) => (
                 <Badge key={window} variant="secondary">
-                  {JOINT_WINDOW_LABELS[window]}
+                  {jointWindowLabels(locale)[window]}
                 </Badge>
               ))}
             </div>
@@ -92,7 +97,7 @@ export function MedicalCard({ exercise }: { exercise: Exercise }) {
 
         {avoid.length > 0 ? (
           <div className="flex flex-col gap-2">
-            <span className="text-muted-foreground">Şu kısıtlarda yaptırma</span>
+            <span className="text-muted-foreground">{t.avoidLabel}</span>
             <div className="flex flex-wrap gap-1.5">
               {names(avoid).map((item) => (
                 <Badge key={item.key} variant="destructive">
@@ -105,7 +110,7 @@ export function MedicalCard({ exercise }: { exercise: Exercise }) {
 
         {safe.length > 0 ? (
           <div className="flex flex-col gap-2">
-            <span className="text-muted-foreground">Şu kısıtlarda sorun yok</span>
+            <span className="text-muted-foreground">{t.safeLabel}</span>
             <div className="flex flex-wrap gap-1.5">
               {names(safe).map((item) => (
                 <Badge key={item.key} variant="secondary">

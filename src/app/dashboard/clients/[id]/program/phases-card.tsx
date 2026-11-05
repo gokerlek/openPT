@@ -23,7 +23,7 @@ import { Field, FieldError, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { InputGroup, InputGroupAddon, InputGroupInput } from '@/components/ui/input-group';
 import { hasAssignments } from '@/lib/day-assignments';
-import { formatDate } from '@/lib/format';
+import { getFormat } from '@/lib/format';
 import {
   PROGRAM_LIMITS,
   addPhase,
@@ -42,6 +42,11 @@ import { FrequencySelect } from './frequency-select';
 import type { PhaseActions, ProgramFormStore, StoredState } from './program-form';
 import { UnphaseDialog } from './unphase-dialog';
 import { AssignmentSummary } from './weekday-field';
+import { useLocale, useMessages } from '@/i18n/client';
+import { ptProgramMessages } from '@/i18n/messages/pt-program';
+import { commonMessages } from '@/i18n/messages/common';
+
+type Messages = ReturnType<typeof ptProgramMessages>['phasesCard'];
 
 type Shared = {
   form: ProgramFormStore;
@@ -57,56 +62,58 @@ type Shared = {
 /**
  * Evreyi siler (8 sn "Geri al"). Şu anki evre ve tek evre silinmez; kaydırınca nedeni söylenir (menüde soluk durur).
  */
-function removePhaseWithUndo(phase: ProgramPhase, shared: Shared) {
+function removePhaseWithUndo(phase: ProgramPhase, shared: Shared, t: Messages) {
   const { phases, currentPhaseId, actions } = shared;
   if (phase.id === currentPhaseId) {
-    toast('Şu anki evre silinmez; önce başka bir evreyi şu anki yap.');
+    toast(t.cantDeleteCurrent);
     return;
   }
   if (phases.length <= 1) {
-    toast('Tek evre silinmez.');
+    toast(t.cantDeleteOnly);
     return;
   }
-  actions.updateWithUndo((all) => removePhase(all, phase.id, currentPhaseId), `'${phase.name}' evresi silindi`);
+  actions.updateWithUndo((all) => removePhase(all, phase.id, currentPhaseId), t.deleted(phase.name));
 }
 
 /** Evrenin menüsü: kopyala, şu anki evre yap, sil. Taşıma tutamaçla (ve klavyede Alt + ↑/↓). */
 function PhaseMenu({ phase, shared }: { phase: ProgramPhase; shared: Shared }) {
+  const t = useMessages(ptProgramMessages).phasesCard;
+  const locale = useLocale();
   const { phases, currentPhaseId, actions } = shared;
   const isCurrent = phase.id === currentPhaseId;
   const copy = () => {
     const all = actions.current();
     const source = all.find((item) => item.id === phase.id);
     if (!source) return;
-    const created = copyPhase(all, source, programIdSource(all));
+    const created = copyPhase(all, source, programIdSource(all), locale);
     actions.update((phasesNow) => addPhase(phasesNow, created, phase.id), {
       select: created.days[0]?.id,
-      announce: `'${created.name}' evresi eklendi`,
+      announce: t.added(created.name),
     });
   };
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger render={<Button type="button" variant="ghost" size="icon" aria-label={`Evre işlemleri: ${phase.name}`} />}>
+      <DropdownMenuTrigger render={<Button type="button" variant="ghost" size="icon" aria-label={t.menuAria(phase.name)} />}>
         <DotsThreeVertical weight="bold" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="min-w-48 touch:**:data-[slot=dropdown-menu-item]:min-h-11 touch:**:data-[slot=dropdown-menu-sub-trigger]:min-h-11">
         <DropdownMenuItem disabled={!canAddPhase(phases, phase.days.length)} onClick={copy}>
           <Copy />
-          Kopyala
+          {t.copy}
         </DropdownMenuItem>
         {isCurrent ? null : (
           <DropdownMenuItem onClick={() => actions.setCurrentPhase(phase.id)}>
             <PushPin />
-            Şu anki evre yap
+            {t.makeCurrent}
           </DropdownMenuItem>
         )}
         <DropdownMenuSeparator />
         <DropdownMenuItem
           variant="destructive"
           disabled={isCurrent || phases.length <= 1}
-          onClick={() => removePhaseWithUndo(phase, shared)}>
+          onClick={() => removePhaseWithUndo(phase, shared, t)}>
           <Trash />
-          Evreyi sil
+          {t.deletePhase}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
@@ -118,6 +125,7 @@ function PhaseMenu({ phase, shared }: { phase: ProgramPhase; shared: Shared }) {
  * çipler, atandıkları günlerle) ve "+ Program".
  */
 function PhaseRow({ phase, index, shared, slot }: { phase: ProgramPhase; index: number; shared: Shared; slot: SortableSlot }) {
+  const t = useMessages(ptProgramMessages).phasesCard;
   const { form, phases, currentPhaseId, stored, selectedDayId, missingDayIds, hasTemplates, actions } = shared;
   const nameField = useField(form, { path: ['phases', index, 'name'] });
   const weeksField = useField(form, { path: ['phases', index, 'weeks'] });
@@ -130,7 +138,7 @@ function PhaseRow({ phase, index, shared, slot }: { phase: ProgramPhase; index: 
     <>
     {/* Tutamaç kaydırma satırının dışında: dokunma alanı kartın üstüne taşar (`SwipeRow` kırpar). */}
     {slot.grabber}
-    <SwipeRow id={phase.id} end={[deleteAction(() => removePhaseWithUndo(phase, shared), { disabled: isCurrent || phases.length <= 1 })]}>
+    <SwipeRow id={phase.id} end={[deleteAction(() => removePhaseWithUndo(phase, shared, t), { disabled: isCurrent || phases.length <= 1 })]}>
     <div
       className={cn(
         'relative flex flex-col gap-3 rounded-lg border bg-card p-3 pt-4',
@@ -139,7 +147,7 @@ function PhaseRow({ phase, index, shared, slot }: { phase: ProgramPhase; index: 
       <div className="flex flex-wrap items-end gap-3">
         <Field data-invalid={Boolean(nameField.errors) || undefined} className="basis-full gap-1.5 sm:max-w-sm sm:flex-1 sm:basis-auto">
           <FieldLabel htmlFor={`phase-name-${phase.id}`} className="text-xs text-muted-foreground">
-            Evre adı
+            {t.nameLabel}
           </FieldLabel>
           <div className="flex items-center gap-2">
             <span className="w-5 shrink-0 text-sm font-medium tabular-nums text-muted-foreground">{index + 1}.</span>
@@ -155,7 +163,7 @@ function PhaseRow({ phase, index, shared, slot }: { phase: ProgramPhase; index: 
         </Field>
         <Field data-invalid={Boolean(weeksField.errors) || undefined} className="w-32 gap-1.5">
           <FieldLabel htmlFor={`phase-weeks-${phase.id}`} className="text-xs text-muted-foreground">
-            Süre
+            {t.durationLabel}
           </FieldLabel>
           <InputGroup>
             <InputGroupInput
@@ -165,7 +173,7 @@ function PhaseRow({ phase, index, shared, slot }: { phase: ProgramPhase; index: 
               inputMode="numeric"
               min={1}
               max={PROGRAM_LIMITS.weeks}
-              placeholder="süresiz"
+              placeholder={t.openEnded}
               className="tabular-nums"
               aria-invalid={Boolean(weeksField.errors) || undefined}
               value={weeks}
@@ -177,14 +185,14 @@ function PhaseRow({ phase, index, shared, slot }: { phase: ProgramPhase; index: 
                 })
               }
             />
-            <InputGroupAddon align="inline-end">hafta</InputGroupAddon>
+            <InputGroupAddon align="inline-end">{t.weeksUnit}</InputGroupAddon>
           </InputGroup>
         </Field>
         {hasAssignments(phase.days) ? null : (
-          <FrequencySelect form={form} phaseIndex={index} id={`phase-frequency-${phase.id}`} label="Haftada" compact className="w-32" />
+          <FrequencySelect form={form} phaseIndex={index} id={`phase-frequency-${phase.id}`} label={t.perWeekLabel} compact className="w-32" />
         )}
         <div className="flex flex-1 items-center justify-end gap-2 pb-1 sm:flex-none">
-          {isCurrent ? <Badge variant="secondary">{pending ? 'Şu an (kaydedince)' : 'Şu an'}</Badge> : null}
+          {isCurrent ? <Badge variant="secondary">{pending ? t.currentPending : t.current}</Badge> : null}
           <PhaseMenu phase={phase} shared={shared} />
         </div>
       </div>
@@ -193,7 +201,7 @@ function PhaseRow({ phase, index, shared, slot }: { phase: ProgramPhase; index: 
       ) : null}
 
       <div className="flex flex-col gap-1.5">
-        <span className="text-xs text-muted-foreground">Programlar</span>
+        <span className="text-xs text-muted-foreground">{t.programsLabel}</span>
         <DayChips
           form={form}
           phase={phase}
@@ -221,6 +229,10 @@ function PhaseRow({ phase, index, shared, slot }: { phase: ProgramPhase; index: 
 
 /** Evre süresi dolduysa sonraki evreye geçiş önerisi (düzenlemede; geçiş kayıtla olur). */
 function Suggestion({ shared, now, timeZone }: { shared: Shared; now: string; timeZone: string }) {
+  const t = useMessages(ptProgramMessages).phasesCard;
+  const locale = useLocale();
+  const format = getFormat(locale);
+  const common = useMessages(commonMessages);
   const { phases, currentPhaseId, stored, actions } = shared;
   if (!stored) return null;
   if (currentPhaseId !== stored.current.phaseId) {
@@ -231,12 +243,12 @@ function Suggestion({ shared, now, timeZone }: { shared: Shared; now: string; ti
       <Alert>
         <Info />
         <AlertDescription>
-          Kaydedince &apos;{target?.name}&apos; evresine geçilir; danışan bu evrenin programlarını atandıkları günlerde görür.
+          {t.willSwitch(target?.name ?? '')}
         </AlertDescription>
         {canRevert ? (
           <div className="col-start-2 mt-2">
             <Button type="button" variant="ghost" size="sm" onClick={() => actions.setCurrentPhase(stored.current.phaseId)}>
-              Vazgeç
+              {common.actions.cancel}
             </Button>
           </div>
         ) : null}
@@ -251,15 +263,12 @@ function Suggestion({ shared, now, timeZone }: { shared: Shared; now: string; ti
     return (
       <Alert>
         <Info />
-        <AlertTitle>&apos;{phase.name}&apos; evresinin süresi doldu</AlertTitle>
-        <AlertDescription>
-          {status.weeks} hafta planlanmıştı, {formatDate(stored.current.startedAt, timeZone)} tarihinde başladı. Sıradaki: &apos;
-          {next?.name}&apos;.
-        </AlertDescription>
+        <AlertTitle>{t.expired(phase.name)}</AlertTitle>
+        <AlertDescription>{t.plannedStarted(status.weeks, format.date(stored.current.startedAt, timeZone), next?.name ?? '')}</AlertDescription>
         <div className="col-start-2 mt-2">
           <Button type="button" size="sm" onClick={() => actions.setCurrentPhase(status.nextPhaseId)}>
             <ArrowRight data-icon="inline-start" />
-            Sonraki evreye geç
+            {t.advance}
           </Button>
         </div>
       </Alert>
@@ -270,7 +279,7 @@ function Suggestion({ shared, now, timeZone }: { shared: Shared; now: string; ti
       <Alert>
         <Info />
         <AlertDescription>
-          &apos;{phase.name}&apos; evresinin süresi doldu; sonrası için yeni evre ekleyebilir ya da süreyi uzatabilirsin.
+          {t.endedNote(phase.name)}
         </AlertDescription>
       </Alert>
     );
@@ -292,6 +301,8 @@ export function PhasesCard({
   now: string;
   timeZone: string;
 }) {
+  const t = useMessages(ptProgramMessages).phasesCard;
+  const locale = useLocale();
   const { form, phases, currentPhaseId, actions } = shared;
   const currentPhase = phases.find((phase) => phase.id === currentPhaseId) ?? phases[0];
   // Formisch kancası: günlerin `getDeepError` okumaları bu bileşenin çizimine bağlansın.
@@ -303,39 +314,38 @@ export function PhasesCard({
     const moved = moveItem(actions.current(), (phase) => phase.id, id, target);
     const position = moved.findIndex((phase) => phase.id === id);
     const name = moved[position]?.name ?? '';
-    actions.update((all) => moveItem(all, (phase) => phase.id, id, target), { announce: `'${name}' evresi ${position + 1}. sırada` });
+    actions.update((all) => moveItem(all, (phase) => phase.id, id, target), { announce: t.moved(name, position + 1) });
   };
 
   const addNewPhase = () => {
     const all = actions.current();
-    const created = blankPhase(all, programIdSource(all));
+    const created = blankPhase(all, programIdSource(all), locale);
     actions.update((phasesNow) => addPhase(phasesNow, created), {
       select: created.days[0]?.id,
-      announce: `'${created.name}' evresi eklendi`,
+      announce: t.added(created.name),
     });
   };
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Evreler</CardTitle>
+        <CardTitle>{t.title}</CardTitle>
         <CardDescription>
-          Her evrenin programları kendi günlerine atanır; süre dolunca sonraki evreye geçiş önerilir. Program başka evreye
-          menüsünden taşınır.
+          {t.description}
         </CardDescription>
         <CardAction className="flex items-center gap-1">
           <Button type="button" variant="outline" size="sm" disabled={!canAddPhase(phases)} onClick={addNewPhase}>
             <Plus data-icon="inline-start" />
-            Evre ekle
+            {t.addPhase}
           </Button>
           <DropdownMenu>
-            <DropdownMenuTrigger render={<Button type="button" variant="ghost" size="icon" aria-label="Evre seçenekleri" />}>
+            <DropdownMenuTrigger render={<Button type="button" variant="ghost" size="icon" aria-label={t.optionsAria} />}>
               <DotsThreeVertical weight="bold" />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="min-w-48 touch:**:data-[slot=dropdown-menu-item]:min-h-11 touch:**:data-[slot=dropdown-menu-sub-trigger]:min-h-11">
               <DropdownMenuItem onClick={unphase}>
                 <Rows />
-                Evreleri kaldır…
+                {t.removePhases}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -343,12 +353,12 @@ export function PhasesCard({
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
         <Suggestion shared={shared} now={now} timeZone={timeZone} />
-        {currentPhase ? <AssignmentSummary days={currentPhase.days} label={`Haftanın programı · '${currentPhase.name}' evresi`} /> : null}
+        {currentPhase ? <AssignmentSummary days={currentPhase.days} label={t.weekProgram(currentPhase.name)} /> : null}
         <SortableList
           items={phases}
           keyOf={(phase) => phase.id}
-          nameOf={(phase) => phase.name || `${phases.indexOf(phase) + 1}. evre`}
-          label="Evreler"
+          nameOf={(phase) => phase.name || t.phaseN(phases.indexOf(phase) + 1)}
+          label={t.listLabel}
           onStep={(id, target) => movePhaseTo(id, target)}
           onDrop={(id, over) => movePhaseTo(id, { over })}
           onTapItem={(id) => document.getElementById(`phase-name-${id}`)?.focus()}
