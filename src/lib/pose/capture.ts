@@ -1,7 +1,7 @@
 import { DEFAULT_LOCALE, type Locale } from '../../i18n/locale.ts';
 import { measurementsMessages } from '../../i18n/messages/measurements/index.ts';
 import type { Metric } from './geometry.ts';
-import {PROTOCOLS,type PoseTask} from './protocols.ts';
+import {PROTOCOL_RULES,type PoseTask} from './protocols.ts';
 export type MetricSummary={id:string;median:number;minimum:number;maximum:number;range:number;spread:number};
 export type CaptureResult={ok:true;metrics:MetricSummary[];validSamples:number;totalSamples:number;durationMs:number;repetitions:number;side:'left'|'right'|'both';fps:number}|{ok:false;reason:string};
 export const median=(values:number[])=>{const a=[...values].sort((x,y)=>x-y);const n=a.length;return n%2?a[Math.floor(n/2)]!:(a[n/2-1]!+a[n/2]!)/2;};
@@ -32,7 +32,7 @@ export class CaptureSession {
   if(this.source && source && (this.source.width!==source.width || this.source.height!==source.height)){this.changedSource=true;return;}
   const gap=at-this.last>500;
   this.last=at;
-  const protocol=PROTOCOLS[this.task];
+  const protocol=PROTOCOL_RULES[this.task];
   // Every required metric must belong to the same usable frame.
   const required=protocol.metrics.every(id=>metrics.some(m=>m.id===id && Number.isFinite(m.degrees) && m.degrees>=0 && m.degrees<=180));
   const usable=ready && required;
@@ -64,7 +64,7 @@ export class CaptureSession {
   if(this.changedSource)return {ok:false,reason:reasons.sourceChanged};
   if(this.changedSide)return {ok:false,reason:reasons.sideChanged};
   if(durationMs<3000 || durationMs>120000 || this.samples.length<20 || fps<4 || this.samples.length/Math.max(1,this.count)<.7)return {ok:false,reason:reasons.tooFewFrames};
-  const protocol=PROTOCOLS[this.task];
+  const protocol=PROTOCOL_RULES[this.task];
   if(protocol.dynamic && this.cycles.length<3)return {ok:false,reason:reasons.tooFewReps};
   const ids=this.samples[0]!.map(m=>m.id);
   const metrics=ids.map(id=>{

@@ -11,8 +11,8 @@ import {
   rankOf,
   SCREENING_PROTOCOL,
   SCREENING_TEST_IDS,
-  SCREENING_TESTS,
   screeningHints,
+  TEST_RULES,
   type Outcome,
   type ScreeningCell,
   type ScreeningTestId,
@@ -44,7 +44,7 @@ export function painWarnings(screenings: readonly Screening[], locale: Locale = 
   const byPattern = new Map<MovementPattern, string[]>();
   for (const pain of painHistory(screenings).open) {
     const text = screeningMessages(locale).care.pain(cellTitle(pain.testId, pain.side, false, locale));
-    for (const pattern of SCREENING_TESTS[pain.testId].painPatterns) {
+    for (const pattern of TEST_RULES[pain.testId].painPatterns) {
       const list = byPattern.get(pattern) ?? [];
       if (!list.includes(text)) list.push(text);
       byPattern.set(pattern, list);
@@ -114,7 +114,7 @@ export function screeningMarks(
         locale,
       );
       if (!summary) continue;
-      for (const pattern of SCREENING_TESTS[testId].patterns) summaries.set(pattern, [...(summaries.get(pattern) ?? []), summary]);
+      for (const pattern of TEST_RULES[testId].patterns) summaries.set(pattern, [...(summaries.get(pattern) ?? []), summary]);
     }
   }
   for (const item of items) {

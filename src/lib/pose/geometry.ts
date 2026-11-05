@@ -1,7 +1,7 @@
 export type Landmark = { x: number; y: number; visibility: number; presence?: number };
 import { DEFAULT_LOCALE, type Locale } from '../../i18n/locale.ts';
 import { measurementsMessages } from '../../i18n/messages/measurements/index.ts';
-import { PROTOCOLS, type PoseTask } from './protocols.ts';
+import { PROTOCOL_RULES, type PoseTask } from './protocols.ts';
 export type { PoseTask } from './protocols.ts';
 export type Metric = { id: string; label: string; degrees: number };
 export type Quality = 'ready' | 'no_person' | 'multiple' | 'cropped' | 'uncertain';
@@ -34,7 +34,7 @@ export function analyzePose(poses: Landmark[][], w:number,h:number,task:PoseTask
   const p=poses[0]!;
   const score=(ids:number[])=>Math.min(...ids.map(i=>p[i]?.visibility??0));
   const near=score([11,23,25,27,31])>=score([12,24,26,28,32])?[11,23,25,27,31]:[12,24,26,28,32];
-  const protocol=PROTOCOLS[task];
+  const protocol=PROTOCOL_RULES[task];
   const sided=protocol.view==='side';
   const arm=task==='shoulder_flexion' || task==='elbow';
   const required=sided?[0,...near,...(arm?[near[0]!+2,near[0]!+4]:[])]:[0,11,12,23,24,25,26,27,28,31,32,...(task==='shoulder_abduction'?[13,14,15,16]:[])];

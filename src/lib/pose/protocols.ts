@@ -7,8 +7,8 @@ export const POSE_PROTOCOL=2 as const;
 /** Çekim yönü (kod); ekrandaki adı `viewLabels(locale)`. */
 export type PoseView='front'|'side';
 export type PoseProtocol={id:PoseTask;title:string;subtitle:string;view:PoseView;dynamic:boolean;primary:string;direction:1|-1;metrics:readonly string[];instructions:readonly string[]};
-/** Protokolün metin dışı kuralları; başlık, alt başlık ve yönergeler sözlükte. */
-const RULES:Record<PoseTask,Omit<PoseProtocol,'title'|'subtitle'|'instructions'>>={
+/** Protokolün metin dışı kuralları (dilsiz tablo); başlık, alt başlık ve yönergeler sözlükte. */
+export const PROTOCOL_RULES:Record<PoseTask,Omit<PoseProtocol,'title'|'subtitle'|'instructions'>>={
  front:{id:'front',view:'front',dynamic:false,primary:'shoulder_tilt',direction:1,metrics:['shoulder_tilt','hip_tilt','trunk_tilt']},
  side:{id:'side',view:'side',dynamic:false,primary:'trunk_tilt',direction:1,metrics:['trunk_tilt']},
  squat:{id:'squat',view:'side',dynamic:true,primary:'near_knee',direction:-1,metrics:['near_knee','trunk_tilt']},
@@ -23,7 +23,7 @@ const RULES:Record<PoseTask,Omit<PoseProtocol,'title'|'subtitle'|'instructions'>
 /** Protokoller, metinleri okuyanın dilinde. */
 export function protocols(locale: Locale = DEFAULT_LOCALE): Record<PoseTask, PoseProtocol> {
  const text=measurementsMessages(locale).camera.protocols;
- return Object.fromEntries(POSE_TASKS.map((id):[PoseTask,PoseProtocol]=>[id,{...RULES[id],title:text[id].title,subtitle:text[id].subtitle,instructions:text[id].instructions}])) as Record<PoseTask,PoseProtocol>;
+ return Object.fromEntries(POSE_TASKS.map((id):[PoseTask,PoseProtocol]=>[id,{...PROTOCOL_RULES[id],title:text[id].title,subtitle:text[id].subtitle,instructions:text[id].instructions}])) as Record<PoseTask,PoseProtocol>;
 }
 
 /** Türkçe protokoller (eski çağrılar ve metin dışı kurallar); arayüz `protocols(locale)` kullanır. */

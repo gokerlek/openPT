@@ -7,7 +7,9 @@ import ts from 'typescript';
 /**
  * Arayüz dosyaları (`src/app/**`, `src/components/**`) Türkçe takma adları içe aktarmaz (plan §7 I.4): `MUSCLE_LABELS`,
  * `WEEKDAY_NAMES` gibi sabitler eski çağrılar için Türkçe kalır; arayüz `muscleLabels(locale)` gibi erişimciyi çağırır,
- * metin dışı kural gerekiyorsa dilsiz tabloyu (`MEASUREMENT_RULES`, `TEST_RULES`, `STRENGTH_WINDOW_KEYS`) okur.
+ * metin dışı kural gerekiyorsa dilsiz tabloyu (`MEASUREMENT_RULES`, `TEST_RULES`, `STRENGTH_WINDOW_KEYS`) okur. `src/lib`
+ * dosyaları takma adı kullanabilir (dilsiz eski çağrılar), ama kapsamda `locale` varken okuyamaz: dil oradadır.
+ * Yalnız türde geçmesi (`typeof GOAL_LABELS`) sayılmaz.
  * Takma ad elle listelenmez, kaynaktan bulunur: dışa verilen BÜYÜK_HARFLİ `const`, değeri Türkçeyle çağrılan bir erişimci
  * (`muscleLabels('tr')`, `text('tr').regions`, `x(DEFAULT_LOCALE)`); başka modülden yeniden dışa verilmesi de sayılır.
  */
@@ -83,7 +85,63 @@ function turkishAliases(files: readonly string[]): Map<string, Set<string>> {
 const ALL = sourceFiles(SRC);
 const ALIASES = turkishAliases(ALL);
 const UI = ALL.filter((file) => file.startsWith(join(SRC, 'app') + sep) || file.startsWith(join(SRC, 'components') + sep));
+const LIB = ALL.filter((file) => file.startsWith(join(SRC, 'lib') + sep));
 const path = (file: string) => relative(ROOT, file).split(sep).join('/');
+
+const bindsLocale = (name: ts.BindingName): boolean =>
+  ts.isIdentifier(name) ? name.text === 'locale' : name.elements.some((element) => !ts.isOmittedExpression(element) && bindsLocale(element.name));
+
+/** Kapsamda `locale` adlı değişken: kuşatan işlevin parametresi ya da kuşatan blokta, döngüde, dosyada bildirilmiş. */
+function localeInScope(node: ts.Node): boolean {
+  for (let scope = node.parent; scope; scope = scope.parent) {
+    if (ts.isFunctionLike(scope) && scope.parameters.some((parameter) => bindsLocale(parameter.name))) return true;
+    if ((ts.isForOfStatement(scope) || ts.isForInStatement(scope) || ts.isForStatement(scope)) && scope.initializer && ts.isVariableDeclarationList(scope.initializer)) {
+      if (scope.initializer.declarations.some((declaration) => bindsLocale(declaration.name))) return true;
+    }
+    if (ts.isBlock(scope) || ts.isSourceFile(scope) || ts.isCaseClause(scope) || ts.isDefaultClause(scope)) {
+      if (scope.statements.some((statement) => ts.isVariableStatement(statement) && statement.declarationList.declarations.some((declaration) => bindsLocale(declaration.name)))) return true;
+    }
+  }
+  return false;
+}
+
+/** Ad yalnız türde mi (`typeof X`, `typeof X.y`): çalışırken metin okunmaz. */
+function inTypeQuery(node: ts.Node): boolean {
+  let child: ts.Node = node;
+  while (ts.isQualifiedName(child.parent)) child = child.parent;
+  return ts.isTypeQueryNode(child.parent);
+}
+
+/** `src/lib` dosyasının Türkçe takma ad okuduğu ve kapsamda dilin olduğu yerler. */
+function libAliasReads(file: string): string[] {
+  const source = parse(file);
+  const local = new Map<string, string>([...(ALIASES.get(file) ?? [])].map((name) => [name, `${name} (${path(file)})`]));
+  for (const statement of source.statements) {
+    if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier)) continue;
+    const target = resolveImport(file, statement.moduleSpecifier.text);
+    const names = target ? ALIASES.get(target) : undefined;
+    const bindings = statement.importClause?.namedBindings;
+    if (!names || !bindings || !ts.isNamedImports(bindings)) continue;
+    for (const element of bindings.elements) {
+      const name = (element.propertyName ?? element.name).text;
+      if (names.has(name)) local.set(element.name.text, `${name} (${path(target!)})`);
+    }
+  }
+  const found: string[] = [];
+  const visit = (node: ts.Node): void => {
+    if (ts.isIdentifier(node) && local.has(node.text)) {
+      const parent = node.parent;
+      const declaration = ts.isImportSpecifier(parent) || ts.isExportSpecifier(parent) || (ts.isVariableDeclaration(parent) && parent.name === node);
+      const member = (ts.isPropertyAccessExpression(parent) && parent.name === node) || (ts.isPropertyAssignment(parent) && parent.name === node);
+      if (!declaration && !member && !inTypeQuery(node) && localeInScope(node)) {
+        found.push(`${path(file)}:${source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1}: ${local.get(node.text)}`);
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+  return found;
+}
 
 describe('arayüz Türkçe takma adları içe aktarmaz', () => {
   test('takma adlar kaynaktan bulunur', () => {
@@ -112,5 +170,10 @@ describe('arayüz Türkçe takma adları içe aktarmaz', () => {
       }
     }
     assert.deepEqual(found, []);
+  });
+
+  test('`src/lib`: kapsamda dil varken Türkçe takma ad okunmaz (erişimci dille ya da dilsiz tablo)', () => {
+    assert.ok(LIB.length > 200, `${LIB.length} kütüphane dosyası`);
+    assert.deepEqual(LIB.flatMap(libAliasReads), []);
   });
 });
