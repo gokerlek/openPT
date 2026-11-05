@@ -3,15 +3,18 @@
 import { MuscleMap } from '@/components/muscle-map/muscle-map';
 import { Progress, ProgressLabel } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { formatNumber } from '@/lib/format';
+import { useLocale, useMessages } from '@/i18n/client';
+import { ptProgramMessages } from '@/i18n/messages/pt-program';
+import { getFormat } from '@/lib/format';
 import { loadMapProps } from '@/lib/muscle-tiers';
 import type { LoadRow } from '@/lib/program-insights';
-import { MUSCLE_LABELS, type Muscle } from '@/lib/schemas/exercise';
+import { muscleLabels, type Muscle } from '@/lib/schemas/exercise';
 import { weekdaysText } from '@/lib/training-days';
 
 /** Program sayfasının haritaları haftalık ölçekte (10 set ve üstü dolu); "Bir tur" da. */
 function WeekMap({ load, label }: { load: Record<string, number>; label: string }) {
-  return <MuscleMap layout="split" bodyClassName="h-56" {...loadMapProps(load, 'weekly', label)} />;
+  const locale = useLocale();
+  return <MuscleMap layout="split" bodyClassName="h-56" {...loadMapProps(load, 'weekly', label, {}, locale)} />;
 }
 
 /**
@@ -25,12 +28,15 @@ export type DoneLoad = { load: Record<string, number>; sessions: number; sets: n
  * kalır ve sayı yazar; planda olmayıp yapılan kas "planda yok".
  */
 function LoadVersus({ rows }: { rows: readonly LoadRow[] }) {
+  const locale = useLocale();
+  const t = useMessages(ptProgramMessages).phaseLoad;
+  const format = getFormat(locale);
   if (rows.length === 0) return null;
   return (
-    <ul className="grid gap-x-6 gap-y-3 sm:grid-cols-2" aria-label="Kas başına yapılan ve planlanan set">
+    <ul className="grid gap-x-6 gap-y-3 sm:grid-cols-2" aria-label={t.versusAria}>
       {rows.map((row) => {
-        const label = MUSCLE_LABELS[row.muscle as Muscle] ?? row.muscle;
-        const text = row.planned > 0 ? `${formatNumber(row.done)} / ${formatNumber(row.planned)} set` : `${formatNumber(row.done)} set · planda yok`;
+        const label = muscleLabels(locale)[row.muscle as Muscle] ?? row.muscle;
+        const text = row.planned > 0 ? t.versusPlanned(format.number(row.done), format.number(row.planned)) : t.versusUnplanned(format.number(row.done));
         return (
           <li key={row.muscle}>
             <Progress value={row.planned > 0 ? Math.min(100, (row.done / row.planned) * 100) : 100} getAriaValueText={() => text} className="gap-1.5">
@@ -70,26 +76,28 @@ export function PhaseLoad({
   label: string;
   done?: DoneLoad | null;
 }) {
-  const cycleCaption = `Bir tur: ${formatNumber(dayCount)} antrenman birer kez; kas başına çalışma seti.`;
+  const locale = useLocale();
+  const t = useMessages(ptProgramMessages).phaseLoad;
+  const format = getFormat(locale);
+  const cycleCaption = t.cycleCaption(dayCount);
   const byAssignment = assigned.length > 0;
   const hasWeekly = Boolean(weekly && (byAssignment || (factor !== null && daysPerWeek !== undefined)));
   const weeklyCaption = byAssignment
-    ? `Planlanan haftalık yük atanmış günlere göre (${weekdaysText(assigned)}).`
-    : `Planlanan haftalık yük: haftada ${formatNumber(daysPerWeek ?? 0)} gün, ${formatNumber(dayCount)} antrenman → her antrenman ortalama haftada ${formatNumber(factor ?? 0)} kez.`;
+    ? t.weeklyByAssignment(weekdaysText(assigned, locale))
+    : t.weeklyByFrequency(daysPerWeek ?? 0, dayCount, format.number(factor ?? 0));
   // Haftalık görünümün yolu: programlara gün atamak ya da (atamasız evrede) haftalık sıklık. PT sayfalarında; PT metni
   // kişisiz (ürün beyaz etiket).
-  const weeklyHint = "programlara gün atanmalı ya da 'haftada kaç gün' seçilmeli";
+  const weeklyHint = t.weeklyHint;
   const doneTab = done ? (
     <TabsContent value="done" className="flex flex-col gap-4 pt-3">
       {done.sessions > 0 ? (
-        <WeekMap load={done.load} label={`${label}: bu hafta yapılan`} />
+        <WeekMap load={done.load} label={t.doneAria(label)} />
       ) : (
-        <p className="rounded-lg bg-muted px-3 py-2.5 text-sm text-muted-foreground">Bu hafta henüz bitmiş antrenman yok.</p>
+        <p className="rounded-lg bg-muted px-3 py-2.5 text-sm text-muted-foreground">{t.noneDone}</p>
       )}
       {hasWeekly && done.versus ? <LoadVersus rows={done.versus} /> : null}
       <p className="text-center text-xs text-muted-foreground">
-        Bu hafta ({done.range}): {formatNumber(done.sessions)} antrenman · {formatNumber(done.sets)} set. Bitmiş antrenmanların çalışma setleri;
-        {hasWeekly ? ' çubuk planlanan haftalık yüke göre dolar.' : ` planla karşılaştırmak için ${weeklyHint}.`}
+        {t.doneSummary(done.range, done.sessions, done.sets, hasWeekly, weeklyHint)}
       </p>
     </TabsContent>
   ) : null;
@@ -97,10 +105,8 @@ export function PhaseLoad({
   if (!hasWeekly || !weekly) {
     const cycleView = (
       <div className="flex flex-col gap-2">
-        <WeekMap load={cycle} label={`${label}: bir tur`} />
-        <p className="text-center text-xs text-muted-foreground">
-          {cycleCaption} Haftalık görünüm için {weeklyHint}.
-        </p>
+        <WeekMap load={cycle} label={t.cycleAria(label)} />
+        <p className="text-center text-xs text-muted-foreground">{t.cycleHint(cycleCaption, weeklyHint)}</p>
       </div>
     );
     if (!doneTab) return cycleView;
@@ -108,10 +114,10 @@ export function PhaseLoad({
       <Tabs defaultValue="cycle">
         <TabsList variant="line" className="w-full justify-start overflow-x-auto">
           <TabsTrigger value="cycle" className="flex-none">
-            Bir tur
+            {t.tabCycle}
           </TabsTrigger>
           <TabsTrigger value="done" className="flex-none">
-            Bu hafta (yapılan)
+            {t.tabDone}
           </TabsTrigger>
         </TabsList>
         <TabsContent value="cycle" className="pt-3">
@@ -125,26 +131,24 @@ export function PhaseLoad({
     <Tabs defaultValue="weekly">
       <TabsList variant="line" className="w-full justify-start overflow-x-auto">
         <TabsTrigger value="weekly" className="flex-none">
-          Haftalık (plan)
+          {t.tabWeekly}
         </TabsTrigger>
         {doneTab ? (
           <TabsTrigger value="done" className="flex-none">
-            Bu hafta (yapılan)
+            {t.tabDone}
           </TabsTrigger>
         ) : null}
         <TabsTrigger value="cycle" className="flex-none">
-          Bir tur
+          {t.tabCycle}
         </TabsTrigger>
       </TabsList>
       <TabsContent value="weekly" className="flex flex-col gap-2 pt-3">
-        <WeekMap load={weekly} label={`${label}: planlanan haftalık`} />
-        <p className="text-center text-xs text-muted-foreground">
-          {weeklyCaption} Kas başına set; programdan hesaplanır, antrenman kayıtlarından değil.
-        </p>
+        <WeekMap load={weekly} label={t.weeklyAria(label)} />
+        <p className="text-center text-xs text-muted-foreground">{t.weeklyFooter(weeklyCaption)}</p>
       </TabsContent>
       {doneTab}
       <TabsContent value="cycle" className="flex flex-col gap-2 pt-3">
-        <WeekMap load={cycle} label={`${label}: bir tur`} />
+        <WeekMap load={cycle} label={t.cycleAria(label)} />
         <p className="text-center text-xs text-muted-foreground">{cycleCaption}</p>
       </TabsContent>
     </Tabs>

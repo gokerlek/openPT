@@ -5,6 +5,9 @@ import { AnimatePresence, motion } from 'motion/react';
 import { Check } from '@/components/line-icons';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
+import { useMessages } from '@/i18n/client';
+import { commonMessages } from '@/i18n/messages/common';
+import { ptProgramMessages } from '@/i18n/messages/pt-program';
 import { DURATION, EASE, tween } from '@/lib/motion';
 import { floatingSaveShown } from './editor-signals';
 
@@ -55,8 +58,11 @@ function saveVisible(save: EditorSaveState | null): save is EditorSaveState {
   return save !== null && (save.creating || save.dirty || save.pending);
 }
 
-function saveLabel(save: EditorSaveState): string {
-  return save.pending ? (save.creating ? 'Oluşturuluyor…' : 'Kaydediliyor…') : save.submitLabel;
+function useSaveLabel(save: EditorSaveState | null): string {
+  const t = useMessages(ptProgramMessages).editorSave;
+  const common = useMessages(commonMessages);
+  if (!save) return '';
+  return save.pending ? (save.creating ? t.creating : common.actions.saving) : save.submitLabel;
 }
 
 /**
@@ -84,6 +90,7 @@ function revealFirstError(form: HTMLFormElement | null) {
 export function SaveButton() {
   const save = useContext(EditorSaveContext);
   const dock = useContext(SaveDockContext);
+  const label = useSaveLabel(save);
   return (
     <AnimatePresence initial={false}>
       {saveVisible(save) ? (
@@ -97,7 +104,7 @@ export function SaveButton() {
           exit={{ opacity: 0, scale: 0.9, transition: tween(DURATION.instant, EASE.exit) }}>
           <Button type="submit" size="sm" disabled={save.pending} className="touch:h-11" onClick={(event) => revealFirstError(event.currentTarget.form)}>
             {save.pending ? <Spinner data-icon="inline-start" /> : <Check data-icon="inline-start" />}
-            {saveLabel(save)}
+            {label}
           </Button>
         </motion.span>
       ) : null}
@@ -151,6 +158,7 @@ function useContainsFocus(element: HTMLElement | null): boolean {
 export function FloatingSaveButton() {
   const save = useContext(EditorSaveContext);
   const dock = useContext(SaveDockContext);
+  const label = useSaveLabel(save);
   const header = dock?.header ?? null;
   const headerOffscreen = useOffscreen(header);
   const headerFocused = useContainsFocus(header);
@@ -189,7 +197,7 @@ export function FloatingSaveButton() {
               className="h-11 rounded-full px-4 shadow-lg"
               onClick={(event) => revealFirstError(event.currentTarget.form)}>
               {save.pending ? <Spinner data-icon="inline-start" /> : <Check data-icon="inline-start" />}
-              {saveLabel(save)}
+              {label}
             </Button>
           </motion.div>
         ) : null}

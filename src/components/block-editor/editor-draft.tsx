@@ -8,7 +8,7 @@ import type * as v from 'valibot';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { showUndoToast } from '@/components/undo-toast';
-import { formatRecent } from '@/lib/format';
+import { getFormat } from '@/lib/format';
 import { focusEditorStart } from './editor-context';
 import {
   DRAFT_PREFIX,
@@ -21,6 +21,8 @@ import {
   type DraftBase,
   type EditorDraft,
 } from '@/lib/unsaved-changes';
+import { useLocale, useMessages } from '@/i18n/client';
+import { ptProgramMessages } from '@/i18n/messages/pt-program';
 
 /**
  * Düzenleyicinin yerel taslağı (tasarım PT kararı 16). Kaydedilmemiş değişiklik varken formun
@@ -137,6 +139,7 @@ export function useEditorDraft<TSchema extends v.GenericSchema<Record<string, un
    */
   prepare?: (input: v.InferInput<TSchema>) => v.InferInput<TSchema>;
 }): EditorDraftController<TBase, v.InferInput<TSchema>> {
+  const t = useMessages(ptProgramMessages).editorDraft;
   const [offer, setOffer] = useState<EditorDraft<TBase> | null>(null);
   const [continued, setContinued] = useState<{ base: TBase; input: v.InferInput<TSchema> } | null>(null);
   const [generation, setGeneration] = useState(0);
@@ -236,10 +239,10 @@ export function useEditorDraft<TSchema extends v.GenericSchema<Record<string, un
     setGeneration((value) => value + 1);
     if (!edited) return;
     const after = getInput(form);
-    showUndoToast('Taslağa devam edildi; az önceki değişikliklerin yerine geçti.', () => {
+    showUndoToast(t.continued, () => {
       // Sonraki düzenlemeler silinmesin (program formundaki "Geri al" ile aynı denetim).
       if (draftDiffers(getInput(form), after)) {
-        toast.error('Sonrasında başka değişiklik yapıldı; geri alınamadı.');
+        toast.error(t.undoBlocked);
         return;
       }
       state.current.writeBase = base;
@@ -247,7 +250,7 @@ export function useEditorDraft<TSchema extends v.GenericSchema<Record<string, un
       setInput(form, { input: edited as v.InferInput<TSchema> });
       setGeneration((value) => value + 1);
     });
-  }, [form, base, present, prepare]);
+  }, [form, base, present, prepare, t]);
 
   const dismiss = useCallback(() => {
     present(null);
@@ -314,12 +317,14 @@ export function DraftNotice({
   onRestore: () => void;
   onDismiss: () => void;
 }) {
+  const t = useMessages(ptProgramMessages).editorDraft;
+  const format = getFormat(useLocale());
   return (
     <Alert>
       <ClockCounterClockwise />
-      <AlertTitle>Kaydedilmemiş bir taslağın var · {formatRecent(offer.savedAt, timeZone)}</AlertTitle>
+      <AlertTitle>{t.noticeTitle(format.recent(offer.savedAt, timeZone))}</AlertTitle>
       {offer.conflict ? (
-        <AlertDescription>Bu arada başka bir yerde kaydedildi; devam edersen kaydederken çakışma uyarısı çıkar.</AlertDescription>
+        <AlertDescription>{t.conflictNote}</AlertDescription>
       ) : null}
       <div className="col-start-2 mt-2 flex flex-wrap gap-2">
         <Button
@@ -330,7 +335,7 @@ export function DraftNotice({
             onRestore();
             focusEditorStart();
           }}>
-          Taslağa devam et
+          {t.resume}
         </Button>
         <Button
           type="button"
@@ -341,7 +346,7 @@ export function DraftNotice({
             onDismiss();
             focusEditorStart();
           }}>
-          At
+          {t.discard}
         </Button>
       </div>
     </Alert>

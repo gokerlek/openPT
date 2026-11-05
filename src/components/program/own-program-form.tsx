@@ -24,7 +24,6 @@ import { WeekdayToggle } from '@/components/weekday-toggle';
 import type { EditorCare } from '@/lib/constraint-filter';
 import { assignWeekdays, hasAssignments, takenWeekdays, upgradeAssignments, weekdaysInput } from '@/lib/day-assignments';
 import { dayBlocksPath } from '@/lib/editor-undo';
-import { formatNumber } from '@/lib/format';
 import { copyPtDays, OWN_PROGRAM_LIMITS, ownNameProblem, type OwnProgramDay, type OwnProgramPhase } from '@/lib/own-programs';
 import {
   displayDays,
@@ -49,14 +48,13 @@ import { useServiceMutation } from '@/lib/query/use-service';
 import { ownProgramFormSchema, type OwnProgramFormInput, type OwnProgramFormValues } from '@/lib/schemas/own-program';
 import type { EditorDevice, PickerExercise } from '@/lib/template-edit';
 import { countRows, type TemplateBlock } from '@/lib/template-plan';
-import { WEEKDAY_SHORT, weekdayNamesText, weekdaysText, type Weekday } from '@/lib/training-days';
+import { weekdayNamesText, weekdayShortLabels, weekdaysText, type Weekday } from '@/lib/training-days';
 import { cn } from '@/lib/utils';
 import { ownProgramDraftKey, PROGRAM_DRAFT_BASE } from '@/lib/unsaved-changes';
-
-const FREQUENCY_LABELS: Record<string, string> = {
-  none: 'Belirtme',
-  ...Object.fromEntries(Array.from({ length: PROGRAM_LIMITS.daysPerWeek }, (_, index) => [String(index + 1), `${index + 1} gün`])),
-};
+import { useLocale, useMessages } from '@/i18n/client';
+import { catalogMessages } from '@/i18n/messages/catalog';
+import { ptProgramMessages } from '@/i18n/messages/pt-program';
+import { commonMessages } from '@/i18n/messages/common';
 
 /** Formun girdisi: notlar düzenleyicide boş metin (PT'nin program formuyla aynı). */
 function toInput(phases: readonly OwnProgramPhase[]): OwnProgramFormInput['phases'] {
@@ -115,6 +113,13 @@ export type OwnProgramFormProps = {
  * düzenleyicisiyle aynı desen.
  */
 export function OwnProgramForm(props: OwnProgramFormProps) {
+  const t = useMessages(ptProgramMessages).ownProgramForm;
+  const common = useMessages(commonMessages);
+  const locale = useLocale();
+  const frequencyLabels: Record<string, string> = {
+    none: t.frequencyNone,
+    ...Object.fromEntries(Array.from({ length: PROGRAM_LIMITS.daysPerWeek }, (_, index) => [String(index + 1), t.daysCount(index + 1)])),
+  };
   const { mode, clientId, programId, creating, initial, exercises, devices, templates, timeZone } = props;
   const router = useRouter();
   const own = mode === 'own';
@@ -191,7 +196,7 @@ export function OwnProgramForm(props: OwnProgramFormProps) {
   );
   const rowsText = (blocks: readonly TemplateBlock[]) => {
     const blocked = blocks.reduce((sum, block) => sum + block.rows.filter((row) => exerciseById.get(row.exerciseId)?.blocked).length, 0);
-    return `${formatNumber(countRows(blocks))} hareket${blocked > 0 ? ` · sana önerilmeyen ${formatNumber(blocked)}` : ''}`;
+    return t.rowsSummary(countRows(blocks), blocked);
   };
 
   const current = useCallback(() => (getInput(form, { path: ['phases'] }) ?? []) as unknown as OwnProgramPhase[], [form]);
@@ -216,7 +221,7 @@ export function OwnProgramForm(props: OwnProgramFormProps) {
     if (!day) return;
     if (change((phasesNow) => addDay(phasesNow, target.id, day), day.id)) {
       setAddOpen(false);
-      toast(`${day.name} eklendi`);
+      toast(t.dayAdded(day.name));
     }
   };
 
@@ -229,7 +234,7 @@ export function OwnProgramForm(props: OwnProgramFormProps) {
     write(removeDay(all as ProgramPhase[], target.id, selectedDay.id) as OwnProgramPhase[]);
     if (neighbour) setSelectedDayId(neighbour.id);
     showGuardedUndo(
-      `${selectedDay.name} silindi`,
+      t.dayDeleted(selectedDay.name),
       { locate: () => 'root', read: () => current(), write: (_, value) => write(value), before },
       { onUndone: () => setSelectedDayId(selectedDay.id) },
     );
@@ -266,27 +271,27 @@ export function OwnProgramForm(props: OwnProgramFormProps) {
       draft.discard();
       const name = own ? (getInput(form, { path: ['name'] }) ?? initial.name).trim() : initial.name;
       const dropped = result.droppedDevices
-        ? { description: `${formatNumber(result.droppedDevices)} satırın cihazı artık yok; egzersizin kendi cihazı kullanıldı.` }
+        ? { description: t.droppedDevices(result.droppedDevices) }
         : undefined;
-      if (result.unchanged) toast.success('Değişiklik yoktu; program aynı kaldı.');
+      if (result.unchanged) toast.success(t.unchanged);
       else if (creating && own && !result.activated) {
         // PT'nin programı varken yeni program kendiliğinden seçilmez (§3.2): tek dokunuşla Bugün'ün programı olur.
-        toast.success(`${name} oluşturuldu`, {
+        toast.success(t.created(name), {
           action: {
-            label: "Bugün'ün programı yap",
+            label: t.makeToday,
             onClick: () => {
               void fetchJson('/api/me/programs/active', { method: 'POST', body: JSON.stringify({ programId: result.id }) }).then(
                 () => {
-                  toast.success(`Bugün ${name} ile açılır`);
+                  toast.success(t.todayOpens(name));
                   router.refresh();
                 },
-                () => toast.error("Seçilemedi; Program'dan yeniden dene."),
+                () => toast.error(t.pickFailed),
               );
             },
           },
         });
-      } else if (creating && result.activated) toast.success(`${name} oluşturuldu`, { description: `Bugün ${name} ile açılır.` });
-      else toast.success(creating ? `${name} oluşturuldu` : 'Program kaydedildi.', dropped);
+      } else if (creating && result.activated) toast.success(t.created(name), { description: t.todayOpensNote(name) });
+      else toast.success(creating ? t.created(name) : t.saved, dropped);
       router.push(props.doneHref.replace('{id}', result.id));
       router.refresh();
     },
@@ -295,12 +300,12 @@ export function OwnProgramForm(props: OwnProgramFormProps) {
   const dirty = form.isDirty || start.dropped.length > 0 || start.added;
   const guarded = dirty && !save.isPending && !save.isSuccess;
   const noted = useMemo(() => new Set(start.dropped), [start.dropped]);
-  const droppedNotice = droppedDeviceNotice(phases as ProgramPhase[], noted, dirty);
+  const droppedNotice = droppedDeviceNotice(phases as ProgramPhase[], noted, dirty, locale);
 
   const submit = (values: OwnProgramFormValues) => {
     // Ad danışanın öteki programlarında olmamalı (sunucu da denetler).
     if (own) {
-      const nameProblem = ownNameProblem(values.name, props.otherNames);
+      const nameProblem = ownNameProblem(values.name, props.otherNames, locale);
       if (nameProblem) {
         setErrors(form, { path: ['name'], errors: [nameProblem] });
         return;
@@ -316,7 +321,7 @@ export function OwnProgramForm(props: OwnProgramFormProps) {
             firstDay ??= day.id;
             setErrors(form, {
               path: ['phases', i, 'days', j, 'blocks', b, 'rows', r, 'exerciseId'],
-              errors: ['Bu egzersiz kütüphanede yok; kartı sil, yerine yenisini ekle.'],
+              errors: [catalogMessages(locale).blocks.missingExercise],
             });
           }),
         ),
@@ -342,13 +347,12 @@ export function OwnProgramForm(props: OwnProgramFormProps) {
   const canAdd = days.length < OWN_PROGRAM_LIMITS.days;
   const ptDays = (props.ptProgram?.phases ?? []).flatMap((item) => item.days.map((day) => ({ day, phase: item })));
   const multiPhase = (props.ptProgram?.phases.length ?? 0) > 1;
-  const programLabel = own ? 'Programı' : 'Danışanın programı';
   // Sıklık yalnız hiç atama yokken: atamalı programda haftalık hedef atanmış gün sayısıdır, `daysPerWeek` kaydedilmez.
   const anyAssigned = hasAssignments(days);
 
   return (
     <EditorSaveProvider
-      value={{ dirty, pending: save.isPending || save.isSuccess, creating, submitLabel: creating ? 'Programı oluştur' : 'Programı kaydet' }}>
+      value={{ dirty, pending: save.isPending || save.isSuccess, creating, submitLabel: creating ? t.createProgram : t.saveProgram }}>
       <Form of={form} className="flex flex-col gap-5" onSubmit={submit}>
         {draft.offer ? <DraftNotice offer={draft.offer} timeZone={timeZone} onRestore={draft.restore} onDismiss={draft.dismiss} /> : null}
 
@@ -363,30 +367,30 @@ export function OwnProgramForm(props: OwnProgramFormProps) {
         {missingRows > 0 ? (
           <Alert variant="destructive">
             <WarningCircle />
-            <AlertDescription>{formatNumber(missingRows)} hareket kütüphanede yok; kaydetmeden önce kartlarını sil, yerine yenisini ekle.</AlertDescription>
+            <AlertDescription>{t.missingRows(missingRows)}</AlertDescription>
           </Alert>
         ) : null}
         {blockedRows.length > 0 ? (
           <Alert>
             <Bandaids />
-            <AlertTitle>Kısıtın nedeniyle sana önerilmeyen {formatNumber(blockedRows.length)} hareket</AlertTitle>
+            <AlertTitle>{t.blockedTitle(blockedRows.length)}</AlertTitle>
             <AlertDescription>
               <p>{blockedRows.join(' · ')}</p>
-              <p>Kaydedebilirsin; antrenmanda &apos;Değiştir&apos;den bir muadil seç ya da kartı sil. Emin değilsen antrenörüne sor.</p>
+              <p>{t.blockedBody}</p>
             </AlertDescription>
           </Alert>
         ) : null}
 
         {own ? (
           <Field data-invalid={Boolean(nameField.errors) || undefined}>
-            <FieldLabel htmlFor="own-name">Adı</FieldLabel>
+            <FieldLabel htmlFor="own-name">{t.nameLabel}</FieldLabel>
             <Input
               {...nameField.props}
               id="own-name"
               className="h-11 text-base"
               maxLength={OWN_PROGRAM_LIMITS.name}
               value={nameField.input ?? ''}
-              placeholder="Ör. Evde"
+              placeholder={t.namePlaceholder}
               aria-invalid={Boolean(nameField.errors) || undefined}
               onKeyDown={keepLineEnter}
             />
@@ -397,13 +401,13 @@ export function OwnProgramForm(props: OwnProgramFormProps) {
         {anyAssigned ? null : (
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
             <label className="text-sm text-muted-foreground" htmlFor="own-frequency">
-              {own ? 'Gün atamazsan haftada kaç gün:' : 'Gün atanmazsa haftada kaç gün:'}
+              {own ? t.freqOwn : t.freqOther}
             </label>
             <div className="w-32">
               <LabeledSelect
                 id="own-frequency"
                 value={frequencyField.input === undefined ? 'none' : String(frequencyField.input)}
-                labels={FREQUENCY_LABELS}
+                labels={frequencyLabels}
                 triggerClassName="h-11"
                 onChange={(value) => setInput(form, { path: ['phases', 0, 'daysPerWeek'], input: value === 'none' ? undefined : Number(value) })}
               />
@@ -413,20 +417,20 @@ export function OwnProgramForm(props: OwnProgramFormProps) {
 
         <div className="flex flex-col gap-1.5">
           <span className="text-xs text-muted-foreground" id="own-days-label">
-            Programlar
+            {t.programs}
           </span>
           <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none]" role="group" aria-labelledby="own-days-label">
             {displayDays(days).map((day) => {
               const selected = day.id === selectedDay?.id;
               const failing = missing.some((item) => item.dayId === day.id);
-              const assigned = weekdaysText(day.weekdays ?? []);
+              const assigned = weekdaysText(day.weekdays ?? [], locale);
               return (
                 <Button
                   key={day.id}
                   type="button"
                   variant={selected ? 'default' : 'outline'}
                   aria-pressed={selected}
-                  aria-label={`${day.name}, ${weekdayNamesText(day.weekdays ?? []) || 'gün atanmadı'}${failing ? ', hatalı' : ''}`}
+                  aria-label={`${day.name}, ${weekdayNamesText(day.weekdays ?? [], locale) || t.noDaysAssigned}${failing ? t.failing : ''}`}
                   className={cn('h-11 shrink-0 px-4', failing && 'ring-2 ring-destructive')}
                   onClick={() => setSelectedDayId(day.id)}>
                   {failing ? <WarningCircle data-icon="inline-start" className="text-destructive" /> : null}
@@ -444,14 +448,14 @@ export function OwnProgramForm(props: OwnProgramFormProps) {
               type="button"
               variant="outline"
               className="h-11 shrink-0 border-dashed px-4"
-              aria-label="Program ekle"
+              aria-label={t.addAria}
               disabled={!canAdd}
               onClick={() => setAddOpen(true)}>
               <Plus data-icon="inline-start" />
-              Program
+              {t.addProgram}
             </Button>
           </div>
-          {!canAdd ? <p className="text-xs text-muted-foreground">En fazla {OWN_PROGRAM_LIMITS.days} antrenman.</p> : null}
+          {!canAdd ? <p className="text-xs text-muted-foreground">{t.maxDays(OWN_PROGRAM_LIMITS.days)}</p> : null}
         </div>
 
         {selectedDay && phase ? (
@@ -466,10 +470,10 @@ export function OwnProgramForm(props: OwnProgramFormProps) {
               exercises={exercises}
               devices={devices}
               newIds={() => programIdSource(current() as ProgramPhase[])}
-              noteHint={own ? 'Antrenmanda görürsün.' : 'Danışan antrenmanda görür.'}
-              libraryDescription={own ? 'Antrenörünün kütüphanesinden hareket ekle.' : 'Ada ya da kasa göre ara; dokununca programın sonuna eklenir.'}
-              listLabel={`${selectedDay.name} hareketleri`}
-              addLabel={`Hareket ekle: ${selectedDay.name}`}
+              noteHint={own ? t.noteHintOwn : t.noteHintOther}
+              libraryDescription={own ? t.libOwn : t.libOther}
+              listLabel={t.listLabel(selectedDay.name)}
+              addLabel={t.addLabel(selectedDay.name)}
               variant={own ? 'simple' : 'full'}
               care={props.care ?? null}
             />
@@ -478,10 +482,10 @@ export function OwnProgramForm(props: OwnProgramFormProps) {
                 type="button"
                 variant="ghost"
                 className="h-11 self-start px-2 text-destructive hover:text-destructive"
-                aria-label={`Sil: ${selectedDay.name}`}
+                aria-label={t.removeAria(selectedDay.name)}
                 onClick={removeSelectedDay}>
                 <Trash data-icon="inline-start" />
-                Sil
+                {common.actions.delete}
               </Button>
             ) : null}
           </>
@@ -494,21 +498,20 @@ export function OwnProgramForm(props: OwnProgramFormProps) {
         <Drawer open={addOpen} onOpenChange={setAddOpen}>
           <DrawerContent showCloseButton={false} className="gap-0">
             <DrawerHeader className="gap-1.5 pt-5">
-              <DrawerTitle className="text-lg font-semibold">Program ekle</DrawerTitle>
+              <DrawerTitle className="text-lg font-semibold">{t.drawerTitle}</DrawerTitle>
               <DrawerDescription>
-                {programLabel} {formatNumber(days.length)}/{formatNumber(OWN_PROGRAM_LIMITS.days)} antrenman. Eklenen program listenin sonuna
-                gelir.
+                {t.addDrawerDescription(own, days.length, OWN_PROGRAM_LIMITS.days)}
               </DrawerDescription>
             </DrawerHeader>
             <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overscroll-contain px-4 pb-4">
               <ul className="flex flex-col gap-2">
                 <li>
-                  <Item variant="outline" render={<button type="button" className="w-full text-left" onClick={() => addDayWith((target, all) => blankDay(target, programIdSource(all as ProgramPhase[])))} />}>
+                  <Item variant="outline" render={<button type="button" className="w-full text-left" onClick={() => addDayWith((target, all) => blankDay(target, programIdSource(all as ProgramPhase[]), locale))} />}>
                     <ItemMedia variant="icon">
                       <Square />
                     </ItemMedia>
                     <ItemContent>
-                      <ItemTitle>Boş program</ItemTitle>
+                      <ItemTitle>{t.blank}</ItemTitle>
                     </ItemContent>
                   </Item>
                 </li>
@@ -516,7 +519,7 @@ export function OwnProgramForm(props: OwnProgramFormProps) {
 
               {selectedDay ? (
                 <section className="flex flex-col gap-2">
-                  <h3 className="text-sm font-medium">Bu programdakilerden kopyala</h3>
+                  <h3 className="text-sm font-medium">{t.copyFromThis}</h3>
                   <ul className="flex flex-col gap-2">
                     {days.map((day) => (
                       <li key={day.id}>
@@ -530,7 +533,7 @@ export function OwnProgramForm(props: OwnProgramFormProps) {
                               onClick={() =>
                                 addDayWith((target, all) => {
                                   const source = target.days.find((item) => item.id === day.id);
-                                  return source ? copyDay(target, source, programIdSource(all as ProgramPhase[])) : null;
+                                  return source ? copyDay(target, source, programIdSource(all as ProgramPhase[]), locale) : null;
                                 })
                               }
                             />
@@ -551,7 +554,7 @@ export function OwnProgramForm(props: OwnProgramFormProps) {
 
               {own && ptDays.length > 0 ? (
                 <section className="flex flex-col gap-2">
-                  <h3 className="text-sm font-medium">Antrenörünün programından</h3>
+                  <h3 className="text-sm font-medium">{t.fromTrainer}</h3>
                   <ul className="flex flex-col gap-2">
                     {ptDays.map(({ day, phase: from }) => (
                       <li key={day.id}>
@@ -585,7 +588,7 @@ export function OwnProgramForm(props: OwnProgramFormProps) {
 
               {templates.length > 0 ? (
                 <section className="flex flex-col gap-2">
-                  <h3 className="text-sm font-medium">{own ? 'Hazır şablondan' : 'Şablondan'}</h3>
+                  <h3 className="text-sm font-medium">{own ? t.fromTemplateOwn : t.fromTemplateOther}</h3>
                   <ul className="flex flex-col gap-2">
                     {templates.map((template) => (
                       <li key={template.id}>
@@ -596,7 +599,7 @@ export function OwnProgramForm(props: OwnProgramFormProps) {
                             <button
                               type="button"
                               className="min-h-11 w-full text-left"
-                              onClick={() => addDayWith((target, all) => dayFromTemplateForEditing(target, template, programIdSource(all as ProgramPhase[]), new Date(), deviceIds).day)}
+                              onClick={() => addDayWith((target, all) => dayFromTemplateForEditing(target, template, programIdSource(all as ProgramPhase[]), new Date(), deviceIds, locale).day)}
                             />
                           }>
                           <ItemMedia variant="icon">
@@ -615,7 +618,7 @@ export function OwnProgramForm(props: OwnProgramFormProps) {
             </div>
             <div className="border-t px-4 pt-3 pb-4">
               <Button type="button" variant="ghost" className="h-11 w-full" onClick={() => setAddOpen(false)}>
-                Vazgeç
+                {common.actions.cancel}
               </Button>
             </div>
           </DrawerContent>
@@ -627,7 +630,7 @@ export function OwnProgramForm(props: OwnProgramFormProps) {
       <UnsavedChangesGuard
         ref={guard}
         active={guarded}
-        description={own ? 'Çıkarsan bu değişiklikler kaydedilmez.' : 'Çıkarsan bu değişiklikler kaydedilmez; danışan göremez.'}
+        description={own ? t.guardOwn : t.guardOther}
         onLeave={draft.leave}
       />
     </EditorSaveProvider>
@@ -638,17 +641,18 @@ type OwnFormStore = ReturnType<typeof useForm<typeof ownProgramFormSchema>>;
 
 /** Seçili programın adı (listede benzersiz). */
 function DayName({ form, dayIndex, dayId }: { form: OwnFormStore; dayIndex: number; dayId: string }) {
+  const t = useMessages(ptProgramMessages).ownProgramForm;
   const field = useField(form, { path: ['phases', 0, 'days', dayIndex, 'name'] });
   return (
     <Field data-invalid={Boolean(field.errors) || undefined}>
-      <FieldLabel htmlFor={`own-day-${dayId}`}>Program adı</FieldLabel>
+      <FieldLabel htmlFor={`own-day-${dayId}`}>{t.dayNameLabel}</FieldLabel>
       <Input
         {...field.props}
         id={`own-day-${dayId}`}
         className="h-11 text-base"
         maxLength={PROGRAM_LIMITS.dayName}
         value={field.input ?? ''}
-        placeholder="Ör. Alt vücut"
+        placeholder={t.dayNamePlaceholder}
         aria-invalid={Boolean(field.errors) || undefined}
         onKeyDown={keepLineEnter}
       />
@@ -681,8 +685,10 @@ function DayWeekdays({
   /** Programın formdaki başlangıç değerinde gün alanı var mı (`weekdaysInput`). */
   startedWithDays: boolean;
 }) {
+  const t = useMessages(ptProgramMessages).ownProgramForm;
+  const locale = useLocale();
   const taken = takenWeekdays(days, day.id);
-  const takenText = [...taken].map(([weekday, name]) => `${WEEKDAY_SHORT[weekday as Weekday]} · ${name}`).join(', ');
+  const takenText = [...taken].map(([weekday, name]) => `${weekdayShortLabels(locale)[weekday as Weekday]} · ${name}`).join(', ');
   const labelId = `own-day-weekdays-${day.id}`;
   const assign = (next: readonly number[]) => {
     const assigned = assignWeekdays(current()[0]?.days ?? [], day.id, next).find((item) => item.id === day.id);
@@ -691,14 +697,14 @@ function DayWeekdays({
   };
   return (
     <Field className="gap-1.5">
-      <FieldLabel id={labelId}>Günleri</FieldLabel>
+      <FieldLabel id={labelId}>{t.daysLabel}</FieldLabel>
       <WeekdayToggle id={labelId} describedBy={`${labelId}-hint`} value={day.weekdays ?? []} taken={taken} onChange={assign} />
       <FieldDescription id={`${labelId}-hint`}>
         {taken.size > 0
-          ? `Başka programda: ${takenText}`
+          ? t.takenOther(takenText)
           : own
-            ? 'Bu günlerde Bugün ekranında bu programı görürsün.'
-            : 'Danışan bu günlerde Bugün ekranında bu programı görür.'}
+            ? t.seeOwn
+            : t.seeOther}
       </FieldDescription>
     </Field>
   );
@@ -706,20 +712,21 @@ function DayWeekdays({
 
 /** Kaydın reddi: o arada değişti (412), paylaşım kapandı (403, PT), program silindi (404). */
 function SaveProblem({ problem, own, onReload }: { problem: 'stale' | 'unshared' | 'missing'; own: boolean; onReload: () => void }) {
+  const t = useMessages(ptProgramMessages).ownProgramForm;
   const text =
     problem === 'stale'
       ? own
         ? {
-            title: 'Bu program sen düzenlerken değişti',
-            body: 'Antrenörün ya da başka bir cihazın kaydetti. Değişikliklerin burada duruyor; sayfayı yenilersen gider.',
+            title: t.staleOwnTitle,
+            body: t.staleOwnBody,
           }
         : {
-            title: 'Bu program başka bir yerde değişti',
-            body: 'Sen düzenlerken danışan ya da başka bir sekme kaydetti. Değişikliklerin burada ve taslakta duruyor; sayfayı yenilersen gider.',
+            title: t.staleOtherTitle,
+            body: t.staleOtherBody,
           }
       : problem === 'unshared'
-        ? { title: 'Danışan bu programın paylaşımını kapattı', body: 'Değişikliklerin bu tarayıcıdaki taslakta kaldı; kaydedilemez.' }
-        : { title: 'Program silindi', body: own ? 'Bu program artık yok.' : 'Danışan bu programı sildi; değişiklikler kaydedilemez.' };
+        ? { title: t.unsharedTitle, body: t.unsharedBody }
+        : { title: t.deletedTitle, body: own ? t.deletedOwn : t.deletedOther };
   return (
     <Alert variant="destructive" data-form-error>
       <WarningCircle />
@@ -729,7 +736,7 @@ function SaveProblem({ problem, own, onReload }: { problem: 'stale' | 'unshared'
         <div className="col-start-2 mt-2">
           <Button type="button" variant="outline" size="sm" className="touch:h-11" onClick={onReload}>
             <ArrowClockwise data-icon="inline-start" />
-            Sayfayı yenile
+            {t.reload}
           </Button>
         </div>
       ) : null}

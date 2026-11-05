@@ -4,7 +4,8 @@ import { createContext, useCallback, useContext, useMemo } from 'react';
 import { useDraggable, useDroppable, type DraggableSyntheticListeners } from '@dnd-kit/core';
 import { CardGrabber } from '@/components/exercise-card';
 import { sameDestination } from '@/lib/drop-target';
-import { DROP_OUTCOME_LABELS } from '@/lib/edit-messages';
+import { useLocale } from '@/i18n/client';
+import { dropOutcomeLabels } from '@/lib/edit-messages';
 import type { CombineOutcome, MoveDestination } from '@/lib/template-edit';
 import { cn } from '@/lib/utils';
 import { useDragView, type DragView } from './drag-store';
@@ -118,6 +119,7 @@ export function DropFace({ itemId, disabled = false, render, children, ...props 
 /** Orta bandında beklenen hedefte ⧉'nin yerine çıkan sonuç hapı ("Süperset yap"…). */
 export function DropPill({ itemId }: { itemId: string }) {
   const outcome = useArmed(itemId);
+  const locale = useLocale();
   if (!outcome || outcome === 'not_allowed') return null;
   const full = outcome === 'full';
   return (
@@ -128,7 +130,7 @@ export function DropPill({ itemId }: { itemId: string }) {
         'pointer-events-none absolute top-1/2 right-3 z-20 -translate-y-1/2 rounded-full px-2.5 py-1 text-xs font-medium whitespace-nowrap',
         full ? 'bg-muted text-muted-foreground' : 'bg-primary text-primary-foreground',
       )}>
-      {DROP_OUTCOME_LABELS[outcome]}
+      {dropOutcomeLabels(locale)[outcome]}
     </span>
   );
 }

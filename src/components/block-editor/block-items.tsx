@@ -15,11 +15,11 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { clientTargetState } from '@/lib/client-targets';
-import { DEVICE_KIND_LABELS, DEVICE_KINDS, loadSpecFor } from '@/lib/device-loads';
+import { deviceKindLabels, DEVICE_KINDS, loadSpecFor } from '@/lib/device-loads';
 import { cardioKind } from '@/lib/cardio';
 import { deviceChangeMessage, dropTargetLabel, groupWorkText, rowWorkText } from '@/lib/edit-messages';
 import { familyOf } from '@/lib/muscles';
-import { describeRule, describeSetRules, PROGRESSION_LABELS, RIR_LABELS } from '@/lib/progression';
+import { describeRule, describeSetRules, progressionLabels, rirLabels } from '@/lib/progression';
 import { moveTargetOf } from '@/lib/reorder';
 import { isStraight } from '@/lib/set-plan';
 import {
@@ -33,8 +33,8 @@ import {
   type PickerExercise,
 } from '@/lib/template-edit';
 import {
-  BLOCK_KIND_HINTS,
-  BLOCK_KIND_LABELS,
+  blockKindHints,
+  blockKindLabels,
   TEMPLATE_LIMITS,
   groupSkipNote,
   kindOptions,
@@ -51,6 +51,9 @@ import { useArmedTarget, useDragging } from './drag/drag-store';
 import { blockField, bodyId, faceId, groupTitle, rowTitle, useEditor, type Editor, type RowClientTarget } from './editor-context';
 import { keepLineEnter } from './enter-key';
 import { BlockSecondsField, RoundsField, SetCountField, SetsSection, SetsSummary, TargetField } from './set-table';
+import { useLocale, useMessages } from '@/i18n/client';
+import { ptProgramMessages } from '@/i18n/messages/pt-program';
+import { commonMessages } from '@/i18n/messages/common';
 
 export { EditorContext, blockField, rowTitle, useEditor, type BlocksFormStore, type BlocksPath } from './editor-context';
 export type { Editor };
@@ -60,8 +63,6 @@ const SELECT_TOUCH = {
   triggerClassName: 'touch:data-[size=default]:h-11',
   contentClassName: 'touch:**:data-[slot=select-item]:min-h-11',
 } as const;
-
-export const FULL_MESSAGE = 'Şablon dolu: en fazla 40 hareket, 30 blok';
 
 const KEY_SHORTCUTS = 'Alt+ArrowUp Alt+ArrowDown Alt+Home Alt+End Alt+ArrowRight Alt+ArrowLeft Delete';
 
@@ -115,17 +116,18 @@ function useBodyEscape(itemId: string): React.KeyboardEventHandler<HTMLDivElemen
  * klavye ve ekran okuyucu yolu (kısayolları da var: Alt + ok).
  */
 function MoveStrip({ itemId, kind, title }: { itemId: string; kind: 'single' | 'member' | 'group'; title: string }) {
+  const t = useMessages(ptProgramMessages).editorItems;
   const editor = useEditor();
   const button = 'h-9 touch:h-11';
   return (
     <MoveButtons name={title} onStep={(target) => editor.actions.step(itemId, target)}>
       {kind === 'single' ? (
         <Button type="button" variant="outline" size="sm" className={button} onClick={() => editor.actions.groupWithPrevious(itemId)}>
-          Öncekiyle grupla
+          {t.groupWithPrevious}
         </Button>
       ) : kind === 'member' ? (
         <Button type="button" variant="outline" size="sm" className={button} onClick={() => editor.actions.ungroup(itemId)}>
-          Gruptan çıkar
+          {t.ungroup}
         </Button>
       ) : null}
     </MoveButtons>
@@ -134,14 +136,16 @@ function MoveStrip({ itemId, kind, title }: { itemId: string; kind: 'single' | '
 
 /** Kütüphanede olmayan harekette yüzün sağında 🗑 "Sil". */
 function FaceRemoveButton({ itemId }: { itemId: string }) {
+  const t = useMessages(ptProgramMessages).editorItems;
+  const common = useMessages(commonMessages);
   const editor = useEditor();
   return (
     <Button
       type="button"
       variant="ghost"
       size="icon"
-      aria-label="Sil: Silinmiş egzersiz"
-      title="Sil"
+      aria-label={t.removeDeleted}
+      title={common.actions.delete}
       className="size-11 rounded-lg text-destructive hover:bg-destructive/10 hover:text-destructive [&_svg]:size-5"
       onClick={() => editor.actions.remove(itemId)}>
       <Trash aria-hidden />
@@ -152,8 +156,8 @@ function FaceRemoveButton({ itemId }: { itemId: string }) {
 // Kaydırma panelleri (tasarım §3): sağda olumlu işlemler, solda sil ve dağıt. Hepsi kartın
 // görünür düğmelerinin kopyası (açık gövdedeki Sil / Gruptan çıkar / Grubu dağıt).
 
-function removeAction(editor: Editor, itemId: string): SwipeAction {
-  return { key: 'remove', label: 'Sil', icon: <Trash />, tone: 'destructive', removes: true, onPress: () => editor.actions.remove(itemId) };
+function removeAction(editor: Editor, itemId: string, label: string): SwipeAction {
+  return { key: 'remove', label, icon: <Trash />, tone: 'destructive', removes: true, onPress: () => editor.actions.remove(itemId) };
 }
 
 function Mark({ label, children }: { label: string; children: React.ReactNode }) {
@@ -187,12 +191,13 @@ function DeviceLabel({ name }: { name: string }) {
  * içinde düğme olmaz). Dokunma alanı 44 px'e uzar. Kartı ve Ayrıntılar'ı açar, cihaz seçicisini açar.
  */
 function DeviceShortcut({ rowId, name }: { rowId: string; name: string }) {
+  const t = useMessages(ptProgramMessages).editorItems;
   const editor = useEditor();
   return (
     <button
       type="button"
-      aria-label={`Cihazı değiştir: ${name}`}
-      title="Cihazı değiştir"
+      aria-label={t.changeDeviceAria(name)}
+      title={t.changeDevice}
       className={cn(
         DEVICE_LABEL,
         "relative rounded-sm outline-none select-none after:absolute after:-inset-x-2 after:-inset-y-3.5 after:content-[''] hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50",
@@ -221,10 +226,12 @@ function RowMeta({
   invalid: boolean;
   shortcut?: boolean;
 }) {
+  const t = useMessages(ptProgramMessages).editorItems;
+  const locale = useLocale();
   const { devices, clientTargets, care } = useEditor();
   const device = exercise ? rowDevice(row, exercise, devices) : undefined;
   const text = exercise
-    ? rowWorkText(row.sets, exercise.trackingType, block.kind === 'single' ? block.restSeconds : undefined, cardioKind(exercise))
+    ? rowWorkText(row.sets, exercise.trackingType, block.kind === 'single' ? block.restSeconds : undefined, cardioKind(exercise), locale)
     : null;
   const target = clientTargets[row.id];
   // Danışanın kısıtı (tasarım `kisit-tarama.md` §3.3): yasak ya da dikkat; gerekçe ekran okuyucuda ve ipucunda.
@@ -235,39 +242,39 @@ function RowMeta({
     <>
       {text ? <span className="truncate tabular-nums">{text}</span> : <span className="truncate font-mono">{row.exerciseId}</span>}
       {flag?.decision ? (
-        <Mark label={`Kısıt: ${flag.decision === 'block' ? 'bu danışana önerilmiyor' : 'dikkat'} · ${flag.messages.join(' · ')}`}>
+        <Mark label={t.limitationMark(flag.decision === 'block', flag.messages.join(' · '))}>
           <Bandaids aria-hidden className={flag.decision === 'block' ? 'text-destructive' : 'text-primary-text'} />
         </Mark>
       ) : null}
       {mark && (mark.pain.length > 0 || mark.info) ? (
-        <Mark label={mark.pain.length > 0 ? `Hareket testi: dikkat · ${mark.pain.join(' · ')}` : `${mark.info?.label ?? ''}. ${mark.info?.detail ?? ''}`.trim()}>
+        <Mark label={mark.pain.length > 0 ? t.screeningPain(mark.pain.join(' · ')) : `${mark.info?.label ?? ''}. ${mark.info?.detail ?? ''}`.trim()}>
           <PersonSimpleTaiChi aria-hidden weight={mark.pain.length > 0 ? 'fill' : 'regular'} className={mark.pain.length > 0 ? 'text-primary-text' : 'text-muted-foreground'} />
         </Mark>
       ) : null}
       {/* Danışanın kendi programı (`kisit-tarama.md` §3.7): kopyayla gelmiş yasak sessizce kalmaz, yazıyla söylenir. */}
-      {exercise?.blocked ? <Badge variant="destructive">Sana önerilmiyor</Badge> : null}
+      {exercise?.blocked ? <Badge variant="destructive">{t.notRecommended}</Badge> : null}
       {exercise?.caution ? (
-        <Mark label="Kısıtına uymayabilir">
+        <Mark label={t.cautionMark}>
           <Bandaids aria-hidden className="text-primary-text" />
         </Mark>
       ) : null}
       {target && clientTargetState(row.sets, target) === 'active' ? (
-        <Mark label={`Danışan güncelledi: ${target.text}`}>
+        <Mark label={t.clientUpdatedMark(target.text)}>
           <UserCircle aria-hidden className="text-primary-text" />
         </Mark>
       ) : null}
       {row.rule ? (
-        <Mark label="Kendi ilerleme kuralı var">
+        <Mark label={t.ownRuleMark}>
           <TrendUp aria-hidden />
         </Mark>
       ) : null}
       {row.note?.trim() ? (
-        <Mark label="Not var">
+        <Mark label={t.noteMark}>
           <NoteBlank aria-hidden />
         </Mark>
       ) : null}
       {invalid ? (
-        <Mark label="Düzeltilecek alan var">
+        <Mark label={t.invalidMark}>
           <WarningCircle aria-hidden className="text-destructive" />
         </Mark>
       ) : null}
@@ -277,7 +284,7 @@ function RowMeta({
             <DeviceLabel name={device.name} />
           </span>
         ) : (
-          <span role="img" aria-label={`Cihaz: ${device.name}`} className={cn(DEVICE_LABEL, 'ml-auto')}>
+          <span role="img" aria-label={t.deviceMark(device.name)} className={cn(DEVICE_LABEL, 'ml-auto')}>
             <DeviceLabel name={device.name} />
           </span>
         )
@@ -285,8 +292,6 @@ function RowMeta({
     </>
   );
 }
-
-const RIR_ITEMS: Record<string, string> = Object.fromEntries(Object.entries(RIR_LABELS).map(([rir, label]) => [rir, label]));
 
 type DeviceGroup = { label: string; options: { value: string; label: string }[] };
 
@@ -343,6 +348,8 @@ function DeviceSelect({
 
 /** Satırın ayrıntıları: cihaz (başlıktaki sırayla önce: salonda en sık değişen), ilerleme kuralı ve not. */
 function RowDetails({ blockIndex, rowIndex, row, exercise }: { blockIndex: number; rowIndex: number; row: TemplateRow; exercise: PickerExercise }) {
+  const t = useMessages(ptProgramMessages).editorItems;
+  const locale = useLocale();
   const editor = useEditor();
   const { form, path, devices, deviceList, exerciseList, exercises } = editor;
   const noteField = useField(form, { path: blockField(path, blockIndex, 'rows', rowIndex, 'note') });
@@ -358,7 +365,7 @@ function RowDetails({ blockIndex, rowIndex, row, exercise }: { blockIndex: numbe
   const groups = useMemo(() => {
     const choices = deviceChoices(row, { ...swapContext, deviceList }).filter((choice) => choice.result.kind !== 'reset');
     return DEVICE_KINDS.map((kind) => ({
-      label: DEVICE_KIND_LABELS[kind],
+      label: deviceKindLabels(locale)[kind],
       options: choices
         .filter((choice) => devices.get(choice.deviceId)?.kind === kind)
         .map((choice) => ({ value: choice.deviceId, label: choice.label })),
@@ -399,15 +406,15 @@ function RowDetails({ blockIndex, rowIndex, row, exercise }: { blockIndex: numbe
       size="sm"
       className="self-start touch:h-11"
       onClick={() => setInput(form, { path: blockField(path, blockIndex, 'rows', rowIndex, 'rule'), input: undefined })}>
-      Egzersizin kuralına dön
+      {t.resetRule}
     </Button>
   );
   // Kendi program (kendi-program.md §2.5): kural seçilmez; kopyalanan satırdaki antrenörün kuralı yalnız okunur.
   const simple = editor.variant === 'simple';
   const ownRule = row.rule ? (
     <Field className="gap-1.5">
-      <FieldLabel>Antrenörünün kuralı</FieldLabel>
-      <FieldDescription>{describeRule(rule, spec)}</FieldDescription>
+      <FieldLabel>{t.trainerRule}</FieldLabel>
+      <FieldDescription>{describeRule(rule, spec, locale)}</FieldDescription>
       {resetRule}
     </Field>
   ) : null;
@@ -415,16 +422,16 @@ function RowDetails({ blockIndex, rowIndex, row, exercise }: { blockIndex: numbe
   return (
     <div id={`details-${row.id}`} className="grid grid-cols-1 gap-4 px-3 pt-3 pb-3 sm:grid-cols-2">
       <Field className="gap-1.5">
-        <FieldLabel htmlFor={`device-${row.id}`}>Cihaz</FieldLabel>
+        <FieldLabel htmlFor={`device-${row.id}`}>{t.deviceLabel}</FieldLabel>
         <DeviceSelect
           rowId={row.id}
           value={row.deviceId ?? ''}
           groups={groups}
-          empty={ownDevice ? `Egzersizin cihazı: ${ownDevice.name}` : 'Cihazsız'}
+          empty={ownDevice ? t.exerciseDevice(ownDevice.name) : t.noDevice}
           onChange={changeDevice}
         />
         <FieldDescription>
-          Cihaz değişince hareket, o cihazdaki muadiline geçer; muadil yoksa aynı hareket bu cihazda yapılır.
+          {t.deviceHint}
         </FieldDescription>
       </Field>
 
@@ -432,20 +439,20 @@ function RowDetails({ blockIndex, rowIndex, row, exercise }: { blockIndex: numbe
         ownRule
       ) : (
         <Field className="gap-1.5">
-          <FieldLabel htmlFor={`scheme-${row.id}`}>İlerleme</FieldLabel>
+          <FieldLabel htmlFor={`scheme-${row.id}`}>{t.progression}</FieldLabel>
           <div className="grid grid-cols-2 gap-2">
             <LabeledSelect
               {...SELECT_TOUCH}
               id={`scheme-${row.id}`}
               value={rule.scheme}
-              labels={PROGRESSION_LABELS}
+              labels={progressionLabels(locale)}
               onChange={(scheme) => writeRule({ scheme })}
             />
             <LabeledSelect
               {...SELECT_TOUCH}
               id={`rir-${row.id}`}
               value={String(rule.targetRir)}
-              labels={RIR_ITEMS}
+              labels={rirLabels(locale)}
               onChange={(rir) => writeRule({ targetRir: Number(rir) })}
             />
           </div>
@@ -456,13 +463,13 @@ function RowDetails({ blockIndex, rowIndex, row, exercise }: { blockIndex: numbe
       )}
 
       <Field data-invalid={Boolean(noteField.errors) || undefined} className="gap-1.5 sm:col-span-2">
-        <FieldLabel htmlFor={`note-${row.id}`}>Not</FieldLabel>
+        <FieldLabel htmlFor={`note-${row.id}`}>{t.noteLabel}</FieldLabel>
         <Input
           {...noteField.props}
           id={`note-${row.id}`}
           className="touch:h-11"
           maxLength={TEMPLATE_LIMITS.note}
-          placeholder="Dizleri içe kaçırma"
+          placeholder={t.notePlaceholder}
           value={typeof noteField.input === 'string' ? noteField.input : ''}
           onKeyDown={keepLineEnter}
         />
@@ -496,12 +503,13 @@ function BottomRow({ children }: { children: React.ReactNode }) {
   return <div className="flex flex-wrap justify-end gap-2 border-t px-3 pt-3 pb-4">{children}</div>;
 }
 
-function RemoveButton({ itemId, label = 'Sil' }: { itemId: string; label?: string }) {
+function RemoveButton({ itemId, label }: { itemId: string; label?: string }) {
   const editor = useEditor();
+  const common = useMessages(commonMessages);
   return (
     <Button type="button" variant="destructive" className="h-9 touch:h-11" onClick={() => editor.actions.remove(itemId)}>
       <Trash data-icon="inline-start" />
-      {label}
+      {label ?? common.actions.delete}
     </Button>
   );
 }
@@ -526,6 +534,7 @@ function RowBody({
   exercise: PickerExercise | undefined;
   title: string;
 }) {
+  const t = useMessages(ptProgramMessages).editorItems;
   const editor = useEditor();
   const { form, path } = editor;
   const single = block.kind === 'single';
@@ -549,12 +558,12 @@ function RowBody({
               blockIndex={blockIndex}
               blockId={block.id}
               name="restSeconds"
-              label="Dinlenme"
+              label={t.rest}
               max={TEMPLATE_LIMITS.restSeconds}
               step={15}
             />
           ) : (
-            <p className="self-end pb-2 text-xs text-muted-foreground touch:pb-3">Dinlenme grup ayarlarında.</p>
+            <p className="self-end pb-2 text-xs text-muted-foreground touch:pb-3">{t.restInGroup}</p>
           )}
           {straight ? (
             <TargetField blockIndex={blockIndex} rowIndex={rowIndex} row={row} exercise={exercise} />
@@ -565,7 +574,9 @@ function RowBody({
       ) : (
         <ExerciseCardSection className="flex flex-col gap-1.5">
           <p className="text-sm text-muted-foreground">
-            Bu hareket kütüphanede yok (<span className="font-mono">{row.exerciseId}</span>). Kartı sil, yerine kütüphaneden yenisini ekle.
+            {t.missingExercise.lead}
+            <span className="font-mono">{row.exerciseId}</span>
+            {t.missingExercise.tail}
           </p>
           <FieldError>{exerciseField.errors?.[0]}</FieldError>
         </ExerciseCardSection>
@@ -574,8 +585,7 @@ function RowBody({
       {exercise?.blocked ? (
         <ExerciseCardSection className="flex flex-col gap-1.5 text-sm">
           <p className="text-muted-foreground">
-            Kısıtın nedeniyle bu hareket şu an sana önerilmiyor; antrenörüne sor. Antrenmanda &apos;Değiştir&apos;den bir muadil seçebilir ya
-            da kartı silip yerine başka bir hareket ekleyebilirsin.
+            {t.blockedNote}
           </p>
           <FieldError>{exerciseField.errors?.[0]}</FieldError>
         </ExerciseCardSection>
@@ -590,11 +600,8 @@ function RowBody({
       {exercise ? (
         <div className="border-t">
           <DisclosureButton open={detailsOpen} controls={`details-${row.id}`} onToggle={() => editor.toggleDetails(row.id)}>
-            Ayrıntılar{' '}
-            <span className="text-muted-foreground">
-              · {device ? 'cihaz · ' : ''}
-              {editor.variant === 'simple' && !row.rule ? 'not' : 'kural · not'}
-            </span>
+            {t.details}{' '}
+            <span className="text-muted-foreground">{t.detailsSummary(Boolean(device), !(editor.variant === 'simple' && !row.rule))}</span>
           </DisclosureButton>
           {detailsOpen ? <RowDetails blockIndex={blockIndex} rowIndex={rowIndex} row={row} exercise={exercise} /> : null}
         </div>
@@ -604,7 +611,7 @@ function RowBody({
         {single ? null : (
           <Button type="button" variant="outline" className="h-9 touch:h-11" onClick={() => editor.actions.ungroup(row.id)}>
             <LinkBreak data-icon="inline-start" />
-            Gruptan çıkar
+            {t.ungroup}
           </Button>
         )}
         <RemoveButton itemId={row.id} />
@@ -620,6 +627,7 @@ function RowBody({
  * hedefi kalkar: PT kazanır, program geçmişine yazılır.
  */
 function ClientTargetNote({ row, target }: { row: TemplateRow; target: RowClientTarget }) {
+  const t = useMessages(ptProgramMessages).editorItems;
   const editor = useEditor();
   const state = clientTargetState(row.sets, target);
   const adopt = () =>
@@ -630,22 +638,22 @@ function ClientTargetNote({ row, target }: { row: TemplateRow; target: RowClient
             ? { ...block, rows: block.rows.map((item) => (item.id === row.id ? { ...item, sets: target.sets.map((set) => ({ ...set })) } : item)) }
             : block,
         ),
-      { highlight: row.id, announce: 'Danışanın hedefi alındı; kaydedince programa yazılır.' },
+      { highlight: row.id, announce: t.adoptAnnounce },
     );
   return (
     <ExerciseCardSection className="flex flex-wrap items-center gap-x-2 gap-y-1.5 text-sm">
-      <Badge variant="secondary">Danışan güncelledi</Badge>
+      <Badge variant="secondary">{t.clientUpdatedBadge}</Badge>
       <span className="text-muted-foreground tabular-nums">{target.text}</span>
       <p className="basis-full text-xs text-muted-foreground">
         {state === 'active'
-          ? 'Danışan bu hedefle çalışıyor. Setleri değiştirip kaydedersen danışanın hedefi kalkar.'
+          ? t.targetActive
           : state === 'adopted'
-            ? 'Kaydedince danışanın hedefi programa yazılır.'
-            : 'Kaydedince danışanın hedefi kalkar; senin setlerin geçerli olur.'}
+            ? t.targetAdopted
+            : t.targetReplaced}
       </p>
       {state === 'active' ? (
         <Button type="button" variant="outline" size="sm" className="touch:h-11" onClick={adopt}>
-          Danışanın hedefini al
+          {t.adoptTarget}
         </Button>
       ) : null}
     </ExerciseCardSection>
@@ -658,13 +666,16 @@ function ClientTargetNote({ row, target }: { row: TemplateRow; target: RowClient
  * kabına dokunmak seçer; üye tek başına seçilmez (grubu seçilir).
  */
 function RowCard({ block, blockIndex, row, rowIndex }: { block: TemplateBlock; blockIndex: number; row: TemplateRow; rowIndex: number }) {
+  const t = useMessages(ptProgramMessages).editorItems;
+  const locale = useLocale();
+  const common = useMessages(commonMessages);
   const editor = useEditor();
   const { form, path, exercises, labels, open, highlight, selecting, selected } = editor;
   const dragging = useDragging();
   // Formisch kancası: satırın hata okuması bu kartın çizimine bağlansın.
   useField(form, { path: blockField(path, blockIndex, 'rows', rowIndex, 'exerciseId') });
   const exercise = exercises.get(row.exerciseId);
-  const title = rowTitle(row, exercises);
+  const title = rowTitle(row, exercises, locale);
   const device = rowDevice(row, exercise, editor.devices);
   const single = block.kind === 'single';
   const last = rowIndex === block.rows.length - 1;
@@ -681,7 +692,7 @@ function RowCard({ block, blockIndex, row, rowIndex }: { block: TemplateBlock; b
     : [
         {
           key: 'ungroup',
-          label: 'Çıkar',
+          label: t.swipeUngroup,
           icon: <LinkBreak />,
           tone: 'neutral' as const,
           disabled: editor.blocks.length >= TEMPLATE_LIMITS.blocks,
@@ -698,7 +709,7 @@ function RowCard({ block, blockIndex, row, rowIndex }: { block: TemplateBlock; b
         titleClassName={exercise ? undefined : 'text-destructive'}
         meta={<RowMeta block={block} row={row} exercise={exercise} invalid={invalid} shortcut={Boolean(device) && !selecting} />}
         metaAction={device && !selecting ? <DeviceShortcut rowId={row.id} name={device.name} /> : undefined}
-        label={selecting ? title : `${title}, ayrıntıları aç/kapat`}
+        label={selecting ? title : t.expandAria(title)}
         expanded={isOpen}
         controls={bodyId(row.id)}
         onToggle={() => editor.toggleOpen(row.id)}
@@ -717,7 +728,7 @@ function RowCard({ block, blockIndex, row, rowIndex }: { block: TemplateBlock; b
                 <SwipeRow
                   id={row.id}
                   start={start}
-                  end={[removeAction(editor, row.id)]}
+                  end={[removeAction(editor, row.id, common.actions.delete)]}
                   // "Çıkar" tam kaydırmayla tetiklenmez: dokunarak seçilir.
                   fullStart={false}
                   disabled={dragging}
@@ -776,11 +787,13 @@ function RowCard({ block, blockIndex, row, rowIndex }: { block: TemplateBlock; b
 
 /** Grubun açık yüzü: tür, tur, tur sonu dinlenme, (devrede) istasyon arası, açıklama, alt satır. */
 function GroupSettings({ block, blockIndex }: { block: TemplateBlock; blockIndex: number }) {
+  const t = useMessages(ptProgramMessages).editorItems;
+  const locale = useLocale();
   const editor = useEditor();
   const options = kindOptions(block.rows.length);
   const kind = block.kind === 'single' ? 'superset' : block.kind;
   const rounds = roundsOf(block);
-  const skipNote = groupSkipNote(block, (row) => rowTitle(row, editor.exercises));
+  const skipNote = groupSkipNote(block, (row) => rowTitle(row, editor.exercises, locale), locale);
   const onKeyDown = useBodyEscape(block.id);
   const tooMany = editor.blocks.length - 1 + block.rows.length > TEMPLATE_LIMITS.blocks;
 
@@ -789,7 +802,7 @@ function GroupSettings({ block, blockIndex }: { block: TemplateBlock; blockIndex
       <div className="flex flex-col gap-3 border-t border-primary/25 px-3 py-3">
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-xs text-muted-foreground" id={`kind-${block.id}`}>
-            Tür
+            {t.kindLabel}
           </span>
           <ToggleGroup
             variant="outline"
@@ -802,7 +815,7 @@ function GroupSettings({ block, blockIndex }: { block: TemplateBlock; blockIndex
             }}>
             {options.map((option) => (
               <ToggleGroupItem key={option} value={option} className="h-8 px-3 touch:h-11">
-                {BLOCK_KIND_LABELS[option]}
+                {blockKindLabels(locale)[option]}
               </ToggleGroupItem>
             ))}
           </ToggleGroup>
@@ -813,7 +826,7 @@ function GroupSettings({ block, blockIndex }: { block: TemplateBlock; blockIndex
             blockIndex={blockIndex}
             blockId={block.id}
             name="restSeconds"
-            label="Tur sonu dinlenme"
+            label={t.groupRest}
             max={TEMPLATE_LIMITS.restSeconds}
             step={15}
           />
@@ -822,13 +835,13 @@ function GroupSettings({ block, blockIndex }: { block: TemplateBlock; blockIndex
               blockIndex={blockIndex}
               blockId={block.id}
               name="transitionSeconds"
-              label="İstasyon arası"
+              label={t.groupTransition}
               max={TEMPLATE_LIMITS.transitionSeconds}
               step={5}
             />
           ) : null}
         </div>
-        <p className="text-xs text-muted-foreground">{BLOCK_KIND_HINTS[kind]}</p>
+        <p className="text-xs text-muted-foreground">{blockKindHints(locale)[kind]}</p>
         {skipNote ? <p className="text-xs text-muted-foreground">{skipNote}</p> : null}
       </div>
       <BottomRow>
@@ -837,10 +850,10 @@ function GroupSettings({ block, blockIndex }: { block: TemplateBlock; blockIndex
           variant="outline"
           className="h-9 touch:h-11"
           aria-disabled={tooMany || undefined}
-          title={tooMany ? FULL_MESSAGE : undefined}
-          onClick={() => (tooMany ? editor.announce(FULL_MESSAGE) : editor.actions.dissolve(block.id))}>
+          title={tooMany ? ptProgramMessages(locale).edit.templateFull : undefined}
+          onClick={() => (tooMany ? editor.announce(ptProgramMessages(locale).edit.templateFull) : editor.actions.dissolve(block.id))}>
           <LinkBreak data-icon="inline-start" />
-          Grubu dağıt
+          {t.dissolve}
         </Button>
         <RemoveButton itemId={block.id} />
       </BottomRow>
@@ -855,12 +868,15 @@ function GroupSettings({ block, blockIndex }: { block: TemplateBlock; blockIndex
  * modunda grubun her yeri grubu seçer; üyeler soluk ve etkileşimsizdir.
  */
 function GroupCard({ block, blockIndex }: { block: TemplateBlock; blockIndex: number }) {
+  const t = useMessages(ptProgramMessages).editorItems;
+  const locale = useLocale();
+  const common = useMessages(commonMessages);
   const editor = useEditor();
   const { form, path, open, highlight, selecting, selected } = editor;
   const dragging = useDragging();
   const rowsArray = useFieldArray(form, { path: blockField(path, blockIndex, 'rows') });
   const kind = block.kind === 'single' ? 'superset' : block.kind;
-  const title = groupTitle(block, blockIndex);
+  const title = groupTitle(block, blockIndex, locale);
   const rounds = roundsOf(block);
   const isOpen = open.has(block.id);
   const checked = selected.has(block.id);
@@ -869,18 +885,18 @@ function GroupCard({ block, blockIndex }: { block: TemplateBlock; blockIndex: nu
     Boolean(getDeepError(form, { path: blockField(path, blockIndex, 'transitionSeconds') }));
   const onKeyDown = useFaceKeys(block.id, isOpen);
   const tooMany = editor.blocks.length - 1 + block.rows.length > TEMPLATE_LIMITS.blocks;
-  const meta = groupWorkText(block, rounds);
+  const meta = groupWorkText(block, rounds, locale);
 
   const end: SwipeAction[] = [
     {
       key: 'dissolve',
-      label: 'Dağıt',
+      label: t.swipeDissolve,
       icon: <ArrowsSplit />,
       tone: 'neutral',
       disabled: tooMany,
-      onPress: () => (tooMany ? editor.announce(FULL_MESSAGE) : editor.actions.dissolve(block.id)),
+      onPress: () => (tooMany ? editor.announce(ptProgramMessages(locale).edit.templateFull) : editor.actions.dissolve(block.id)),
     },
-    removeAction(editor, block.id),
+    removeAction(editor, block.id, common.actions.delete),
   ];
 
   const head = (
@@ -888,18 +904,18 @@ function GroupCard({ block, blockIndex }: { block: TemplateBlock; blockIndex: nu
       <CardFace
         id={faceId(block.id)}
         badge={<CardBadge tone="group">{blockIndex + 1}</CardBadge>}
-        title={BLOCK_KIND_LABELS[kind]}
+        title={blockKindLabels(locale)[kind]}
         meta={
           <>
             <span className="truncate tabular-nums">{meta}</span>
             {invalid ? (
-              <Mark label="Düzeltilecek alan var">
+              <Mark label={t.invalidMark}>
                 <WarningCircle aria-hidden className="text-destructive" />
               </Mark>
             ) : null}
           </>
         }
-        label={selecting ? title : `${title}, ayarları aç/kapat`}
+        label={selecting ? title : t.settingsAria(title)}
         expanded={isOpen}
         controls={bodyId(block.id)}
         onToggle={() => editor.toggleOpen(block.id)}
@@ -966,11 +982,11 @@ function GroupCard({ block, blockIndex }: { block: TemplateBlock; blockIndex: nu
           type="button"
           variant="ghost"
           aria-haspopup="dialog"
-          aria-label={`Gruba hareket ekle: ${title}`}
+          aria-label={t.addToGroupAria(title)}
           className="h-11 w-full rounded-none rounded-b-[inherit] border-t border-primary/25 text-primary-text hover:bg-primary/8 hover:text-primary-text"
           onClick={(event) => editor.openAddToGroup(block.id, event)}>
           <Plus data-icon="inline-start" />
-          Gruba hareket ekle
+          {t.addToGroup}
         </Button>
       )}
     </DragGroup>
@@ -1000,6 +1016,7 @@ export function BlockItem({ block, blockIndex, count }: { block: TemplateBlock; 
  * (parmak ortadaki çizgide), overlay yarı saydamlaşır (hedefin halkası ve hapı görünür).
  */
 export function ItemPreview({ itemId }: { itemId: string }) {
+  const locale = useLocale();
   const { blocks, exercises, labels } = useEditor();
   const armed = useArmedTarget();
   const blockIndex = blocks.findIndex((block) => block.id === itemId || block.rows.some((row) => row.id === itemId));
@@ -1008,8 +1025,8 @@ export function ItemPreview({ itemId }: { itemId: string }) {
   const group = block.id === itemId && block.kind !== 'single';
   const row = block.rows.find((item) => item.id === itemId);
   const exercise = row ? exercises.get(row.exerciseId) : undefined;
-  const titleOf = (exerciseId: string) => exercises.get(exerciseId)?.title ?? 'Silinmiş egzersiz';
-  const outcome = armed ? dropTargetLabel(blocks, armed.targetId, armed.outcome, titleOf) : null;
+  const titleOf = (exerciseId: string) => exercises.get(exerciseId)?.title ?? ptProgramMessages(locale).editorContext.deletedExercise;
+  const outcome = armed ? dropTargetLabel(blocks, armed.targetId, armed.outcome, titleOf, locale) : null;
   const full = armed?.outcome === 'full';
   return (
     <div className="relative">
@@ -1035,15 +1052,15 @@ export function ItemPreview({ itemId }: { itemId: string }) {
             static
             grabber={<CardGrabber tone="group" dragging />}
             badge={<CardBadge tone="group">{blockIndex + 1}</CardBadge>}
-            title={BLOCK_KIND_LABELS[block.kind]}
-            meta={<span className="truncate tabular-nums">{groupWorkText(block, roundsOf(block))}</span>}
+            title={blockKindLabels(locale)[block.kind]}
+            meta={<span className="truncate tabular-nums">{groupWorkText(block, roundsOf(block), locale)}</span>}
           />
         ) : (
           <CardFace
             static
             grabber={<CardGrabber dragging />}
             badge={<CardBadge>{labels.get(row.id)}</CardBadge>}
-            title={rowTitle(row, exercises)}
+            title={rowTitle(row, exercises, locale)}
             titleClassName={exercise ? undefined : 'text-destructive'}
             meta={<RowMeta block={block} row={row} exercise={exercise} invalid={false} />}
           />

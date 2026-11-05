@@ -13,7 +13,8 @@ import { Toggle } from '@/components/ui/toggle';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { CARDIO_LIMITS, cardioKind, minutesOf } from '@/lib/cardio';
 import { loadSpecFor } from '@/lib/device-loads';
-import { formatNumber } from '@/lib/format';
+import { getFormat, type Format } from '@/lib/format';
+import { catalogMessages } from '@/i18n/messages/catalog';
 import { describeSetRules } from '@/lib/progression';
 import { SET_LIMITS, isStraight, resizeSets, setShape, type SetSpec } from '@/lib/set-plan';
 import { applySetPreset, setRounds, setRowSetCount, updateRowSets, type PickerExercise, type SetPreset } from '@/lib/template-edit';
@@ -21,6 +22,8 @@ import { TEMPLATE_LIMITS, type TemplateBlock, type TemplateRow } from '@/lib/tem
 import { cn } from '@/lib/utils';
 import { blockField, setInputId, useEditor, type SetColumn } from './editor-context';
 import { enterAction, keepLineEnter } from './enter-key';
+import { useLocale, useMessages } from '@/i18n/client';
+import { ptProgramMessages } from '@/i18n/messages/pt-program';
 
 /**
  * Satırın setleri (SPEC §7.4): set sayısı ve dinlenme stepper'ı, düz setlerde tek "Hedef"
@@ -30,8 +33,6 @@ import { enterAction, keepLineEnter } from './enter-key';
  */
 
 type RowProps = { blockIndex: number; rowIndex: number; row: TemplateRow; exercise: PickerExercise | undefined };
-
-const COUNT_ERROR = `1–${SET_LIMITS.perRow} arası bir sayı gir.`;
 
 /** Setler düzken çipler (v1): tekrar ve süre. Çip bütün setlere yazar. */
 const REP_CHIPS: readonly (readonly [number, number])[] = [
@@ -75,8 +76,8 @@ function secondsOf(minutes: number | undefined): number | undefined {
   return minutes === undefined || Number.isNaN(minutes) ? minutes : Math.round(minutes * 60);
 }
 
-function rangeText(set: Pick<SetSpec, 'min' | 'max'>): string {
-  const format = (value: number) => (Number.isFinite(value) ? formatNumber(value) : '?');
+function rangeText(set: Pick<SetSpec, 'min' | 'max'>, formatter: Format): string {
+  const format = (value: number) => (Number.isFinite(value) ? formatter.number(value) : '?');
   return set.min === set.max ? format(set.min) : `${format(set.min)}–${format(set.max)}`;
 }
 
@@ -113,6 +114,7 @@ function useCountDraft<T>(snapshot: () => T, applyFrom: (base: T, count: number)
 
 /** Satırın set sayısı: "−" son seti siler, "+" son seti kopyalar. */
 export function SetCountField({ row, exercise }: Pick<RowProps, 'row' | 'exercise'>) {
+  const t = useMessages(ptProgramMessages).setTable;
   const editor = useEditor();
   const id = `setcount-${row.id}`;
   const count = useCountDraft(
@@ -124,7 +126,7 @@ export function SetCountField({ row, exercise }: Pick<RowProps, 'row' | 'exercis
   return (
     <Field data-invalid={count.invalid || undefined} className="w-auto gap-1.5">
       <FieldLabel htmlFor={id} className="text-xs text-muted-foreground">
-        Set
+        {t.setLabel}
       </FieldLabel>
       <Stepper
         id={id}
@@ -134,20 +136,21 @@ export function SetCountField({ row, exercise }: Pick<RowProps, 'row' | 'exercis
         max={SET_LIMITS.perRow}
         disabled={!exercise}
         invalid={count.invalid}
-        decrementLabel="Son seti sil"
-        incrementLabel="Son seti kopyala"
+        decrementLabel={t.decrementSet}
+        incrementLabel={t.incrementSet}
         onFocus={count.onFocus}
         onBlur={count.onBlur}
         onKeyDown={keepLineEnter}
         onValueChange={count.change}
       />
-      {count.invalid ? <FieldError>{COUNT_ERROR}</FieldError> : null}
+      {count.invalid ? <FieldError>{t.countError(SET_LIMITS.perRow)}</FieldError> : null}
     </Field>
   );
 }
 
 /** Grubun turu: turu dolduran hareketler yeni tura geçer, daha az setliler kendi sayısında kalır. */
 export function RoundsField({ block, rounds }: { block: TemplateBlock; rounds: number }) {
+  const t = useMessages(ptProgramMessages).setTable;
   const editor = useEditor();
   const id = `rounds-${block.id}`;
   const count = useCountDraft(
@@ -166,7 +169,7 @@ export function RoundsField({ block, rounds }: { block: TemplateBlock; rounds: n
   return (
     <Field data-invalid={count.invalid || undefined} className="w-auto gap-1.5">
       <FieldLabel htmlFor={id} className="text-xs text-muted-foreground">
-        Tur
+        {t.roundLabel}
       </FieldLabel>
       <Stepper
         id={id}
@@ -175,14 +178,14 @@ export function RoundsField({ block, rounds }: { block: TemplateBlock; rounds: n
         min={1}
         max={TEMPLATE_LIMITS.sets}
         invalid={count.invalid}
-        decrementLabel="Bir tur eksilt"
-        incrementLabel="Bir tur ekle"
+        decrementLabel={t.decrementRound}
+        incrementLabel={t.incrementRound}
         onFocus={count.onFocus}
         onBlur={count.onBlur}
         onKeyDown={keepLineEnter}
         onValueChange={count.change}
       />
-      {count.invalid ? <FieldError>{COUNT_ERROR}</FieldError> : null}
+      {count.invalid ? <FieldError>{t.countError(SET_LIMITS.perRow)}</FieldError> : null}
     </Field>
   );
 }
@@ -205,6 +208,8 @@ export function BlockSecondsField({
   step: number;
   disabled?: boolean;
 }) {
+  const t = useMessages(ptProgramMessages).setTable;
+  const locale = useLocale();
   const { form, path } = useEditor();
   const field = useField(form, { path: blockField(path, blockIndex, name) });
   const id = `${name}-${blockId}`;
@@ -217,15 +222,15 @@ export function BlockSecondsField({
       <Stepper
         id={id}
         size="auto"
-        unit="sn"
+        unit={catalogMessages(locale).time.secondsUnit}
         value={value}
         min={0}
         max={max}
         step={step}
         disabled={disabled}
         invalid={Boolean(field.errors)}
-        decrementLabel={`${label}: ${step} sn azalt`}
-        incrementLabel={`${label}: ${step} sn artır`}
+        decrementLabel={t.stepDecrease(label, step)}
+        incrementLabel={t.stepIncrease(label, step)}
         inputRef={field.props.ref}
         onFocus={field.props.onFocus}
         onBlur={field.props.onBlur}
@@ -243,6 +248,9 @@ export function BlockSecondsField({
  * mesafe, yürüyüş/koşuda eğim de (`cardio.ts`); yürüyüş/koşuda süre dakikayla yazılır.
  */
 export function TargetField({ blockIndex, rowIndex, row, exercise }: RowProps) {
+  const t = useMessages(ptProgramMessages).setTable;
+  const locale = useLocale();
+  const format = getFormat(locale);
   const editor = useEditor();
   const { form, path } = editor;
   const setsPath = blockField(path, blockIndex, 'rows', rowIndex, 'sets');
@@ -257,10 +265,11 @@ export function TargetField({ blockIndex, rowIndex, row, exercise }: RowProps) {
   const step = walk ? 1 : isDuration ? 5 : 1;
   const errors = minField.errors ?? maxField.errors ?? distanceField.errors ?? inclineField.errors;
   const amrap = setShape(row.sets).amrap;
-  const amrapBadge = amrap === 'none' ? null : amrap === 'last' ? (row.sets.length === 1 ? 'AMRAP' : 'son set AMRAP') : amrap === 'all' ? 'hepsi AMRAP' : 'AMRAP';
+  const amrapBadge = amrap === 'none' ? null : amrap === 'last' ? (row.sets.length === 1 ? 'AMRAP' : t.amrapLast) : amrap === 'all' ? t.amrapAll : 'AMRAP';
   const first = row.sets[0];
   const chips = walk ? WALK_CHIPS : isDuration ? TIME_CHIPS : REP_CHIPS;
-  const unit = walk ? 'dk' : isDuration ? 'sn' : 'tekrar';
+  const time = catalogMessages(locale).time;
+  const unit = walk ? time.minutesUnit : isDuration ? time.secondsUnit : time.reps(2);
   const scale = walk ? 60 : 1;
   const display = walk ? shownMinutes : shown;
   const toStored = (value: number | undefined) => (walk ? secondsOf(value) : value);
@@ -273,7 +282,7 @@ export function TargetField({ blockIndex, rowIndex, row, exercise }: RowProps) {
   return (
     <Field data-invalid={Boolean(errors) || undefined} className="min-w-0 basis-full gap-1.5 sm:w-auto sm:basis-auto">
       <FieldLabel htmlFor={`min-${row.id}`} className="text-xs text-muted-foreground">
-        Hedef
+        {t.targetLabel}
       </FieldLabel>
       <div className="flex flex-wrap items-center gap-2">
         <Input
@@ -285,7 +294,7 @@ export function TargetField({ blockIndex, rowIndex, row, exercise }: RowProps) {
           max={max}
           step={step}
           disabled={!exercise}
-          aria-label="En az"
+          aria-label={t.minAria}
           aria-invalid={Boolean(minField.errors) || undefined}
           className="h-8 w-14 text-center tabular-nums touch:h-11"
           value={display(minField.input)}
@@ -304,7 +313,7 @@ export function TargetField({ blockIndex, rowIndex, row, exercise }: RowProps) {
           max={max}
           step={step}
           disabled={!exercise}
-          aria-label="En çok"
+          aria-label={t.maxAria}
           aria-invalid={Boolean(maxField.errors) || undefined}
           className="h-8 w-14 text-center tabular-nums touch:h-11"
           value={display(maxField.input)}
@@ -317,7 +326,7 @@ export function TargetField({ blockIndex, rowIndex, row, exercise }: RowProps) {
       {cardio ? (
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
           <label className="flex items-center gap-2 text-sm text-muted-foreground">
-            Mesafe
+            {t.distance}
             <Input
               {...distanceField.props}
               id={`distance-${row.id}`}
@@ -336,7 +345,7 @@ export function TargetField({ blockIndex, rowIndex, row, exercise }: RowProps) {
           </label>
           {walk ? (
             <label className="flex items-center gap-2 text-sm text-muted-foreground">
-              Eğim
+              {t.incline}
               <Input
                 {...inclineField.props}
                 id={`incline-${row.id}`}
@@ -360,11 +369,11 @@ export function TargetField({ blockIndex, rowIndex, row, exercise }: RowProps) {
       {exercise ? (
         <div
           role="group"
-          aria-label="Hazır hedefler"
+          aria-label={t.presetsAria}
           className="-mx-3 flex gap-1.5 overflow-x-auto px-3 pt-1 pb-0.5 [scrollbar-width:none] sm:mx-0 sm:flex-wrap sm:px-0">
           {chips.map(([min, max]) => {
             const pressed = first?.min === min * scale && first?.max === max * scale;
-            const label = min === max ? formatNumber(min) : `${formatNumber(min)}–${formatNumber(max)}`;
+            const label = min === max ? format.number(min) : `${format.number(min)}–${format.number(max)}`;
             return (
               <Toggle
                 key={label}
@@ -386,18 +395,22 @@ export function TargetField({ blockIndex, rowIndex, row, exercise }: RowProps) {
 
 /** Düz olmayan setlerin özeti ("12 / 10 / 8 · piramit"): dokununca "Setleri ayrı düzenle" açılır. */
 export function SetsSummary({ row, exercise }: Pick<RowProps, 'row' | 'exercise'>) {
+  const t = useMessages(ptProgramMessages).setTable;
+  const locale = useLocale();
+  const format = getFormat(locale);
   const editor = useEditor();
   const shape = setShape(row.sets).kind;
   const walk = exercise ? cardioKind(exercise) === 'walk' : false;
-  const steps = row.sets.map((set) => `${rangeText(walk ? { min: minutesOf(set.min), max: minutesOf(set.max) } : set)}${set.amrap ? '+' : ''}`).join(' / ');
-  const unit = walk ? ' dk' : exercise?.trackingType === 'duration' ? ' sn' : '';
-  const suffix = shape === 'pyramid' ? ' · piramit' : shape === 'backoff' ? ' · back-off' : '';
+  const steps = row.sets.map((set) => `${rangeText(walk ? { min: minutesOf(set.min), max: minutesOf(set.max) } : set, format)}${set.amrap ? '+' : ''}`).join(' / ');
+  const time = catalogMessages(locale).time;
+  const unit = walk ? ` ${time.minutesUnit}` : exercise?.trackingType === 'duration' ? ` ${time.secondsUnit}` : '';
+  const suffix = shape === 'pyramid' ? t.shapePyramid : shape === 'backoff' ? t.shapeBackoff : '';
   const text = `${steps}${unit}${suffix}`;
   // Kendi programda set düzeni seçilmez: kopyalanan satırın düzeni yalnız okunur ("Setleri eşitle" aşağıda).
   if (editor.variant === 'simple') {
     return (
       <div className="flex min-w-0 basis-full flex-col gap-1.5 sm:basis-auto">
-        <span className="text-xs text-muted-foreground">Hedef</span>
+        <span className="text-xs text-muted-foreground">{t.targetLabel}</span>
         <span className="text-sm tabular-nums">{text}</span>
       </div>
     );
@@ -405,14 +418,14 @@ export function SetsSummary({ row, exercise }: Pick<RowProps, 'row' | 'exercise'
   return (
     <div className="flex min-w-0 basis-full flex-col gap-1.5 sm:basis-auto">
       <span className="text-xs text-muted-foreground" aria-hidden>
-        Hedef
+        {t.targetLabel}
       </span>
       <Button
         type="button"
         variant="outline"
         className="h-8 w-full min-w-0 justify-start px-2.5 font-normal tabular-nums touch:h-11 sm:w-auto"
         disabled={!exercise}
-        aria-label={`Setleri ayrı düzenle: ${text}`}
+        aria-label={t.editSetsAria(text)}
         onClick={() => {
           editor.setSetsOpen(row.id, true);
           editor.focusSet(row.id, 0, 'min');
@@ -422,18 +435,6 @@ export function SetsSummary({ row, exercise }: Pick<RowProps, 'row' | 'exercise'
     </div>
   );
 }
-
-const PRESET_MESSAGES: Record<Exclude<SetPreset, 'lastAmrap'>, string> = {
-  straight: 'Düz setler uygulandı',
-  pyramid: 'Piramit uygulandı',
-  backoff: 'Back-off uygulandı',
-};
-
-const PRESET_LABELS: Record<Exclude<SetPreset, 'lastAmrap'>, string> = {
-  straight: 'Düz',
-  pyramid: 'Piramit',
-  backoff: 'Back-off',
-};
 
 type NumberFieldStore = { input: unknown; errors: readonly string[] | null; props: FieldElementProps };
 
@@ -498,6 +499,7 @@ function SetNumberInput({
 
 /** Bir set: n · min–max · % (ağırlıklı harekette) · AMRAP. 360 px'in altında % ve AMRAP alt satıra iner. */
 function EditorSetRow({ blockIndex, rowIndex, row, exercise, index }: RowProps & { index: number }) {
+  const t = useMessages(ptProgramMessages).setTable;
   const { form, path } = useEditor();
   const at = (name: 'min' | 'max' | 'loadPct' | 'amrap') => blockField(path, blockIndex, 'rows', rowIndex, 'sets', index, name);
   const minField = useField(form, { path: at('min') });
@@ -526,7 +528,7 @@ function EditorSetRow({ blockIndex, rowIndex, row, exercise, index }: RowProps &
           count={count}
           column="min"
           field={minField}
-          label={`Set ${n} en az${walk ? ' (dk)' : ''}`}
+          label={t.setMin(n, walk)}
           max={max}
           step={step}
           disabled={disabled}
@@ -542,7 +544,7 @@ function EditorSetRow({ blockIndex, rowIndex, row, exercise, index }: RowProps &
           count={count}
           column="max"
           field={maxField}
-          label={`Set ${n} en çok${walk ? ' (dk)' : ''}`}
+          label={t.setMax(n, walk)}
           max={max}
           step={step}
           disabled={disabled}
@@ -561,7 +563,7 @@ function EditorSetRow({ blockIndex, rowIndex, row, exercise, index }: RowProps &
                 count={count}
                 column="pct"
                 field={pctField}
-                label={`Set ${n} yükü, tam yükün yüzdesi (boş: tam yük)`}
+                label={t.pctLabel(n)}
                 max={100}
                 step={5}
                 disabled={disabled}
@@ -575,7 +577,7 @@ function EditorSetRow({ blockIndex, rowIndex, row, exercise, index }: RowProps &
             disabled={disabled}
             pressed={Boolean(set?.amrap)}
             onPressedChange={(pressed) => setInput(form, { path: at('amrap'), input: pressed ? true : undefined })}
-            aria-label={`Set ${n} AMRAP (yapabildiği kadar)`}>
+            aria-label={t.amrapLabel(n)}>
             AMRAP
           </Toggle>
         </div>
@@ -591,18 +593,20 @@ function EditorSetRow({ blockIndex, rowIndex, row, exercise, index }: RowProps &
  * değilse ya da bir sette hata varsa kendiliğinden açıktır (hatada kapanmaz).
  */
 export function SetsSection({ blockIndex, rowIndex, row, exercise, title, open, forced }: RowProps & { title: string; open: boolean; forced: boolean }) {
+  const t = useMessages(ptProgramMessages).setTable;
+  const locale = useLocale();
   const editor = useEditor();
   const setsArray = useFieldArray(editor.form, { path: blockField(editor.path, blockIndex, 'rows', rowIndex, 'sets') });
   const weighted = exercise?.trackingType === 'weight_reps';
   const shape = setShape(row.sets).kind;
   const deviceId = row.deviceId ?? exercise?.deviceId;
   const device = deviceId ? editor.devices.get(deviceId) : undefined;
-  const rules = exercise ? describeSetRules(row.sets, loadSpecFor(exercise, device)) : null;
+  const rules = exercise ? describeSetRules(row.sets, loadSpecFor(exercise, device), locale) : null;
   const contentId = `sets-${row.id}`;
 
   const apply = (preset: Exclude<SetPreset, 'lastAmrap'>) => {
     editor.setSetsOpen(row.id, true);
-    editor.updateWithUndo((before) => applySetPreset(before, row.id, preset), PRESET_MESSAGES[preset]);
+    editor.updateWithUndo((before) => applySetPreset(before, row.id, preset), t.presetApplied[preset]);
   };
 
   // Kendi program (kendi-program.md §2.5): yüzde, AMRAP ve düzen seçimi yok. Kopyalanan satırda antrenörün düzeni
@@ -612,9 +616,9 @@ export function SetsSection({ blockIndex, rowIndex, row, exercise, title, open, 
     if (plain) return null;
     return (
       <div className="flex flex-wrap items-center justify-between gap-2 border-t px-3 py-3">
-        <p className="text-sm text-muted-foreground">Antrenörünün set düzeni{rules ? ` · ${rules}` : ''}</p>
-        <Button type="button" variant="outline" size="sm" className="touch:h-11" onClick={() => editor.updateWithUndo((before) => applySetPreset(before, row.id, 'straight'), PRESET_MESSAGES.straight)}>
-          Setleri eşitle
+        <p className="text-sm text-muted-foreground">{t.trainerLayout}{rules ? ` · ${rules}` : ''}</p>
+        <Button type="button" variant="outline" size="sm" className="touch:h-11" onClick={() => editor.updateWithUndo((before) => applySetPreset(before, row.id, 'straight'), t.presetApplied.straight)}>
+          {t.equalize}
         </Button>
       </div>
     );
@@ -630,7 +634,7 @@ export function SetsSection({ blockIndex, rowIndex, row, exercise, title, open, 
         onClick={() => editor.setSetsOpen(row.id, !open)}
         className="group/sets flex h-11 w-full items-center justify-between gap-2 px-3 text-left text-sm outline-none hover:bg-muted/40 focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:ring-inset disabled:cursor-default disabled:hover:bg-transparent">
         <span>
-          Setleri ayrı düzenle <span className="text-muted-foreground">· {weighted ? '%, AMRAP' : 'AMRAP'}</span>
+          {t.editSets} <span className="text-muted-foreground">· {weighted ? '%, AMRAP' : 'AMRAP'}</span>
         </span>
         <CaretDown
           aria-hidden
@@ -642,7 +646,7 @@ export function SetsSection({ blockIndex, rowIndex, row, exercise, title, open, 
           {weighted ? (
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-xs text-muted-foreground" id={`layout-${row.id}`}>
-                Düzen
+                {t.layoutLabel}
               </span>
               <ToggleGroup
                 variant="outline"
@@ -655,20 +659,20 @@ export function SetsSection({ blockIndex, rowIndex, row, exercise, title, open, 
                 }}>
                 {(['straight', 'pyramid', 'backoff'] as const).map((preset) => (
                   <ToggleGroupItem key={preset} value={preset} className="h-8 px-3 touch:h-11">
-                    {PRESET_LABELS[preset]}
+                    {t.presetLabels[preset]}
                   </ToggleGroupItem>
                 ))}
               </ToggleGroup>
-              {shape === 'custom' ? <span className="text-xs text-muted-foreground">Özel düzen</span> : null}
+              {shape === 'custom' ? <span className="text-xs text-muted-foreground">{t.customLayout}</span> : null}
             </div>
           ) : !isStraight(row.sets) ? (
             <div>
               <Button type="button" variant="outline" size="sm" className="touch:h-11" onClick={() => apply('straight')}>
-                Setleri eşitle
+                {t.equalize}
               </Button>
             </div>
           ) : null}
-          <ol className="flex flex-col gap-2" aria-label={`${title} setleri`}>
+          <ol className="flex flex-col gap-2" aria-label={t.setsAria(title)}>
             {row.sets.map((_, index) => (
               <EditorSetRow key={index} blockIndex={blockIndex} rowIndex={rowIndex} row={row} exercise={exercise} index={index} />
             ))}

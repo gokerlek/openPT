@@ -15,6 +15,8 @@ import { DRAG } from '@/lib/motion';
 import { vibrate } from '@/lib/haptics';
 import { LIST_ACCESSIBILITY, autoScrollEdge, listAutoScroll, setReordering, useListSensors } from '@/components/list/dnd-base';
 import type { TemplateBlock } from '@/lib/template-plan';
+import { useLocale } from '@/i18n/client';
+import { ptProgramMessages } from '@/i18n/messages/pt-program';
 import { useEditor } from '../editor-context';
 import type { DropData } from './drag-node';
 import { DragStoreContext, IDLE, createDragStore } from './drag-store';
@@ -52,11 +54,6 @@ type Session = {
 };
 
 const NOTHING: DropResolution = { line: null, candidate: null, refusal: null };
-
-const REFUSALS: Record<'limit' | 'full', string> = {
-  limit: 'Şablon dolu: en fazla 40 hareket, 30 blok',
-  full: 'Grup dolu (8)',
-};
 
 function pageSpan(element: Element) {
   const rect = element.getBoundingClientRect();
@@ -111,6 +108,7 @@ export function EditorDnd({
   children: React.ReactNode;
 }) {
   const editor = useEditor();
+  const locale = useLocale();
   const id = useId();
   const [store] = useState(createDragStore);
   const sensors = useListSensors();
@@ -210,7 +208,7 @@ export function EditorDnd({
 
     if (resolution.refusal !== current.refusal) {
       current.refusal = resolution.refusal;
-      if (resolution.refusal) latest.current.announce(REFUSALS[resolution.refusal]);
+      if (resolution.refusal) latest.current.announce(resolution.refusal === 'limit' ? ptProgramMessages(locale).edit.templateFull : ptProgramMessages(locale).edit.groupFull);
     }
     publish();
   };
@@ -220,7 +218,7 @@ export function EditorDnd({
     const action = current ? dropAction(current.resolution, current.armedId) : null;
     finish();
     if (!current || !action) return;
-    commitDrop(latest.current, current.activeId, action);
+    commitDrop(latest.current, current.activeId, action, locale);
   };
 
   return (
