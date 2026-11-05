@@ -1,6 +1,6 @@
 # Uygulama güncellemeleri
 
-PT panelinde Ayarlar → Uygulama sürümü açılır. Danışanlar bu sayfaya ve API'ye erişemez. Şu anda yayımlanmış yeni kararlı release yoksa ekran bunu söyler.
+PT panelinde Ayarlar → Sürüm açılır. Danışanlar bu sayfaya ve API'ye erişemez. Şu anda yayımlanmış yeni kararlı release yoksa ekran bunu söyler.
 
 ## Otomatik yol
 

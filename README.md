@@ -12,7 +12,9 @@ Antrenör programı hazırlar ve danışanını davet eder. Danışan telefonund
 
 ### Tek komut
 
-macOS ya da Linux'ta, Node.js 20+ ile terminale yapıştır:
+macOS ya da Linux'ta çalışır. Önce bir kez [Node.js](https://nodejs.org/) kur (sitedeki "LTS" sürümünü indir ve aç; sürüm 20 ya
+da üstü olmalı). Sonra **Terminal** uygulamasını aç (Mac'te: Spotlight'ta "Terminal" yaz), aşağıdaki satırı yapıştır ve Enter'a bas.
+Windows kullanıyorsan aşağıdaki **Tarayıcıdan** yolunu kullan.
 
 ```sh
 node --input-type=module -e "$(curl -fsSL https://raw.githubusercontent.com/gokerlek/axon-fit/main/kur/kur.mjs)"

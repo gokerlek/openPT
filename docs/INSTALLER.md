@@ -56,6 +56,7 @@ Resmi yönergeler: [GitHub App manifest akışı](https://docs.github.com/en/app
 - "Yalnız seçili repolara erişiyor" uyarısında GitHub → Settings → Applications → uygulaman → Configure ekranında **All repositories** seç ve kaydet. Seçili repolarla kurulmuş uygulama danışan repolarını göremez; bu durumda danışan ekleme ve silme iş başlamadan durur (silinmemiş veri GitHub'da sessizce kalmaz). Kurulum sürüyorsa ayarı kaydettikten sonra ilk sekmeye dön ve **Yeniden doğrula**'ya bas.
 - Domaini değiştirdiysen GitHub uygulamasının ayarlarında Homepage URL ve Callback URL'yi yeni Production adresine göre bir kez güncelle (`/api/auth/github/callback`). GitHub kayıtlı adresleri kendiliğinden değiştirmez.
 - GitHub `redirect_uri` uyarısı veriyorsa uygulamanın callback adresiyle tarayıcıdaki Production domain aynı olmalı. Adresin sonu `/api/auth/github/callback` olmalı.
+- Tek komutla kurduysan GitHub uygulamasının ilk Callback URL'si kurulum sırasındaki yerel adrestir (`http://127.0.0.1:<port>/…`). Uygulamayı GitHub'da kaldırıp yeniden kurarsan "Install"dan sonra tarayıcı bu kapalı adrese gider ve hata gösterir; kurulum yine de tamamlanmıştır. İstersen bu yerel adresi GitHub uygulamasının ayarlarından sil; Production adresi (`/api/auth/github/callback`) kalmalı.
 - GitHub'a yanlış hesapla giriş yapılırsa PT oturumu açılmaz ve kullanıcı anahtarı saklanmaz.
 - "Bu işlem için GitHub ile yeniden giriş yap": danışan ekleme/silme PT'nin GitHub girişini ister. Çıkış yapıp GitHub ile gir; e-posta koduyla açılmış oturum repo açamaz.
 - Veri repo'su açık/fork ise görünüm kaydı reddedilir. Kişisel veriyi açık kod reposuna taşıma; ayrı private repo kullan.
@@ -64,7 +65,7 @@ Resmi yönergeler: [GitHub App manifest akışı](https://docs.github.com/en/app
 
 ## Güncellemeler
 
-PT panelindeki Ayarlar → Uygulama sürümü isteğe bağlıdır; normal kullanım sırasında upstream sürüm kontrolü yapılmaz. Geliştiricinin reposu veya hesabı erişilemez olsa da kendi kurulumun mevcut sürümüyle çalışmaya devam eder. [Güncelleme ve manuel birleştirme](UPDATES.md).
+PT panelindeki Ayarlar → Sürüm isteğe bağlıdır; normal kullanım sırasında upstream sürüm kontrolü yapılmaz. Geliştiricinin reposu veya hesabı erişilemez olsa da kendi kurulumun mevcut sürümüyle çalışmaya devam eder. [Güncelleme ve manuel birleştirme](UPDATES.md).
 
 ## Yerel simülasyon
 
