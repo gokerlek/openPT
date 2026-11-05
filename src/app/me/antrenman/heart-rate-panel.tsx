@@ -126,7 +126,7 @@ export function HeartSheet({
               </span>
               <span className="flex flex-col">
                 <span className="font-heading text-3xl leading-none font-semibold tabular-nums">
-                  {live ?? '—'} <span className="text-base font-medium text-muted-foreground">bpm</span>
+                  {live ?? '—'} <span className="text-base font-medium text-muted-foreground">{t.bpm}</span>
                 </span>
                 <span className="text-sm text-muted-foreground">{zone ? t.yourZone(t.zones[zone]) : t.waiting}</span>
               </span>
@@ -140,12 +140,12 @@ export function HeartSheet({
             <dl className="grid grid-cols-2 gap-2">
               <div className="rounded-lg border p-3">
                 <dt className="text-[0.8125rem] text-muted-foreground">{t.recovery}</dt>
-                <dd className="text-lg font-semibold tabular-nums">{limits.recovery} bpm</dd>
+                <dd className="text-lg font-semibold tabular-nums">{limits.recovery} {t.bpm}</dd>
                 <dd className="text-xs text-muted-foreground">{t.recoveryText}</dd>
               </div>
               <div className="rounded-lg border p-3">
                 <dt className="text-[0.8125rem] text-muted-foreground">{t.alert}</dt>
-                <dd className="text-lg font-semibold tabular-nums">{limits.alert} bpm</dd>
+                <dd className="text-lg font-semibold tabular-nums">{limits.alert} {t.bpm}</dd>
                 <dd className="text-xs text-muted-foreground">{t.alertText}</dd>
               </div>
             </dl>

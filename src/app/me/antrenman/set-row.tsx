@@ -7,8 +7,11 @@ import { ArrowUp } from '@phosphor-icons/react';
 import { Check, X } from '@/components/line-icons';
 import { SwipeRow, deleteAction } from '@/components/swipe/swipe-row';
 import { NUMBER_FORMAT, WHOLE_FORMAT } from '@/components/ui/stepper';
+import { useLocale } from '@/i18n/client';
+import { intlLocale } from '@/i18n/locale';
+import { clientWorkoutMessages } from '@/i18n/messages/client-workout';
 import { CARDIO_LIMITS, distanceText, durationClock, inclineText, minutesOf, walkKcal, type CardioKind } from '@/lib/cardio';
-import { formatNumber } from '@/lib/format';
+import { getFormat } from '@/lib/format';
 import { DURATION, tween } from '@/lib/motion';
 import type { TrackingType } from '@/lib/progression';
 import { SESSION_LIMITS } from '@/lib/schemas/session';
@@ -81,6 +84,7 @@ function CellNumber({
   onFocus?: (() => void) | undefined;
   onChange: (value: number) => void;
 }) {
+  const locale = useLocale();
   // Boşaltılıp bırakılan kutu değere dönsün diye kutu yeniden kurulur (`Stepper` gibi).
   const [resetKey, setResetKey] = useState(0);
   const latest = useRef(value);
@@ -97,7 +101,7 @@ function CellNumber({
       min={0}
       max={max}
       step={decimal ? 0.5 : 1}
-      locale="tr-TR"
+      locale={intlLocale(locale)}
       format={decimal ? NUMBER_FORMAT : WHOLE_FORMAT}
       disabled={disabled}
       onValueChange={settled ? undefined : accept}
@@ -196,6 +200,9 @@ export function WorkoutSetRow({
   /** Bekleyen planlı seti bugünden siler (sola kaydırıp "Sil"); silinemiyorsa (yapılmış, son set) null. */
   onDrop: (() => void) | null;
 }) {
+  const locale = useLocale();
+  const t = clientWorkoutMessages(locale).row;
+  const f = getFormat(locale);
   const logged = set.logged;
   // Sola kaydırıp "Sil": yapılmış set (kayıt silinir, satır bekleyene döner), bekleyen planlı ya da fazladan set (satır kapanır).
   const drop = logged ? null : set.extra && entry && !entry.disabled ? onDropExtra : onDrop;
@@ -203,18 +210,18 @@ export function WorkoutSetRow({
   const weighted = trackingType === 'weight_reps';
   const kg = logged ? logged.kg : highlight === 'current' ? currentKg : waitingKg;
   const value = logged ? (logged.reps ?? logged.seconds) : undefined;
-  const label = `Set ${set.position + 1}`;
+  const label = t.label(set.position + 1);
   const amrap = Boolean(set.target.amrap);
   const input = logged ? null : entry;
   const fix = logged && onFix ? onFix : null;
   const duration = trackingType === 'duration';
   const walk = cardio === 'walk';
-  const valueLabel = `${label}, ${walk ? 'süre (dk)' : duration ? 'süre (sn)' : amrap ? 'yaptığın tekrar' : 'tekrar'}`;
+  const valueLabel = walk ? t.minutes(label) : duration ? t.seconds(label) : amrap ? t.repsDone(label) : t.reps(label);
   const kcal = logged && walk ? walkKcal(logged, bodyMassKg) : null;
   // Yürüyüş/koşuda süre kutusu dakika (saniye saklanır).
   const shownValue = (seconds: number | undefined) => (walk && seconds !== undefined ? minutesOf(seconds) : seconds);
   const storedValue = (shown: number) => (walk ? Math.round(shown * 60) : shown);
-  const valueText = (seconds: number) => (walk ? durationClock(seconds) : duration ? `${seconds} sn` : String(seconds));
+  const valueText = (seconds: number) => (walk ? durationClock(seconds) : duration ? t.secondsValue(seconds) : String(seconds));
   const cardioCell = (key: 'distanceM' | 'inclinePct', text: (value: number) => string) => {
     const current = input ? input[key] : logged?.[key];
     return input || fix ? (
@@ -225,7 +232,7 @@ export function WorkoutSetRow({
           decimal={key === 'inclinePct'}
           invalid={false}
           disabled={input ? input.disabled : locked}
-          label={`${label}, ${key === 'distanceM' ? 'mesafe (m)' : 'eğim (%)'}`}
+          label={key === 'distanceM' ? t.distance(label) : t.incline(label)}
           settled={!input}
           onFocus={input?.onSelect}
           onChange={(changed) => (input ? input.onChange({ [key]: changed }) : logged && fix?.(logged.id, { [key]: changed }))}
@@ -263,7 +270,7 @@ export function WorkoutSetRow({
             <button
               type="button"
               id={setEditButtonId(logged.id)}
-              aria-label={`${label}, ${setValueText(logged, bodyMassKg)}. Düzenle`}
+              aria-label={t.edit(label, setValueText(logged, bodyMassKg, locale))}
               onClick={(event) => {
                 event.stopPropagation();
                 onEdit(logged.id);
@@ -274,7 +281,7 @@ export function WorkoutSetRow({
           ) : (
             set.position + 1
           )}
-          {amrap ? <span className="sr-only">, AMRAP</span> : null}
+          {amrap ? <span className="sr-only">{t.amrap}</span> : null}
         </div>
         <div
           role="cell"
@@ -282,11 +289,11 @@ export function WorkoutSetRow({
           {set.extra && input ? (
             // Yalnız ✕ siler (onaysız, 8 sn "Geri al"): yazıya dokunmak satırı seçer.
             <span className="inline-flex max-w-full items-center">
-              <span className="truncate">fazladan</span>
+              <span className="truncate">{t.extra}</span>
               <button
                 type="button"
                 disabled={input.disabled}
-                aria-label={`${label}, fazladan: ${group ? 'turu' : 'seti'} sil`}
+                aria-label={t.dropExtra(label, group)}
                 onClick={(event) => {
                   event.stopPropagation();
                   onDropExtra();
@@ -296,15 +303,15 @@ export function WorkoutSetRow({
               </button>
             </span>
           ) : set.extra ? (
-            'fazladan'
+            t.extra
           ) : (
-            previousText(set.previous, trackingType, cardio)
+            previousText(set.previous, trackingType, cardio, locale)
           )}
-          {kcal ? <span className="block font-medium text-primary-text">≈ {kcal} kcal</span> : null}
+          {kcal ? <span className="block font-medium text-primary-text">{t.kcal(kcal)}</span> : null}
         </div>
         {showTarget ? (
           <div role="cell" className={cn(CELL, 'text-muted-foreground')}>
-            {targetCell(set.target, trackingType, cardio)}
+            {targetCell(set.target, trackingType, cardio, locale)}
           </div>
         ) : null}
         {weighted && (input || fix) ? (
@@ -315,7 +322,7 @@ export function WorkoutSetRow({
               decimal
               invalid={input?.invalid ?? false}
               disabled={input ? input.disabled : locked}
-              label={`${label}, ağırlık (kg)`}
+              label={t.weight(label)}
               settled={!input}
               onFocus={input?.onSelect}
               onChange={(next) => (input ? input.onChange({ kg: next }) : logged && fix?.(logged.id, { kg: next }))}
@@ -323,18 +330,18 @@ export function WorkoutSetRow({
             {logged?.overload ? (
               <>
                 <ArrowUp weight="bold" className="pointer-events-none absolute top-1/2 right-2 size-3 -translate-y-1/2 text-destructive-text" aria-hidden />
-                <span className="sr-only">, hedefin çok üzerinde</span>
+                <span className="sr-only">{t.overload}</span>
               </>
             ) : null}
           </div>
         ) : weighted ? (
           <div role="cell" className={cn(CELL, logged ? 'font-semibold' : 'text-muted-foreground')}>
             <span className="inline-flex items-center gap-0.5">
-              {kg !== undefined ? formatNumber(kg) : '—'}
+              {kg !== undefined ? f.number(kg) : '—'}
               {logged?.overload ? (
                 <>
                   <ArrowUp weight="bold" className="size-3.5 text-destructive-text" aria-hidden />
-                  <span className="sr-only">, hedefin çok üzerinde</span>
+                  <span className="sr-only">{t.overload}</span>
                 </>
               ) : null}
             </span>
@@ -358,16 +365,16 @@ export function WorkoutSetRow({
           </div>
         ) : (
           <div role="cell" className={cn(CELL, logged ? 'font-semibold' : 'text-muted-foreground')}>
-            {value !== undefined ? valueText(value) : amrap && !showTarget ? targetCell(set.target, trackingType, cardio) : '—'}
+            {value !== undefined ? valueText(value) : amrap && !showTarget ? targetCell(set.target, trackingType, cardio, locale) : '—'}
           </div>
         )}
-        {cardio ? cardioCell('distanceM', distanceText) : null}
-        {walk ? cardioCell('inclinePct', inclineText) : null}
+        {cardio ? cardioCell('distanceM', (meters) => distanceText(meters, locale)) : null}
+        {walk ? cardioCell('inclinePct', (pct) => inclineText(pct, locale)) : null}
         <div role="cell" className={cn(CELL, 'justify-center p-0')}>
           {logged ? (
             <button
               type="button"
-              aria-label={`${label}, ${setValueText(logged, bodyMassKg)}, yapıldı. İşareti kaldır`}
+              aria-label={t.untick(label, setValueText(logged, bodyMassKg, locale))}
               onClick={(event) => {
                 event.stopPropagation();
                 onUntick(logged.id);
@@ -386,7 +393,10 @@ export function WorkoutSetRow({
               type="button"
               id={highlight === 'current' ? ROW_DONE_ID : undefined}
               disabled={input.disabled}
-              aria-label={`${label}, ${weighted && input.kg !== undefined ? `${formatNumber(input.kg)} kg × ${input.value}` : duration ? valueText(input.value) : `${input.value} tekrar`}: yapıldı olarak işaretle`}
+              aria-label={t.markDone(
+                label,
+                weighted && input.kg !== undefined ? t.kgTimes(f.number(input.kg), input.value) : duration ? valueText(input.value) : t.repsValue(input.value),
+              )}
               onClick={(event) => {
                 event.stopPropagation();
                 input.onDone();
@@ -399,7 +409,7 @@ export function WorkoutSetRow({
           ) : set.extra ? (
             <button
               type="button"
-              aria-label={`${label}, fazladan: ${group ? 'turu' : 'seti'} sil`}
+              aria-label={t.dropExtra(label, group)}
               onClick={(event) => {
                 event.stopPropagation();
                 onDropExtra();

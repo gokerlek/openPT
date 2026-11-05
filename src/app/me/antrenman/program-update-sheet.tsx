@@ -7,26 +7,29 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Field, FieldContent, FieldDescription, FieldLabel, FieldTitle } from '@/components/ui/field';
 import { Drawer, DrawerContent, DrawerDescription, DrawerFooter, DrawerHeader, DrawerTitle } from '@/components/ui/drawer';
 import { Spinner } from '@/components/ui/spinner';
-import { formatNumber } from '@/lib/format';
+import { useLocale } from '@/i18n/client';
+import type { Locale } from '@/i18n/locale';
+import { clientWorkoutMessages } from '@/i18n/messages/client-workout';
+import { getFormat } from '@/lib/format';
 import { DURATION, tween } from '@/lib/motion';
 import { feedbackSummary, type FeedbackItem } from '@/lib/program-feedback';
-import { dative } from '@/lib/turkish';
 
 /** Sheet'in alt metni: neyin hemen değiştiği, neyin antrenöre gittiği. */
-function explainer(items: readonly FeedbackItem[], ownName: string | null): string {
+function explainer(items: readonly FeedbackItem[], ownName: string | null, locale: Locale): string {
+  const t = clientWorkoutMessages(locale).update;
   // Kendi programda her madde doğrudan programa yazılır (`docs/design/kendi-program.md` §2.9).
-  if (ownName) return `Seçtiklerin ${ownName} programına yazılır.`;
+  if (ownName) return t.ownExplainer(ownName);
   const direct = items.some((item) => item.mode === 'direct');
   const proposal = items.some((item) => item.mode === 'proposal');
-  if (direct && proposal) return 'Kilo ve tekrar hedefin hemen değişir; set sayısını ve hareket değişikliğini antrenörün onaylar.';
-  if (direct) return 'Kilo ve tekrar hedefin hemen değişir; antrenörüne bildirilir.';
-  return 'Önerilerin antrenörüne gider; onaylayınca programına yazılır.';
+  if (direct && proposal) return t.bothExplainer;
+  if (direct) return t.directExplainer;
+  return t.proposalExplainer;
 }
 
 /** "Tek tek seç"te maddenin alt metni: işaretliyken ne olur, işaretsizken ne olur. */
-function itemDescription(item: FeedbackItem, checked: boolean): string {
+function itemDescription(item: FeedbackItem, checked: boolean, locale: Locale): string {
   if (item.mode === 'proposal') return item.hint;
-  return checked ? 'Programa yazılır' : item.hint;
+  return checked ? clientWorkoutMessages(locale).update.written : item.hint;
 }
 
 export type ProgramAnswer = { answer: 'yes' | 'no' | 'pick'; picked?: ReadonlySet<string> };
@@ -80,6 +83,9 @@ function UpdateBody({
   ownName: string | null;
   onAnswer: (answer: ProgramAnswer) => void;
 }) {
+  const locale = useLocale();
+  const t = clientWorkoutMessages(locale).update;
+  const f = getFormat(locale);
   const initial = new Set(items.filter((item) => item.checked).map((item) => item.key));
   const [mode, setMode] = useState<'summary' | 'pick'>(initial.size > 0 ? 'summary' : 'pick');
   const [picked, setPicked] = useState<ReadonlySet<string>>(initial);
@@ -111,9 +117,9 @@ function UpdateBody({
           <>
             <DrawerHeader className="gap-1.5 pt-5">
               <DrawerTitle ref={title} tabIndex={-1} className="text-lg font-semibold outline-none">
-                {ownName ? `${ownName} programını güncelleyelim mi?` : 'Programını güncelleyelim mi?'}
+                {ownName ? t.ownTitle(ownName) : t.title}
               </DrawerTitle>
-              <DrawerDescription>{explainer(items, ownName)}</DrawerDescription>
+              <DrawerDescription>{explainer(items, ownName, locale)}</DrawerDescription>
             </DrawerHeader>
             <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto overscroll-contain px-4">
               <ul className="flex flex-col gap-1.5 text-sm">
@@ -124,29 +130,27 @@ function UpdateBody({
                     </span>
                     <span className="min-w-0">
                       {item.text}
-                      {item.mode === 'proposal' ? <span className="text-muted-foreground"> (antrenörüne)</span> : null}
+                      {item.mode === 'proposal' ? <span className="text-muted-foreground">{t.toTrainer}</span> : null}
                     </span>
                   </li>
                 ))}
               </ul>
-              {summary.more > 0 ? <p className="text-sm text-muted-foreground tabular-nums">+{formatNumber(summary.more)} değişiklik</p> : null}
+              {summary.more > 0 ? <p className="text-sm text-muted-foreground tabular-nums">{t.more(f.number(summary.more), summary.more)}</p> : null}
               {summary.unchecked > 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  {formatNumber(summary.unchecked)} öneri seçili değil; &quot;Tek tek seç&quot;ten ekleyebilirsin.
-                </p>
+                <p className="text-sm text-muted-foreground">{t.unchecked(f.number(summary.unchecked), summary.unchecked)}</p>
               ) : null}
             </div>
             <DrawerFooter className="pt-3">
               <Button size="lg" className="h-14 w-full text-base" disabled={busy} onClick={() => answer({ answer: 'yes' })}>
                 {busy && pending === 'yes' ? <Spinner data-icon="inline-start" /> : null}
-                {ownName ? `${dative(ownName)} yaz` : 'Evet, güncelle'}
+                {ownName ? t.writeOwn(ownName) : t.yes}
               </Button>
               <Button variant="outline" className="h-11 w-full" disabled={busy} onClick={() => answer({ answer: 'no' })}>
                 {busy && pending === 'no' ? <Spinner data-icon="inline-start" /> : null}
-                Hayır, aynı kalsın
+                {t.no}
               </Button>
               <Button variant="link" className="h-11 self-center" disabled={busy} onClick={() => setMode('pick')}>
-                Tek tek seç
+                {t.pick}
               </Button>
             </DrawerFooter>
           </>
@@ -154,11 +158,11 @@ function UpdateBody({
           <>
             <DrawerHeader className="gap-1.5 pt-5">
               <DrawerTitle ref={title} tabIndex={-1} className="text-lg font-semibold outline-none">
-                Tek tek seç
+                {t.pick}
               </DrawerTitle>
-              <DrawerDescription>{explainer(items, ownName)}</DrawerDescription>
+              <DrawerDescription>{explainer(items, ownName, locale)}</DrawerDescription>
             </DrawerHeader>
-            <div role="group" aria-label="Program değişiklikleri" className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto overscroll-contain px-4">
+            <div role="group" aria-label={t.changes} className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto overscroll-contain px-4">
               {items.map((item) => {
                 const checked = picked.has(item.key);
                 const id = `update-${item.key.replace(/[^a-z0-9_-]/gi, '-')}`;
@@ -168,7 +172,7 @@ function UpdateBody({
                       <Checkbox id={id} checked={checked} disabled={busy} onCheckedChange={(next) => toggle(item.key, next === true)} className="size-5" />
                       <FieldContent>
                         <FieldTitle className="w-full">{item.text}</FieldTitle>
-                        <FieldDescription className="text-[0.8125rem]">{itemDescription(item, checked)}</FieldDescription>
+                        <FieldDescription className="text-[0.8125rem]">{itemDescription(item, checked, locale)}</FieldDescription>
                       </FieldContent>
                     </Field>
                   </FieldLabel>
@@ -178,7 +182,7 @@ function UpdateBody({
             <DrawerFooter className="pt-3">
               <Button size="lg" className="h-14 w-full text-base" disabled={busy} onClick={() => answer({ answer: 'pick', picked })}>
                 {busy ? <Spinner data-icon="inline-start" /> : null}
-                Kaydet
+                {t.save}
               </Button>
             </DrawerFooter>
           </>

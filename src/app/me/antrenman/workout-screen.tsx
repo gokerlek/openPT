@@ -11,10 +11,12 @@ import { Button } from '@/components/ui/button';
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { Skeleton } from '@/components/ui/skeleton';
 import { showGuardedUndo, showUndoToast } from '@/components/undo-toast';
+import { useLocale } from '@/i18n/client';
+import { clientWorkoutMessages } from '@/i18n/messages/client-workout';
 import { cardioSpeedIssue } from '@/lib/cardio';
-import { formatKg } from '@/lib/format';
+import { getFormat } from '@/lib/format';
 import { DRAG, DURATION, EASE, tween, WORKOUT } from '@/lib/motion';
-import { EFFORT_LABELS } from '@/lib/progression';
+import { effortLabels } from '@/lib/progression';
 import { ApiError, fetchJson } from '@/lib/query/errors';
 import { feedbackItems, feedbackMessage, resolveFeedback, withFeedbackFlags, type FeedbackItem, type FeedbackOutcome } from '@/lib/program-feedback';
 import type { FinishFeedback, FinishHealth, SessionDoc } from '@/lib/schemas/session';
@@ -357,6 +359,8 @@ export function WorkoutScreen({
 }) {
   const router = useRouter();
   const queryClient = useQueryClient();
+  const locale = useLocale();
+  const t = clientWorkoutMessages(locale).screen;
   // Odak adreste (`?hareket=`). `useSearchParams` adres değişimini bir geçişin (transition) içinde görür: işleyiciler
   // ve zamanlayıcılar odağı eşzamanlı kopyadan (`focusRef`) okur; `openFocus` ikisini birlikte yazar.
   const params = useSearchParams();
@@ -421,10 +425,10 @@ export function WorkoutScreen({
       setLocal(next);
       if (!saveLocalWorkout(clientId, next) && !storageWarned.current) {
         storageWarned.current = true;
-        toast.warning('Bu tarayıcıda yedeklenemiyor; sekmeyi kapatma.');
+        toast.warning(t.noBackup);
       }
     },
-    [clientId],
+    [clientId, t],
   );
 
   /**
@@ -655,7 +659,7 @@ export function WorkoutScreen({
       }
       if (canStay && !navigator.onLine) {
         if (!addressMarked()) pushMark();
-        toast('Bağlantı yok; Bugün bağlantı gelince açılır.', { description: 'Antrenmanın telefonunda kayıtlı.' });
+        toast(t.offlineStay, { description: t.savedOnPhone });
         return;
       }
       exitTarget.current = { href, canStay };
@@ -690,7 +694,7 @@ export function WorkoutScreen({
       };
       start();
     },
-    [armed, router, leaveShown, pushMark],
+    [armed, router, leaveShown, pushMark, t],
   );
 
   /**
@@ -713,11 +717,11 @@ export function WorkoutScreen({
   const { outbox, problem, online } = useWorkoutOutbox({
     localRef,
     commit,
-    onGone: () => leave('Bu antrenman silinmiş.', 'info'),
+    onGone: () => leave(t.gone, 'info'),
     onFinishedElsewhere: (server) => {
       const current = localRef.current;
       const count = current ? setsMissingOn(current.doc, server) : 0;
-      if (count === 0) leave('Bu antrenman başka bir cihazda bitirildi.', 'info');
+      if (count === 0) leave(t.finishedElsewhere, 'info');
       else setElsewhere({ server, count });
     },
   });
@@ -788,9 +792,9 @@ export function WorkoutScreen({
       announce(unitTitle(plan, current.doc, unit));
       focusLater('exercise-title', DURATION.base);
     } else {
-      announce('Liste');
+      announce(t.list);
     }
-  }, [focus, leaveShown, announce, focusLater]);
+  }, [focus, leaveShown, announce, focusLater, t]);
 
   /* --- açılış: telefondaki antrenman → taze plan → sunucu → son okunan plan --- */
 
@@ -819,8 +823,8 @@ export function WorkoutScreen({
       // Başka program seçildi (Faz 3): o gün atanmış program varken antrenöre bitişte bildirilir (`other_day`); kendi programda yok.
       if (!announced && data.day.source !== 'own' && data.day.plannedDayId && data.day.plannedDayId !== data.day.dayId) {
         announced = true;
-        toast(`${data.day.dayName} seçildi`, {
-          description: data.day.plannedDayName ? `Bugün ${data.day.plannedDayName} planlıydı; antrenörüne bildirilecek.` : 'Antrenörüne bildirilecek.',
+        toast(t.picked(data.day.dayName), {
+          description: data.day.plannedDayName ? t.plannedToday(data.day.plannedDayName) : t.willNotify,
         });
       }
     };
@@ -866,7 +870,7 @@ export function WorkoutScreen({
     const open = (data: WorkoutResponse, online: boolean) => {
       if (!stale || data.active) begin(data);
       else if (online) exitTo('/me', { canStay: false });
-      else setLoad({ phase: 'error', message: 'Bağlantı yok; bu antrenman telefonunda kayıtlı değil.' });
+      else setLoad({ phase: 'error', message: t.notOnPhone });
     };
     const cached = readWorkoutCache(clientId);
     // Saklanan yanıt bu açılışın günü mü: istenen gün ya da gün istenmediyse sunucunun varsayılan günü (`nextDayId`,
@@ -894,7 +898,7 @@ export function WorkoutScreen({
         if (cancelled) return;
         // Çevrimdışı: son okunan planla başlanır.
         if (usable) open(usable.data, false);
-        else setLoad({ phase: 'error', message: error instanceof ApiError ? error.message : 'Antrenman açılamadı.' });
+        else setLoad({ phase: 'error', message: error instanceof ApiError ? error.message : t.openFailed });
       });
     return cleanup;
     // `finishOnOpen`, `outbox` ve `exitTo` açılışta bir kez okunur.
@@ -998,21 +1002,21 @@ export function WorkoutScreen({
       for (const event of events) {
         if (event === 'warn') {
           beep(1, 660);
-          announce('10 saniye kaldı');
+          announce(t.tenSeconds);
         } else if (event === 'hold') {
           // Süre doldu ama nabız yüksek: sessiz uzar, ekranda "Nabzın 120'ye inince devam".
-          announce('Nabzın yüksek; dinlenme uzuyor.');
+          announce(t.heartHold);
         } else {
           beep(3);
           vibrate([80, 60, 80]);
           if (event === 'end') {
-            announce(heartHigh ? 'Dinlenme bitti. Nabız hâlâ yüksek.' : 'Dinlenme bitti. Hazırsın.');
+            announce(heartHigh ? t.restEndHigh : t.restEnd);
             guard();
           }
         }
       }
     },
-    [announce, guard],
+    [announce, guard, t],
   );
 
   // Görünüm hangi dinlenmenin: dinlenme bitince (ya da yenisi başlayınca) eskisinin görünümü kendiliğinden düşer.
@@ -1061,7 +1065,7 @@ export function WorkoutScreen({
       if (tick.events.length > 0) {
         beep(1, 990);
         vibrate(20);
-        announce('Hedefe ulaştın');
+        announce(t.reached);
       }
       if (tick.timer !== current.timer) commit({ ...current, timer: tick.timer });
       const key = `${tick.seconds}:${tick.phase}`;
@@ -1073,7 +1077,7 @@ export function WorkoutScreen({
     };
     loop();
     return () => window.cancelAnimationFrame(frame);
-  }, [timerKey, commit, announce]);
+  }, [timerKey, commit, announce, t]);
 
   // Geçiş bitince tek kısa bip (geç fark edildiyse sessiz); tam dinlenme değil, alarm yok.
   useEffect(() => {
@@ -1176,11 +1180,11 @@ export function WorkoutScreen({
       unitKey,
       row,
       sets: row ? setViews(plan, doc, row.rowId) : [],
-      group: unitKey ? groupView(plan, doc, unitKey, shown) : null,
+      group: unitKey ? groupView(plan, doc, unitKey, shown, locale) : null,
       warmups: row ? warmupViews(plan, doc, row.rowId) : [],
       setupNote: row ? setupNoteOf(plan, doc, row.rowId) : undefined,
     };
-  }, [local, saving, focus, editing]);
+  }, [local, saving, focus, editing, locale]);
 
   // Adresteki odak geçersiz (başka cihazda silindi, adres elle değişti, birim atlandı, plan dışı kayıt): listeye
   // dönülür (`goToList`: altında bu sayfanın liste girdisi varsa geri, yoksa `replaceState`). Odak bu arada yine
@@ -1232,7 +1236,7 @@ export function WorkoutScreen({
       const row = plan.rows[next.rowId];
       const value = seconds ?? next.value;
       // İnsan sınırı: bu sürede bu mesafe yapılamıyorsa set yazılmaz, nedeni söylenir ("1 saniyede 1000 metre").
-      const speedIssue = row?.cardio ? cardioSpeedIssue(row.cardio, { seconds: value, distanceM: next.distanceM }) : null;
+      const speedIssue = row?.cardio ? cardioSpeedIssue(row.cardio, { seconds: value, distanceM: next.distanceM }, locale) : null;
       if (speedIssue) {
         toast.error(speedIssue);
         announce(speedIssue);
@@ -1251,7 +1255,7 @@ export function WorkoutScreen({
         extra: next.extra === true,
         stamp: stampOf(current),
       });
-      const achievement = row?achievementNotice(current.doc,doc,row,row.achievements,current.achievementSeen):null;
+      const achievement = row?achievementNotice(current.doc,doc,row,row.achievements,current.achievementSeen,locale):null;
       const after = afterLog(plan, current.doc, doc, focused, next);
       // Birim bitti: açılacak sıradaki birim sırada planı bitmemiş ilk birim (`nextUnitAfter`); başka birimde bekleyen
       // "+ Set ekle" seti sayılmaz (önceki bir hareketin fazladan setine geri dönülmez). Yoksa planın bütün setleri
@@ -1267,7 +1271,7 @@ export function WorkoutScreen({
       setSaving({ next: { ...next, value } });
       vibrate(10);
       const logged = findSet(doc, setId)?.set;
-      announce(`Set ${next.position + 1} kaydedildi${logged ? `: ${setValueText(logged, plan.bodyMassKg)}` : ''}`);
+      announce(t.setSaved(next.position + 1, logged ? setValueText(logged, plan.bodyMassKg, locale) : null));
 
       if (after.kind === 'member') {
         // Grupta turun sıradaki üyesi: dinlenme yok; kart 12 px kayar, devrede istasyon geçişi sayar.
@@ -1278,7 +1282,7 @@ export function WorkoutScreen({
           guard();
           if (after.transitionSeconds > 0) setTransition({ endsAt: Date.now() + after.transitionSeconds * 1000, total: after.transitionSeconds });
           const title = following ? plan.rows[following.rowId]?.title : undefined;
-          if (title) announce(`Sıradaki: ${title}`);
+          if (title) announce(t.next(title));
         });
       } else if (after.kind === 'same') {
         guard(DURATION.base + WORKOUT.tapGuardMs);
@@ -1292,7 +1296,7 @@ export function WorkoutScreen({
         // Grupta bütün üyeler: "Romanian Deadlift ve Şınav tamamlandı."
         const unit = cursorOf(plan, doc).units.find((item) => item.key === next.unitKey);
         const names = unit?.members.flatMap((member) => (member.rowId && plan.rows[member.rowId] ? [plan.rows[member.rowId]?.title ?? ''] : [])) ?? [];
-        const done = names.length > 0 ? names.join(' ve ') : (row?.title ?? 'Hareket');
+        const done = names.length > 0 ? t.names(names) : (row?.title ?? t.exercise);
         guard(NEXT_REST_MS + WORKOUT.tapGuardMs);
         later(NEXT_SLIDE_MS, () => {
           // Kart sıradaki birime geçer (adres değişir, sıra değişmez), yalnız ekran hâlâ biten birimdeyse: bu arada
@@ -1313,7 +1317,7 @@ export function WorkoutScreen({
           vibrate(20);
           const title = following ? plan.rows[following.rowId]?.title : undefined;
           // Başka yere geçildiyse "Sıradaki" söylenmez ve klavye odağı taşınmaz (kullanıcı oradadır).
-          announce(stayed && title ? `${done} tamamlandı. Sıradaki: ${title}.` : `${done} tamamlandı.`);
+          announce(t.unitDone(done, stayed && title ? title : null));
           if (stayed && after.restSeconds <= 0) focusLater('exercise-title', DURATION.base);
         });
         later(NEXT_REST_MS, () => {
@@ -1329,7 +1333,7 @@ export function WorkoutScreen({
         });
       }
     },
-    [saving, commit, outbox, announce, guard, later, openRest, focusLater, openFocus],
+    [saving, commit, outbox, announce, guard, later, openRest, focusLater, openFocus, locale, t],
   );
 
   const onStartTimer = useCallback(() => {
@@ -1341,8 +1345,8 @@ export function WorkoutScreen({
     // Sayaç başlarsa set başlamıştır: küçültülmüş dinlenme biter.
     commit({ ...current, rest: null, timer: startSetTimer({ rowId: next.rowId, setIndex: next.setIndex, target: next.target }, Date.now()) });
     guard();
-    announce('Sayaç başladı');
-  }, [saving, commit, guard, announce]);
+    announce(t.timerStarted);
+  }, [saving, commit, guard, announce, t]);
 
   const onStopTimer = useCallback(() => {
     const timer = localRef.current?.timer;
@@ -1354,8 +1358,8 @@ export function WorkoutScreen({
     if (!current?.timer) return;
     commit({ ...current, timer: null });
     guard();
-    announce('Sayaç durdu');
-  }, [commit, guard, announce]);
+    announce(t.timerStopped);
+  }, [commit, guard, announce, t]);
 
   /** Aşırı yük uyarısında "Düzelt": ağırlık planınkine döner. */
   const onResetKg = useCallback(() => {
@@ -1365,8 +1369,8 @@ export function WorkoutScreen({
     if (!next) return;
     commit({ ...current, draft: { rowId: next.rowId, setIndex: next.setIndex, kg: next.plannedKg, value: next.value } });
     guard();
-    announce(`Ağırlık ${formatKg(next.plannedKg)}`);
-  }, [commit, guard, announce]);
+    announce(t.weight(getFormat(locale).kg(next.plannedKg)));
+  }, [commit, guard, announce, locale, t]);
 
   const onToggleWarmup = useCallback(
     (rowId: string, index: number, done: boolean) => {
@@ -1377,9 +1381,9 @@ export function WorkoutScreen({
       if (doc === current.doc) return;
       commit(withChange(current, doc, { send: false }));
       vibrate(10);
-      announce(done ? `Isınma ${index + 1} yapıldı` : `Isınma ${index + 1} geri alındı`);
+      announce(done ? t.warmupDone(index + 1) : t.warmupUndone(index + 1));
     },
-    [commit, announce],
+    [commit, announce, t],
   );
 
   const onSetupNote = useCallback(
@@ -1389,9 +1393,9 @@ export function WorkoutScreen({
       const doc = setSetupNote(planOf(current), current.doc, { rowId, note: text, stamp: stampOf(current) });
       if (doc === current.doc) return;
       commit(withChange(current, doc, { send: false }));
-      announce(text.trim() ? 'Ayar notu kaydedildi' : 'Ayar notu silindi');
+      announce(text.trim() ? t.setupSaved : t.setupDeleted);
     },
-    [commit, announce],
+    [commit, announce, t],
   );
 
   /**
@@ -1405,9 +1409,9 @@ export function WorkoutScreen({
       const doc = setEntryEffort(current.doc, entryId, effort, stampOf(current));
       commit(withChange(current.rest ? { ...current, rest: acknowledgeRest(current.rest) } : current, doc, { send: false }));
       const title = doc.entries.find((entry) => entry.id === entryId)?.title;
-      announce(`${title ?? 'Hareket'}: ${EFFORT_LABELS[effort]}`);
+      announce(t.effort(title ?? t.exercise, effortLabels(locale)[effort]));
     },
-    [commit, announce],
+    [commit, announce, locale, t],
   );
 
   /** "Kolaydı · sonraki set X kg": o sete "Kolay", sonraki set bir adım (yeniden dokunmak geri alır). */
@@ -1419,8 +1423,8 @@ export function WorkoutScreen({
     const doc = setSetEffort(current.doc, current.rest.setId, shortcut.taken ? undefined : 'easy', stampOf(current));
     commit(withChange({ ...current, draft: null, rest: acknowledgeRest(current.rest) }, doc, { send: false }));
     const kg = nextSet(planOf(current), doc, null, focusRef.current)?.kg;
-    announce(kg !== undefined ? `Sonraki set ${formatKg(kg)}` : 'Kaydedildi');
-  }, [commit, announce]);
+    announce(kg !== undefined ? t.nextSetKg(getFormat(locale).kg(kg)) : t.saved);
+  }, [commit, announce, locale, t]);
 
   /** AMRAP'ta set bittikten sonra "Kaç tekrar yaptın?". Bitiş yoldayken yazılmaz (`onEffort` gibi). */
   const onAmrapReps = useCallback(
@@ -1495,7 +1499,7 @@ export function WorkoutScreen({
       // İnsan sınırı: düzeltme de yapılamayacak hızı yazmaz.
       const rowKey = rowKeyOf(found.entry);
       const cardio = rowKey ? planOf(current).rows[rowKey]?.cardio : undefined;
-      const speedIssue = cardio && set.seconds !== undefined ? cardioSpeedIssue(cardio, { seconds: fixed.value, distanceM: fixed.distanceM }) : null;
+      const speedIssue = cardio && set.seconds !== undefined ? cardioSpeedIssue(cardio, { seconds: fixed.value, distanceM: fixed.distanceM }, locale) : null;
       if (speedIssue) {
         toast.error(speedIssue);
         announce(speedIssue);
@@ -1505,9 +1509,9 @@ export function WorkoutScreen({
       commit(withChange(current, doc, { send: true }));
       outbox.schedule();
       const saved = findSet(doc, setId)?.set;
-      announce(`Set düzeltildi${saved ? `: ${setValueText(saved)}` : ''}`);
+      announce(t.setFixed(saved ? setValueText(saved, undefined, locale) : null));
     },
-    [saving, commit, outbox, announce],
+    [saving, commit, outbox, announce, locale, t],
   );
 
   const onWater = useCallback(() => {
@@ -1516,11 +1520,11 @@ export function WorkoutScreen({
     const { doc } = addWaterTap(current.doc, 1, stampOf(current));
     commit(withChange(current.rest ? { ...current, rest: acknowledgeRest(current.rest) } : current, doc, { send: false }));
     vibrate(10);
-    announce(`Su: ${waterOf(doc)} bardak`);
+    announce(t.water(waterOf(doc)));
     setUndoWater(true);
     window.clearTimeout(waterTimer.current);
     waterTimer.current = window.setTimeout(() => setUndoWater(false), WORKOUT.waterUndoMs);
-  }, [commit, announce]);
+  }, [commit, announce, t]);
 
   const onUndoWater = useCallback(() => {
     const current = localRef.current;
@@ -1529,8 +1533,8 @@ export function WorkoutScreen({
     commit(withChange(current, doc, { send: false }));
     window.clearTimeout(waterTimer.current);
     setUndoWater(false);
-    announce(`Su: ${waterOf(doc)} bardak`);
-  }, [commit, announce]);
+    announce(t.water(waterOf(doc)));
+  }, [commit, announce, t]);
 
   /**
    * Kaydedilmiş seti alttaki panelde düzenlemek (tasarım §2.4): tablodaki satıra (klavyede set numarasına) ya da dinlenmenin
@@ -1544,7 +1548,7 @@ export function WorkoutScreen({
       const current = localRef.current;
       if (!current || saving || finishingRef.current) return false;
       if (timedSetRunning(current, focusRef.current)) {
-        toast('Süre sayıyor', { description: 'Seti düzenlemek için önce bitir ya da vazgeç.' });
+        toast(t.timing, { description: t.timingEdit });
         return false;
       }
       const plan = planOf(current);
@@ -1556,11 +1560,11 @@ export function WorkoutScreen({
       if (focusRef.current !== unitKey) openFocus(unitKey);
       setEditing(setId);
       guard();
-      announce(`Set ${edit.position + 1} düzenleniyor`);
+      announce(t.setEditing(edit.position + 1));
       focusLater('set-edit-title', DURATION.fast);
       return true;
     },
-    [saving, openFocus, guard, announce, focusLater],
+    [saving, openFocus, guard, announce, focusLater, t],
   );
 
   /** Dinlenmenin "Düzenle"si: set alttaki panelde düzenlenir, dinlenme küçülüp şeritte sürer (panel görünsün). */
@@ -1598,10 +1602,10 @@ export function WorkoutScreen({
       outbox.schedule();
       setEditing(null);
       guard();
-      toast.success('Set düzenlendi');
+      toast.success(t.setEdited);
       returnFocus(editing);
     },
-    [commit, editing, outbox, guard, returnFocus],
+    [commit, editing, outbox, guard, returnFocus, t],
   );
 
   /** Panelin "Vazgeç"i (ve Esc): hiçbir şey yazılmaz, panel sıradaki sete döner. */
@@ -1628,7 +1632,7 @@ export function WorkoutScreen({
       const current = localRef.current;
       if (!current || saving || finishingRef.current) return;
       if (timedSetRunning(current, focusRef.current)) {
-        toast('Süre sayıyor', { description: 'Seti değiştirmek için önce bitir ya da vazgeç.' });
+        toast(t.timing, { description: t.timingChange });
         return;
       }
       const plan = planOf(current);
@@ -1651,7 +1655,7 @@ export function WorkoutScreen({
       outbox.schedule();
       setEditing((now) => (now === setId ? null : now));
       guard();
-      const text = `Set ${position + 1} ${kind === 'untick' ? 'geri alındı' : 'silindi'}`;
+      const text = kind === 'untick' ? t.setUnticked(position + 1) : t.setDeleted(position + 1);
       announce(text);
       // Klavye odağı kalkan düğmedeyse (✓, "Seti sil") "Set bitti"ye, o yoksa başlığa.
       later(DURATION.fast, () => {
@@ -1666,7 +1670,7 @@ export function WorkoutScreen({
           if (!mountedRef.current || pausingRef.current || !latest || latest.doc.id !== sessionId || finishingRef.current) return;
           // Süreli set sayarken geri getirmek sıradaki seti değiştirip süren seti bırakırdı (`removeSet` gibi).
           if (timedSetRunning(latest, focusRef.current)) {
-            toast('Süre sayıyor', { description: 'Seti geri getirmek için önce bitir ya da vazgeç.' });
+            toast(t.timing, { description: t.timingRestore });
             return;
           }
           // Silmenin bıraktığı fazladan tur da geri gelir; fazladan setin denetimi de o turla (`restoreSet`).
@@ -1674,7 +1678,7 @@ export function WorkoutScreen({
           const next = { ...latest, extraRounds: rounds };
           const back = restoreSet(planOf(next), latest.doc, { ...found, removedAt }, stampOf(latest));
           if (!back) {
-            toast(`Set ${position + 1} geri getirilemedi`, { description: 'O arada yeniden yapıldı ya da hareket değişti.' });
+            toast(t.restoreFailed(position + 1), { description: t.restoreFailedWhy });
             return;
           }
           // Geri gelen set sıradaki setin yerindeyse sıradaki set değişir (`onDropExtra` gibi): süreli setin sayacı düşer,
@@ -1688,13 +1692,13 @@ export function WorkoutScreen({
           const restored = drafts ? { ...next, drafts } : next;
           commit(withChange(moved ? { ...restored, draft, timer: null } : restored, back.doc, { send: true }));
           outbox.schedule();
-          announce(`Set ${position + 1} geri geldi`);
+          announce(t.setBack(position + 1));
         },
         // Hangi hareketin seti: bildirim başka harekete geçildikten sonra da görünür (grupta "Set 2" iki üyede de var).
-        { description: `${title} · ${setValueText(found.set)}` },
+        { description: `${title} · ${setValueText(found.set, undefined, locale)}` },
       );
     },
-    [saving, commit, outbox, guard, announce, later],
+    [saving, commit, outbox, guard, announce, later, locale, t],
   );
   const onUntickSet = useCallback((setId: string) => removeSet(setId, 'untick'), [removeSet]);
   const onDeleteSet = useCallback((setId: string) => removeSet(setId, 'delete'), [removeSet]);
@@ -1774,7 +1778,7 @@ export function WorkoutScreen({
         // Tarih sunucunun (ilk yazımda koyduğu); yanıt gelmediyse telefondaki.
         const saved = result.doc ?? doc;
         void queryClient.invalidateQueries({ queryKey: ['coach', clientId, 'highlights'] });
-        queryClient.setQueriesData<WorkoutResponse>({ queryKey: WORKOUT_OVERVIEW_KEY }, (old) => (old ? afterFinish(old, saved) : old));
+        queryClient.setQueriesData<WorkoutResponse>({ queryKey: WORKOUT_OVERVIEW_KEY }, (old) => (old ? afterFinish(old, saved, locale) : old));
         release();
         // Antrenman bitti (özete gidiliyor): nabız bandı kesilir. Başka antrenmana geçilirken bağlı kalır.
         if (!mountedRef.current || !switchTarget.current) disconnectHeartRate();
@@ -1786,22 +1790,22 @@ export function WorkoutScreen({
           const target = switchTarget.current;
           switchTarget.current = null;
           restartWith(target);
-          toast.success('Yaptığın setler kaydedildi; seçtiğin antrenman açılıyor.');
+          toast.success(t.switched);
         } else {
           // Özet işaretsiz girdinin yerine (`exitTo`): özette geri tuşu antrenmanın altındakine (genellikle Bugün) gider;
           // liste girdisine inseydi ekran boş bağlanır, varsayılan programdan yeni antrenman başlatırdı.
           exitTo(`/me/antrenman/ozet/${current.doc.id}`, { canStay: false });
         }
         // Kendi programda mesaj programın adıyla; yazılamayan madde varsa [Programı aç] (§2.9).
-        const ownPlan = current.plan.source === 'own' && current.plan.programId ? { id: current.plan.programId, name: current.plan.programName ?? 'Programın' } : null;
-        const message = result.feedback ? feedbackMessage(result.feedback, ownPlan) : null;
+        const ownPlan = current.plan.source === 'own' && current.plan.programId ? { id: current.plan.programId, name: current.plan.programName ?? t.yourProgram } : null;
+        const message = result.feedback ? feedbackMessage(result.feedback, ownPlan, locale) : null;
         // Özet açılırken bir an sonra (prototip): önce özetin ilk kartı görünsün.
         if (message) {
           window.setTimeout(
             () =>
               toast(message.title, {
                 description: message.description,
-                ...(message.open && ownPlan ? { action: { label: 'Programı aç', onClick: () => router.push(`/me/programlar/${ownPlan.id}`) } } : {}),
+                ...(message.open && ownPlan ? { action: { label: t.openProgram, onClick: () => router.push(`/me/programlar/${ownPlan.id}`) } } : {}),
               }),
             450,
           );
@@ -1809,7 +1813,7 @@ export function WorkoutScreen({
         return true;
       } catch (error) {
         if (error instanceof ApiError && error.status === 410) {
-          leave('Bu antrenman silinmiş.', 'info');
+          leave(t.gone, 'info');
           return true;
         }
         switchTarget.current = null;
@@ -1818,15 +1822,15 @@ export function WorkoutScreen({
         setUpdate(null);
         toast.error(
           error instanceof ApiError && error.status === 0
-            ? 'Bağlantı yok; antrenmanın bu telefonda duruyor. Bağlantı gelince yeniden bitir.'
+            ? t.finishOffline
             : error instanceof ApiError
               ? error.message
-              : 'Antrenman bitirilemedi. Biraz sonra tekrar dene.',
+              : t.finishFailed,
         );
         return false;
       }
     },
-    [clientId, outbox, leave, release, restartWith, exitTo, router, commit, queryClient],
+    [clientId, outbox, leave, release, restartWith, exitTo, router, commit, queryClient, locale, t],
   );
 
   /**
@@ -1852,7 +1856,7 @@ export function WorkoutScreen({
         current = withChange(current, result.doc, { send: false });
         commit(current);
       }
-      const items = feedbackItems({ day: current.plan, doc: current.doc, extras: current.extras, suggestions: current.plan.setIncrease });
+      const items = feedbackItems({ day: current.plan, doc: current.doc, extras: current.extras, suggestions: current.plan.setIncrease, locale });
       if (items.length === 0) {
         void submitFinish(health, undefined);
         return;
@@ -1860,7 +1864,7 @@ export function WorkoutScreen({
       setFinishOpen(false);
       setUpdate({ items, health });
     },
-    [commit, submitFinish],
+    [commit, submitFinish, locale],
   );
 
   /** "Programını güncelleyelim mi?"nin cevabı; sheet kararsız kapandıysa cevapsız (`none`). */
@@ -1941,7 +1945,7 @@ export function WorkoutScreen({
       const skipped = unit.members.every((member) => member.skipped);
       const doc = skipped ? restoreAt(plan, current.doc, key, stampOf(current)) : current.doc;
       if (validFocus(plan, doc, key) === null) {
-        toast('Bu hareketin planı bu telefonda yok', { description: 'Setleri listede duruyor.' });
+        toast(t.noPlanHere, { description: t.setsInList });
         return;
       }
       if (skipped) commitFlow(current, doc, {}, key);
@@ -1950,7 +1954,7 @@ export function WorkoutScreen({
       announce(unitTitle(plan, current.doc, unit));
       focusLater('exercise-title', DURATION.slow);
     },
-    [saving, commitFlow, openFocus, announce, focusLater],
+    [saving, commitFlow, openFocus, announce, focusLater, t],
   );
 
   /**
@@ -1973,8 +1977,8 @@ export function WorkoutScreen({
    */
   const onList = useCallback(() => {
     goToList();
-    announce('Liste');
-  }, [goToList, announce]);
+    announce(t.list);
+  }, [goToList, announce, t]);
 
   /**
    * Listede Alt + ↑/↓ ya da gizli "Yukarı/Aşağı taşı": birim bir adım (`moveUnit`; biten ve atlanan yerinde kalır, aradan
@@ -1992,9 +1996,9 @@ export function WorkoutScreen({
       commitFlow(current, doc);
       highlightUnit(key);
       const position = listView(plan, doc).items.findIndex((item) => item.key === key) + 1;
-      announce(`${unitTitle(plan, current.doc, unit)} ${position}. sırada`);
+      announce(t.movedTo(unitTitle(plan, current.doc, unit), position));
     },
-    [saving, commitFlow, highlightUnit, announce],
+    [saving, commitFlow, highlightUnit, announce, t],
   );
 
   /** Sürükleyip bırakmak (listede tutamaçtan): birim bırakıldığı bitmemiş birimin yerine (`moveUnitTo`). */
@@ -2009,9 +2013,9 @@ export function WorkoutScreen({
       commitFlow(current, doc);
       highlightUnit(key);
       const position = listView(plan, doc).items.findIndex((item) => item.key === key) + 1;
-      announce(`${unitTitle(plan, current.doc, unit)} ${position}. sırada`);
+      announce(t.movedTo(unitTitle(plan, current.doc, unit), position));
     },
-    [saving, commitFlow, highlightUnit, announce],
+    [saving, commitFlow, highlightUnit, announce, t],
   );
 
   /**
@@ -2054,11 +2058,11 @@ export function WorkoutScreen({
         returningToList.current = true;
       }
       highlightUnit(key);
-      announce(`${title} atlandı`);
+      announce(t.skipped(title));
       if (target) focusLater('exercise-title', DURATION.base);
       const sessionId = current.doc.id;
       showUndoToast(
-        `${title} atlandı`,
+        t.skipped(title),
         () => {
           const latest = localRef.current;
           // Bitiş (ya da iptal, değiştirme) gönderilirken geri alınmaz: belge yolda, meşgul bitiş sorusu kapanmamalı. Ara
@@ -2069,14 +2073,14 @@ export function WorkoutScreen({
           setFinishOpen(false);
           openFocus(key);
           highlightUnit(key);
-          announce(`${title} geri alındı`);
+          announce(t.skipUndone(title));
           focusLater('exercise-title', DURATION.base);
         },
-        done > 0 ? { description: `${done}/${planned} set yapıldı` } : {},
+        done > 0 ? { description: t.setsDone(done, planned) } : {},
       );
       finishIfDone(result.doc);
     },
-    [saving, commitFlow, openFocus, goToList, highlightUnit, announce, focusLater, finishIfDone],
+    [saving, commitFlow, openFocus, goToList, highlightUnit, announce, focusLater, finishIfDone, t],
   );
 
   /**
@@ -2093,9 +2097,9 @@ export function WorkoutScreen({
       if (!unit || doc === current.doc) return;
       commitFlow(current, doc);
       highlightUnit(key);
-      announce(`${unitTitle(plan, current.doc, unit)} yeniden sırada`);
+      announce(t.requeued(unitTitle(plan, current.doc, unit)));
     },
-    [commitFlow, highlightUnit, announce],
+    [commitFlow, highlightUnit, announce, t],
   );
 
   /**
@@ -2119,14 +2123,14 @@ export function WorkoutScreen({
       const focused = focusRef.current === key;
       commitFlow(current, doc, { extras }, focused ? null : focusRef.current);
       if (focused) goToList();
-      announce(`${title} silindi`);
+      announce(t.removed(title));
       const sessionId = current.doc.id;
       if (!extra) {
         // Planı bu telefonda yok (başka cihazda eklendi): geri getirilecek satır yok.
-        toast(`${title} silindi`);
+        toast(t.removed(title));
         return;
       }
-      showUndoToast(`${title} silindi`, () => {
+      showUndoToast(t.removed(title), () => {
         const latest = localRef.current;
         // Ara verilirken, ekran kapandıktan sonra ya da bitiş yoldayken hiçbir şey yapmaz (atlamanın "Geri al"ı gibi).
         if (!mountedRef.current || pausingRef.current || !latest || latest.doc.id !== sessionId || finishingRef.current) return;
@@ -2135,10 +2139,10 @@ export function WorkoutScreen({
         const back = addExercise(planOf(latest), latest.doc, { entryId, extra: keyed, stamp: stampOf(latest) });
         commitFlow(latest, back, { extras: { ...latest.extras, [extraKey(entryId, keyed.exerciseId)]: keyed } });
         highlightUnit(entryId);
-        announce(`${title} geri geldi`);
+        announce(t.back(title));
       });
     },
-    [saving, commitFlow, goToList, highlightUnit, announce],
+    [saving, commitFlow, goToList, highlightUnit, announce, t],
   );
 
   /** "Değiştir": sheet'i şu anki hareket için açar; muadil seçildiyse başta asıl hareket. */
@@ -2171,11 +2175,11 @@ export function WorkoutScreen({
       const drafts = current.drafts?.filter((item) => item.rowId !== target.rowId);
       commitFlow(current, doc, { extras, draft: null, ...(drafts ? { drafts } : {}), timer: null });
       const to = option?.title ?? current.plan.rows[target.rowId]?.title ?? '';
-      toast.success(option ? `${from} yerine ${to}` : `Yeniden ${to}`);
-      announce(option ? `${from} yerine ${to}` : `Asıl hareket: ${to}`);
+      toast.success(option ? t.swapped(from, to) : t.swapBack(to));
+      announce(option ? t.swapped(from, to) : t.original(to));
       focusLater('exercise-title', DURATION.slow);
     },
-    [swapTarget, commitFlow, announce, focusLater],
+    [swapTarget, commitFlow, announce, focusLater, t],
   );
 
   /** "Hareket ekle": planı sunucudan (kendi geçmişiyle), kayıt hemen açılır; yapılacakların sonuna. */
@@ -2196,23 +2200,23 @@ export function WorkoutScreen({
         commitFlow(current, doc, { extras: { ...current.extras, [extraKey(entryId, keyed.exerciseId)]: keyed } });
         setAddOpen(false);
         setFinishOpen(false);
-        announce(`${item.title} eklendi`);
-        toast.success(`${item.title} eklendi`, {
-          description: 'Yapılacakların sonunda',
+        announce(t.added(item.title));
+        toast.success(t.added(item.title), {
+          description: t.addedWhere,
           duration: WORKOUT.addedToastMs,
           classNames: TOAST_BUTTONS,
           // Ara verilirken ya da ekran kapandıktan sonra (toast Bugün'de kalır) hiçbir şey yapmaz (`pausingRef`, `mountedRef`).
-          action: { label: 'Şimdi yap', onClick: () => (mountedRef.current && !pausingRef.current ? onOpenUnit(entryId) : undefined) },
+          action: { label: t.doNow, onClick: () => (mountedRef.current && !pausingRef.current ? onOpenUnit(entryId) : undefined) },
         });
       } catch (error) {
-        toast.error(error instanceof ApiError && error.status === 0 ? 'Bağlantı yok; hareket eklenemedi.' : error instanceof ApiError ? error.message : 'Hareket eklenemedi.');
+        toast.error(error instanceof ApiError && error.status === 0 ? t.addOffline : error instanceof ApiError ? error.message : t.addFailed);
         // Kısıt değişmiş (409): önbellekteki kütüphane tazelenir, hareket listeden düşer.
         if (error instanceof ApiError && error.status === 409) void queryClient.invalidateQueries({ queryKey: ['me', 'workout', 'library'] });
       } finally {
         setAddBusy(null);
       }
     },
-    [addBusy, commitFlow, announce, onOpenUnit, queryClient],
+    [addBusy, commitFlow, announce, onOpenUnit, queryClient, t],
   );
 
   /**
@@ -2235,10 +2239,10 @@ export function WorkoutScreen({
       commit(moved ? { ...next, draft: null, timer: null } : next);
       guard();
       setFinishOpen(false);
-      announce(group ? 'Fazladan tur eklendi' : 'Fazladan set eklendi');
+      announce(group ? t.extraRound : t.extraSet);
       if (moved) focusLater('exercise-title', DURATION.base);
     },
-    [saving, commit, guard, announce, focusLater],
+    [saving, commit, guard, announce, focusLater, t],
   );
 
   /**
@@ -2259,12 +2263,12 @@ export function WorkoutScreen({
       const moved = before?.rowId !== after?.rowId || before?.setIndex !== after?.setIndex;
       commit(moved ? { ...next, draft: null, timer: null } : next);
       guard();
-      announce('Fazladan set silindi');
+      announce(t.extraDeleted);
       // 8 sn "Geri al": istenen tur sayısı geri yazılır; o arada değiştiyse (yeni tur istendi, set yapıldı) yazılmaz.
       const sessionId = current.doc.id;
       const roundsOf = (local: LocalWorkout) => local.extraRounds[key] ?? 0;
       showGuardedUndo(
-        'Fazladan set silindi',
+        t.extraDeleted,
         {
           locate: () => {
             const latest = localRef.current;
@@ -2274,7 +2278,7 @@ export function WorkoutScreen({
           write: (latest, rounds) => commit({ ...latest, extraRounds: { ...latest.extraRounds, [key]: rounds } }),
           before: roundsOf(current),
         },
-        { onUndone: () => announce('Fazladan set geri geldi') },
+        { onUndone: () => announce(t.extraBack) },
       );
       // Odakta yalnız odaktaki birim bitmiş olabilir: bitirme sorusu hiçbir yerde set kalmadıysa.
       if (before && !after && !nextSet(planOf(next), current.doc)) {
@@ -2283,7 +2287,7 @@ export function WorkoutScreen({
         });
       }
     },
-    [saving, commit, guard, announce, later],
+    [saving, commit, guard, announce, later, t],
   );
 
   /**
@@ -2297,7 +2301,7 @@ export function WorkoutScreen({
       if (!current || saving || performance.now() < guardUntil.current) return;
       const plan = planOf(current);
       if (!canDropSet(plan, current.doc, rowId, setIndex)) return;
-      const label = `Set ${(setViews(plan, current.doc, rowId).find((view) => view.setIndex === setIndex)?.position ?? 0) + 1}`;
+      const position = (setViews(plan, current.doc, rowId).find((view) => view.setIndex === setIndex)?.position ?? 0) + 1;
       const before = nextSet(plan, current.doc, current.draft, focusRef.current);
       // Silinen ya da geri gelen setle günün planı ve kaydın planlanan sayısı birlikte yazılır.
       const apply = (local: LocalWorkout, on: boolean): LocalWorkout => {
@@ -2313,10 +2317,10 @@ export function WorkoutScreen({
       const moved = before?.rowId !== after?.rowId || before?.setIndex !== after?.setIndex;
       commit(moved ? { ...next, draft: null, timer: null } : next);
       guard();
-      announce(`${label} silindi`);
+      announce(t.setDeleted(position));
       const sessionId = current.doc.id;
       showGuardedUndo(
-        `${label} silindi`,
+        t.setDeleted(position),
         {
           locate: () => {
             const latest = localRef.current;
@@ -2326,7 +2330,7 @@ export function WorkoutScreen({
           write: (latest, on) => commit(apply(latest, on)),
           before: false,
         },
-        { onUndone: () => announce(`${label} geri geldi`) },
+        { onUndone: () => announce(t.setBack(position)) },
       );
       if (before && !after && !nextSet(planOf(next), next.doc)) {
         later(DURATION.slow + 50, () => {
@@ -2334,7 +2338,7 @@ export function WorkoutScreen({
         });
       }
     },
-    [saving, commit, guard, announce, later],
+    [saving, commit, guard, announce, later, t],
   );
 
   /** Bitişte "Geçileni yap": ilk geçilen hareket şimdi. */
@@ -2357,12 +2361,12 @@ export function WorkoutScreen({
         switchTarget.current = null;
         outbox.resume();
         setFinishing(false);
-        toast.error(error instanceof ApiError ? error.message : 'Antrenman iptal edilemedi.');
+        toast.error(error instanceof ApiError ? error.message : t.cancelFailed);
         return;
       }
     }
-    leave('Antrenman iptal edildi.', 'info');
-  }, [outbox, leave]);
+    leave(t.cancelled, 'info');
+  }, [outbox, leave, t]);
 
   /**
    * "Antrenmanı değiştir" (⋯ menüsü): set yoksa antrenman silinir (sunucuya yazıldıysa), varsa yapılanlar "başka
@@ -2380,7 +2384,7 @@ export function WorkoutScreen({
       const current = localRef.current;
       if (!current || finishing) return;
       if (program === planProgram(current.plan) && day === current.plan.dayId) {
-        toast('Zaten bu antrenmandasın.');
+        toast(t.already);
         return;
       }
       if (!current.doc.entries.some((entry) => entry.sets.length > 0)) {
@@ -2393,7 +2397,7 @@ export function WorkoutScreen({
         } catch (error) {
           outbox.resume();
           setFinishing(false);
-          toast.error(error instanceof ApiError ? error.message : 'Antrenman değiştirilemedi.');
+          toast.error(error instanceof ApiError ? error.message : t.switchFailed);
           return;
         }
         release();
@@ -2409,7 +2413,7 @@ export function WorkoutScreen({
       if (!latest || latest.doc.id !== current.doc.id) return;
       commit(withChange(latest, undoSwitchPrep(latest.doc, current.doc, changed.doc, stampOf(latest)), { send: false }));
     },
-    [finishing, outbox, release, restartWith, commit, submitFinish],
+    [finishing, outbox, release, restartWith, commit, submitFinish, t],
   );
 
   const onAddElsewhere = useCallback(async () => {
@@ -2418,12 +2422,12 @@ export function WorkoutScreen({
     setElsewhereBusy(true);
     try {
       await fetchJson(`/api/me/sessions/${current.doc.id}`, { method: 'PATCH', body: JSON.stringify({ writer: current.doc.writer, addSets: current.doc.entries }) });
-      leave('Setler eklendi.');
+      leave(t.setsAdded);
     } catch (error) {
       setElsewhereBusy(false);
-      toast.error(error instanceof ApiError ? error.message : 'Setler eklenemedi.');
+      toast.error(error instanceof ApiError ? error.message : t.setsAddFailed);
     }
-  }, [elsewhere, leave]);
+  }, [elsewhere, leave, t]);
 
   /* --- açık katmanın altında geri tuşu --- */
 
@@ -2501,24 +2505,24 @@ export function WorkoutScreen({
         <Empty>
           <EmptyHeader>
             <EmptyMedia variant="icon">{error ? <WarningCircle weight="fill" /> : <Barbell weight="fill" />}</EmptyMedia>
-            <EmptyTitle>{error ? 'Antrenman açılamadı' : 'Henüz program yok'}</EmptyTitle>
+            <EmptyTitle>{error ? t.openFailedTitle : t.noProgram}</EmptyTitle>
             <EmptyDescription>
               {error
                 ? load.message
                 : load.phase === 'empty' && load.problem
                   ? load.problem
-                  : 'Antrenörün programını hazırladığında antrenmanın burada açılacak.'}
+                  : t.noProgramText}
             </EmptyDescription>
           </EmptyHeader>
           <EmptyContent className="gap-2">
             {error ? (
               <Button size="lg" className="h-11 w-full" onClick={() => setAttempt((value) => value + 1)}>
                 <ArrowClockwise data-icon="inline-start" />
-                Tekrar dene
+                {t.retry}
               </Button>
             ) : null}
             <Button size="lg" variant={error ? 'outline' : 'default'} className="h-11 w-full" nativeButton={false} render={<Link href="/me" />}>
-              Bugün&apos;e dön
+              {t.backToToday}
             </Button>
           </EmptyContent>
         </Empty>
@@ -2600,7 +2604,7 @@ export function WorkoutScreen({
   // Odakta ⋯: "Muadil seç" kartın satırında (odaktaki birimin şu anki üyesi; set kaydedildiyse ya da eklenen harekette
   // nedeniyle devre dışı), "Bu hareketi atla" bitmemiş birimde (`dropWithUndo`'nun kuralı). Set kaydedilirken ikisi de
   // devre dışı (işleyiciler o arada bir şey yapmaz; kart birazdan sıradaki sete ya da harekete geçer).
-  const savingNote = { note: 'Set kaydediliyor…' };
+  const savingNote = { note: t.savingSet };
   const focusActions: FocusActions | null =
     shownFocus !== null && row
       ? {
@@ -2608,11 +2612,11 @@ export function WorkoutScreen({
             ? savingNote
             : canSwap(local.plan, doc, row.rowId)
               ? { onSelect: () => openSwap(row.rowId) }
-              : { note: local.plan.rows[row.rowId] ? 'Set kaydedildi, muadil seçilemez' : 'Bu hareketin muadili yok' },
+              : { note: local.plan.rows[row.rowId] ? t.swapLocked : t.noSwap },
           skip: saving
             ? savingNote
             : list.items.find((item) => item.key === shownFocus)?.state === 'done'
-              ? { note: 'Bu hareket bitti' }
+              ? { note: t.exerciseDone }
               : { onSelect: () => onDropUnit(shownFocus) },
           // Yalnız antrenmanda eklenen harekette: seti yoksa silinir, varsa nedeni yazar (plandaki hareket atlanır).
           ...(list.items.find((item) => item.key === shownFocus)?.added
@@ -2621,7 +2625,7 @@ export function WorkoutScreen({
                   ? savingNote
                   : canRemoveAdded(doc, shownFocus)
                     ? { onSelect: () => onRemoveAdded(shownFocus) }
-                    : { note: 'Seti var; önce setleri sil ya da atla' },
+                    : { note: t.hasSets },
               }
             : {}),
         }
@@ -2656,15 +2660,15 @@ export function WorkoutScreen({
   // açık) sheet kendisi söyler. Setsiz antrenmanda yalnız iptal var (bitiş sorusunda "Antrenmanı iptal et").
   const status: WorkoutStatus | null =
     finishing && topLayer === null
-      ? { tone: 'busy' as const, text: summary.sets === 0 ? 'Antrenman iptal ediliyor…' : 'Antrenman bitiriliyor…' }
+      ? { tone: 'busy' as const, text: summary.sets === 0 ? t.cancelling : t.finishing }
       : problem === 'session'
-        ? { tone: 'warn' as const, text: 'Oturumun kapandı; kayıtların bu telefonda. Antrenörüne yaz.' }
+        ? { tone: 'warn' as const, text: t.sessionClosed }
         : problem === 'error'
-          ? { tone: 'warn' as const, text: 'Kayıt gönderilemedi', retry: true }
+          ? { tone: 'warn' as const, text: t.sendFailed, retry: true }
           : !online || problem === 'offline'
-            ? { tone: 'offline' as const, text: `Çevrimdışı${unsent > 0 ? ` · ${unsent} set telefonda` : ''}` }
+            ? { tone: 'offline' as const, text: t.offline(unsent) }
             : problem === 'limited' && unsent > 0
-              ? { tone: 'offline' as const, text: `Şu an yoğun · ${unsent} set telefonda, birazdan gönderilecek` }
+              ? { tone: 'offline' as const, text: t.busy(unsent) }
               : null;
 
   // Çıkılırken ekrana dokunulmaz (`inert`): satır, alt çubuk ya da ⋯'deki öğeler adresi değiştirip bekleyen geçişi (Bugün
@@ -2780,7 +2784,7 @@ export function WorkoutScreen({
             </div>
           ) : (
             <section
-              aria-label="Set girişi"
+              aria-label={t.entry}
               onPointerDownCapture={swallow}
               onClickCapture={swallow}
               className="relative border-t bg-card px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
@@ -2807,7 +2811,7 @@ export function WorkoutScreen({
                   onFinish={() => setFinishOpen(true)}
                   previous={previous}
                   following={following}
-                  addSet={!saving && unitKey && addable(unitKey) ? { label: group ? 'Tur ekle' : 'Set ekle', onAdd: () => onAddSet(unitKey) } : null}
+                  addSet={!saving && unitKey && addable(unitKey) ? { label: group ? clientWorkoutMessages(locale).card.addRound : clientWorkoutMessages(locale).card.addSet, onAdd: () => onAddSet(unitKey) } : null}
                   collapsed={collapsed}
                   onToggleCollapsed={togglePanel}
                 />
@@ -2820,7 +2824,7 @@ export function WorkoutScreen({
           {rest && rest.mode === 'full' && restView ? (
             <motion.section
               key="rest"
-              aria-label="Dinlenme"
+              aria-label={t.rest}
               initial={{ y: '100%' }}
               animate={{ y: 0, transition: tween(DURATION.base) }}
               exit={{ y: '100%', transition: tween(DURATION.fast, EASE.exit) }}
@@ -2833,7 +2837,7 @@ export function WorkoutScreen({
                 view={restView}
                 heart={heart.status === 'connected' || heart.status === 'lost' ? { bpm: heart.bpm, recovery: heartLimits.recovery } : null}
                 summary={restSummary}
-                saved={restSet ? { text: `Set ${(restPosition ?? 0) + 1} kaydedildi · ${setValueText(restSet, plan.bodyMassKg)}`, setId: restSet.id } : null}
+                saved={restSet ? { text: t.restSaved((restPosition ?? 0) + 1, setValueText(restSet, plan.bodyMassKg, locale)), setId: restSet.id } : null}
                 lockWarning={local.restCount === 1 && (isIOS() || !wakeHeld)}
                 amrap={restSet?.target?.amrap ? { reps: restSet.reps ?? 0 } : null}
                 effort={restEffort}
@@ -2843,7 +2847,7 @@ export function WorkoutScreen({
                 onEasy={onEasy}
                 water={water}
                 undoWater={undoWater}
-                next={restNext ? nextText(restNext, plan.rows[restNext.rowId] ?? { title: '', trackingType: 'weight_reps' }, restNext.rowId !== restRowId) : null}
+                next={restNext ? nextText(restNext, plan.rows[restNext.rowId] ?? { title: '', trackingType: 'weight_reps' }, restNext.rowId !== restRowId, locale) : null}
                 onSkip={endRest}
                 onMinimize={() => {
                   updateRest((timer) => ({ ...acknowledgeRest(timer), mode: 'mini' }));
@@ -2893,7 +2897,7 @@ export function WorkoutScreen({
         onAnswer={onProgramAnswer}
         onDismiss={() => onProgramAnswer(null)}
       />
-      <FinishedElsewhereDialog count={elsewhere?.count ?? null} busy={elsewhereBusy} onAdd={onAddElsewhere} onSkip={() => leave('Bu antrenman başka bir cihazda bitirildi.', 'info')} />
+      <FinishedElsewhereDialog count={elsewhere?.count ?? null} busy={elsewhereBusy} onAdd={onAddElsewhere} onSkip={() => leave(t.finishedElsewhere, 'info')} />
       <PauseDialog open={pauseAsked} busy={pausing !== null} onContinue={onStay} onPause={onPause} />
       {/* Yoklama (§2.2): yalnız sağlık onayı varken ve antrenman yeni başlıyorken açılır. */}
       <StartCheck ref={checkRef} clientId={clientId} local={local} onApply={applyCheck} onLeave={leave} onOpenChange={setCheckOpen} />
@@ -2906,10 +2910,11 @@ export function WorkoutScreen({
 
 /** Açılış: plan telefonda yoksa bir an; üst çubuk, kart ve panel yerinde. */
 function WorkoutSkeleton() {
+  const t = clientWorkoutMessages(useLocale()).screen;
   return (
     <div className="mx-auto flex h-dvh w-full max-w-md flex-col bg-background" aria-busy="true">
       <span role="status" className="sr-only">
-        Antrenman açılıyor…
+        {t.opening}
       </span>
       <div className="shrink-0 border-b pt-[env(safe-area-inset-top)]">
         <div className="flex h-13 items-center justify-between px-3">

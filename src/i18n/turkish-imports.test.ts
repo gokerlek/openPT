@@ -11,9 +11,7 @@ import { join, relative, sep } from 'node:path';
 
 const ROOT = join(import.meta.dirname, '..', '..');
 const SRC = join(ROOT, 'src');
-const PENDING = new Set([
-  'src/app/me/antrenman/program-update-sheet.tsx',
-]);
+const PENDING = new Set<string>();
 const IMPORTS_TURKISH = /from\s+['"][^'"]*\/turkish(?:\.ts)?['"]/;
 
 function sourceFiles(dir: string): string[] {

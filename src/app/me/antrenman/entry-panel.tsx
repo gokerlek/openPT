@@ -327,7 +327,7 @@ export function EntryPanel({
       {inTransition && transition ? <TransitionBar key={transition.endsAt} transition={transition} now={now} /> : null}
       <div className="flex min-h-11 items-center gap-1.5 text-sm font-medium tabular-nums">
         <span className="shrink-0">{t.set(next.position + 1, next.total)}</span>
-        {next.target.amrap ? <Badge className="shrink-0 bg-primary/15 text-primary">AMRAP</Badge> : null}
+        {next.target.amrap ? <Badge className="shrink-0 bg-primary/15 text-primary">{t.amrap}</Badge> : null}
         {next.extra ? (
           <Badge variant="secondary" className="shrink-0">
             {t.extra}
