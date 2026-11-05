@@ -45,6 +45,14 @@ export class GithubError extends Error implements Localizable {
 }
 
 /**
+ * Kullanıcıya gösterilecek GitHub hatası: yalnız `GithubError`'ın kendi (sırsız) metni, `locale` dilinde. Başka hata
+ * (Octokit, fetch, TypeError) null döner: ham mesajı ekrana çıkmasın, çağıran kendi genel metnini koysun.
+ */
+export function githubErrorText(error: unknown, locale: Locale): string | null {
+  return error instanceof GithubError ? error.localized(locale) : null;
+}
+
+/**
  * Yanıt başlıklarından istek sınırı. 429 her zaman sınırdır; 403 ancak kota bittiyse
  * (`x-ratelimit-remaining: 0`), `retry-after` geldiyse ya da ikincil sınır mesajıysa: izin 403'ü sınır değildir.
  */

@@ -1,14 +1,14 @@
 import { WarningCircle } from '@phosphor-icons/react/dist/ssr';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { messageOf } from '@/i18n/errors';
 import { installMessages } from '@/i18n/messages/install';
 import { getLocale } from '@/i18n/server';
 import { githubConnection, githubMode } from '@/lib/github/client';
+import { githubErrorText } from '@/lib/github/errors';
 
 /**
  * GitHub uygulaması kurulumunun sorunları (tasarım B1): kurulum "All repositories" değilse yeni danışan
  * repoları uygulamaya görünmez; izin eksikse güncelleme ve repo işleri düşer. Kişisel anahtar (PAT)
- * kurulumunda hiç görünmez. Kurulum okunamazsa sebebi (isteğin dilinde, sırsız) söylenir; sayfa düşmez.
+ * kurulumunda hiç görünmez. Kurulum okunamazsa sebebi (yalnız `GithubError`'ın kendi metni, isteğin dilinde; öteki hatalar genel metin) söylenir; sayfa düşmez.
  */
 export async function GithubAppNotice() {
   if (githubMode() !== 'app') return null;
@@ -21,7 +21,7 @@ export async function GithubAppNotice() {
     problems = connection.problems;
     settingsUrl = connection.settingsUrl;
   } catch (error) {
-    problems = [messageOf(error, locale) ?? t.appNoticeUnreadable];
+    problems = [githubErrorText(error, locale) ?? t.appNoticeUnreadable];
   }
   if (problems.length === 0) return null;
   return (
