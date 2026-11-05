@@ -31,28 +31,29 @@ const FILES = ['src/app', 'src/components', 'src/lib'].flatMap(sourceFiles).sort
 const isUi = (file: string) => file.startsWith('src/app/') || file.startsWith('src/components/');
 
 /**
- * Bilerek dilsiz çağrılar: dosya ve çağrılan adla (JSX'te `<Ad>`), her birinin nedeni yanında. Kullanılmayan kayıt testi
- * düşürür (eskiyen izin kalmasın).
+ * Bilerek dilsiz çağrılar: dosya ve çağrılan adla (JSX'te `<Ad>`), her birinin nedeni yanında. `count`: bu dosyada bu
+ * çağrının kaç kez dilsiz olduğu; sayı tutmazsa test düşer: aynı dosyada aynı çağrının yeni bir dilsiz kullanımı izne
+ * sığınamaz, kullanılmayan kayıt da kalmaz (eskiyen izin).
  */
-const ALLOWED: readonly { file: string; call: string; reason: string }[] = [
+const ALLOWED: readonly { file: string; call: string; count: number; reason: string }[] = [
   // Görsel uçları yalnız kaydın `image` yolunu okur (baytları verir); metin yanıta girmez.
-  { file: 'src/app/api/attachments/[id]/image/route.ts', call: 'getAttachment', reason: 'yalnız görsel yolu (veri)' },
-  { file: 'src/app/api/devices/[id]/image/route.ts', call: 'getDevice', reason: 'yalnız görsel yolu (veri)' },
+  { file: 'src/app/api/attachments/[id]/image/route.ts', call: 'getAttachment', count: 1, reason: 'yalnız görsel yolu (veri)' },
+  { file: 'src/app/api/devices/[id]/image/route.ts', call: 'getDevice', count: 1, reason: 'yalnız görsel yolu (veri)' },
   // HAM: düzenlenen kayıt dil verilmeden okunur, form çevrilmiş metinle dolarsa kaydedince PT'nin içeriği olurdu
   // (`t1-review.test.ts`). Gösterilen ad aynı dosyada dille okunur.
-  { file: 'src/app/dashboard/attachments/[id]/edit/page.tsx', call: 'getAttachment', reason: 'düzenleme formu HAM kayıtla dolar' },
-  { file: 'src/app/dashboard/attachments/[id]/edit/page.tsx', call: 'listAttachments', reason: 'düzenleme formu HAM kayıtla dolar' },
-  { file: 'src/app/dashboard/devices/[id]/edit/page.tsx', call: 'getDevice', reason: 'düzenleme formu HAM kayıtla dolar' },
-  { file: 'src/app/dashboard/devices/[id]/edit/page.tsx', call: 'listDevices', reason: 'düzenleme formu HAM kayıtla dolar' },
-  { file: 'src/app/dashboard/exercises/[id]/edit/page.tsx', call: 'getExercise', reason: 'düzenleme formu HAM kayıtla dolar' },
-  { file: 'src/app/dashboard/exercises/[id]/edit/page.tsx', call: 'listExercises', reason: 'düzenleme formu HAM kayıtla dolar' },
+  { file: 'src/app/dashboard/attachments/[id]/edit/page.tsx', call: 'getAttachment', count: 1, reason: 'düzenleme formu HAM kayıtla dolar' },
+  { file: 'src/app/dashboard/attachments/[id]/edit/page.tsx', call: 'listAttachments', count: 1, reason: 'düzenleme formu HAM kayıtla dolar' },
+  { file: 'src/app/dashboard/devices/[id]/edit/page.tsx', call: 'getDevice', count: 1, reason: 'düzenleme formu HAM kayıtla dolar' },
+  { file: 'src/app/dashboard/devices/[id]/edit/page.tsx', call: 'listDevices', count: 1, reason: 'düzenleme formu HAM kayıtla dolar' },
+  { file: 'src/app/dashboard/exercises/[id]/edit/page.tsx', call: 'getExercise', count: 1, reason: 'düzenleme formu HAM kayıtla dolar' },
+  { file: 'src/app/dashboard/exercises/[id]/edit/page.tsx', call: 'listExercises', count: 1, reason: 'düzenleme formu HAM kayıtla dolar' },
   // Yalnız sayı: gerekçe metinleri sonuca girmez (dil hesap bağımlılığı olsaydı önizleme dil değişince boşuna yenilenirdi).
-  { file: 'src/app/dashboard/clients/[id]/constraints/constraint-form.tsx', call: 'careCounts', reason: 'yalnız grup sayıları' },
-  { file: 'src/app/dashboard/clients/[id]/measurements/measurement-form.tsx', call: 'groupSummary', reason: 'yalnız `.count` okunur' },
+  { file: 'src/app/dashboard/clients/[id]/constraints/constraint-form.tsx', call: 'careCounts', count: 1, reason: 'yalnız grup sayıları' },
+  { file: 'src/app/dashboard/clients/[id]/measurements/measurement-form.tsx', call: 'groupSummary', count: 1, reason: 'yalnız `.count` okunur' },
   // Ölçüm adları (`Metric.label`) gösterilmez; dil algılayıcının bağımlılığı olsaydı çekim ortasında yeniden başlardı.
-  { file: 'src/components/measurements/use-pose-detection.ts', call: 'analyzePose', reason: 'etiketler gösterilmez' },
+  { file: 'src/components/measurements/use-pose-detection.ts', call: 'analyzePose', count: 1, reason: 'etiketler gösterilmez' },
   // Dil dönen girdiye yazılır (`{ ...careInputOf(…), locale }`); boş girdi de aynı dili taşır.
-  { file: 'src/lib/workout-routes.ts', call: 'careInputOf', reason: 'dil dönen girdiye eklenir' },
+  { file: 'src/lib/workout-routes.ts', call: 'careInputOf', count: 1, reason: 'dil dönen girdiye eklenir' },
 ];
 
 type Finding = { file: string; line: number; call: string };
@@ -124,12 +125,12 @@ describe('dil parametresi unutulmaz', () => {
     assert.ok(!FILES.some((file) => file.startsWith('src/app/api/dev/')));
   });
 
-  test('dil alan her yardımcıya (konumlu, nesne alanı, JSX özelliği) dil verilir; izin listesinde eskiyen kayıt yok', () => {
-    const used = new Set<number>();
+  test('dil alan her yardımcıya (konumlu, nesne alanı, JSX özelliği) dil verilir; izin listesindeki her kayıt sayısınca', () => {
+    const used = ALLOWED.map(() => 0);
     const missing = findOmissions().filter(({ file, call }) => {
       const index = ALLOWED.findIndex((entry) => entry.file === file && entry.call === call);
       if (index < 0) return true;
-      used.add(index);
+      used[index]! += 1;
       return false;
     });
     assert.deepEqual(
@@ -137,9 +138,9 @@ describe('dil parametresi unutulmaz', () => {
       [],
     );
     assert.deepEqual(
-      ALLOWED.flatMap((entry, index) => (used.has(index) ? [] : [`${entry.file}: ${entry.call}`])),
+      ALLOWED.flatMap((entry, index) => (used[index] === entry.count ? [] : [`${entry.file}: ${entry.call} (${used[index]} kez, izin ${entry.count})`])),
       [],
-      'kullanılmayan izin kayıtları',
+      'izin kayıtlarının sayısı tutmuyor (yeni dilsiz çağrı ya da eskiyen kayıt)',
     );
   });
 });
