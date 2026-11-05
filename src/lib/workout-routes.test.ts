@@ -231,6 +231,12 @@ describe('GET /api/me/workout', () => {
     assert.deepEqual(day?.setIncrease, [
       { rowId: 'r_aaaaaa', from: 3, to: 4, why: '4 haftadır bu harekette; son 2 haftada ilerliyor. Hedef kasın son 7 günde 8 seti var (önerilen ~10).' },
     ]);
+    // Gerekçe danışanın dilinde.
+    const english = { ...experienced(), locale: 'en' as const };
+    assert.equal(
+      body(await workoutRoute(english, null)).day?.setIncrease?.[0]?.why,
+      '4 weeks on this exercise; progressing over the last 2 weeks. Sets for the target muscle in the last 7 days: 8 (recommended ~10).',
+    );
     // Deneyim tabanı yoksa (Tanışma) aday yok.
     assert.equal(body(await workoutRoute(setup(files).deps, null)).day?.setIncrease, undefined);
     // Bu hafta göğse iki algoritmik öneri verildi.

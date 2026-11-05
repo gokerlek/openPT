@@ -448,6 +448,7 @@ export function workoutRoute(deps: WorkoutRouteDeps, dayParam: string | null, pr
           proposals: proposalsFile && proposalsFile !== 'broken' ? parseProposals(proposalsFile.content).items : [],
           setWeightsOf: deps.setWeights,
           sessionId: current?.id,
+          locale,
         });
         if (setIncrease.length > 0) day = { ...day, setIncrease };
         day = withRowCare(day, catalog.exercises, care.input);

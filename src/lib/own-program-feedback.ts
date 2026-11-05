@@ -137,7 +137,7 @@ export function planOwnFeedback(input: {
     }
     // Cümlenin kapsamı yazmadan önce (çıkarılan satırın günü sonra bulunamaz).
     const scope = scopeOf(decision.rowId, decision.dayId);
-    const applied = applyProposal({ phases: phases as ProgramPhase[] }, asProposal(decision as FeedbackDecision & { kind: ProposalKind }, doc, at), ids);
+    const applied = applyProposal({ phases: phases as ProgramPhase[] }, asProposal(decision as FeedbackDecision & { kind: ProposalKind }, doc, at), ids, locale);
     if (applied.status === 'stale') {
       outcome.stale = (outcome.stale ?? 0) + 1;
       continue;

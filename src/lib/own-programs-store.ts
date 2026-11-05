@@ -31,7 +31,7 @@ export async function ownLibrary(locale?: Locale): Promise<Awaited<ReturnType<Ow
   const [exercises, devices] = await Promise.all([listExercises(undefined, locale), listDevices(undefined, locale)]);
   return {
     library: { exercises: new Map(exercises.map((exercise) => [exercise.id, exercise])), deviceIds: new Set(devices.map((device) => device.id)) },
-    ctx: programDiffContext(exercises, devices),
+    ctx: programDiffContext(exercises, devices, locale),
   };
 }
 
