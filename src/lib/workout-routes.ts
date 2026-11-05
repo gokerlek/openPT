@@ -28,7 +28,7 @@ import { displayDays, currentPhaseOf, DAY_ID_PATTERN } from './program-plan.ts';
 import type { TrackingType } from './progression.ts';
 import { parseProposals, PROPOSALS_PATH } from './proposals.ts';
 import type { Client } from './schemas/client.ts';
-import { EQUIPMENT_LABELS, type Category, type Equipment } from './schemas/exercise.ts';
+import { equipmentLabels, type Category, type Equipment } from './schemas/exercise.ts';
 import { readOwnProgram, readOwnState, type OwnState } from './own-program-files.ts';
 import { activeProgramId, shownProgram } from './own-program-index.ts';
 import { lastDateByProgram } from './own-program-text.ts';
@@ -608,9 +608,9 @@ export function alternativesRoute(
       anyClear ||= ordered.anyClear;
       return {
         equipment,
-        label: EQUIPMENT_LABELS[equipment as Equipment] ?? equipment,
+        label: equipmentLabels(locale)[equipment as Equipment] ?? equipment,
         options: ordered.items.map(({ exercise, pinned }) => {
-          const note = hasCare(care) ? optionCareText(resultOf(exercise)) : null;
+          const note = hasCare(care) ? optionCareText(resultOf(exercise), locale) : null;
           const extra = swapRowFor({ row, blockId: block.id, original: source, exercise, devices: catalog.devices, history, firstForMuscle, insight, programId });
           return {
             exerciseId: exercise.id,
@@ -658,7 +658,7 @@ export function exercisesRoute(deps: WorkoutRouteDeps, addParam: string | null, 
           const result = cared ? evaluateCare(exercise, care) : null;
           // Danışan izin veremez: izinsiz yasak listede hiç yok ("Değiştir"deki gibi).
           if (result && result.blockedBy.length > 0) return [];
-          const note = result ? optionCareText(result) : null;
+          const note = result ? optionCareText(result, locale) : null;
           return [
             {
               id: exercise.id,

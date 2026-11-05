@@ -6,8 +6,12 @@ import { SortableList } from '@/components/list/sortable-list';
 import { SwipeRow, deleteAction } from '@/components/swipe/swipe-row';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { UNIT_STATE_TEXT, UnitStateIcon } from '@/components/workout/unit-state';
-import { formatKg } from '@/lib/format';
+import { unitStateText, UnitStateIcon } from '@/components/workout/unit-state';
+import { useLocale } from '@/i18n/client';
+import type { Locale } from '@/i18n/locale';
+import { clientWorkoutMessages } from '@/i18n/messages/client-workout';
+import { getFormat } from '@/lib/format';
+import { blockKindLabels } from '@/lib/template-plan';
 import { cn } from '@/lib/utils';
 import { itemName, type ListItem, type ListView } from '@/lib/workout-flow';
 
@@ -25,22 +29,25 @@ function movable(item: ListItem): boolean {
 }
 
 /** Satırın ağırlığı: bugün kaydedilen son set "40 kg", geçen antrenmandan "Geçen: 40 kg"; ağırlıksız (süreli) hareket yok. */
-function weightText(item: ListItem): string | null {
+function weightText(item: ListItem, locale: Locale): string | null {
   if (item.lastKg === null) return null;
-  return item.lastFrom === 'last' ? `Geçen: ${formatKg(item.lastKg)}` : formatKg(item.lastKg);
+  const kg = getFormat(locale).kg(item.lastKg);
+  return item.lastFrom === 'last' ? clientWorkoutMessages(locale).list.previousKg(kg) : kg;
 }
 
 /** Satırın gövdesi: durum ikonu (sözcüğü ekran okuyucuya), numara ve ad; sağda "2/4 set" ve ağırlık. */
 function RowContent({ item }: { item: ListItem }) {
   const current = item.state === 'current';
   const muted = item.state === 'done' || item.state === 'skipped';
-  const weight = weightText(item);
+  const locale = useLocale();
+  const weight = weightText(item, locale);
+  const kindLabel = item.kind === 'single' ? null : blockKindLabels(locale)[item.kind];
   return (
     <>
       <UnitStateIcon state={item.state} />
       <span className={cn('flex min-w-0 flex-1 flex-col items-start gap-1', muted && 'text-muted-foreground')}>
-        <span className="sr-only">{UNIT_STATE_TEXT[item.state]}: </span>
-        {item.kindLabel ? <Badge className="bg-primary/15 text-primary">{item.kindLabel}</Badge> : null}
+        <span className="sr-only">{unitStateText(locale)[item.state]}: </span>
+        {kindLabel ? <Badge className="bg-primary/15 text-primary">{kindLabel}</Badge> : null}
         {item.members.map((member) => (
           <span key={member.rowId} className="flex w-full min-w-0 items-baseline gap-2">
             <span className="w-6 shrink-0 text-sm text-muted-foreground tabular-nums">{member.number}</span>
@@ -50,7 +57,7 @@ function RowContent({ item }: { item: ListItem }) {
       </span>
       <span className="flex shrink-0 flex-col items-end gap-0.5 text-[0.8125rem] text-muted-foreground tabular-nums">
         <span className={cn(current && 'font-medium text-foreground')}>
-          {item.done}/{item.planned} set
+          {clientWorkoutMessages(locale).list.sets(item.done, item.planned)}
         </span>
         {weight ? <span>{weight}</span> : null}
       </span>
@@ -98,11 +105,12 @@ export function WorkoutList({
   /** Eklenen hareketi siler (8 sn "Geri al"). */
   onRemove: (key: string) => void;
 }) {
+  const t = clientWorkoutMessages(useLocale()).list;
   return (
     <section aria-labelledby={LIST_TITLE_ID} className="flex flex-col gap-1">
       <div className="flex min-h-11 items-center">
         <h2 id={LIST_TITLE_ID} tabIndex={-1} className="font-heading text-base font-semibold outline-none">
-          Hareketler
+          {t.title}
         </h2>
       </div>
       <SortableList
@@ -110,7 +118,7 @@ export function WorkoutList({
         keyOf={(item) => item.key}
         nameOf={itemName}
         canMove={movable}
-        label="Hareketler"
+        label={t.title}
         onStep={(key, target) => onMove(key, target === 'up' ? -1 : 1)}
         onDrop={onMoveTo}
         onTapItem={onOpen}
@@ -131,8 +139,8 @@ export function WorkoutList({
                 <RowContent item={item} />
               </button>
               {item.state === 'skipped' ? (
-                <Button variant="secondary" className="mr-1.5 h-11 shrink-0 px-3.5" aria-label={`${itemName(item)}: geri al`} onClick={() => onRestore(item.key)}>
-                  Geri al
+                <Button variant="secondary" className="mr-1.5 h-11 shrink-0 px-3.5" aria-label={t.restoreNamed(itemName(item))} onClick={() => onRestore(item.key)}>
+                  {t.restore}
                 </Button>
               ) : null}
             </div>
@@ -154,7 +162,7 @@ export function WorkoutList({
       />
       <Button variant="ghost" size="lg" className="mt-2 h-12 w-full" onClick={onAdd}>
         <Plus data-icon="inline-start" weight="bold" />
-        Hareket ekle
+        {t.add}
       </Button>
     </section>
   );
@@ -167,11 +175,12 @@ export function WorkoutList({
  */
 export function WorkoutListBar({ view, onOpen, onFinish }: { view: ListView; onOpen: (key: string) => void; onFinish: () => void }) {
   const current = view.current ? view.items.find((item) => item.key === view.current) : undefined;
+  const t = clientWorkoutMessages(useLocale()).list;
   if (view.allDone || !current) {
     return (
       <Button size="lg" className="h-14 w-full text-base" onClick={onFinish}>
         <FlagCheckered data-icon="inline-start" weight="fill" />
-        Antrenmanı bitir
+        {t.finish}
       </Button>
     );
   }
@@ -179,7 +188,7 @@ export function WorkoutListBar({ view, onOpen, onFinish }: { view: ListView; onO
     <Button size="lg" className="h-14 w-full text-base" onClick={() => onOpen(current.key)}>
       <Play data-icon="inline-start" weight="fill" />
       <span className="min-w-0 truncate">
-        {view.doneSets > 0 ? 'Devam et' : 'Başla'}: {itemName(current)}
+        {view.doneSets > 0 ? t.continueWith(itemName(current)) : t.startWith(itemName(current))}
       </span>
     </Button>
   );

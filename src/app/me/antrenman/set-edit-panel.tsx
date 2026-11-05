@@ -5,8 +5,10 @@ import { Check } from '@/components/line-icons';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Stepper } from '@/components/ui/stepper';
+import { useLocale } from '@/i18n/client';
+import { clientWorkoutMessages } from '@/i18n/messages/client-workout';
 import { minutesOf } from '@/lib/cardio';
-import { EFFORT_LABELS, gridOf, type Effort } from '@/lib/progression';
+import { effortLabels, gridOf, type Effort } from '@/lib/progression';
 import { SESSION_LIMITS } from '@/lib/schemas/session';
 import type { WorkoutRow } from '@/lib/workout-plan';
 import { EFFORT_CHOICES } from '@/lib/workout-session';
@@ -51,6 +53,10 @@ export function SetEditPanel({
   onCancel: () => void;
   onDelete: () => void;
 }) {
+  const locale = useLocale();
+  const messages = clientWorkoutMessages(locale);
+  const t = messages.setEdit;
+  const input = messages.input;
   const [kg, setKg] = useState(edit.kg);
   const [value, setValue] = useState(edit.value);
   const [effort, setEffort] = useState(edit.effort ?? undefined);
@@ -73,18 +79,19 @@ export function SetEditPanel({
       }}>
       <div className="flex min-h-11 items-center gap-1.5 text-sm tabular-nums">
         <h2 id="set-edit-title" tabIndex={-1} className="shrink-0 font-medium outline-none">
-          Set {edit.position + 1}/{edit.total}
+          {messages.entry.set(edit.position + 1, edit.total)}
           <span className="font-normal text-muted-foreground">
-            <span aria-hidden> · </span>düzenleniyor
+            <span aria-hidden> · </span>
+            {t.editing}
           </span>
         </h2>
         {edit.extra ? (
           <Badge variant="secondary" className="shrink-0">
-            Fazladan
+            {messages.entry.extra}
           </Badge>
         ) : null}
         <Button variant="ghost" className="-mr-2 ml-auto h-11 shrink-0 px-3 text-destructive hover:text-destructive" onClick={onDelete}>
-          Seti sil
+          {t.delete}
         </Button>
       </div>
       {weighted ? (
@@ -100,9 +107,9 @@ export function SetEditPanel({
           stepFn={grid ? (current, direction) => (direction === 1 ? grid.up(current ?? grid.min, 1) : grid.below(current ?? grid.min, current ?? grid.min)) : undefined}
           inputMode="decimal"
           unit="kg"
-          aria-label={`Ağırlık, ${row.title}`}
-          decrementLabel="Ağırlığı azalt"
-          incrementLabel="Ağırlığı artır"
+          aria-label={input.weight(row.title)}
+          decrementLabel={input.weightLess}
+          incrementLabel={input.weightMore}
         />
       ) : null}
       <Stepper
@@ -117,16 +124,16 @@ export function SetEditPanel({
         max={valueMax}
         step={walk ? 1 : duration ? SECONDS_STEP : 1}
         inputMode={walk ? 'decimal' : 'numeric'}
-        unit={walk ? 'dk' : duration ? 'sn' : 'tekrar'}
-        aria-label={duration ? `Süre, ${row.title}` : `Tekrar, ${row.title}`}
-        decrementLabel={duration ? 'Süreyi azalt' : 'Tekrarı azalt'}
-        incrementLabel={duration ? 'Süreyi artır' : 'Tekrarı artır'}
+        unit={walk ? input.minutesUnit : duration ? input.secondsUnit : input.repsUnit}
+        aria-label={duration ? input.duration(row.title) : input.reps(row.title)}
+        decrementLabel={duration ? input.durationLess : input.repsLess}
+        incrementLabel={duration ? input.durationMore : input.repsMore}
       />
       {edit.effort !== null ? (
         // Tek satır: giriş panelindeki "Sıradaki" satırının yerinde, panel düzenlerken uzamaz.
         <div role="group" aria-labelledby="set-edit-effort" className="flex min-h-11 items-center gap-2">
           <span id="set-edit-effort" className="shrink-0 text-sm text-muted-foreground">
-            Zorluk
+            {t.effort}
           </span>
           <div className="grid min-w-0 flex-1 grid-cols-3 gap-2">
             {EFFORT_CHOICES.map((choice) => (
@@ -136,7 +143,7 @@ export function SetEditPanel({
                 aria-pressed={effort === choice}
                 className="h-11 min-w-0 px-2"
                 onClick={() => setEffort(effort === choice ? undefined : choice)}>
-                {EFFORT_LABELS[choice]}
+                {effortLabels(locale)[choice]}
               </Button>
             ))}
           </div>
@@ -144,10 +151,10 @@ export function SetEditPanel({
       ) : null}
       <div className="grid grid-cols-[1fr_1.6fr] gap-2">
         <Button variant="secondary" size="lg" className="h-14 text-base" onClick={onCancel}>
-          Vazgeç
+          {t.cancel}
         </Button>
         <Button size="lg" className="h-14 text-base transition-transform duration-100 active:scale-[0.97] motion-reduce:active:scale-100" onClick={save}>
-          Kaydet
+          {t.save}
           <Check data-icon="inline-end" weight="bold" />
         </Button>
       </div>

@@ -6,8 +6,10 @@ import { Check, Plus } from '@/components/line-icons';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Stepper } from '@/components/ui/stepper';
+import { useLocale, useMessages } from '@/i18n/client';
+import { clientWorkoutMessages } from '@/i18n/messages/client-workout';
 import { CARDIO_LIMITS, minutesOf } from '@/lib/cardio';
-import { formatKg, formatNumber } from '@/lib/format';
+import { getFormat } from '@/lib/format';
 import { gridOf } from '@/lib/progression';
 import { SESSION_LIMITS } from '@/lib/schemas/session';
 import { cn } from '@/lib/utils';
@@ -32,14 +34,15 @@ export type FollowingView = { name: string; onOpen: () => void };
 
 /** "‹ Önceki": kısa (adı yalnız erişilebilir adda), satırın ya da başlığın kenarında. */
 function PreviousButton({ previous, className }: { previous: FollowingView; className?: string }) {
+  const t = useMessages(clientWorkoutMessages).entry;
   return (
     <Button
       variant="ghost"
-      aria-label={`Önceki hareket: ${previous.name}`}
+      aria-label={t.previousNamed(previous.name)}
       className={cn('h-11 gap-1 px-2 text-sm font-normal text-muted-foreground', className)}
       onClick={previous.onOpen}>
       <CaretLeft data-icon="inline-start" weight="bold" />
-      Önceki
+      {t.previous}
     </Button>
   );
 }
@@ -53,6 +56,7 @@ function PreviousButton({ previous, className }: { previous: FollowingView; clas
  * seti bırakırdı); yeri boş kalır, panel kaymaz.
  */
 function NextUp({ previous, following, hidden }: { previous: FollowingView | null; following: FollowingView | null; hidden: boolean }) {
+  const t = useMessages(clientWorkoutMessages).entry;
   return (
     <div className={cn('mt-1 flex min-h-11 items-center gap-2 border-t pt-1', previous && !hidden ? 'justify-between' : 'justify-center')}>
       {hidden ? null : (
@@ -64,12 +68,12 @@ function NextUp({ previous, following, hidden }: { previous: FollowingView | nul
               variant="ghost"
               className={cn('h-11 w-auto max-w-full min-w-0 gap-1 px-3 text-sm font-normal text-muted-foreground', previous && '-mr-2 shrink')}
               onClick={following.onOpen}>
-              <span className="shrink-0">Sıradaki:</span>{' '}
+              <span className="shrink-0">{t.next}</span>{' '}
               <span className="min-w-0 truncate font-medium text-foreground">{following.name}</span>
               <CaretRight data-icon="inline-end" weight="bold" />
             </Button>
           ) : (
-            <p className="text-sm text-muted-foreground">Son hareket</p>
+            <p className="text-sm text-muted-foreground">{t.last}</p>
           )}
         </>
       )}
@@ -82,11 +86,12 @@ export const ENTRY_PANEL_TOGGLE_ID = 'entry-panel-toggle';
 
 /** Paneli kapatan (açıkken üst satırın sağında) ya da açan (kapalıyken gezinme satırının sağında) küçük düğme. */
 function PanelToggle({ collapsed, onToggle, className }: { collapsed: boolean; onToggle: () => void; className?: string }) {
+  const t = useMessages(clientWorkoutMessages).entry;
   return (
     <Button
       id={ENTRY_PANEL_TOGGLE_ID}
       variant="ghost"
-      aria-label={collapsed ? 'Set panelini aç' : 'Set panelini gizle'}
+      aria-label={collapsed ? t.openPanel : t.hidePanel}
       aria-expanded={!collapsed}
       className={cn('size-11 shrink-0 p-0 text-muted-foreground [&_svg]:size-5', className)}
       onClick={onToggle}>
@@ -100,17 +105,18 @@ function PanelToggle({ collapsed, onToggle, className }: { collapsed: boolean; o
  * tekrar kutuları, ✓). `hidden` (set kaydedilirken): gezinme düğmeleri yok, yeri boş kalır.
  */
 function CollapsedBar({ previous, following, hidden, onToggle }: { previous: FollowingView | null; following: FollowingView | null; hidden: boolean; onToggle: () => void }) {
+  const t = useMessages(clientWorkoutMessages).entry;
   return (
     <div className="flex min-h-14 items-center gap-1 pt-1">
       {!hidden && previous ? <PreviousButton previous={previous} className="-ml-2 shrink-0" /> : null}
       <div className="flex min-w-0 flex-1 justify-center">
         {hidden ? null : following ? (
           <Button variant="ghost" className="h-11 w-auto max-w-full min-w-0 gap-1 px-3 text-sm font-normal text-muted-foreground" onClick={following.onOpen}>
-            <span className="shrink-0">Sıradaki:</span> <span className="min-w-0 truncate font-medium text-foreground">{following.name}</span>
+            <span className="shrink-0">{t.next}</span> <span className="min-w-0 truncate font-medium text-foreground">{following.name}</span>
             <CaretRight data-icon="inline-end" weight="bold" />
           </Button>
         ) : (
-          <p className="text-sm text-muted-foreground">Son hareket</p>
+          <p className="text-sm text-muted-foreground">{t.last}</p>
         )}
       </div>
       <PanelToggle collapsed onToggle={onToggle} className="-mr-2" />
@@ -134,15 +140,18 @@ function TransitionBar({ transition, now }: { transition: TransitionView; now: n
 
 /** Sayılan süreli set: büyük saniye, alt sınıra geri sayım ve çubuk (stepper'ın yerinde). */
 function TimerBox({ view, target }: { view: TimerView; target: NextSet['target'] }) {
+  const locale = useLocale();
+  const t = clientWorkoutMessages(locale).entry;
+  const f = getFormat(locale);
   const reached = view.phase !== 'below';
   return (
     <div role="timer" aria-live="off" className="relative flex h-14 items-center gap-3 overflow-hidden rounded-lg border border-input px-4 dark:bg-input/30">
       <span className="flex items-baseline gap-1.5">
-        <span className="font-heading text-[2rem] leading-none font-semibold text-primary tabular-nums">{formatNumber(view.seconds)}</span>
-        <span className="text-sm text-muted-foreground">sn</span>
+        <span className="font-heading text-[2rem] leading-none font-semibold text-primary tabular-nums">{f.number(view.seconds)}</span>
+        <span className="text-sm text-muted-foreground">{clientWorkoutMessages(locale).input.secondsUnit}</span>
       </span>
       <span className="ml-auto text-right text-sm text-muted-foreground tabular-nums">
-        {reached ? (view.phase === 'above' && !target.amrap ? 'Hedefin üstündesin' : 'Hedefe ulaştın') : `Hedefe ${formatNumber(view.toMin)} sn`}
+        {reached ? (view.phase === 'above' && !target.amrap ? t.aboveTarget : t.reached) : t.toTarget(f.number(view.toMin))}
       </span>
       <span className="absolute inset-x-0 bottom-0 h-1 bg-primary/15" aria-hidden>
         <span className="block h-full origin-left bg-primary transition-transform duration-160" style={{ transform: `scaleX(${view.fraction})` }} />
@@ -227,6 +236,10 @@ export function EntryPanel({
   collapsed: boolean;
   onToggleCollapsed: () => void;
 }) {
+  const locale = useLocale();
+  const messages = clientWorkoutMessages(locale);
+  const t = messages.entry;
+  const input = messages.input;
   const counting = next !== null && row?.trackingType === 'duration' && timer !== null && !frozen;
   if (collapsed && !counting) return <CollapsedBar previous={previous} following={following} hidden={frozen} onToggle={onToggleCollapsed} />;
   if (!next || !row) {
@@ -235,20 +248,20 @@ export function EntryPanel({
         <div className="flex min-h-11 items-center gap-2">
           <p className="flex min-w-0 flex-1 items-center gap-2 text-sm font-medium">
             <CheckCircle weight="fill" className="size-5 shrink-0 text-primary" aria-hidden />
-            Bu hareket bitti
+            {t.done}
           </p>
           {previous ? <PreviousButton previous={previous} className="shrink-0" /> : null}
           <PanelToggle collapsed={false} onToggle={onToggleCollapsed} className="-mr-2" />
         </div>
         {following ? (
           <Button size="lg" className="h-14 w-full text-base" onClick={following.onOpen}>
-            <span className="min-w-0 truncate">Sıradaki: {following.name}</span>
+            <span className="min-w-0 truncate">{t.nextNamed(following.name)}</span>
             <ArrowRight data-icon="inline-end" weight="bold" />
           </Button>
         ) : (
           <Button size="lg" className="h-14 w-full text-base" onClick={onFinish}>
             <FlagCheckered data-icon="inline-start" />
-            Antrenmanı bitir
+            {t.finish}
           </Button>
         )}
         {addSet ? (
@@ -278,7 +291,7 @@ export function EntryPanel({
       id="set-done"
       size="lg"
       aria-disabled={frozen || undefined}
-      aria-label={!frozen && !ask && nextLetter ? `Set bitti, sıradaki ${nextLetter}` : undefined}
+      aria-label={!frozen && !ask && nextLetter ? t.doneThen(nextLetter) : undefined}
       onClick={frozen ? undefined : onDone}
       className={cn(
         'h-14 w-full text-base transition-transform duration-100 active:scale-[0.97] motion-reduce:active:scale-100',
@@ -287,22 +300,22 @@ export function EntryPanel({
       {frozen ? (
         <>
           <Check data-icon="inline-start" weight="bold" />
-          Kaydedildi
+          {t.saved}
         </>
       ) : ask ? (
         <>
-          Onayla · Set bitti
+          {t.confirm}
           <Check data-icon="inline-end" weight="bold" />
         </>
       ) : nextLetter ? (
         <>
-          Set bitti
+          {t.setDone}
           <ArrowRight data-icon="inline-end" weight="bold" />
           {nextLetter}
         </>
       ) : (
         <>
-          Set bitti
+          {t.setDone}
           <Check data-icon="inline-end" weight="bold" />
         </>
       )}
@@ -313,24 +326,26 @@ export function EntryPanel({
     <div className="flex flex-col gap-2">
       {inTransition && transition ? <TransitionBar key={transition.endsAt} transition={transition} now={now} /> : null}
       <div className="flex min-h-11 items-center gap-1.5 text-sm font-medium tabular-nums">
-        <span className="shrink-0">
-          Set {next.position + 1}/{next.total}
-        </span>
+        <span className="shrink-0">{t.set(next.position + 1, next.total)}</span>
         {next.target.amrap ? <Badge className="shrink-0 bg-primary/15 text-primary">AMRAP</Badge> : null}
-        {next.extra ? <Badge variant="secondary" className="shrink-0">Fazladan</Badge> : null}
+        {next.extra ? (
+          <Badge variant="secondary" className="shrink-0">
+            {t.extra}
+          </Badge>
+        ) : null}
         <span className="text-muted-foreground" aria-hidden>
           ·
         </span>
-        <span className="min-w-0 flex-1 truncate text-muted-foreground">{targetText(next.target, row.trackingType, cardio)}</span>
+        <span className="min-w-0 flex-1 truncate text-muted-foreground">{targetText(next.target, row.trackingType, cardio, locale)}</span>
         {inTransition && transition ? (
-          <span className="shrink-0 text-[0.8125rem] text-primary">Geçiş {clockText(Math.ceil((transition.endsAt - now) / 1000))}</span>
+          <span className="shrink-0 text-[0.8125rem] text-primary">{t.transition(clockText(Math.ceil((transition.endsAt - now) / 1000)))}</span>
         ) : running ? (
           <Button variant="ghost" className="-mr-2 h-11 shrink-0 px-3 text-muted-foreground" onClick={onCancelTimer}>
-            Vazgeç
+            {t.cancel}
           </Button>
         ) : next.extra && !frozen ? (
-          <Button variant="ghost" className="h-11 shrink-0 px-3 text-muted-foreground" aria-label="Fazladan seti sil" onClick={onDropExtra}>
-            Sil
+          <Button variant="ghost" className="h-11 shrink-0 px-3 text-muted-foreground" aria-label={t.dropExtra} onClick={onDropExtra}>
+            {t.delete}
           </Button>
         ) : null}
         {running ? null : <PanelToggle collapsed={false} onToggle={onToggleCollapsed} className="-mr-2" />}
@@ -349,9 +364,9 @@ export function EntryPanel({
           inputMode="decimal"
           unit="kg"
           invalid={ask}
-          aria-label={`Ağırlık, ${row.title}`}
-          decrementLabel="Ağırlığı azalt"
-          incrementLabel="Ağırlığı artır"
+          aria-label={input.weight(row.title)}
+          decrementLabel={input.weightLess}
+          incrementLabel={input.weightMore}
         />
       ) : null}
       {running && timer ? (
@@ -369,10 +384,10 @@ export function EntryPanel({
           max={valueMax}
           step={walk ? 1 : duration ? SECONDS_STEP : 1}
           inputMode={walk ? 'decimal' : 'numeric'}
-          unit={walk ? 'dk' : duration ? 'sn' : 'tekrar'}
-          aria-label={duration ? `Süre, ${row.title}` : next.target.amrap ? `Yaptığın tekrar, ${row.title}` : `Tekrar, ${row.title}`}
-          decrementLabel={duration ? 'Süreyi azalt' : 'Tekrarı azalt'}
-          incrementLabel={duration ? 'Süreyi artır' : 'Tekrarı artır'}
+          unit={walk ? input.minutesUnit : duration ? input.secondsUnit : input.repsUnit}
+          aria-label={duration ? input.duration(row.title) : next.target.amrap ? input.repsDone(row.title) : input.reps(row.title)}
+          decrementLabel={duration ? input.durationLess : input.repsLess}
+          incrementLabel={duration ? input.durationMore : input.repsMore}
         />
       )}
       {cardio && !frozen ? (
@@ -387,9 +402,9 @@ export function EntryPanel({
             max={CARDIO_LIMITS.distanceMax}
             step={CARDIO_LIMITS.distanceStep}
             unit="m"
-            aria-label={`Mesafe, ${row.title}`}
-            decrementLabel="Mesafeyi azalt"
-            incrementLabel="Mesafeyi artır"
+            aria-label={input.distance(row.title)}
+            decrementLabel={input.distanceLess}
+            incrementLabel={input.distanceMore}
           />
           {walk ? (
             <Stepper
@@ -402,9 +417,9 @@ export function EntryPanel({
               step={CARDIO_LIMITS.inclineStep}
               inputMode="decimal"
               unit="%"
-              aria-label={`Eğim, ${row.title}`}
-              decrementLabel="Eğimi azalt"
-              incrementLabel="Eğimi artır"
+              aria-label={input.incline(row.title)}
+              decrementLabel={input.inclineLess}
+              incrementLabel={input.inclineMore}
             />
           ) : null}
         </div>
@@ -412,11 +427,9 @@ export function EntryPanel({
       {ask ? (
         <div role="alert" className="flex min-h-11 items-center gap-2 text-sm text-destructive-text">
           <WarningCircle weight="fill" className="size-4.5 shrink-0" />
-          <span className="min-w-0 flex-1">
-            Hedefin çok üzerindesin · plan {formatKg(next.plannedKg)}
-          </span>
+          <span className="min-w-0 flex-1">{t.overTarget(getFormat(locale).kg(next.plannedKg))}</span>
           <Button variant="ghost" className="-mr-2 h-11 shrink-0 px-3" onClick={onResetKg}>
-            Düzelt
+            {t.fix}
           </Button>
         </div>
       ) : null}
@@ -424,13 +437,13 @@ export function EntryPanel({
         running ? (
           <Button id="set-done" size="lg" className="h-14 w-full text-base" onClick={onStopTimer}>
             <Stop data-icon="inline-start" weight="fill" />
-            Bitir
+            {t.stop}
           </Button>
         ) : (
           <div className="grid grid-cols-[1fr_1.6fr] gap-2">
             <Button variant="secondary" size="lg" className="h-14 text-base" onClick={onStartTimer}>
               <Play data-icon="inline-start" weight="fill" />
-              Başlat
+              {t.start}
             </Button>
             {doneButton}
           </div>
