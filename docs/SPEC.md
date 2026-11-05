@@ -675,7 +675,7 @@ Tasarım dili, ekran akışları, Türkçe metinler, antrenman ekranı mantığ�
 7. **Danışan listesi N repo okuması ister** (30 danışan → 30 istek). Sunucu tarafı ETag önbelleğiyle tek seferlik maliyete iner.
 8. **Kod fork'u açıktır.** Açık bir repo'nun fork'u gizli yapılamaz. Bu yüzden uygulama kod repo'suna hiçbir şey yazmaz; `APP_REPO` fork'un adıyla çakışırsa ya da açık/fork bir repo'yu gösterirse kurulum durur (`createAppRepo`). PT'nin kodda yaptığı değişiklikler de herkese açık olur.
 9. **Vercel ücretsiz plan ticari kullanıma kapalı.** Danışanlardan ücret alınmaya başlanırsa ücretli plana geçmek ya da Cloudflare'e taşımak gerekir.
-10. **İngilizce klinik metinler uzman onayı bekliyor.** Kısıtlar, hareket testi, durum etiketleri, güvenlik ve acil durum metinleri çeviriyle yazıldı. İngilizce yayımlanmadan önce bir fizyoterapist ya da hekim okumalı. Türkçe metinler değişmedi.
+10. **İngilizce klinik metinler uzman onayı bekliyor.** Kısıtlar, hareket testi, durum etiketleri, güvenlik ve acil durum metinleri çeviriyle yazıldı. İngilizce yayımlanmadan önce bir fizyoterapist ya da hekim okumalı (liste: `docs/i18n-klinik-inceleme.md`). Türkçe metinler değişmedi.
 
 ---
 
