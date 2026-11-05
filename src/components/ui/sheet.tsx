@@ -10,6 +10,8 @@ import { cn } from "cn"
 
 import { X } from "@/components/line-icons"
 import { Button } from "@/components/ui/button"
+import { useMessages } from "@/i18n/client"
+import { commonMessages } from "@/i18n/messages/common"
 
 function Sheet({ ...props }: SheetPrimitive.Root.Props) {
   return <SheetPrimitive.Root data-slot="sheet" {...props} />
@@ -50,6 +52,7 @@ function SheetContent({
   side?: "top" | "right" | "bottom" | "left"
   showCloseButton?: boolean
 }) {
+  const t = useMessages(commonMessages).actions
   return (
     <SheetPortal>
       <SheetOverlay />
@@ -75,7 +78,7 @@ function SheetContent({
             }
           >
             <X />
-            <span className="sr-only">Kapat</span>
+            <span className="sr-only">{t.close}</span>
           </SheetPrimitive.Close>
         )}
       </SheetPrimitive.Popup>

@@ -3,7 +3,10 @@
 import { useState } from 'react';
 import { motion } from 'motion/react';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
-import { MUSCLE_LABELS } from '@/lib/schemas/exercise';
+import { useLocale, useMessages } from '@/i18n/client';
+import { uiMessages } from '@/i18n/messages/ui';
+import { getFormat } from '@/lib/format';
+import { muscleLabels } from '@/lib/schemas/exercise';
 import type { BodyMuscle } from '@/lib/muscles';
 import { legendText, type MuscleLegendData, type MuscleMark, type MuscleMarks } from '@/lib/muscle-tiers';
 import { cn } from '@/lib/utils';
@@ -17,7 +20,6 @@ import { muscleOfPath } from './regions';
 export type MuscleSide = 'front' | 'back';
 
 const SIDES: readonly MuscleSide[] = ['front', 'back'];
-const SIDE_LABELS: Record<MuscleSide, string> = { front: 'Ön', back: 'Arka' };
 
 type SideShape = {
   /** Grubu olmayan parçalar (baş, el, ayak…): yalnız siluet. */
@@ -128,6 +130,10 @@ export function MuscleMap({
   label,
   className,
 }: MuscleMapProps) {
+  const locale = useLocale();
+  const t = useMessages(uiMessages).muscleMap;
+  const names = muscleLabels(locale);
+  const { number } = getFormat(locale);
   const [ownSide, setOwnSide] = useState<MuscleSide>(defaultSide);
   const [hovered, setHovered] = useState<BodyMuscle | null>(null);
   const side = sideProp ?? ownSide;
@@ -140,13 +146,13 @@ export function MuscleMap({
   const describeMuscle =
     describe ??
     ((muscle: BodyMuscle) =>
-      (legend ? legendText(legend, muscle) : null) ??
-      (counts ? `${MUSCLE_LABELS[muscle]} · ${counts[muscle] ?? 0} egzersiz` : MUSCLE_LABELS[muscle]));
+      (legend ? legendText(legend, muscle, locale) : null) ??
+      (counts ? t.exercisesCount(counts[muscle] ?? 0, names[muscle], number(counts[muscle] ?? 0)) : names[muscle]));
 
   const body = (face: MuscleSide) => (
     <Body
       side={face}
-      label={layout === 'flip' ? label : `${label} — ${SIDE_LABELS[face]}`}
+      label={layout === 'flip' ? label : `${label} — ${t.sides[face]}`}
       marks={marks}
       selected={selected}
       disabled={disabled}
@@ -184,7 +190,7 @@ export function MuscleMap({
           {SIDES.map((face) => (
             <div key={face} className="flex flex-col items-center gap-1.5">
               <div className={cn('aspect-[35/93]', bodyClassName)}>{body(face)}</div>
-              <span className="text-xs text-muted-foreground">{SIDE_LABELS[face]}</span>
+              <span className="text-xs text-muted-foreground">{t.sides[face]}</span>
             </div>
           ))}
         </div>
@@ -204,14 +210,14 @@ export function MuscleMap({
             const next = value[0] as MuscleSide | undefined;
             if (next) changeSide(next);
           }}
-          aria-label="Görünüm">
+          aria-label={t.view}>
           {SIDES.map((face) => (
             <ToggleGroupItem key={face} value={face} className="px-5">
-              {SIDE_LABELS[face]}
+              {t.sides[face]}
               {face !== side && selectedOn(face) ? (
                 <>
                   <span className="size-1.5 rounded-full bg-primary-text" aria-hidden />
-                  <span className="sr-only">(seçili kas var)</span>
+                  <span className="sr-only">{t.selectedOther}</span>
                 </>
               ) : null}
             </ToggleGroupItem>
@@ -273,6 +279,10 @@ function nearestMuscle(x: number, y: number, svg: SVGSVGElement): BodyMuscle | n
 
 /** Tek yüzün SVG'si. Her kas bir `g`; sol ve sağ birlikte yanar. */
 function Body({ side, label, marks, labelOf, selected, disabled: locked, counts, onToggle, highlighted, onHighlight }: BodyProps) {
+  const locale = useLocale();
+  const t = useMessages(uiMessages).muscleMap;
+  const names = muscleLabels(locale);
+  const { number } = getFormat(locale);
   const { neutral, groups } = SHAPES[side];
   const interactive = Boolean(onToggle);
   const patternId = usePatternId();
@@ -323,7 +333,7 @@ function Body({ side, label, marks, labelOf, selected, disabled: locked, counts,
             aria-pressed={interactive ? isSelected : undefined}
             aria-disabled={disabled || undefined}
             aria-label={
-              interactive ? (labelOf?.(muscle) ?? `${MUSCLE_LABELS[muscle]}${count === undefined ? '' : `, ${count} egzersiz`}`) : undefined
+              interactive ? (labelOf?.(muscle) ?? (count === undefined ? names[muscle] : t.exercisesCountLabel(count, names[muscle], number(count)))) : undefined
             }
             data-mark={mark ?? 'empty'}
             className={cn(

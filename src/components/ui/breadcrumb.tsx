@@ -4,13 +4,16 @@ import * as React from "react"
 import { mergeProps } from "@base-ui/react/merge-props"
 import { useRender } from "@base-ui/react/use-render"
 import { cn } from "cn"
+import { useMessages } from "@/i18n/client"
+import { uiMessages } from "@/i18n/messages/ui"
 import { CaretRightIcon } from "@phosphor-icons/react"
 import { DotsThree as DotsThreeIcon } from "@/components/line-icons"
 
 function Breadcrumb({ className, ...props }: React.ComponentProps<"nav">) {
+  const t = useMessages(uiMessages).kit
   return (
     <nav
-      aria-label="Sayfa yolu"
+      aria-label={t.breadcrumb}
       data-slot="breadcrumb"
       className={cn(className)}
       {...props}
@@ -102,6 +105,7 @@ function BreadcrumbEllipsis({
   className,
   ...props
 }: React.ComponentProps<"span">) {
+  const t = useMessages(uiMessages).kit
   return (
     <span
       data-slot="breadcrumb-ellipsis"
@@ -115,7 +119,7 @@ function BreadcrumbEllipsis({
     >
       <DotsThreeIcon
       />
-      <span className="sr-only">Daha fazla</span>
+      <span className="sr-only">{t.more}</span>
     </span>
   )
 }

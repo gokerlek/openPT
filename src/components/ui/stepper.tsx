@@ -3,6 +3,9 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { NumberField } from '@base-ui/react/number-field';
 import { Minus, Plus } from '@/components/line-icons';
+import { useLocale, useMessages } from '@/i18n/client';
+import { intlLocale, type Locale } from '@/i18n/locale';
+import { uiMessages } from '@/i18n/messages/ui';
 import { cn } from '@/lib/utils';
 
 /**
@@ -54,15 +57,37 @@ const CENTER: Record<Size, { plain: string; unit: string }> = {
 };
 
 /**
- * Binlik ayracı yok: `tr-TR`'de nokta binlik ayracıdır, "57.5" 575 okunurdu. Gruplama kapalıyken hem virgül hem nokta
- * ondalık sayılır (İngilizce klavyeli telefonun ondalık tuşu nokta yazar); kutu "57,5" gösterir.
+ * Binlik ayracı yok: `tr-TR`'de nokta binlik ayracıdır, "57.5" 575 okunurdu. Gruplama kapalıyken Türkçede hem virgül hem
+ * nokta ondalık sayılır (İngilizce klavyeli telefonun ondalık tuşu nokta yazar); kutu "57,5" gösterir. İngilizcede
+ * (`en-GB`) kutu "57.5" gösterir ama Base UI virgülü ondalık saymaz ("2,5" → 2): `commaAsDecimal` yazılan virgülü noktaya
+ * çevirir (`Stepper` ondalık kutularında; `me/antrenman/set-row.tsx` de kullanmalı).
  */
 export const NUMBER_FORMAT = { useGrouping: false } as const satisfies Intl.NumberFormatOptions;
 /** Tam sayı alanı (tekrar, saniye, set): yazılan "8,5" kutudan çıkınca 9 olur, kutu da 9 gösterir. */
 export const WHOLE_FORMAT = { useGrouping: false, maximumFractionDigits: 0 } as const satisfies Intl.NumberFormatOptions;
 
-/** `xl`'de kutu yazının genişliğinde (birim hemen yanında): "62,5" → 4,5 karakter. */
-const WIDE_TEXT = new Intl.NumberFormat('tr-TR', { maximumFractionDigits: 3, useGrouping: false });
+/** `xl`'de kutu yazının genişliğinde (birim hemen yanında): "62,5" → 4,5 karakter. Dile göre (ayraç değişir). */
+const wideTexts = new Map<Locale, Intl.NumberFormat>();
+function wideText(locale: Locale): Intl.NumberFormat {
+  let format = wideTexts.get(locale);
+  if (!format) {
+    format = new Intl.NumberFormat(intlLocale(locale), { maximumFractionDigits: 3, useGrouping: false });
+    wideTexts.set(locale, format);
+  }
+  return format;
+}
+
+/**
+ * İngilizce ondalık kutusunda yazılan virgül nokta olur: Base UI `en-GB`'de virgülü ondalık saymaz ve "2,5"i 2 okur.
+ * `onInput` Base UI'ın `onChange`'inden önce çalışır, o da noktalı metni okur. Türkçede gerekmez (virgül de nokta da ondalık).
+ */
+export function commaAsDecimal(event: React.FormEvent<HTMLInputElement>): void {
+  const input = event.currentTarget;
+  if (!input.value.includes(',')) return;
+  const caret = input.selectionStart;
+  input.value = input.value.replace(/,/g, '.');
+  if (caret !== null) input.setSelectionRange(caret, caret);
+}
 
 const REPEAT = { delay: 400, interval: 100 } as const;
 /** Parmak bu kadar kayarsa basılı tutma iptal (sayfa kaydırılıyordur). */
@@ -221,8 +246,8 @@ export function Stepper({
   id,
   disabled = false,
   invalid = false,
-  decrementLabel = 'Azalt',
-  incrementLabel = 'Artır',
+  decrementLabel,
+  incrementLabel,
   'aria-label': ariaLabel,
   'aria-describedby': ariaDescribedBy,
   inputRef,
@@ -231,6 +256,8 @@ export function Stepper({
   onKeyDown,
   className,
 }: StepperProps) {
+  const locale = useLocale();
+  const t = useMessages(uiMessages).kit;
   const local = useRef<HTMLInputElement>(null);
   // Boşaltılıp bırakılan kutu değere dönsün diye kutu yeniden kurulur (çağıran boşu yazmadıysa).
   const [resetKey, setResetKey] = useState(0);
@@ -291,6 +318,7 @@ export function Stepper({
       aria-invalid={invalid || undefined}
       onFocus={onFocus}
       onKeyDown={onKeyDown}
+      onInput={locale === 'en' && inputMode === 'decimal' ? commaAsDecimal : undefined}
       onBlur={() => {
         onBlur?.();
         // Base UI boş kutuyu `null` bildirir; çağıran yazmadıysa (değer duruyorsa) kutu değere döner.
@@ -305,7 +333,7 @@ export function Stepper({
           : 'h-full w-full min-w-0 bg-transparent px-1 font-medium tabular-nums outline-none touch:text-base',
         !wide && (unit ? 'pr-5 text-right' : 'text-center'),
       )}
-      style={wide ? { width: `${Math.max(1, value === null ? 1 : WIDE_TEXT.format(value).length) + 0.4}ch` } : undefined}
+      style={wide ? { width: `${Math.max(1, value === null ? 1 : wideText(locale).format(value).length) + 0.4}ch` } : undefined}
     />
   );
 
@@ -316,7 +344,7 @@ export function Stepper({
       min={min}
       max={max}
       step={step}
-      locale="tr-TR"
+      locale={intlLocale(locale)}
       format={inputMode === 'decimal' ? NUMBER_FORMAT : WHOLE_FORMAT}
       disabled={disabled}
       onValueChange={(next, details) => {
@@ -332,7 +360,7 @@ export function Stepper({
           'items-stretch rounded-lg border border-input bg-transparent text-sm shadow-xs transition-colors has-[input:focus-visible]:border-ring has-[input:focus-visible]:ring-3 has-[input:focus-visible]:ring-ring/50 data-disabled:opacity-50 data-invalid:border-destructive data-invalid:ring-3 data-invalid:ring-destructive/20 dark:bg-input/30',
           HEIGHT[size],
         )}>
-        <StepButton direction={-1} label={decrementLabel} size={size} disabled={disabled || atMin} onStep={() => stepBy(-1)} onPress={commitTyped} />
+        <StepButton direction={-1} label={decrementLabel ?? t.decrease} size={size} disabled={disabled || atMin} onStep={() => stepBy(-1)} onPress={commitTyped} />
         {wide ? (
           // Ortanın tamamı kutunun etiketi: rakamın dışına dokunmak da klavyeyi açar.
           <label htmlFor={inputId} className="flex min-w-0 flex-1 cursor-text items-center justify-center border-x border-input">
@@ -355,7 +383,7 @@ export function Stepper({
             ) : null}
           </span>
         )}
-        <StepButton direction={1} label={incrementLabel} size={size} disabled={disabled || atMax} onStep={() => stepBy(1)} onPress={commitTyped} />
+        <StepButton direction={1} label={incrementLabel ?? t.increase} size={size} disabled={disabled || atMax} onStep={() => stepBy(1)} onPress={commitTyped} />
       </NumberField.Group>
     </NumberField.Root>
   );

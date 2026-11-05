@@ -1,6 +1,8 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
+import { useMessages } from '@/i18n/client';
+import { uiMessages } from '@/i18n/messages/ui';
 
 /**
  * Taşınabilen öğenin hemen arkasındaki sr-only şerit: klavyeyle odaklanınca görünür. Sürüklemenin klavye ve ekran okuyucu
@@ -20,14 +22,15 @@ export function MoveButtons({
   onStep: (target: 'up' | 'down') => void;
   children?: React.ReactNode;
 }) {
+  const t = useMessages(uiMessages).move;
   const button = 'h-9 touch:h-11';
   return (
-    <div role="group" aria-label={`${name}: taşı`} className="sr-only flex flex-wrap gap-1.5 px-3 pb-3 focus-within:not-sr-only">
+    <div role="group" aria-label={t.group(name)} className="sr-only flex flex-wrap gap-1.5 px-3 pb-3 focus-within:not-sr-only">
       <Button type="button" variant="outline" size="sm" className={button} disabled={!canUp} focusableWhenDisabled onClick={() => onStep('up')}>
-        Yukarı taşı
+        {t.up}
       </Button>
       <Button type="button" variant="outline" size="sm" className={button} disabled={!canDown} focusableWhenDisabled onClick={() => onStep('down')}>
-        Aşağı taşı
+        {t.down}
       </Button>
       {children}
     </div>

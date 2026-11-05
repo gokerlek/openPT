@@ -31,6 +31,8 @@ import {
   type MotionValue,
   type SpringOptions,
 } from 'motion/react';
+import { useMessages } from '@/i18n/client';
+import { uiMessages } from '@/i18n/messages/ui';
 import { cn } from '@/lib/utils';
 
 export type DockEntry = {
@@ -96,6 +98,7 @@ function DockItem({
   reduced: boolean;
   labels: boolean;
 }) {
+  const t = useMessages(uiMessages).dock;
   const ref = useRef<HTMLSpanElement>(null);
   const [showLabel, setShowLabel] = useState(false);
 
@@ -108,7 +111,7 @@ function DockItem({
   // Etiketli düzende öğe büyümez (telefondaki gibi): sabit taban boyut.
   const size = reduced || labels ? baseItemSize : animated;
 
-  const label = item.disabled ? `${item.label} · yakında` : item.label;
+  const label = item.disabled ? t.soon(item.label) : item.label;
   // Etiketli düzende ipucu çizilmez; üzerine gelmek/odak boşuna yeniden çizdirmesin.
   const tooltip = !labels;
 

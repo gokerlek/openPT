@@ -1,8 +1,10 @@
 'use client';
 
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { useLocale, useMessages } from '@/i18n/client';
+import { uiMessages } from '@/i18n/messages/ui';
 import { cn } from '@/lib/utils';
-import { normalizeWeekdays, WEEKDAY_NAMES, WEEKDAY_SHORT, WEEKDAYS, type Weekday } from '@/lib/training-days';
+import { normalizeWeekdays, weekdayLabels, weekdayShortLabels, WEEKDAYS, type Weekday } from '@/lib/training-days';
 
 /**
  * Haftanın yedi günü, çoklu seçim (tasarım §2.11; Faz 3): programın (antrenmanın) atandığı günler, PT'nin program
@@ -40,13 +42,17 @@ export function WeekdayToggle({
   taken?: ReadonlyMap<number, string>;
   className?: string;
 }) {
+  const locale = useLocale();
+  const t = useMessages(uiMessages).weekdays;
+  const names = weekdayLabels(locale);
+  const shortNames = weekdayShortLabels(locale);
   return (
     <ToggleGroup
       multiple
       variant="outline"
       spacing={1}
       disabled={disabled}
-      {...(id ? { 'aria-labelledby': id } : { 'aria-label': label ?? 'Antrenman günleri' })}
+      {...(id ? { 'aria-labelledby': id } : { 'aria-label': label ?? t.label })}
       aria-describedby={describedBy}
       aria-invalid={invalid || undefined}
       value={normalizeWeekdays(value).map(String)}
@@ -54,7 +60,7 @@ export function WeekdayToggle({
       className={cn('grid w-full grid-cols-7', className)}>
       {WEEKDAYS.map((day) => {
         const owner = taken?.get(day);
-        const name = owner === undefined ? WEEKDAY_NAMES[day] : `${WEEKDAY_NAMES[day]}, ${owner} programında`;
+        const name = owner === undefined ? names[day] : t.taken(names[day], owner);
         return (
           <ToggleGroupItem
             key={day}
@@ -62,7 +68,7 @@ export function WeekdayToggle({
             disabled={owner !== undefined}
             aria-label={name}
             className="h-11 min-w-0 px-0 text-sm">
-            {WEEKDAY_SHORT[day]}
+            {shortNames[day]}
           </ToggleGroupItem>
         );
       })}

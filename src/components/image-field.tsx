@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from 'react';
 import { ImageSquare } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
 import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/field';
+import { useMessages } from '@/i18n/client';
+import { uiMessages } from '@/i18n/messages/ui';
 import { imageProblem } from '@/lib/image';
 
 /**
@@ -37,7 +39,7 @@ export function usePreview(change: ImageChange): string | null {
 
 export function ImageField({
   id = 'image',
-  label = 'Görsel',
+  label,
   description,
   currentUrl,
   change,
@@ -54,6 +56,7 @@ export function ImageField({
   error: string | null;
   onError: (error: string | null) => void;
 }) {
+  const t = useMessages(uiMessages).image;
   const inputRef = useRef<HTMLInputElement>(null);
   const preview = usePreview(change);
   const shown = change.kind === 'upload' ? preview : change.kind === 'keep' ? currentUrl : null;
@@ -68,17 +71,17 @@ export function ImageField({
 
   return (
     <Field data-invalid={Boolean(error) || undefined}>
-      <FieldLabel htmlFor={id}>{label}</FieldLabel>
+      <FieldLabel htmlFor={id}>{label ?? t.label}</FieldLabel>
       <div className="flex items-center gap-3">
         {shown ? (
           // Özel repo'dan uygulama üzerinden gelir; Next görsel iyileştiricisi oturum çerezini taşımaz.
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={shown} alt="Görsel önizlemesi" className="size-24 shrink-0 rounded-lg border object-cover" />
+          <img src={shown} alt={t.preview} className="size-24 shrink-0 rounded-lg border object-cover" />
         ) : null}
         <div className="flex flex-wrap gap-2">
           <Button type="button" variant="outline" size="sm" onClick={() => inputRef.current?.click()}>
             <ImageSquare data-icon="inline-start" />
-            {shown ? 'Değiştir' : 'Görsel seç'}
+            {shown ? t.change : t.choose}
           </Button>
           {shown ? (
             <Button
@@ -89,12 +92,12 @@ export function ImageField({
                 onError(null);
                 onChange(currentUrl ? { kind: 'remove' } : KEEP);
               }}>
-              Kaldır
+              {t.remove}
             </Button>
           ) : null}
           {change.kind !== 'keep' && currentUrl ? (
             <Button type="button" variant="ghost" size="sm" onClick={() => onChange(KEEP)}>
-              Geri al
+              {t.undo}
             </Button>
           ) : null}
         </div>
