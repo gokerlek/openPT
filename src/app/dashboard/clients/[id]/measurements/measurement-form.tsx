@@ -23,7 +23,7 @@ import { commonMessages } from '@/i18n/messages/common';
 import { measurementsMessages } from '@/i18n/messages/measurements';
 import { getFormat } from '@/lib/format';
 import { isSided, SIDES, slotKey, valuesFromSlots, type MeasurementValue } from '@/lib/measurement-log';
-import { MEASUREMENT_IDS, MEASUREMENTS, measurementDefs, type MeasurementDef, type MeasurementId } from '@/lib/measurements';
+import { MEASUREMENT_IDS, MEASUREMENTS, measurementDef, type MeasurementDef, type MeasurementId } from '@/lib/measurements';
 import { fetchJson } from '@/lib/query/errors';
 import { applyFieldErrors } from '@/lib/query/field-errors';
 import { useServiceMutation } from '@/lib/query/use-service';
@@ -132,7 +132,7 @@ function ValueInput({
 function MeasurementField({ form, id, onEdit }: { form: FormStore; id: MeasurementId; onEdit: () => void }) {
   const locale = useLocale();
   const messages = useMessages(measurementsMessages);
-  const def = measurementDefs(locale)[id];
+  const def = measurementDef(id, locale);
   const unit = messages.units[def.unit];
   // Alan açıklaması: ne sıklıkla ve katalogdaki not ("Önerilen" rozeti etikette).
   const describe = (item: MeasurementDef) => messages.form.describe(item.frequency, item.note);

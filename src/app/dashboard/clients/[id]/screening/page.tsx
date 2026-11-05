@@ -180,6 +180,7 @@ async function Overview({
   const pains = [...history.rows.filter((row) => row.date === current.date), ...(newest ? history.open.filter((row) => row.date !== current.date) : [])];
   const gone = history.rows.filter((row) => row.state === 'resolved' && row.laterDate === current.date);
   const asymmetry = majorAsymmetry(current, suppress);
+  // i18n-followup(T5): `listExercises()` has no locale yet; library titles here stay Turkish until T5 localizes it.
   const exercises = await listExercises();
   const titles = new Map(exercises.map((exercise) => [exercise.id, exercise.title]));
   // Kısıtın izinsiz yasakladığı hareket ipucunda önerilmez (düzenleyici de yaptırmaz; tek bacak hareketinde iki taraf).

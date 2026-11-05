@@ -33,7 +33,7 @@ import {
   resultChoiceLabels,
   RESULT_CHOICES,
   SCREENING_TEST_IDS,
-  screeningTests,
+  screeningTest,
   screeningKey,
   sideEntry,
   sidesOf,
@@ -91,7 +91,7 @@ function SideInput({
   const messages = useMessages(screeningMessages);
   const common = useMessages(commonMessages);
   const t = messages.form;
-  const test = screeningTests(locale)[testId];
+  const test = screeningTest(testId, locale);
   const id = screeningKey(testId, side).replace('.', '-');
   const outcome = outcomeOf(testId, toEntry(state));
   const pointsOpen = !state.pain && (state.result === 'standard' || state.result === 'easier');
@@ -251,7 +251,6 @@ export function ScreeningForm({
   const messages = useMessages(screeningMessages);
   const t = messages.form;
   const common = useMessages(commonMessages);
-  const testTexts = screeningTests(locale);
   const base = `/dashboard/clients/${clientId}/screening`;
   const key = draftKey(clientId, mode);
   const [state, setState] = useState<ScreeningDraftState>(initial);
@@ -373,7 +372,7 @@ export function ScreeningForm({
                   'flex h-11 items-center gap-1.5 rounded-lg border px-3 text-sm whitespace-nowrap hover:bg-muted',
                   done(testId) && 'border-primary/50',
                 )}>
-                <span className="tabular-nums">{index + 1}</span> {testTexts[testId].short}
+                <span className="tabular-nums">{index + 1}</span> {screeningTest(testId, locale).short}
                 {done(testId) ? <CheckCircle weight="fill" className="size-4 text-primary" aria-label={t.filled} /> : started(testId) ? <span className="sr-only">{t.partial}</span> : null}
               </a>
             </li>
@@ -382,7 +381,7 @@ export function ScreeningForm({
       </nav>
 
       {SCREENING_TEST_IDS.map((testId, index) => {
-        const test = testTexts[testId];
+        const test = screeningTest(testId, locale);
         const extra = state.extras[testId] ?? { note: '' };
         return (
           <Card key={testId} id={`test-${testId}`} className="scroll-mt-20">

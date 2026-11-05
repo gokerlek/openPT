@@ -20,7 +20,8 @@ export function CameraCapturePanel({detection,task,enabled,chairHeight,armSuppor
  const [mode,setMode]=useState<Mode>('idle');
  const [progress,setProgress]=useState({seconds:0,repetitions:0});
  const locale=useLocale();const t=useMessages(measurementsMessages).camera.panel;
- const [cue,setCue]=useState(t.idle);
+ // Boşken yönerge sözlükten okunur (dil değişince güncel): durumda yalnız konuşulan cümle tutulur.
+ const [spoken,setSpoken]=useState<string|null>(null);const cue=spoken??t.idle;
  const [error,setError]=useState<string|null>(null);
  const [sound,setSound]=useState(false);
  const lastSpeech=useRef('');const lastSpokenAt=useRef(-Infinity);
@@ -28,7 +29,7 @@ export function CameraCapturePanel({detection,task,enabled,chairHeight,armSuppor
  useEffect(()=>{latest.current=detection;},[detection]);
  useEffect(()=>()=>{if(interval.current)clearInterval(interval.current);capture.current=null;if(typeof speechSynthesis!=='undefined')speechSynthesis.cancel();onBusyChange(false);},[onBusyChange]);
  function say(text:string){
-  setCue(text);
+  setSpoken(text);
   if(sound && text!==lastSpeech.current && performance.now()-lastSpokenAt.current>900 && typeof speechSynthesis!=='undefined'){
    lastSpeech.current=text;lastSpokenAt.current=performance.now();speechSynthesis.cancel();const speech=new SpeechSynthesisUtterance(text);speech.lang=intlLocale(locale);speechSynthesis.speak(speech);
   }
@@ -42,7 +43,7 @@ export function CameraCapturePanel({detection,task,enabled,chairHeight,armSuppor
   const frame=latest.current;
   if(frame?.state==='tracking')session.add(frame.sampledAt,frame.analysis.metrics,frame.analysis.quality==='ready',frame.analysis.side??'both',{width:frame.width,height:frame.height});
   const result=session.finish(performance.now(),locale);stop();
-  if(!result.ok){setError(result.reason);setCue(t.failed);return;}
+  if(!result.ok){setError(result.reason);setSpoken(t.failed);return;}
   onComplete({id:crypto.randomUUID(),capturedAt:new Date().toISOString(),task,protocol:POSE_PROTOCOL,model:'mediapipe-lite-v1',side:result.side,width:session.source!.width,height:session.source!.height,durationMs:Math.round(result.durationMs),validSamples:result.validSamples,totalSamples:result.totalSamples,repetitions:result.repetitions,level:'manual',metrics:result.metrics,...(task==='sit_stand'?{armSupport,...(chairHeight!==undefined?{chairHeightCm:chairHeight}:{})}:{})});
  }
  function start(){
@@ -84,7 +85,7 @@ export function CameraCapturePanel({detection,task,enabled,chairHeight,armSuppor
  return <div className="flex flex-col gap-2" aria-label={t.controls}>
   <div className="grid min-h-12 grid-cols-[minmax(0,1fr)_auto] items-start gap-3"><p role="status" className="text-sm font-medium leading-5">{cue}</p><p className="whitespace-nowrap font-mono text-sm tabular-nums">{t.progress(progress.seconds,protocol.dynamic?`${progress.repetitions}/3`:null)}</p></div>
   <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-3">
-   <Button className="h-11" disabled={mode==='idle' && (!enabled || detection?.state!=='tracking' || detection.analysis.quality!=='ready')} onClick={busy?(mode==='measuring'?finish:()=>{stop();setCue(t.cancelled);}):start}>{mode==='measuring'?t.finish:busy?t.cancel:t.start}</Button>
+   <Button className="h-11" disabled={mode==='idle' && (!enabled || detection?.state!=='tracking' || detection.analysis.quality!=='ready')} onClick={busy?(mode==='measuring'?finish:()=>{stop();setSpoken(t.cancelled);}):start}>{mode==='measuring'?t.finish:busy?t.cancel:t.start}</Button>
    <label className="flex min-h-11 items-center gap-2 text-xs"><Checkbox checked={sound} disabled={busy} onCheckedChange={setSound}/>{t.sound}</label>
   </div>
   <div className="h-10 overflow-y-auto text-xs leading-4"><p role={error?'alert':undefined} className={error?'text-destructive':'text-muted-foreground'}>{error??(protocol.dynamic?t.dynamicHint:t.staticHint)}</p></div>

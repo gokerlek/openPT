@@ -18,6 +18,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
   if (!v.is(clientIdSchema, id) || !/^[a-z0-9-]{2,60}$/.test(exerciseId) || !CONSTRAINT_ID_PATTERN.test(source)) {
     return notFound(t.overrideNotFound, locale);
   }
+  // i18n-followup(T5): `listExercises()` has no locale yet; the library title goes into the stored log line (`overrideAdded`/`overrideRemoved`), so it stays Turkish until T5 localizes it.
   const title = (await listExercises()).find((item) => item.id === exerciseId)?.title ?? t.deletedExercise;
   try {
     await updateHealth(

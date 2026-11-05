@@ -354,6 +354,7 @@ export default async function ConstraintsPage({ params }: { params: Promise<{ id
   }
   const { client } = loaded;
   const [view, config] = await Promise.all([loadHealthPart(client, 'conditions', locale), readAppConfig()]);
+  // i18n-followup(T5): `listExercises()` has no locale yet; library titles here stay Turkish until T5 localizes it.
   const [programFile, exercises] =
     view.state === 'ok' ? await Promise.all([readProgramFile(id).catch(() => undefined), listExercises()]) : [undefined, [] as ExerciseWithSource[]];
 
