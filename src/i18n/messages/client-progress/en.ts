@@ -65,7 +65,7 @@ const en: Shape<typeof tr> = {
     workouts: (current, target) => `${current}/${target} workouts`,
   },
   streak: {
-    week: (done, target) => `This week ${done}/${target} days`,
+    week: (done, target) => `This week ${done}/${target} ${plural('en', target, { one: 'day', other: 'days' })}`,
     bestStreak: (best) => ` · longest streak ${weeksText(best)}`,
     best: (best) => ` · longest ${weeksText(best)}`,
     current: (current, best, week) => `${weeksText(current)} in a row${best} · ${week.charAt(0).toLowerCase()}${week.slice(1)}`,
@@ -98,7 +98,7 @@ const en: Shape<typeof tr> = {
     noise: ' · within measurement error',
   },
   adherence: (weeks, done, planned, pct) =>
-    `${weeks === 1 ? 'Last week' : `In the last ${weeks} completed weeks`}: ${done}/${planned} days (${pct}%).`,
+    `${weeks === 1 ? 'Last week' : `In the last ${weeks} completed weeks`}: ${done}/${planned} ${plural('en', planned, { one: 'day', other: 'days' })} (${pct}%).`,
   windows: {
     '4h': { label: '4 weeks', period: 'Last 4 weeks', periodIn: 'In the last 4 weeks' },
     '8h': { label: '8 weeks', period: 'Last 8 weeks', periodIn: 'In the last 8 weeks' },

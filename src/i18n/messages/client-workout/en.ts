@@ -225,7 +225,7 @@ const en: Shape<typeof tr> = {
       `${returning ? "You're back after a break: the first workouts move up in small steps." : "You're new to this exercise: the right weight is found in small steps."} ${detail}`,
     setIncreaseText: (title, from, to) => `${title} ${from} → ${to} ${sets(to)}`,
     setIncreaseWhy: (weeks, setsText, target) =>
-      `${weeks} ${plural('en', weeks, { one: 'week', other: 'weeks' })} on this exercise; progressing over the last 2 weeks. The target muscle had ${setsText} sets in the last 7 days (recommended ~${target}).`,
+      `${weeks} ${plural('en', weeks, { one: 'week', other: 'weeks' })} on this exercise; progressing over the last 2 weeks. Sets for the target muscle in the last 7 days: ${setsText} (recommended ~${target}).`,
   },
 
   feedback: {

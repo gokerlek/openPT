@@ -369,3 +369,39 @@ describe('kardiyo kalorisi', () => {
     assert.equal(sessionSummary(input).kcal, 0);
   });
 });
+
+describe('özet İngilizce (en)', () => {
+  test('süre, hafta ve çoğullar', () => {
+    assert.equal(minutesText(1, 'en'), '1 min');
+    assert.equal(minutesText(125, 'en'), '2 h 5 min');
+    assert.equal(weekText({ done: 2, target: 3, current: true }, 'en'), 'This week 2/3');
+    assert.equal(weekText({ done: 1, target: 3, current: false }, 'en'), '1 workout that week');
+    assert.equal(weekText({ done: 3, target: 3, current: false }, 'en'), '3 workouts that week');
+  });
+
+  test('hareket satırı: set ve tekrar çoğulu, bir defalık, geçilen', () => {
+    assert.deepEqual(exerciseLine(sessionEntry('e_aaaaaa', { sets: sets('aaaaaa', [[60, 10], [62.5, 9], [60, 8]]) }), 'en'), {
+      title: 'Bench Press',
+      text: '3 sets · 27 reps · 62.5 kg top',
+      state: 'done',
+    });
+    assert.equal(exerciseLine(sessionEntry('e_aaaaaa', { oneOff: true, sets: sets('aaaaaa', [[60, 1]]) }), 'en').text, '1/3 sets · 1 rep · 60 kg top · one-off');
+    assert.deepEqual(exerciseLine(sessionEntry('e_aaaaaa', { status: 'skipped' }), 'en'), { title: 'Bench Press', text: 'skipped', state: 'skipped' });
+  });
+
+  test('kütüphane hareketinin kaydedilmiş adı okuyanın dilinde; PT adı olduğu gibi', () => {
+    const pushUp = sessionEntry('e_aaaaaa', { exerciseId: 'sinav', title: 'Şınav', sets: sets('aaaaaa', [[undefined, 12]], { plannedSetCount: 1 }) });
+    assert.equal(exerciseLine(pushUp, 'en').title, 'Push-Up');
+    assert.equal(exerciseLine(pushUp).title, 'Şınav');
+    assert.equal(exerciseLine({ ...pushUp, title: 'Duvar şınavı' }, 'en').title, 'Duvar şınavı');
+  });
+
+  test('rekor satırı', () => {
+    assert.deepEqual(recordLine('Bench Press', { kind: 'heaviest', now: { kg: 65, reps: 5 }, before: { kg: 62.5, reps: 6 } }, 'en'), {
+      title: 'Bench Press',
+      value: '65 kg × 5',
+      detail: 'Previous heaviest: 62.5 kg × 6',
+    });
+    assert.equal(recordLine('Row', { kind: 'reps', now: { kg: 50, reps: 12 }, before: { kg: 50, reps: 1 } }, 'en').detail, 'Previous most at this weight: 1 rep');
+  });
+});

@@ -1,4 +1,5 @@
-import type { Locale } from '../i18n/locale.ts';
+import { DEFAULT_LOCALE, type Locale } from '../i18n/locale.ts';
+import { clientWorkoutMessages } from '../i18n/messages/client-workout/index.ts';
 import * as v from 'valibot';
 import { canRecordHealth } from './client-status.ts';
 import { GithubError } from './github/errors.ts';
@@ -139,7 +140,8 @@ export async function withRetry<T>(run: () => Promise<T>): Promise<T> {
     try {
       return await run();
     } catch (second) {
-      if (isConflict(second)) throw new GithubError('Kayıt şu an başka bir yazmayla çakıştı; biraz sonra tekrar denenecek.', 409, { retryAfter: 5 });
+      // Mesaj varsayılan dilde (günlük ve Türkçe yanıt); İngilizce yanıtı `session-routes` sözlükten seçer.
+      if (isConflict(second)) throw new GithubError(clientWorkoutMessages(DEFAULT_LOCALE).errors.conflict, 409, { retryAfter: 5 });
       throw second;
     }
   }

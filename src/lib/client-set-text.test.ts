@@ -64,3 +64,25 @@ describe('kardiyo hedefleri', () => {
     assert.equal(clientSetText([{ min: 1800, max: 1800, distanceM: 3000, inclinePct: 5 }], 'duration', undefined, 'walk'), '1 set: 30 dk · 3 km · %5');
   });
 });
+
+describe('setler İngilizce (/me, en)', () => {
+  test('cümle İngilizce, çoğul sayıya göre', () => {
+    assert.equal(
+      clientSetText(piramit, 'weight_reps', 90, null, 'en'),
+      '3 sets: 12, 10 reps and as many as you can in the last set (at least 8) · weight goes up each set · 1 min 30 s rest',
+    );
+    assert.equal(clientSetText(uc(8, 12), 'weight_reps', undefined, null, 'en'), '3 sets of 8–12 reps');
+    assert.equal(clientSetText(uc(10, 10), 'bodyweight_reps', 60, null, 'en'), '3 sets of 10 reps · 1 min rest');
+    assert.equal(clientSetText(uc(30, 60), 'duration', 0, null, 'en'), '3 sets of 30–60 s · no rest between sets');
+    assert.equal(clientSetText([{ min: 1, max: 1 }], 'weight_reps', undefined, null, 'en'), '1 set: 1 rep');
+  });
+
+  test('"as many as you can": sıra sayısı ve hepsi', () => {
+    const first = uc(8, 12).map((set, index) => (index === 0 ? { ...set, amrap: true } : set));
+    assert.equal(clientSetText(first, 'weight_reps', undefined, null, 'en'), '3 sets of 8–12 reps; as many as you can in the 1st set');
+    assert.equal(
+      clientSetText(uc(8, 12).map((set) => ({ ...set, amrap: true })), 'weight_reps', undefined, null, 'en'),
+      '3 sets, as many as you can in each (at least 8 reps)',
+    );
+  });
+});
