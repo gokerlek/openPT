@@ -29,7 +29,7 @@ const GITHUB_ERRORS:Record<string,string>={
   simulasyon:'Simülasyonda GitHub’a gidilmez.',
 };
 /** Simülasyonun örnek bilgileri: biçimce geçerli, hiçbir hesaba ait değil. */
-const DEMO:AppCredentials={appId:'123456',slug:'axon-fit-ornek',owner:'ornek-pt',clientId:'Iv23liOrnekSimulasyon',clientSecret:'ornek-client-secret',privateKey:'-----BEGIN RSA PRIVATE KEY-----\nU0lNVUxBU1lPTi1PUk5FSy1BTkFIVEFS\n-----END RSA PRIVATE KEY-----\n'};
+const DEMO:AppCredentials={appId:'123456',slug:'openpt-ornek',owner:'ornek-pt',clientId:'Iv23liOrnekSimulasyon',clientSecret:'ornek-client-secret',privateKey:'-----BEGIN RSA PRIVATE KEY-----\nU0lNVUxBU1lPTi1PUk5FSy1BTkFIVEFS\n-----END RSA PRIVATE KEY-----\n'};
 
 // GitHub uygulamasının bilgileri yalnız bu sekmenin sessionStorage'ında (dönüş sayfası yazar); okuma/silme try/catch içinde.
 const noSubscribe=()=>()=>{};
@@ -121,7 +121,7 @@ export function InstallationWizard({homepage,initial,automaticAvailable,demo=fal
   function download() {
     try{
       const blob=new Blob([environmentFile(values)],{type:'text/plain;charset=utf-8'});
-      const url=URL.createObjectURL(blob);const link=document.createElement('a');link.href=url;link.download='axon-fit.env';link.click();URL.revokeObjectURL(url);
+      const url=URL.createObjectURL(blob);const link=document.createElement('a');link.href=url;link.download='openpt.env';link.click();URL.revokeObjectURL(url);
       setExported(true);setNotice('Dosya hazırlandı. Kendi Vercel projenin Environment Variables ekranına aktar.');
     }catch(error){setNotice(error instanceof Error?error.message:'Dosya hazırlanamadı.');}
   }
@@ -174,7 +174,7 @@ export function InstallationWizard({homepage,initial,automaticAvailable,demo=fal
         <div className="rounded-lg bg-muted p-4 text-sm space-y-1"><p>GitHub hesabın: {values.owner}</p><p>Uygulama adresin: {homepage}</p><p>Özel veri alanı ve güvenli oturum ayarları otomatik hazırlanır.</p></div>
         {automaticAvailable?<div className="flex flex-col gap-4 rounded-lg border p-4">
           <h3 className="font-semibold">Otomatik aktar ve yayınla</h3>
-          <ol className="list-decimal space-y-3 pl-5 text-sm text-muted-foreground"><li>Aşağıdaki düğmeyle Vercel’de anahtar oluşturma ekranını aç.</li><li><strong>Create Token</strong> düğmesine bas; isim olarak <strong>Axon kurulumu</strong> yaz.</li><li><strong>Scope</strong> alanında uygulamanın bulunduğu hesabı veya team’i seç. <strong>Expiration</strong> alanında bir geçerlilik süresi seç.</li><li>Anahtarı oluştur, kopyala ve aşağıya yapıştır. <strong>Otomatik kur ve yayınla</strong> düğmesi kalan işlemleri tamamlar.</li></ol>
+          <ol className="list-decimal space-y-3 pl-5 text-sm text-muted-foreground"><li>Aşağıdaki düğmeyle Vercel’de anahtar oluşturma ekranını aç.</li><li><strong>Create Token</strong> düğmesine bas; isim olarak <strong>openPT kurulumu</strong> yaz.</li><li><strong>Scope</strong> alanında uygulamanın bulunduğu hesabı veya team’i seç. <strong>Expiration</strong> alanında bir geçerlilik süresi seç.</li><li>Anahtarı oluştur, kopyala ve aşağıya yapıştır. <strong>Otomatik kur ve yayınla</strong> düğmesi kalan işlemleri tamamlar.</li></ol>
           <a href="https://vercel.com/account/settings/tokens" target="_blank" rel="noreferrer" className="text-sm text-primary underline">Kendi Vercel tokenımı oluştur</a>
           <Field><FieldLabel htmlFor="vercelToken">Vercel’den kopyaladığın anahtar</FieldLabel><Input id="vercelToken" name="vercelToken" type="password" value={vercelToken} onChange={event=>setVercelToken(event.target.value)} autoComplete="new-password" maxLength={1000} disabled={busy} /></Field>
           <p className="text-xs text-muted-foreground">Ayarlar yalnız kendi uygulamanın sunucusu üzerinden kendi Vercel projenine gönderilir. Vercel tokenı env, DB veya çerezde saklanmaz. Kurulum bitince Vercel’den iptal edebilirsin.</p>

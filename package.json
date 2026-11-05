@@ -1,5 +1,5 @@
 {
-  "name": "pulsecoach",
+  "name": "openpt",
   "version": "0.2.1",
   "private": true,
   "description": "Tek antrenörlük PT ve danışan uygulaması. Veritabanı yok: veriler antrenörün kendi GitHub repolarında JSON olarak durur.",

@@ -6,10 +6,10 @@ import { offlineHtml } from './offline-page.ts';
 
 describe('/offline sayfası', () => {
   test('kendi başına çalışan tek HTML: dış stil ya da betik dosyası yok', () => {
-    const html = offlineHtml({ appName: 'Axon Fit', accent: '#c4f000' });
+    const html = offlineHtml({ appName: 'openPT', accent: '#c4f000' });
     assert.match(html, /^<!doctype html>/);
     assert.match(html, /<html lang="tr">/);
-    assert.match(html, /<title>Bağlantı yok · Axon Fit<\/title>/);
+    assert.match(html, /<title>Bağlantı yok · openPT<\/title>/);
     assert.match(html, /Yeniden dene/);
     assert.doesNotMatch(html, /<link[^>]+stylesheet/);
     assert.doesNotMatch(html, /<script[^>]+src=/);
@@ -25,7 +25,7 @@ describe('/offline sayfası', () => {
   });
 
   test('danışanı rahatlatır: antrenmandaki setler telefonda durur, bağlantı gelince gönderilir', () => {
-    const html = offlineHtml({ appName: 'Axon Fit', accent: null });
+    const html = offlineHtml({ appName: 'openPT', accent: null });
     assert.match(html, /setler telefonda durur, bağlantı gelince gönderilir/);
     assert.match(html, /Yeniden dene/);
   });

@@ -1,7 +1,7 @@
 /**
- * Axon Fit — tek komutla kurulum (`kur`).
+ * openPT — tek komutla kurulum (`kur`).
  *
- *   node --input-type=module -e "$(curl -fsSL https://raw.githubusercontent.com/gokerlek/axon-fit/main/kur/kur.mjs)"
+ *   node --input-type=module -e "$(curl -fsSL https://raw.githubusercontent.com/gokerlek/openPT/main/kur/kur.mjs)"
  *
  * Tek dosya, bağımlılıksız (yalnız Node yerleşikleri), Node 20+, macOS ve Linux. `-e` ile ESM olarak
  * değerlendirilir: başka dosya import etmez, `import.meta.url` ve `process.argv[1]`e dayanmaz.
@@ -32,8 +32,8 @@ import os from 'node:os';
 import path from 'node:path';
 
 export const VERCEL_CLI_VERSION = '65.11.0';
-export const DEFAULT_SOURCE = 'gokerlek/axon-fit';
-export const DEFAULT_CODE_REPO = 'axon-fit';
+export const DEFAULT_SOURCE = 'gokerlek/openPT';
+export const DEFAULT_CODE_REPO = 'openpt';
 export const MIN_NODE_MAJOR = 20;
 export const STEP_COUNT = 8;
 export const SECRET_ENV_KEYS = Object.freeze(['AUTH_SECRET', 'GITHUB_APP_PRIVATE_KEY', 'GITHUB_CLIENT_SECRET']);
@@ -46,7 +46,7 @@ export const INLINE_TEXT_MAX_BYTES = 1_000_000;
 
 const GITHUB_API = 'https://api.github.com';
 const VERCEL_API = 'https://api.vercel.com';
-const USER_AGENT = 'axon-fit-kur';
+const USER_AGENT = 'openpt-kur';
 const VERCEL_TOKENS_URL = 'https://vercel.com/account/settings/tokens';
 const VERCEL_GITHUB_INSTALL_URL = 'https://github.com/apps/vercel/installations/new';
 /** Vercel belgesi (docs/accounts → Login methods and connections): hesap ayarları → Authentication. */
@@ -195,14 +195,14 @@ export function randomString(length, alphabet, randomInt = crypto.randomInt) {
   return out;
 }
 
-/** Varsayılan ad: `axon-fit-` + 4 küçük harf/rakam. */
+/** Varsayılan ad: `openpt-` + 4 küçük harf/rakam. */
 export function defaultProjectName(randomInt = crypto.randomInt) {
-  return `axon-fit-${randomString(4, LOWER_DIGITS, randomInt)}`;
+  return `openpt-${randomString(4, LOWER_DIGITS, randomInt)}`;
 }
 
 /** GitHub uygulamasının adı: GitHub'da benzersiz olmalı, en çok 34 karakter. */
 export function githubAppName(randomInt = crypto.randomInt) {
-  return `Axon Fit ${randomString(6, LOWER, randomInt)}`;
+  return `openPT ${randomString(6, LOWER, randomInt)}`;
 }
 
 /** Vercel proje adı = `<ad>.vercel.app` alt alanı: DNS etiketi kuralları. Sorun yoksa null. */
@@ -225,7 +225,7 @@ export function validateRepoName(name) {
 
 /** Veri reposunun adı (bugünkü sihirbazla aynı kural). */
 export function dataRepoName(codeRepo) {
-  return codeRepo.toLowerCase() === 'axon-fit-data' ? 'axon-fit-private-data' : 'axon-fit-data';
+  return codeRepo.toLowerCase() === 'openpt-data' ? 'openpt-private-data' : 'openpt-data';
 }
 
 /** `sahip/repo` biçimi; değilse KurError. */
@@ -260,7 +260,7 @@ export function buildManifest({ appName, productionUrl, localBase }) {
   return {
     name: appName,
     url: productionUrl,
-    description: `Axon Fit kurulumun (${productionUrl}): PT girişi ve GitHub'daki verilerine erişim.`,
+    description: `openPT kurulumun (${productionUrl}): PT girişi ve GitHub'daki verilerine erişim.`,
     hook_attributes: { url: `${productionUrl}/api/github/webhook`, active: false },
     redirect_url: `${localBase}/github/app-created`,
     callback_urls: [`${localBase}/github/callback`, `${productionUrl}/api/auth/github/callback`],
@@ -295,7 +295,7 @@ function page(title, bodyHtml) {
 export function manifestPage({ manifest, state }) {
   const action = `https://github.com/settings/apps/new?state=${encodeURIComponent(state)}`;
   return page(
-    'Axon Fit kurulumu',
+    'openPT kurulumu',
     '<h1>GitHub uygulaması oluşturuluyor…</h1>' +
       '<p>GitHub birazdan açılacak. Orada <b>Create GitHub App</b> düğmesine bas.</p>' +
       `<form id="manifest-form" method="post" action="${escapeHtml(action)}">` +
@@ -823,8 +823,8 @@ export function checkSourceCapabilities(files, label = '') {
   }
   if (!capabilities.includes(REQUIRED_CAPABILITY)) {
     throw new KurError(
-      `Axon Fit'in kurulacak sürümü${label ? ` (${label})` : ''} bu kurulum yolunu (GitHub uygulaması) henüz desteklemiyor.`,
-      "Bu kurulum yolu Axon Fit'in yeni sürümüyle gelecek; şimdilik README'deki Deploy düğmesini kullan.",
+      `openPT'nin kurulacak sürümü${label ? ` (${label})` : ''} bu kurulum yolunu (GitHub uygulaması) henüz desteklemiyor.`,
+      "Bu kurulum yolu openPT'nin yeni sürümüyle gelecek; şimdilik README'deki Deploy düğmesini kullan.",
     );
   }
 }
@@ -1218,7 +1218,7 @@ async function ensureInstallation(ctx, app, login, installationIdHint) {
       ctx.io.say(`    sonra ${settingsUrl(data.id)} adresinde "All repositories" seçip kaydet.`);
       return { id: data.id, repositorySelection: data.repository_selection };
     }
-    ctx.io.say('  ! Uygulama yalnız seçili repolarla kurulmuş. Axon Fit\'in yeni danışan repolarına erişebilmesi için "All repositories" gerekli.');
+    ctx.io.say('  ! Uygulama yalnız seçili repolarla kurulmuş. openPT\'nin yeni danışan repolarına erişebilmesi için "All repositories" gerekli.');
     await showUrl(ctx, settingsUrl(data.id));
     await ctx.io.pause('  Açılan sayfada "All repositories" seçip "Save" de, sonra Enter\'a bas.');
   }
@@ -1312,7 +1312,7 @@ export async function uploadSource(ctx, { github, token, fullName, branch, sourc
     tree = shaOf(result, 'Kod ağacını kurma');
     ctx.io.say(`    Dosyalar: ${i + 1}/${chunks.length}`);
   }
-  const title = `Axon Fit ${source.version || `(${source.ref})`}`;
+  const title = `openPT ${source.version || `(${source.ref})`}`;
   const message = source.commit ? `${title}\n\nKaynak: ${source.name}@${source.commit}` : title;
   const commit = shaOf(await write(`/repos/${fullName}/git/commits`, { message, tree, parents: [] }), 'Commit oluşturma');
   expect(await write(`/repos/${fullName}/git/refs/heads/${encodeURIComponent(branch)}`, { sha: commit, force: true }, 'PATCH'), [200], 'GitHub', `${branch} dalını güncelleme`);
@@ -1326,7 +1326,7 @@ export async function createRepos(ctx, { login, token, source }) {
     login,
     name: DEFAULT_CODE_REPO,
     label: 'Kod reposu',
-    description: 'Axon Fit — kendi kopyam (kod)',
+    description: 'openPT — kendi kopyam (kod)',
   });
   const codeFullName = `${login}/${code.name}`;
   ctx.created.codeRepo = `https://github.com/${codeFullName}`;
@@ -1339,7 +1339,7 @@ export async function createRepos(ctx, { login, token, source }) {
     login,
     name: dataRepoName(code.name),
     label: 'Veri reposu',
-    description: 'Axon Fit verileri (özel)',
+    description: 'openPT verileri (özel)',
     forbidden: [code.name],
     allowExisting: true,
   });
@@ -1518,7 +1518,7 @@ export async function kur(ctx) {
   const step = (n, text) => io.say(`\n[${n}/${STEP_COUNT}] ${text}`);
 
   // Kaynak, hesaplarda hiçbir şey oluşturulmadan (Vercel girişinden bile önce) indirilip denetlenir.
-  step(1, 'Hazırlık: Node sürümü kontrol ediliyor, Axon Fit\'in son sürümü indirilip denetleniyor…');
+  step(1, 'Hazırlık: Node sürümü kontrol ediliyor, openPT\'nin son sürümü indirilip denetleniyor…');
   checkNodeVersion(ctx.nodeVersion);
   const sourceName = parseSource(ctx.env.AXON_KUR_SOURCE || DEFAULT_SOURCE);
   const source = { name: sourceName, ...(await downloadSource(ctx, sourceName)) };
@@ -1599,7 +1599,7 @@ export async function main(ctx, { handleSigint = false } = {}) {
     process.exit(130);
   };
   if (handleSigint) process.once('SIGINT', onSigint);
-  ctx.io.say('Axon Fit kurulumu — her adımda ne olduğunu yazacağım. Durdurmak için Ctrl+C.');
+  ctx.io.say('openPT kurulumu — her adımda ne olduğunu yazacağım. Durdurmak için Ctrl+C.');
   try {
     await kur(ctx);
     return 0;

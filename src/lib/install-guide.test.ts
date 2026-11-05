@@ -134,7 +134,7 @@ describe('"Şimdi değil": 14 gün gizli (o cihazda)', () => {
 
 describe('başka tarayıcıda açma bağlantıları', () => {
   test("Safari'de aç: aynı adres x-safari- önekiyle", () => {
-    assert.equal(safariUrl('https://axon.example/giris?c=c_abc123'), 'x-safari-https://axon.example/giris?c=c_abc123');
+    assert.equal(safariUrl('https://openpt.example/giris?c=c_abc123'), 'x-safari-https://openpt.example/giris?c=c_abc123');
     assert.equal(safariUrl('http://192.168.1.5:3000/dashboard'), 'x-safari-http://192.168.1.5:3000/dashboard');
     assert.equal(safariUrl('javascript:alert(1)'), null);
     assert.equal(safariUrl('bozuk'), null);
@@ -142,10 +142,10 @@ describe('başka tarayıcıda açma bağlantıları', () => {
 
   test("Chrome'da aç: Android intent adresi; sorgu korunur, çapa düşer", () => {
     assert.equal(
-      chromeIntentUrl('https://axon.example/giris?c=c_abc123#x'),
-      'intent://axon.example/giris?c=c_abc123#Intent;scheme=https;package=com.android.chrome;end',
+      chromeIntentUrl('https://openpt.example/giris?c=c_abc123#x'),
+      'intent://openpt.example/giris?c=c_abc123#Intent;scheme=https;package=com.android.chrome;end',
     );
-    assert.equal(chromeIntentUrl('https://axon.example/dashboard'), 'intent://axon.example/dashboard#Intent;scheme=https;package=com.android.chrome;end');
+    assert.equal(chromeIntentUrl('https://openpt.example/dashboard'), 'intent://openpt.example/dashboard#Intent;scheme=https;package=com.android.chrome;end');
     assert.equal(chromeIntentUrl('mailto:a@b.c'), null);
   });
 });

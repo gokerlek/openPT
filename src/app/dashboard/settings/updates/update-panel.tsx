@@ -73,6 +73,6 @@ export function UpdatePanel({current}:{current:string}) {
         </>)}
     {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
     {message && <p role="status" className="text-sm">{message}</p>}
-    <a href="https://github.com/gokerlek/axon-fit/blob/main/docs/UPDATES.md" target="_blank" rel="noreferrer" className="text-sm text-primary underline">Kod değişikliklerimi koruyarak manuel güncelle</a>
+    <a href="https://github.com/gokerlek/openPT/blob/main/docs/UPDATES.md" target="_blank" rel="noreferrer" className="text-sm text-primary underline">Kod değişikliklerimi koruyarak manuel güncelle</a>
   </CardContent></Card>;
 }

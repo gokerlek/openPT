@@ -10,7 +10,7 @@ Her PT uygulamayı kendi GitHub hesabına ve kendi Vercel projesine kurar. Geli�
 ## PT'nin adımları (tarayıcı sihirbazı)
 
 1. README'deki Deploy with Vercel düğmesiyle kendi kod reposunu ve Vercel projesini oluştur. İlk yayın env olmadan açılabilir. Uygulamanın **kalıcı Production adresini** aç; Preview adresini kurulum adresi olarak kullanma (GitHub uygulamasının adresleri bu adrese bağlanır).
-2. `/install` ekranı kod reposunu Vercel’in GitHub bağlantısından alır ve yayın dalını `main` yapar. Veri alanının adı otomatik belirlenir (`axon-fit-data`; kod reposuyla çakışırsa `axon-fit-private-data`). Kullanıcı bunları doldurmaz. Uygulama ilk görünüm kaydında özel veri reposunu otomatik oluşturur.
+2. `/install` ekranı kod reposunu Vercel’in GitHub bağlantısından alır ve yayın dalını `main` yapar. Veri alanının adı otomatik belirlenir (`openpt-data`; kod reposuyla çakışırsa `openpt-private-data`). Kullanıcı bunları doldurmaz. Uygulama ilk görünüm kaydında özel veri reposunu otomatik oluşturur.
 3. **GitHub'a bağla.** Sihirbazdaki **GitHub’a bağla** düğmesine bas. GitHub açılır.
    1. Açılan sayfada adı değiştirme, **Create GitHub App** düğmesine bas.
    2. Sonraki sayfada **All repositories** seçili olsun, **Install** düğmesine bas.
@@ -32,7 +32,7 @@ Manuel alternatif: Vercel tokenı vermek istemeyen kişi ayarları kopyalar veya
 
 ## Teknik ayrıntılar (GitHub'a bağla)
 
-- Sihirbaz [GitHub App manifest akışını](https://docs.github.com/en/apps/sharing-github-apps/registering-a-github-app-from-a-manifest) kullanır. Manifest: ad `Axon Fit <6 harf>` (benzersiz, en çok 34 karakter), `public: false`; `url` Production adresi, `redirect_url` `<adres>/api/install/github-app`, `callback_urls` `[<adres>/api/auth/github/callback]`, `setup_url` `<adres>/install`, `setup_on_update: true`; webhook kapalı (`hook_attributes.active: false`), olay aboneliği yok; izinler Administration, Contents, Actions, Workflows **yazma**, Metadata **okuma**.
+- Sihirbaz [GitHub App manifest akışını](https://docs.github.com/en/apps/sharing-github-apps/registering-a-github-app-from-a-manifest) kullanır. Manifest: ad `openPT <6 harf>` (benzersiz, en çok 34 karakter), `public: false`; `url` Production adresi, `redirect_url` `<adres>/api/install/github-app`, `callback_urls` `[<adres>/api/auth/github/callback]`, `setup_url` `<adres>/install`, `setup_on_update: true`; webhook kapalı (`hook_attributes.active: false`), olay aboneliği yok; izinler Administration, Contents, Actions, Workflows **yazma**, Metadata **okuma**.
 - Dönüşte sunucu tek kullanımlık `state`'i (httpOnly çerez) doğrular ve kodu `POST /app-manifests/{code}/conversions` ile uygulamanın bilgilerine çevirir (App ID, Client ID/Secret, özel anahtar). Bilgiler yalnız o sekmenin `sessionStorage`'ına konur; sunucuda, çerezde, adreste ya da günlükte tutulmaz. Dönüş sayfası önbelleğe alınmaz (`Cache-Control: no-store`), referrer göndermez ve yalnız kendi betiğini çalıştırır.
 - GitHub `setup_url`'e `installation_id` ile döner. Sunucu kurulumu doğrular: hesap Vercel'in bağlı GitHub hesabı mı, repo seçimi "All repositories" mı, izinler onaylı mı, kurulum askıda mı. Kod reposunda `.github/workflows/axon-update.yml` eksikse paketlenmiş dosya kurulum anahtarıyla eklenir; var olan dosyaya dokunulmaz. Uygulama yine de yalnız kendi kod, veri ve `client-` repolarına dokunur (koruma kuralı, SPEC §9.2).
 - Vercel'de GitHub uygulaması ayarı var ama bozuksa (sayı olmayan `GITHUB_APP_ID`, okunamayan PEM, yarım ayar) kurulum tamamlanmış sayılmaz; `/install` açık kalır ve neyin bozuk olduğunu söyler.

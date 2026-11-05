@@ -1,4 +1,4 @@
-# Axon Fit
+# openPT
 
 Antrenörlerin danışanlarını, antrenman programlarını ve gelişimlerini tek yerden takip etmesi için mobil odaklı bir web uygulaması.
 
@@ -17,14 +17,14 @@ da üstü olmalı). Sonra **Terminal** uygulamasını aç (Mac'te: Spotlight'ta 
 Windows kullanıyorsan aşağıdaki **Tarayıcıdan** yolunu kullan.
 
 ```sh
-node --input-type=module -e "$(curl -fsSL https://raw.githubusercontent.com/gokerlek/axon-fit/main/kur/kur.mjs)"
+node --input-type=module -e "$(curl -fsSL https://raw.githubusercontent.com/gokerlek/openPT/main/kur/kur.mjs)"
 ```
 
 Komut her adımda ne yaptığını Türkçe söyler: Vercel'e giriş (tarayıcıda onay), uygulama adı, GitHub'da **Create GitHub App** ve **Install** (tarayıcıda iki düğme), kod ve veri repolarının açılması, Vercel ayarları ve ilk yayın. Sonunda uygulamanın adresini yazar ve açar; **GitHub ile giriş yap**.
 
 ### Tarayıcıdan (Deploy düğmesi)
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fgokerlek%2Faxon-fit)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fgokerlek%2FopenPT)
 
 Env olmadan ilk yayın `/install` sihirbazını açar; sihirbaz bu kopyanın içinde çalışır. **GitHub'a bağla** adımı GitHub'da sana ait uygulamayı oluşturur: GitHub'da **Create GitHub App**, ardından **All repositories** seçiliyken **Install** düğmesine basarsın, GitHub seni sihirbaza döndürür ve kurulum doğrulanır. Gemini anahtarı isteğe bağlıdır. Son adımda kendi geçici Vercel tokenınla ayarları otomatik Production ortamına yazıp yeni yayın başlat; bu token saklanmaz. İstersen .env çıktısını elle aktarabilirsin. [Adım adım bağımsız kurulum](docs/INSTALLER.md).
 
@@ -54,11 +54,11 @@ Telefon / tarayıcı
         ▼
 Next.js uygulaması (Vercel)
         │ Sunucu tarafında GitHub API
-        ├── axon-fit-data       → özel: ayarlar, kütüphane, danışan kimlik listesi
+        ├── openpt-data       → özel: ayarlar, kütüphane, danışan kimlik listesi
         ├── client-<kimlik-1>   → özel: danışan profili ve takip kayıtları
         └── client-<kimlik-2>   → özel: diğer danışanın verileri
 
-axon-fit                       → uygulamanın kaynak kodu (bu repo)
+openpt                       → uygulamanın kaynak kodu (bu repo)
 ```
 
 GitHub erişimi yalnız sunucuda kullanılır; tarayıcı GitHub veri repolarına doğrudan bağlanmaz. İki mod var ve seçim env'den kendiliğinden yapılır:
@@ -68,7 +68,7 @@ GitHub erişimi yalnız sunucuda kullanılır; tarayıcı GitHub veri repoların
 
 Kurulum sihirbazındaki sırlar açık sekmede hazırlanır; otomatik aktarımda yalnız kendi uygulamanın sunucusundan kendi Vercel projenine gönderilir. Manuel .env çıktısı sunucuya gönderilmez. Danışanlar uygulamanın davet akışıyla erişir.
 
-**`APP_REPO` kod reposundan farklı ve private olmalıdır.** Örneğin kod `axon-fit`, veri `axon-fit-data`. Veri reposunu önceden oluşturman gerekmez; ilk kurulum kaydında uygulama oluşturur. Var olan repo kullanılıyorsa private olmalı ve fork olmamalıdır. Danışan repoları da uygulama tarafından oluşturulur.
+**`APP_REPO` kod reposundan farklı ve private olmalıdır.** Örneğin kod `openpt`, veri `openpt-data`. Veri reposunu önceden oluşturman gerekmez; ilk kurulum kaydında uygulama oluşturur. Var olan repo kullanılıyorsa private olmalı ve fork olmamalıdır. Danışan repoları da uygulama tarafından oluşturulur.
 
 ## Elle kurulum ve yerel geliştirme
 
@@ -108,7 +108,7 @@ Yerelde denemek için:
 
 | Alan | Değer |
 | --- | --- |
-| Application name | `Axon Fit Local` |
+| Application name | `openPT Local` |
 | Homepage URL | `http://localhost:3000` |
 | Authorization callback URL | `http://localhost:3000/api/auth/github/callback` |
 
@@ -123,7 +123,7 @@ Canlı site için ayrı bir OAuth App kullan. Homepage URL canlı siten; callbac
 | Değişken | Nereden alınır / ne yazılır? | Gerekli mi? |
 | --- | --- | --- |
 | `GITHUB_OWNER` | GitHub kullanıcı adın; ör. `gokerlek`. URL veya e-posta yazma. | Evet |
-| `APP_REPO` | Ayrı özel veri reposunun adı; ör. `axon-fit-data`. | Evet |
+| `APP_REPO` | Ayrı özel veri reposunun adı; ör. `openpt-data`. | Evet |
 | `GITHUB_APP_ID` | GitHub uygulamasının **App ID** değeri. | Uygulama modunda |
 | `GITHUB_APP_PRIVATE_KEY` | Uygulamanın `.pem` özel anahtarı. Satır sonları `\n` kaçışlı tek satır da olur. | Uygulama modunda |
 | `GITHUB_APP_INSTALLATION_ID` | Uygulamanın hesabındaki kurulum kimliği. Boşsa `GITHUB_OWNER` hesabındaki kurulum bulunur. | İsteğe bağlı |
@@ -134,7 +134,7 @@ Canlı site için ayrı bir OAuth App kullan. Homepage URL canlı siten; callbac
 | `AUTH_SECRET` | Aşağıdaki komutla ürettiğin rastgele sır. En az 32 bayt. | Evet |
 | `PT_EMAIL` | Yedek e-posta girişini kullanacak antrenör adresi. | E-posta girişi için |
 | `RESEND_API_KEY` | Resend hesabından alınan API anahtarı. | İsteğe bağlı |
-| `RESEND_FROM` | Resend'de doğrulanmış alan adından gönderici; ör. `Axon Fit <giris@alanadin.com>`. | Özel e-posta göndericisi için |
+| `RESEND_FROM` | Resend'de doğrulanmış alan adından gönderici; ör. `openPT <giris@alanadin.com>`. | Özel e-posta göndericisi için |
 
 ```bash
 openssl rand -base64 32
@@ -149,8 +149,8 @@ openssl rand -base64 32
 ## 4. Yerelde çalıştır
 
 ```bash
-git clone https://github.com/gokerlek/axon-fit.git
-cd axon-fit
+git clone https://github.com/gokerlek/openPT.git
+cd openPT
 npm ci
 cp .env.example .env.local
 ```
@@ -161,13 +161,13 @@ cp .env.example .env.local
 npm run dev
 ```
 
-[http://localhost:3000](http://localhost:3000) adresini aç. GitHub ile giriş yap ve ilk kurulum ekranında ad, tema ve görünümü kaydet. Ekranlarda görünen varsayılan adı burada **Axon Fit** veya kendi markan olarak değiştirebilirsin. Bazı iç dosya/paket adları projenin önceki adı olan `PulseCoach` olarak durur; kurulum için bunları değiştirmek gerekmez.
+[http://localhost:3000](http://localhost:3000) adresini aç. GitHub ile giriş yap ve ilk kurulum ekranında ad, tema ve görünümü kaydet. Ekranlarda görünen varsayılan adı burada **openPT** veya kendi markan olarak değiştirebilirsin. Bazı iç dosya adları projenin önceki adı olan `PulseCoach` olarak durur; kurulum için bunları değiştirmek gerekmez.
 
 OAuth olmadan yalnız yerelde arayüz geliştirmek için `http://localhost:3000/api/dev/login` geliştirme girişi vardır. Bu uç üretimde 404 döner. Geliştirme girişi veri katmanını taklit etmez: yazma işlemleri tanımladığın GitHub repolarına gider. Yerel testleri ayrı veri reposu/hesabıyla yap.
 
 ## 5. Vercel'e yayınla
 
-1. [Vercel New Project](https://vercel.com/new) sayfasından GitHub'daki `axon-fit` reposunu **Import** et. Başka antrenör kuruyorsa önce kendi hesabına fork almalı.
+1. [Vercel New Project](https://vercel.com/new) sayfasından GitHub'daki `openPT` reposunu **Import** et. Başka antrenör kuruyorsa önce kendi hesabına fork almalı.
 2. Framework **Next.js**, Root Directory repo kökü (`./`), Node.js **22.x** seç.
 3. Install Command `npm ci`; Build Command için burada doğrulanan `npm run build` kullan. Output Directory alanını Next.js varsayılanında bırak. Standart build komutu doğrulanan Webpack derlemesini kullanır.
 4. Environment Variables bölümüne 3. adımdaki değerleri **Production** ortamı için ekle. `.env.local` dosyasını yükleme veya repoya koyma.

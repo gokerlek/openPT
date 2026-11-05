@@ -27,7 +27,7 @@ const schema=wizardSchema;
 export type WizardValues=v.InferInput<typeof schema>;
 export type WizardErrors=Partial<Record<keyof WizardValues,string>>;
 export function initialWizardValues(owner:string,codeRepo:string):WizardValues {
-  return {owner,codeRepo,codeBranch:'main',appRepo:codeRepo.toLowerCase()==='axon-fit-data'?'axon-fit-private-data':'axon-fit-data',appId:'',installationId:'',privateKey:'',clientId:'',clientSecret:'',geminiKey:'',authSecret:''};
+  return {owner,codeRepo,codeBranch:'main',appRepo:codeRepo.toLowerCase()==='openpt-data'?'openpt-private-data':'openpt-data',appId:'',installationId:'',privateKey:'',clientId:'',clientSecret:'',geminiKey:'',authSecret:''};
 }
 function fieldErrors(issues:v.BaseIssue<unknown>[]):WizardErrors {
   const errors:WizardErrors={};
@@ -60,7 +60,7 @@ export function environmentValues(input:WizardValues):Record<string,string> {
   return entries;
 }
 export function environmentFile(input:WizardValues):string {
-  return '# Axon Fit — kendi Vercel projenin Production ortamına ekle.\n# Bu dosya sır içerir; GitHub reposuna ekleme.\n'+Object.entries(environmentValues(input)).map(([key,value])=>`${key}=${value}`).join('\n')+'\n';
+  return '# openPT — kendi Vercel projenin Production ortamına ekle.\n# Bu dosya sır içerir; GitHub reposuna ekleme.\n'+Object.entries(environmentValues(input)).map(([key,value])=>`${key}=${value}`).join('\n')+'\n';
 }
 export function authSecret(bytes:Uint8Array):string {
   if(bytes.length!==32)throw new Error('32 bayt rastgele veri gerekir.');

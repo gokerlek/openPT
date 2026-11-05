@@ -19,7 +19,7 @@ export async function ensureUpdateWorkflow(token:string,repo:string,branch:strin
   }
   if(await exists())return;
   if(!scopes.includes('workflow'))throw new WorkflowSetupError('Güncelleme dosyasını otomatik oluşturmak için workflow izni gerekiyor (GitHub uygulamasında Workflows yazma izni). İzni onaylayıp kurulumu tekrar dene.');
-  const created=await request(path,{method:'PUT',body:JSON.stringify({message:'Set up Axon Fit automatic updates',branch,content:Buffer.from(template.content).toString('base64')})});
+  const created=await request(path,{method:'PUT',body:JSON.stringify({message:'Set up openPT automatic updates',branch,content:Buffer.from(template.content).toString('base64')})});
   // No SHA is sent: GitHub refuses to replace a file created concurrently.
   if([409,422].includes(created.status)&&await exists())return;
   if(!created.ok)throw new WorkflowSetupError(`Güncelleme dosyası oluşturulamadı (${created.status}). GitHub workflow iznini ve ${branch} dalının yazma kurallarını kontrol et.`);

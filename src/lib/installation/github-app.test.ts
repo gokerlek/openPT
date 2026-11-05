@@ -4,12 +4,12 @@ import {generateKeyPairSync} from 'node:crypto';
 import {APP_PERMISSIONS,githubAppManifest,handoffHeaders,handoffPage,installationProblems,installationSettingsUrl,installUrl,manifestFormAction,parseConversion,parseInstallation,randomSuffix,readStoredCredentials,workflowScopes,type InstallationInfo} from './github-app.ts';
 
 const {privateKey:pem}=generateKeyPairSync('rsa',{modulusLength:1024,privateKeyEncoding:{type:'pkcs1',format:'pem'},publicKeyEncoding:{type:'spki',format:'pem'}});
-const conversion={id:123456,slug:'axon-fit-qwerty',node_id:'node',name:'Axon Fit qwerty',owner:{login:'coach',type:'User'},client_id:'Iv23liTestOnly',client_secret:'test-client-secret',webhook_secret:null,pem,html_url:'https://github.com/apps/axon-fit-qwerty'};
+const conversion={id:123456,slug:'openpt-qwerty',node_id:'node',name:'openPT qwerty',owner:{login:'coach',type:'User'},client_id:'Iv23liTestOnly',client_secret:'test-client-secret',webhook_secret:null,pem,html_url:'https://github.com/apps/openpt-qwerty'};
 const installation:InstallationInfo={id:42,account:'coach',selection:'all',permissions:{...APP_PERMISSIONS},suspended:false};
 
 test('manifest: Production adresine bağlı dönüşler, webhook kapalı, yalnız gereken izinler, özel uygulama',()=>{
   const manifest=githubAppManifest({homepage:'https://coach.example.com/',suffix:'qwerty'});
-  assert.equal(manifest.name,'Axon Fit qwerty');
+  assert.equal(manifest.name,'openPT qwerty');
   assert.equal(manifest.url,'https://coach.example.com');
   assert.equal(manifest.redirect_url,'https://coach.example.com/api/install/github-app');
   assert.deepEqual(manifest.callback_urls,['https://coach.example.com/api/auth/github/callback']);
@@ -34,13 +34,13 @@ test('manifest adı GitHub sınırında (34) kalır, son ek 6 küçük harf; ge�
 });
 test('form adresi state’i taşır; kurulum ve ayar adresleri GitHub’a gider',()=>{
   assert.equal(manifestFormAction('a b&c'),'https://github.com/settings/apps/new?state=a+b%26c');
-  assert.equal(installUrl('axon-fit-qwerty'),'https://github.com/apps/axon-fit-qwerty/installations/new');
+  assert.equal(installUrl('openpt-qwerty'),'https://github.com/apps/openpt-qwerty/installations/new');
   assert.throws(()=>installUrl('../evil'));
   assert.equal(installationSettingsUrl(42),'https://github.com/settings/installations/42');
 });
 test('dönüşüm yanıtı: yalnız gereken bilgiler alınır, PEM düzeltilir; eksik/bozuk yanıt reddedilir',()=>{
   const parsed=parseConversion({...conversion,pem:pem.replace(/\n/g,'\r\n')});
-  assert.deepEqual(parsed,{appId:'123456',slug:'axon-fit-qwerty',owner:'coach',clientId:'Iv23liTestOnly',clientSecret:'test-client-secret',privateKey:pem});
+  assert.deepEqual(parsed,{appId:'123456',slug:'openpt-qwerty',owner:'coach',clientId:'Iv23liTestOnly',clientSecret:'test-client-secret',privateKey:pem});
   assert.equal('webhookSecret' in parsed,false);
   for(const broken of [{...conversion,pem:'x'},{...conversion,id:'1'},{...conversion,slug:'Bad Slug'},{...conversion,owner:{name:'enterprise',slug:'e'}},{...conversion,client_secret:'a b'},null])assert.throws(()=>parseConversion(broken));
 });
@@ -67,7 +67,7 @@ test('dönüş sayfası: bilgiler yalnız bu sekmenin sessionStorage’ına, son
   const html=handoffPage(credentials,'n0nce');
   assert.match(html,/sessionStorage\.setItem/);
   assert.doesNotMatch(html,/localStorage/);
-  assert.match(html,/location\.replace\("https:\/\/github\.com\/apps\/axon-fit-qwerty\/installations\/new"\)/);
+  assert.match(html,/location\.replace\("https:\/\/github\.com\/apps\/openpt-qwerty\/installations\/new"\)/);
   assert.match(html,/<script nonce="n0nce">/);
   assert.match(html,/<meta name="referrer" content="no-referrer">/);
   const headers=handoffHeaders('n0nce');

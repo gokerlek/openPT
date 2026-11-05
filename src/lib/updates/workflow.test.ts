@@ -7,7 +7,7 @@ import {execFileSync,spawnSync} from 'node:child_process';
 
 // Exercise the shipped shell workflow against local Git repos, never user repos.
 test('updater prepares an exact release tree, keeps workflows, and never advances production',()=>{
-  const root=mkdtempSync(join(tmpdir(),'axon-workflow-'));
+  const root=mkdtempSync(join(tmpdir(),'openpt-workflow-'));
   const source=join(root,'upstream');const work=join(root,'work');const origin=join(root,'origin.git');
   const git=(cwd:string,...args:string[])=>execFileSync('git',args,{cwd,encoding:'utf8',stdio:['pipe','pipe','pipe']}).trim();
   const init=(path:string)=>{mkdirSync(path);git(path,'init','-b','main');git(path,'config','user.name','Test Coach');git(path,'config','user.email','test@example.invalid');};
@@ -23,7 +23,7 @@ test('updater prepares an exact release tree, keeps workflows, and never advance
     git(work,'add','.');git(work,'commit','-m','existing');const head=git(work,'rev-parse','HEAD');
     git(root,'clone','--bare',work,origin);git(work,'remote','add','origin',origin);
     const yaml=readFileSync(new URL('../../../.github/workflows/axon-update.yml',import.meta.url),'utf8');
-    const script=yaml.split('        run: |\n')[1]!.split('\n').map(line=>line.slice(10)).join('\n').replace('https://github.com/gokerlek/axon-fit.git',source);
+    const script=yaml.split('        run: |\n')[1]!.split('\n').map(line=>line.slice(10)).join('\n').replace('https://github.com/gokerlek/openPT.git',source);
     const env={...process.env,RELEASE:'v0.2.0',EXPECTED_HEAD:head,DEFAULT_BRANCH:'main',GITHUB_REF_NAME:'main',REPOSITORY_OWNER:'coach',OWNER_ID:'1',GITHUB_RUN_ID:'42',GITHUB_STEP_SUMMARY:join(root,'summary')};
     const result=spawnSync('bash',['-c',script],{cwd:work,env,encoding:'utf8'});
     assert.equal(result.status,0,result.stderr);

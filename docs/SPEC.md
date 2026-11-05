@@ -640,7 +640,7 @@ Tasarım dili, ekran akışları, Türkçe metinler, antrenman ekranı mantığ�
 
 ## 10. Marka ve tema düzenleyici
 
-Uygulama beyaz etiketli: paketin adı `pulsecoach`, yayınlanan kurulumun adını ve görünümünü PT belirler.
+Uygulama beyaz etiketli: paketin adı `openpt`, yayınlanan kurulumun adını ve görünümünü PT belirler.
 
 **Temel tema:** shadcn preset'inin `globals.css`'i (Base UI, `base-nova`). Bütün bileşenler aynı CSS değişkenlerini okur; bu yüzden tema düzenleyici birkaç değişkeni değiştirerek bütün uygulamayı tutarlı biçimde değiştirebilir.
 

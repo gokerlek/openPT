@@ -9,8 +9,8 @@ const input:WizardValues={owner:'coach',codeRepo:'coach-app',appRepo:'coach-data
 test('setup derives repo defaults, always uses main and starts without sample credentials',()=>{
   const values=initialWizardValues('coach','renamed-copy');
   assert.equal(values.codeRepo,'renamed-copy');assert.equal(values.codeBranch,'main');
-  assert.equal(values.appRepo,'axon-fit-data');assert.equal(values.appId,'');assert.equal(values.privateKey,'');assert.equal(values.clientSecret,'');
-  assert.notEqual(initialWizardValues('coach','AXON-FIT-DATA').appRepo.toLowerCase(),'axon-fit-data');
+  assert.equal(values.appRepo,'openpt-data');assert.equal(values.appId,'');assert.equal(values.privateKey,'');assert.equal(values.clientSecret,'');
+  assert.notEqual(initialWizardValues('coach','OPENPT-DATA').appRepo.toLowerCase(),'openpt-data');
 });
 test('three steps: one GitHub connection replaces the token and OAuth App steps',()=>{
   assert.deepEqual(WIZARD_STEPS,['GitHub’a bağla','İsteğe bağlı AI','Vercel’e aktar']);

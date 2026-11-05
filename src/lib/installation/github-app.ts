@@ -42,15 +42,15 @@ function productionOrigin(homepage:string):string {
   return url.origin;
 }
 
-export function githubAppManifest({homepage,appName='Axon Fit',suffix}:{homepage:string;appName?:string;suffix:string}):GithubAppManifest {
+export function githubAppManifest({homepage,appName='openPT',suffix}:{homepage:string;appName?:string;suffix:string}):GithubAppManifest {
   if(!SUFFIX.test(suffix))throw new Error('Geçersiz uygulama adı eki.');
   const origin=productionOrigin(homepage);
   // GitHub adı en çok 34 karakter ve benzersiz: "<ad> <6 harf>". Türkçe harfler sadeleşir, kalan işaretler atılır.
-  const base=appName.replace(/[çÇğĞıİöÖşŞüÜ]/g,letter=>TURKISH[letter]!).replace(/[^A-Za-z0-9 ._-]/g,'').replace(/\s+/g,' ').trim().slice(0,NAME_LIMIT-suffix.length-1).trim()||'Axon Fit';
+  const base=appName.replace(/[çÇğĞıİöÖşŞüÜ]/g,letter=>TURKISH[letter]!).replace(/[^A-Za-z0-9 ._-]/g,'').replace(/\s+/g,' ').trim().slice(0,NAME_LIMIT-suffix.length-1).trim()||'openPT';
   return {
     name:`${base} ${suffix}`,
     url:origin,
-    description:'Axon Fit: PT’nin kendi kurulumu. GitHub ile giriş, özel veri repoları ve uygulama güncellemeleri.',
+    description:'openPT: PT’nin kendi kurulumu. GitHub ile giriş, özel veri repoları ve uygulama güncellemeleri.',
     public:false,
     redirect_url:`${origin}/api/install/github-app`,
     callback_urls:[`${origin}/api/auth/github/callback`],

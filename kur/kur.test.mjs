@@ -176,7 +176,7 @@ function makeTar(items) {
   return Buffer.concat(parts);
 }
 
-const TOP = 'axon-fit-1.2.3';
+const TOP = 'openpt-1.2.3';
 const LONG_PATH = `${'derin/'.repeat(30)}uzun-ad-ğüş.txt`;
 const SOURCE_COMMIT = 'a'.repeat(40);
 
@@ -187,7 +187,7 @@ function sampleArchiveItems({ capabilities = ['github-app'] } = {}) {
     { pax: 'g', records: { comment: SOURCE_COMMIT } },
     { name: `${TOP}/`, type: '5', mode: 0o755 },
     { name: `${TOP}/axon-release.json`, data: releaseJson(capabilities) },
-    { name: `${TOP}/package.json`, data: '{"name":"axon","version":"1.2.3"}\n' },
+    { name: `${TOP}/package.json`, data: '{"name":"openpt","version":"1.2.3"}\n' },
     { name: `${TOP}/scripts/calistir.sh`, data: '#!/bin/sh\necho merhaba\n', mode: 0o755 },
     { pax: 'x', records: { path: `${TOP}/${LONG_PATH}` } },
     { name: `${TOP}/derin/kirpilmis`, data: 'uzun yol içeriği\n' },
@@ -204,7 +204,7 @@ function sampleArchiveItems({ capabilities = ['github-app'] } = {}) {
 
 const EXPECTED_FILES = {
   'axon-release.json': { mode: '100644', data: Buffer.from(releaseJson(['github-app'])) },
-  'package.json': { mode: '100644', data: Buffer.from('{"name":"axon","version":"1.2.3"}\n') },
+  'package.json': { mode: '100644', data: Buffer.from('{"name":"openpt","version":"1.2.3"}\n') },
   'scripts/calistir.sh': { mode: '100755', data: Buffer.from('#!/bin/sh\necho merhaba\n') },
   [LONG_PATH]: { mode: '100644', data: Buffer.from('uzun yol içeriği\n') },
   'docs/icerik.md': { mode: '100644', data: Buffer.from('# Başlık\r\nsatır\r\n') },
@@ -289,13 +289,13 @@ test('Node sürümü her şeyden önce: 20 ve üstü geçer; readline statik iç
   assert.ok(bottom.indexOf('startupProblem(') < bottom.indexOf('main('), 'sürüm denetimi main\'den önce');
 });
 
-test('varsayılan ad axon-fit-<4> ve DNS kurallarına uyar; GitHub uygulaması adı 34 karakteri aşmaz', () => {
+test('varsayılan ad openpt-<4> ve DNS kurallarına uyar; GitHub uygulaması adı 34 karakteri aşmaz', () => {
   for (let i = 0; i < 50; i += 1) {
     const name = kur.defaultProjectName();
-    assert.match(name, /^axon-fit-[a-z0-9]{4}$/);
+    assert.match(name, /^openpt-[a-z0-9]{4}$/);
     assert.equal(kur.validateProjectName(name), null);
     const appName = kur.githubAppName();
-    assert.match(appName, /^Axon Fit [a-z]{6}$/);
+    assert.match(appName, /^openPT [a-z]{6}$/);
     assert.ok(appName.length <= 34);
   }
 });
@@ -310,20 +310,20 @@ test('proje adı denetimi', () => {
 });
 
 test('veri reposu adı, kaynak repo biçimi, repo adı denetimi', () => {
-  assert.equal(kur.dataRepoName('axon-fit'), 'axon-fit-data');
-  assert.equal(kur.dataRepoName('Axon-Fit-Data'), 'axon-fit-private-data');
-  assert.equal(kur.parseSource('gokerlek/axon-fit'), 'gokerlek/axon-fit');
+  assert.equal(kur.dataRepoName('openpt'), 'openpt-data');
+  assert.equal(kur.dataRepoName('OpenPT-Data'), 'openpt-private-data');
+  assert.equal(kur.parseSource('gokerlek/openPT'), 'gokerlek/openPT');
   assert.equal(kur.parseSource(' baska/kopya.repo '), 'baska/kopya.repo');
-  for (const bad of ['', 'axon-fit', 'a/b/c', 'https://github.com/a/b', '-x/y']) {
+  for (const bad of ['', 'openpt', 'a/b/c', 'https://github.com/a/b', '-x/y']) {
     assert.throws(() => kur.parseSource(bad), kur.KurError, bad);
   }
-  assert.equal(kur.validateRepoName('axon-fit-data'), null);
+  assert.equal(kur.validateRepoName('openpt-data'), null);
   assert.equal(typeof kur.validateRepoName('..'), 'string');
   assert.equal(typeof kur.validateRepoName('boş luk'), 'string');
 });
 
 test('manifest: yerel dönüş önce, izinler, webhook kapalı, kurulumda yetki, Setup URL yok', () => {
-  const manifest = kur.buildManifest({ appName: 'Axon Fit abcdef', productionUrl: 'https://salon.vercel.app', localBase: 'http://127.0.0.1:5123' });
+  const manifest = kur.buildManifest({ appName: 'openPT abcdef', productionUrl: 'https://salon.vercel.app', localBase: 'http://127.0.0.1:5123' });
   assert.equal(manifest.url, 'https://salon.vercel.app');
   assert.equal(manifest.redirect_url, 'http://127.0.0.1:5123/github/app-created');
   assert.deepEqual(manifest.callback_urls, ['http://127.0.0.1:5123/github/callback', 'https://salon.vercel.app/api/auth/github/callback']);
@@ -359,7 +359,7 @@ test('env: B1 anahtarları, sırlar sensitive, hedef production, PAT yok', () =>
   const authSecret = kur.generateAuthSecret();
   assert.match(authSecret, /^[0-9a-f]{64}$/);
   const items = kur.buildEnvItems({
-    owner: 'coach', codeRepo: 'axon-fit', dataRepo: 'axon-fit-data', branch: 'main', appId: 42,
+    owner: 'coach', codeRepo: 'openpt', dataRepo: 'openpt-data', branch: 'main', appId: 42,
     privateKey: '-----BEGIN PRIVATE KEY-----\nx\n-----END PRIVATE KEY-----\n', installationId: 77,
     clientId: 'Iv1.abc', clientSecret: 'secret', authSecret,
   });
@@ -368,7 +368,7 @@ test('env: B1 anahtarları, sırlar sensitive, hedef production, PAT yok', () =>
     'APP_REPO', 'AUTH_SECRET', 'AXON_CODE_BRANCH', 'AXON_CODE_REPO', 'GITHUB_APP_ID', 'GITHUB_APP_INSTALLATION_ID',
     'GITHUB_APP_PRIVATE_KEY', 'GITHUB_CLIENT_ID', 'GITHUB_CLIENT_SECRET', 'GITHUB_OWNER',
   ]);
-  assert.equal(byKey.AXON_CODE_REPO.value, 'coach/axon-fit');
+  assert.equal(byKey.AXON_CODE_REPO.value, 'coach/openpt');
   assert.equal(byKey.GITHUB_APP_ID.value, '42');
   assert.equal(byKey.GITHUB_APP_INSTALLATION_ID.value, '77');
   for (const item of items) {
@@ -464,7 +464,7 @@ test('sürüm uyumu: kök axon-release.json → capabilities dizisinde github-ap
     assert.throws(() => kur.checkSourceCapabilities(files, 'v0.2.1'), (error) => {
       assert.ok(error instanceof kur.KurError);
       assert.match(error.message, /v0\.2\.1/);
-      assert.equal(error.hint, "Bu kurulum yolu Axon Fit'in yeni sürümüyle gelecek; şimdilik README'deki Deploy düğmesini kullan.");
+      assert.equal(error.hint, "Bu kurulum yolu openPT'nin yeni sürümüyle gelecek; şimdilik README'deki Deploy düğmesini kullan.");
       return true;
     });
   }
@@ -509,7 +509,7 @@ test('tar: gerçek `git archive` çıktısı git\'in kendi blob kimlikleriyle bi
   let archive;
   let listing;
   try {
-    archive = execFileSync('git', ['archive', '--format=tar', '--prefix=axon-fit-test/', 'HEAD'], { cwd: root, maxBuffer: 1024 * 1024 * 1024 });
+    archive = execFileSync('git', ['archive', '--format=tar', '--prefix=openpt-test/', 'HEAD'], { cwd: root, maxBuffer: 1024 * 1024 * 1024 });
     listing = execFileSync('git', ['ls-tree', '-r', '-z', '--full-tree', 'HEAD'], { cwd: root, maxBuffer: 64 * 1024 * 1024 }).toString('utf8');
   } catch {
     t.skip('git ya da depo yok');
@@ -579,12 +579,12 @@ test('kaynak indirme: son sürüm etiketi, kimliksiz istek, codeload arşivi', a
     fetch: async (url, init = {}) => {
       requests.push(String(url));
       assert.equal(init.headers.Authorization, undefined, 'kimliksiz olmalı');
-      if (url === 'https://api.github.com/repos/gokerlek/axon-fit/releases/latest') return json(200, { tag_name: 'v1.2.3' });
-      if (url === 'https://codeload.github.com/gokerlek/axon-fit/tar.gz/v1.2.3') return new Response(gz, { status: 200 });
+      if (url === 'https://api.github.com/repos/gokerlek/openPT/releases/latest') return json(200, { tag_name: 'v1.2.3' });
+      if (url === 'https://codeload.github.com/gokerlek/openPT/tar.gz/v1.2.3') return new Response(gz, { status: 200 });
       throw new Error(`Beklenmeyen istek: ${url}`);
     },
   });
-  const source = await kur.downloadSource(ctx, 'gokerlek/axon-fit');
+  const source = await kur.downloadSource(ctx, 'gokerlek/openPT');
   assert.equal(source.ref, 'v1.2.3');
   assert.equal(source.version, 'v1.2.3');
   assert.equal(source.commit, SOURCE_COMMIT);
@@ -610,7 +610,7 @@ test('kaynak indirme: sürüm yoksa varsayılan dal, sürüm package.json\'dan; 
   const down = baseContext({
     fetch: async (url) => (url.includes('codeload') ? new Response('', { status: 502 }) : json(200, { tag_name: 'v1' })),
   });
-  await assert.rejects(kur.downloadSource(down, 'gokerlek/axon-fit'), /Kaynak kodu indirilemedi \(502\)/);
+  await assert.rejects(kur.downloadSource(down, 'gokerlek/openPT'), /Kaynak kodu indirilemedi \(502\)/);
   let codeloadCalls = 0;
   const flaky = baseContext({
     fetch: async (url) => {
@@ -620,13 +620,13 @@ test('kaynak indirme: sürüm yoksa varsayılan dal, sürüm package.json\'dan; 
       return new Response(gz, { status: 200 });
     },
   });
-  assert.equal((await kur.downloadSource(flaky, 'gokerlek/axon-fit')).version, 'v1.2.3');
+  assert.equal((await kur.downloadSource(flaky, 'gokerlek/openPT')).version, 'v1.2.3');
   assert.equal(codeloadCalls, 2);
   assert.deepEqual(flaky.sleeps, [2000]);
   const old = baseContext({
     fetch: async (url) => (url.includes('codeload') ? new Response(zlib.gzipSync(makeTar(sampleArchiveItems({ capabilities: null }))), { status: 200 }) : json(200, { tag_name: 'v0.2.1' })),
   });
-  await assert.rejects(kur.downloadSource(old, 'gokerlek/axon-fit'), /v0\.2\.1\) bu kurulum yolunu \(GitHub uygulaması\) henüz desteklemiyor/);
+  await assert.rejects(kur.downloadSource(old, 'gokerlek/openPT'), /v0\.2\.1\) bu kurulum yolunu \(GitHub uygulaması\) henüz desteklemiyor/);
 });
 
 test('istek süresi boyuta göre uzar; ağ hatasında GET ve güvenli yazmalar yeniden denenir, repo açma denenmez', async () => {
@@ -650,13 +650,13 @@ test('istek süresi boyuta göre uzar; ağ hatasında GET ve güvenli yazmalar y
     },
   });
   const github = kur.githubApi(ctx.fetch, ctx);
-  const blob = await github('/repos/coach/axon-fit/git/blobs', { method: 'POST', token: 't', body: { content: 'eA==', encoding: 'base64' }, retry: true });
+  const blob = await github('/repos/coach/openpt/git/blobs', { method: 'POST', token: 't', body: { content: 'eA==', encoding: 'base64' }, retry: true });
   assert.equal(blob.status, 201);
   assert.equal(calls.blob, 3);
   assert.deepEqual(ctx.sleeps, [2000, 4000]);
   await assert.rejects(github('/user/repos', { method: 'POST', token: 't', body: { name: 'x' } }), (error) => error instanceof kur.NetworkError && /İnternet/.test(error.hint));
   assert.equal(calls.repo, 1, 'repo açma yeniden denenmez (ikinci kez açılabilir)');
-  await assert.rejects(github('/repos/coach/axon-fit'), kur.NetworkError);
+  await assert.rejects(github('/repos/coach/openpt'), kur.NetworkError);
   assert.equal(calls.get, 4, 'GET 3 kez daha denenir');
 });
 
@@ -676,7 +676,7 @@ test('kod yükleme: ikililer blob, metinler content, ~2 MB ağaç parçaları ba
   const ctx = baseContext({
     fetch: async (url, init = {}) => {
       const { pathname } = new URL(url);
-      const prefix = '/repos/coach/axon-fit';
+      const prefix = '/repos/coach/openpt';
       assert.ok(pathname.startsWith(prefix));
       assert.equal(init.headers.Authorization, 'Bearer ghu_x');
       if (!throttled) {
@@ -687,15 +687,15 @@ test('kod yükleme: ikililer blob, metinler content, ~2 MB ağaç parçaları ba
     },
   });
   const github = kur.githubApi(ctx.fetch, ctx);
-  const source = { name: 'gokerlek/axon-fit', ref: 'v1.2.3', version: 'v1.2.3', commit: SOURCE_COMMIT, files, totalBytes: 0 };
-  await kur.uploadSource(ctx, { github, token: 'ghu_x', fullName: 'coach/axon-fit', branch: 'main', source });
+  const source = { name: 'gokerlek/openPT', ref: 'v1.2.3', version: 'v1.2.3', commit: SOURCE_COMMIT, files, totalBytes: 0 };
+  await kur.uploadSource(ctx, { github, token: 'ghu_x', fullName: 'coach/openpt', branch: 'main', source });
 
   const expected = { ...EXPECTED_FILES };
   for (const file of files.slice(Object.keys(EXPECTED_FILES).length)) expected[file.path] = { mode: '100644', data: file.data };
   assertTreeEquals(git.filesOf('main'), expected);
   const [commit] = git.commits.values();
   assert.deepEqual(commit.parents, []);
-  assert.equal(commit.message, `Axon Fit v1.2.3\n\nKaynak: gokerlek/axon-fit@${SOURCE_COMMIT}`);
+  assert.equal(commit.message, `openPT v1.2.3\n\nKaynak: gokerlek/openPT@${SOURCE_COMMIT}`);
   assert.equal(git.refs.get('main').force, true);
   const trees = git.writes.filter((write) => write.kind === 'tree');
   assert.ok(trees.length >= 2, 'birden çok ağaç parçası');
@@ -779,7 +779,7 @@ test('yerel sunucu: state doğrulanır, kod bir kez çevrilir, adresler hep yaz�
     if (String(url).startsWith('http://127.0.0.1')) return realFetch(url, init);
     if (url === 'https://api.github.com/app-manifests/mcode/conversions') {
       conversions += 1;
-      return json(201, { id: 1, slug: 'axon-fit-abc', name: 'Axon Fit abc', client_id: 'Iv1.c', client_secret: 'cs', pem: privateKey, owner: { login: 'coach' } });
+      return json(201, { id: 1, slug: 'openpt-abc', name: 'openPT abc', client_id: 'Iv1.c', client_secret: 'cs', pem: privateKey, owner: { login: 'coach' } });
     }
     if (url === 'https://github.com/login/oauth/access_token') {
       const body = JSON.parse(init.body);
@@ -805,7 +805,7 @@ test('yerel sunucu: state doğrulanır, kod bir kez çevrilir, adresler hep yaz�
           realFetch(`${base}/github/app-created?code=mcode&state=${state}`, { redirect: 'manual' }),
         ]);
         checks.push(['yönlendirme', first.status, 302], ['ikinci yönlendirme', second.status, 302]);
-        checks.push(['kurulum adresi', first.headers.get('location'), 'https://github.com/apps/axon-fit-abc/installations/new']);
+        checks.push(['kurulum adresi', first.headers.get('location'), 'https://github.com/apps/openpt-abc/installations/new']);
         checks.push(['yabancı state', (await realFetch(`${base}/github/callback?code=good&state=yabanci`)).status, 400]);
         checks.push(['kodsuz', (await realFetch(`${base}/github/callback`)).status, 400]);
         checks.push(['geçersiz kod', (await realFetch(`${base}/github/callback?code=bad`)).status, 400]);
@@ -815,16 +815,16 @@ test('yerel sunucu: state doğrulanır, kod bir kez çevrilir, adresler hep yaz�
       return true;
     },
   });
-  const result = await kur.runGithubAppFlow(ctx, { appName: 'Axon Fit abc', productionUrl: 'https://salon.vercel.app', timeoutMs: 10_000 });
+  const result = await kur.runGithubAppFlow(ctx, { appName: 'openPT abc', productionUrl: 'https://salon.vercel.app', timeoutMs: 10_000 });
   await browser;
   for (const [label, actual, expected] of checks) assert.equal(actual, expected, label);
   assert.equal(conversions, 1);
   assert.equal(result.userToken, 'ghu_token');
   assert.equal(result.installationIdHint, '9');
-  assert.equal(ctx.created.githubApp.settingsUrl, 'https://github.com/settings/apps/axon-fit-abc');
+  assert.equal(ctx.created.githubApp.settingsUrl, 'https://github.com/settings/apps/openpt-abc');
   const output = ctx.io.lines.join('\n');
   assert.match(output, /Tarayıcı açılmadıysa bu adresi aç: http:\/\/127\.0\.0\.1:\d+\//, 'açılsa da yerel adres yazılır');
-  assert.match(output, /Kurulum sayfası açılmadıysa bu adresi aç: https:\/\/github\.com\/apps\/axon-fit-abc\/installations\/new/);
+  assert.match(output, /Kurulum sayfası açılmadıysa bu adresi aç: https:\/\/github\.com\/apps\/openpt-abc\/installations\/new/);
   assert.equal(output.includes('cs'), false);
 });
 
@@ -899,7 +899,7 @@ function vercelProjectContext({ failures = 0, takenByOther = false, partial = fa
       if (parsed.pathname === '/v11/projects') {
         const body = JSON.parse(init.body);
         state.posts.push(body);
-        assert.deepEqual(body.gitRepository, { type: 'github', repo: 'coach/axon-fit' });
+        assert.deepEqual(body.gitRepository, { type: 'github', repo: 'coach/openpt' });
         assert.equal(body.framework, 'nextjs');
         if (state.takenByOther && body.name === 'salon') return json(409, { error: { code: 'conflict', message: 'A project with this name already exists' } });
         if (state.project && state.project.name === body.name) return json(409, { error: { code: 'conflict', message: 'Project already exists' } });
@@ -912,7 +912,7 @@ function vercelProjectContext({ failures = 0, takenByOther = false, partial = fa
           if (partial) state.project = { id: 'prj_bos', name: body.name };
           return json(400, { error: { code: 'repo_not_found', message: 'Repository not found', action: 'Install GitHub App', link: 'https://github.com/apps/vercel/installations/new?state=x' } });
         }
-        state.project = { id: 'prj_1', name: body.name, link: { type: 'github', org: 'coach', repo: 'axon-fit', repoId: 9, productionBranch: 'main' } };
+        state.project = { id: 'prj_1', name: body.name, link: { type: 'github', org: 'coach', repo: 'openpt', repoId: 9, productionBranch: 'main' } };
         return json(200, { id: 'prj_1', name: body.name });
       }
       throw new Error(`Beklenmeyen istek: ${url}`);
@@ -924,7 +924,7 @@ function vercelProjectContext({ failures = 0, takenByOther = false, partial = fa
 
 test('Vercel projesi repo hazır olunca gitRepository ile açılır; Vercel GitHub uygulaması repoyu göremezse kurulum sayfası', async () => {
   const { ctx, vercel, opened, state } = vercelProjectContext({ failures: 4 });
-  const project = await kur.ensureVercelProject(ctx, vercel, { name: 'salon', repoFullName: 'coach/axon-fit' });
+  const project = await kur.ensureVercelProject(ctx, vercel, { name: 'salon', repoFullName: 'coach/openpt' });
   assert.equal(project.id, 'prj_1');
   assert.equal(state.posts.length, 5);
   assert.deepEqual(opened, ['https://github.com/apps/vercel/installations/new?state=x', 'https://github.com/apps/vercel/installations/new?state=x']);
@@ -935,7 +935,7 @@ test('Vercel projesi repo hazır olunca gitRepository ile açılır; Vercel GitH
 
 test('Vercel projesi: ad o arada dolduysa anlaşılır mesaj ve yeni ad sorulur', async () => {
   const { ctx, vercel, state } = vercelProjectContext({ takenByOther: true });
-  const project = await kur.ensureVercelProject(ctx, vercel, { name: 'salon', repoFullName: 'coach/axon-fit' });
+  const project = await kur.ensureVercelProject(ctx, vercel, { name: 'salon', repoFullName: 'coach/openpt' });
   assert.equal(project.name, 'salon-iki');
   assert.deepEqual(state.posts.map((post) => post.name), ['salon', 'salon-iki']);
   assert.ok(ctx.io.lines.some((line) => line.includes('"salon" adı Vercel\'de artık dolu')));
@@ -943,7 +943,7 @@ test('Vercel projesi: ad o arada dolduysa anlaşılır mesaj ve yeni ad sorulur'
 
 test('Vercel projesi: git hatasında bağlantısız açılan proje bu çalıştırmada açıldıysa silinip gitRepository ile yeniden açılır; ad sorulmaz', async () => {
   const { ctx, vercel, state } = vercelProjectContext({ failures: 1, partial: true });
-  const project = await kur.ensureVercelProject(ctx, vercel, { name: 'salon', repoFullName: 'coach/axon-fit' });
+  const project = await kur.ensureVercelProject(ctx, vercel, { name: 'salon', repoFullName: 'coach/openpt' });
   assert.equal(project.id, 'prj_1');
   assert.deepEqual(state.deleted, ['prj_bos']);
   assert.deepEqual(state.posts.map((post) => post.name), ['salon', 'salon', 'salon']);
@@ -954,7 +954,7 @@ test('Vercel projesi: git hatasında bağlantısız açılan proje bu çalışt�
 
 test('Vercel giriş bağlantısı hatası link\'siz gelirse belgeli hesap ayarı adresi açılır ve yazılır', async () => {
   const { ctx, vercel, opened } = vercelProjectContext({ loginConnection: 1 });
-  const project = await kur.ensureVercelProject(ctx, vercel, { name: 'salon', repoFullName: 'coach/axon-fit' });
+  const project = await kur.ensureVercelProject(ctx, vercel, { name: 'salon', repoFullName: 'coach/openpt' });
   assert.equal(project.id, 'prj_1');
   assert.deepEqual(opened, [kur.VERCEL_LOGIN_CONNECTIONS_URL]);
   assert.equal(kur.VERCEL_LOGIN_CONNECTIONS_URL, 'https://vercel.com/account/authentication');
@@ -990,7 +990,7 @@ test('yayın: durumlar izlenir; hata verirse Vercel kayıt bağlantısıyla Tür
       return json(200, { id: 'dpl_1', readyState: states.shift(), inspectorUrl: 'https://vercel.com/coach/salon/dpl_1' });
     },
   });
-  const project = { id: 'prj_1', name: 'salon', link: { type: 'github', org: 'coach', repo: 'axon-fit', repoId: 9 } };
+  const project = { id: 'prj_1', name: 'salon', link: { type: 'github', org: 'coach', repo: 'openpt', repoId: 9 } };
   await assert.rejects(kur.deployAndWait(ctx, { session: { token: 'v' } }, { project, repoId: 9, branch: 'main' }), (error) => {
     assert.match(error.message, /hata verdi/);
     assert.match(error.hint, /https:\/\/vercel\.com\/coach\/salon\/dpl_1/);
@@ -1010,7 +1010,7 @@ function createWorld({ envFails = false, codeRepoTaken = false, projectTaken = f
   const git = fakeGitHost();
   const archive = zlib.gzipSync(makeTar(sampleArchiveItems({ capabilities })));
   const state = {
-    repos: new Set(codeRepoTaken ? ['axon-fit'] : []),
+    repos: new Set(codeRepoTaken ? ['openpt'] : []),
     project: null,
     projectTaken,
     envBody: null,
@@ -1030,7 +1030,7 @@ function createWorld({ envFails = false, codeRepoTaken = false, projectTaken = f
     const p = url.pathname;
     if (url.hostname.endsWith('.vercel.app')) return new Response('DEPLOYMENT_NOT_FOUND', { status: 404, headers: { 'x-vercel-error': 'DEPLOYMENT_NOT_FOUND' } });
     if (url.origin === 'https://codeload.github.com') {
-      assert.equal(p, '/gokerlek/axon-fit/tar.gz/v1.2.3');
+      assert.equal(p, '/gokerlek/openPT/tar.gz/v1.2.3');
       return new Response(archive, { status: 200 });
     }
     if (url.origin === 'https://github.com' && p === '/login/oauth/access_token') {
@@ -1038,13 +1038,13 @@ function createWorld({ envFails = false, codeRepoTaken = false, projectTaken = f
       return json(200, { access_token: secrets.userToken, expires_in: 28800, refresh_token: 'ghr_x', token_type: 'bearer' });
     }
     if (url.origin === 'https://api.github.com') {
-      if (method === 'GET' && p === '/repos/gokerlek/axon-fit/releases/latest') {
+      if (method === 'GET' && p === '/repos/gokerlek/openPT/releases/latest') {
         assert.equal(auth, '');
         return json(200, { tag_name: 'v1.2.3' });
       }
       if (method === 'POST' && p === '/app-manifests/manifest-code/conversions') {
         state.conversions += 1;
-        return json(201, { id: 4242, slug: 'axon-fit-abcdef', name: 'Axon Fit abcdef', client_id: 'Iv1.client', client_secret: secrets.clientSecret, webhook_secret: null, pem: secrets.pem, owner: { login: 'coach' } });
+        return json(201, { id: 4242, slug: 'openpt-abcdef', name: 'openPT abcdef', client_id: 'Iv1.client', client_secret: secrets.clientSecret, webhook_secret: null, pem: secrets.pem, owner: { login: 'coach' } });
       }
       if (method === 'GET' && p === '/users/coach/installation') {
         const { payload } = verifyJwt(auth.slice('Bearer '.length), publicKey);
@@ -1053,7 +1053,7 @@ function createWorld({ envFails = false, codeRepoTaken = false, projectTaken = f
       }
       if (auth !== `Bearer ${secrets.userToken}`) throw new Error(`GitHub isteği kullanıcı anahtarı olmadan: ${method} ${p}`);
       if (method === 'GET' && p === '/user') return json(200, { login: 'coach', id: 1 });
-      const gitCall = /^\/repos\/coach\/axon-fit(\/git\/.+)$/.exec(p);
+      const gitCall = /^\/repos\/coach\/openpt(\/git\/.+)$/.exec(p);
       if (gitCall) {
         const response = git.handle(method, gitCall[1], body);
         if (response) return response;
@@ -1065,7 +1065,7 @@ function createWorld({ envFails = false, codeRepoTaken = false, projectTaken = f
         assert.equal(body.private, true);
         assert.equal(body.auto_init, true);
         state.repos.add(body.name);
-        return json(201, { id: body.name === 'axon-fit' ? 999 : 1000, private: true, default_branch: 'main' });
+        return json(201, { id: body.name === 'openpt' ? 999 : 1000, private: true, default_branch: 'main' });
       }
     }
     if (url.origin === 'https://api.vercel.com') {
@@ -1120,7 +1120,7 @@ function createWorld({ envFails = false, codeRepoTaken = false, projectTaken = f
     // GitHub: "Create GitHub App" → redirect_url; "Install" + yetki → ilk callback adresi.
     const created = await realFetch(`${manifest.redirect_url}?code=manifest-code&state=${appState}`, { redirect: 'manual' });
     assert.equal(created.status, 302);
-    assert.equal(created.headers.get('location'), 'https://github.com/apps/axon-fit-abcdef/installations/new');
+    assert.equal(created.headers.get('location'), 'https://github.com/apps/openpt-abcdef/installations/new');
     const back = await realFetch(`${manifest.callback_urls[0]}?code=user-code&installation_id=77&setup_action=install`);
     assert.equal(back.status, 200);
   }
@@ -1171,8 +1171,8 @@ test('uçtan uca: 8 adım; kod tek commit olarak yüklenir; env ve yayın doğru
 
   const env = Object.fromEntries(world.state.envBody.map((item) => [item.key, item]));
   assert.equal(env.GITHUB_OWNER.value, 'coach');
-  assert.equal(env.APP_REPO.value, 'axon-fit-data');
-  assert.equal(env.AXON_CODE_REPO.value, 'coach/axon-fit');
+  assert.equal(env.APP_REPO.value, 'openpt-data');
+  assert.equal(env.AXON_CODE_REPO.value, 'coach/openpt');
   assert.equal(env.AXON_CODE_BRANCH.value, 'main');
   assert.equal(env.GITHUB_APP_ID.value, '4242');
   assert.equal(env.GITHUB_APP_INSTALLATION_ID.value, '77');
@@ -1191,11 +1191,11 @@ test('uçtan uca: 8 adım; kod tek commit olarak yüklenir; env ve yayın doğru
   assert.equal(world.opened.at(-1), 'https://salonum.vercel.app/login');
   const output = world.ctx.io.lines.join('\n');
   for (let n = 1; n <= kur.STEP_COUNT; n += 1) assert.match(output, new RegExp(`\\[${n}/${kur.STEP_COUNT}\\]`));
-  assert.match(output, /kaynak gokerlek\/axon-fit v1\.2\.3 \(11 dosya/);
+  assert.match(output, /kaynak gokerlek\/openPT v1\.2\.3 \(11 dosya/);
   for (const url of world.opened) assert.ok(output.includes(`bu adresi aç: ${url}`), `adres yazılmadı: ${url}`);
   assert.match(output, /Adresin: https:\/\/salonum\.vercel\.app/);
   assert.match(output, /Tarayıcıda açıldı: GitHub ile giriş yap\./);
-  assert.match(output, /GitHub uygulamanın ayarları: https:\/\/github\.com\/settings\/apps\/axon-fit-abcdef/);
+  assert.match(output, /GitHub uygulamanın ayarları: https:\/\/github\.com\/settings\/apps\/openpt-abcdef/);
   assert.doesNotMatch(output, /Callback URL/, 'adres değişmediyse uyarı yok');
   assertNoSecrets(world, [env.AUTH_SECRET.value]);
 });
@@ -1218,9 +1218,9 @@ test('uçtan uca hata: kod 1 döner, ne yapılacağı ve o ana kadar oluşturula
   const output = world.ctx.io.lines.join('\n');
   assert.match(output, /Kurulum tamamlanamadı: Bazı ayarlar Vercel'e yazılamadı: GITHUB_APP_PRIVATE_KEY \(env_conflict\)/);
   assert.match(output, /Ne yapmalı: Vercel projesinin Settings/);
-  assert.match(output, /GitHub uygulaması "Axon Fit abcdef": https:\/\/github\.com\/settings\/apps\/axon-fit-abcdef/);
-  assert.match(output, /Kod reposu: https:\/\/github\.com\/coach\/axon-fit/);
-  assert.match(output, /Veri reposu: https:\/\/github\.com\/coach\/axon-fit-data/);
+  assert.match(output, /GitHub uygulaması "openPT abcdef": https:\/\/github\.com\/settings\/apps\/openpt-abcdef/);
+  assert.match(output, /Kod reposu: https:\/\/github\.com\/coach\/openpt/);
+  assert.match(output, /Veri reposu: https:\/\/github\.com\/coach\/openpt-data/);
   assert.match(output, /Vercel projesi: https:\/\/vercel\.com\/coachv-projects\/salonum/);
   assert.equal(world.state.deployBody, null, 'env yazılamadıysa yayın başlamaz');
   assertNoSecrets(world);
@@ -1231,8 +1231,8 @@ test('uçtan uca sürüm uyumu: kaynak GitHub uygulaması modunu bilmiyorsa Verc
   const code = await kur.main(world.ctx);
   assert.equal(code, 1);
   const output = world.ctx.io.lines.join('\n');
-  assert.match(output, /Kurulum tamamlanamadı: Axon Fit'in kurulacak sürümü \(v1\.2\.3\) bu kurulum yolunu \(GitHub uygulaması\) henüz desteklemiyor\./);
-  assert.match(output, /Ne yapmalı: Bu kurulum yolu Axon Fit'in yeni sürümüyle gelecek; şimdilik README'deki Deploy düğmesini kullan\./);
+  assert.match(output, /Kurulum tamamlanamadı: openPT'nin kurulacak sürümü \(v1\.2\.3\) bu kurulum yolunu \(GitHub uygulaması\) henüz desteklemiyor\./);
+  assert.match(output, /Ne yapmalı: Bu kurulum yolu openPT'nin yeni sürümüyle gelecek; şimdilik README'deki Deploy düğmesini kullan\./);
   assert.match(output, /Henüz hiçbir şey oluşturulmadı\./);
   assert.doesNotMatch(output, /\[2\/\d\]/, 'Vercel adımına geçilmedi');
   assert.equal(world.state.loggedIn, false);
@@ -1251,7 +1251,7 @@ test('uçtan uca: giriş kapanırsa (Ctrl+D) iptal; çıkış kodu 1 ve oluştur
   const output = world.ctx.io.lines.join('\n');
   assert.match(output, /Kurulum durduruldu: terminal girişi kapandı \(Ctrl\+D\)\./);
   assert.match(output, /Şu ana kadar oluşturulanlar/);
-  assert.match(output, /GitHub uygulaması "Axon Fit abcdef"/);
+  assert.match(output, /GitHub uygulaması "openPT abcdef"/);
   assertNoSecrets(world);
 });
 

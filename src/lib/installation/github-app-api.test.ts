@@ -12,7 +12,7 @@ test('manifest dönüşümü kimliksiz POST; yanıttan yalnız gereken bilgiler'
     assert.equal(String(input),'https://api.github.com/app-manifests/abc_123/conversions');
     assert.equal(init?.method,'POST');
     assert.equal(new Headers(init?.headers).has('Authorization'),false);
-    return Response.json({id:123,slug:'axon-fit-qwerty',owner:{login:'coach'},client_id:'Iv23li',client_secret:'test-secret',webhook_secret:'hook',pem},{status:201});
+    return Response.json({id:123,slug:'openpt-qwerty',owner:{login:'coach'},client_id:'Iv23li',client_secret:'test-secret',webhook_secret:'hook',pem},{status:201});
   };
   const credentials=await githubAppApi(jwt,fake).convert('abc_123');
   assert.equal(credentials.appId,'123');assert.equal(credentials.privateKey,pem);

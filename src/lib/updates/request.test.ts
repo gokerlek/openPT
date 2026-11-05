@@ -5,7 +5,7 @@ import {githubRequest} from './request.ts';
 test('public release checks send no PT credential; private repo checks use it',async()=>{
   const headers:string[]=[];
   const fetcher:typeof fetch=async(_url,init)=>{headers.push(new Headers(init?.headers).get('Authorization')??'');return Response.json({ok:true});};
-  await githubRequest(undefined,'/repos/gokerlek/axon-fit/releases/latest',{},false,fetcher);
+  await githubRequest(undefined,'/repos/gokerlek/openPT/releases/latest',{},false,fetcher);
   await githubRequest('test-secret','/repos/coach/app',{},false,fetcher);
   assert.deepEqual(headers,['','Bearer test-secret']);
 });

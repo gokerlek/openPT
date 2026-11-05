@@ -37,7 +37,7 @@ jobs:
           [[ "$GITHUB_REF_NAME" == "$DEFAULT_BRANCH" ]]
           git fetch origin "$DEFAULT_BRANCH"
           [[ "$(git rev-parse FETCH_HEAD)" == "$EXPECTED_HEAD" ]]
-          git fetch https://github.com/gokerlek/axon-fit.git "refs/tags/$RELEASE"
+          git fetch https://github.com/gokerlek/openPT.git "refs/tags/$RELEASE"
           release_commit=$(git rev-parse FETCH_HEAD)
           manifest=$(git show "$release_commit:axon-release.json")
           jq -e --arg version "${RELEASE#v}" '.version == $version and .automaticUpdate == true and .dataMigration == false' <<< "$manifest"

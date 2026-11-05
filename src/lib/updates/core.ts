@@ -1,4 +1,4 @@
-export const UPSTREAM = 'gokerlek/axon-fit';
+export const UPSTREAM = 'gokerlek/openPT';
 export const WORKFLOW = 'axon-update.yml';
 export function sameOrigin(request:Request) {return request.headers.get('origin')===new URL(request.url).origin;}
 export const RELEASE_PATTERN = /^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;

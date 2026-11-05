@@ -4,7 +4,7 @@ PT panelinde Ayarlar → Sürüm açılır. Danışanlar bu sayfaya ve API'ye er
 
 ## Otomatik yol
 
-1. GitHub Actions açık olmalı. Vercel Git bağlantısının Production Branch'i kod reposunun default branch'i olmalı. `AXON_CODE_REPO=hesabın/kod-repon` tanımla; sihirbaz bunu oluşturduğu .env çıktısına ekler. Veri repo'sunu bu alana yazma. Geliştiricinin `gokerlek/axon-fit` reposu güncelleme hedefi olamaz.
+1. GitHub Actions açık olmalı. Vercel Git bağlantısının Production Branch'i kod reposunun default branch'i olmalı. `AXON_CODE_REPO=hesabın/kod-repon` tanımla; sihirbaz bunu oluşturduğu .env çıktısına ekler. Veri repo'sunu bu alana yazma. Geliştiricinin `gokerlek/openPT` reposu güncelleme hedefi olamaz.
 2. Uygulamanın GitHub erişimi kendi kod reposuna da yetmeli ve Actions workflow dispatch yapabilmeli. Erişim PT'nin kendisinindir; ayrı geliştirici anahtarı veya servis gerekmez:
    - **GitHub uygulaması** (yeni kurulumlar): kurulum anahtarı kullanılır. Kurulum "All repositories" ile yapıldıysa kod reposunu da kapsar; Contents ve Actions yazma izinleri manifest'te vardır.
    - **Kişisel anahtar** (eski kurulumlar): Vercel'deki `GITHUB_TOKEN` kullanılır.
@@ -19,7 +19,7 @@ Danışan/veri repoları ve ortam değişkenleri güncelleme tarafından değiş
 
 Önce kendi kod reponun **Actions** ekranını aç. **Axon update** görünmeli ve etkin olmalı. **Enable workflow** veya **Enable Actions** bildirimi varsa repo sahibinin etkinleştirmesi gerekir.
 
-Workflow hiç yoksa kod reponun varsayılan dalında `.github/workflows/axon-update.yml` dosyasını kontrol et. Dosya kopyanda eksikse [ana repodaki dosyanın](https://github.com/gokerlek/axon-fit/blob/main/.github/workflows/axon-update.yml) içeriğini aynı yola ekle. GitHub'ın web editöründen **Add file → Create new file** ile ekleyebilirsin. Bu tek seferlik onarımdan sonra uygulamada yeniden sürüm kontrolü yapıp hazırlığı başlat.
+Workflow hiç yoksa kod reponun varsayılan dalında `.github/workflows/axon-update.yml` dosyasını kontrol et. Dosya kopyanda eksikse [ana repodaki dosyanın](https://github.com/gokerlek/openPT/blob/main/.github/workflows/axon-update.yml) içeriğini aynı yola ekle. GitHub'ın web editöründen **Add file → Create new file** ile ekleyebilirsin. Bu tek seferlik onarımdan sonra uygulamada yeniden sürüm kontrolü yapıp hazırlığı başlat.
 
 Güncel kurulum (sihirbazın "GitHub'a bağla" adımı ve `kur` komutu) bu dosya eksikse kendisi oluşturur; hem otomatik env aktarımı hem manuel dışa aktarma bu hazırlığı kullanır. GitHub uygulamasının Workflows yazma izni bunun içindir (eski kurulumlarda anahtarın `workflow` izni); dosya zaten varsa üzerine yazılmaz. Kurulu eski kopyalar için yukarıdaki tek seferlik manuel onarım geçerlidir.
 
@@ -39,7 +39,7 @@ Sürüm kontrolü artık yeni sürümü göstermek ile otomatik güncellemenin h
 Örnek (gerçek sürüm tag'ını release sayfasından seç):
 
 ```sh
-git remote add upstream https://github.com/gokerlek/axon-fit.git
+git remote add upstream https://github.com/gokerlek/openPT.git
 git fetch upstream --tags
 git tag yedek-guncelleme-oncesi
 git merge vX.Y.Z
