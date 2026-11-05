@@ -2,7 +2,8 @@ import * as v from 'valibot';
 import { ATTACHMENT_LIBRARY } from '../data/attachment-library.ts';
 import { DEVICE_LIBRARY } from '../data/device-library.ts';
 import { EXERCISE_LIBRARY } from '../data/exercise-library.ts';
-import { GithubError } from './github/errors.ts';
+import { ptLibraryMessages } from '../i18n/messages/pt-library/index.ts';
+import { LocalizedGithubError } from './localized-github-error.ts';
 import type { RepoFiles } from './repo-files.ts';
 import { customAttachmentsSchema, type Attachment } from './schemas/attachment.ts';
 import { customDevicesSchema, type Device } from './schemas/device.ts';
@@ -56,7 +57,7 @@ export async function readCatalog<T extends { id: string }>(files: RepoFiles, ca
   const stored = await files.readJson(catalog.path);
   if (!stored) return { items: [], unreadable: [], invalid: 0, sha: null };
   const parsed = catalog.parse(stored.content);
-  if (!parsed) throw new GithubError(`${catalog.path} bozuk: kayıt listesi değil.`, 500);
+  if (!parsed) throw new LocalizedGithubError((l) => ptLibraryMessages(l).catalogLib.corruptList(catalog.path), 500);
   return { ...parsed, invalid: parsed.unreadable.length, sha: stored.sha };
 }
 
@@ -119,7 +120,7 @@ export async function readRetiredIds(files: RepoFiles): Promise<{ ids: RetiredId
   if (!stored) return { ids: { exercises: [], devices: [], attachments: [] }, sha: null };
   // Liste de bir "nesne" sayılır (looseObject kabul ederdi); dosya bir nesne olmalı.
   const parsed = Array.isArray(stored.content) ? null : v.safeParse(retiredIdsSchema, stored.content);
-  if (!parsed?.success) throw new GithubError(`${RETIRED_IDS_PATH} bozuk: silinen kimlikler okunamadı.`, 500);
+  if (!parsed?.success) throw new LocalizedGithubError((l) => ptLibraryMessages(l).catalogLib.corruptRetired(RETIRED_IDS_PATH), 500);
   return { ids: parsed.output, sha: stored.sha };
 }
 

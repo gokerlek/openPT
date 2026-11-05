@@ -1,4 +1,6 @@
 import { DEFAULT_LOCALE, type Locale } from '../i18n/locale.ts';
+import { ptProgramMessages } from '../i18n/messages/pt-program/index.ts';
+import { msg } from '../i18n/valibot.ts';
 import * as v from 'valibot';
 import { effectiveSets, sameSets } from './client-targets.ts';
 import { applyProgramEdit, type DiffContext } from './program-diff.ts';
@@ -53,19 +55,17 @@ export const proposalActionSchema = v.variant('action', [
   v.object({
     action: v.literal('decline'),
     sessionId: v.pipe(v.string(), v.regex(SESSION_ID_PATTERN)),
-    note: v.optional(v.pipe(v.string(), v.trim(), v.maxLength(300, 'Not en fazla 300 karakter.'))),
+    note: v.optional(v.pipe(v.string(), v.trim(), v.maxLength(300, msg((l) => ptProgramMessages(l).proposals.noteMax)))),
   }),
 ]);
 
-export const PROPOSAL_KIND_LABELS: Record<ProposalKind, string> = {
-  sets: 'Set sayısı',
-  target: 'Hedef',
-  swap: 'Hareket değişimi',
-  remove: 'Çıkarma',
-  add: 'Ekleme',
-  /** Öneri katmanının adayı (§5.6): danışanın bitişinde "Antrenörüne öner" ile gelir, gerekçesi `why`'da. */
-  algo_sets: 'Set artışı · öneri motoru',
-};
+/** `algo_sets`: öneri katmanının adayı (§5.6): danışanın bitişinde "Antrenörüne öner" ile gelir, gerekçesi `why`'da. */
+export function proposalKindLabels(locale: Locale = DEFAULT_LOCALE): Record<ProposalKind, string> {
+  return ptProgramMessages(locale).proposals.kinds;
+}
+
+/** Türkçe adlar (eski çağrılar); arayüz `proposalKindLabels(locale)` kullanır. */
+export const PROPOSAL_KIND_LABELS: Record<ProposalKind, string> = proposalKindLabels('tr');
 
 const DAY_MS = 86_400_000;
 const timestamp = v.pipe(v.string(), v.isoTimestamp());
@@ -243,25 +243,19 @@ export function clientOutcomes(file: ProposalsFile, now: Date, days: number = PR
   return { decided, pending: pendingProposals(file) };
 }
 
-export const OUTCOME_LABELS: Record<Exclude<ProposalStatus, 'pending'>, string> = {
-  approved: 'Antrenörün önerini onayladı',
-  declined: 'Antrenörün önerini reddetti',
-  stale: 'Program değiştiği için önerin uygulanamadı',
-};
+/** Karar etiketleri danışanın dilinde (Bugün'de görünür). */
+export function outcomeLabels(locale: Locale = DEFAULT_LOCALE): Record<Exclude<ProposalStatus, 'pending'>, string> {
+  return ptProgramMessages(locale).proposals.outcomes;
+}
+
+/** Türkçe etiketler (eski çağrılar); arayüz `outcomeLabels(locale)` kullanır. */
+export const OUTCOME_LABELS: Record<Exclude<ProposalStatus, 'pending'>, string> = outcomeLabels('tr');
 
 /* --- onay: programa uygulama --- */
 
 type Program = { phases: readonly ProgramPhase[]; clientTargets?: ClientTargets | undefined };
 
 export type ApplyProposalResult = { status: 'applied'; phases: ProgramPhase[] } | { status: 'stale'; reason: string };
-
-const STALE = {
-  row: 'Bu hareket programda artık yok.',
-  changed: 'Satır o arada değişti.',
-  day: 'Bu gün programda artık yok.',
-  full: 'Gün dolu; önce bir hareket çıkar.',
-  last: 'Günün tek hareketi; çıkarılamaz.',
-} as const;
 
 function mapRow(phases: readonly ProgramPhase[], rowId: string, change: (row: TemplateBlock['rows'][number]) => TemplateBlock['rows'][number]): ProgramPhase[] {
   return phases.map((phase) => ({
@@ -314,7 +308,8 @@ function removeRow(phases: readonly ProgramPhase[], rowId: string): ProgramPhase
  * - `remove`: satır çıkar; günün tek hareketi çıkarılamaz.
  * - `add`: günün sonuna tek hareketlik blok (yeni kimliklerle); gün doluysa uygulanmaz.
  */
-export function applyProposal(program: Program, proposal: Proposal, ids: ProgramIdSource, _locale: Locale = DEFAULT_LOCALE): ApplyProposalResult {
+export function applyProposal(program: Program, proposal: Proposal, ids: ProgramIdSource, locale: Locale = DEFAULT_LOCALE): ApplyProposalResult {
+  const STALE = ptProgramMessages(locale).proposals.stale;
   const phases = program.phases;
   if (proposal.kind === 'add') {
     const day = phases.flatMap((phase) => phase.days).find((item) => item.id === proposal.dayId);
@@ -372,8 +367,8 @@ export function applyProposal(program: Program, proposal: Proposal, ids: Program
 }
 
 /** Onaylanan önerinin program geçmişindeki notu (farkın yanında): "Danışanın önerisi: Leg Press 3 → 4 set". */
-export function approvalNote(proposal: Pick<Proposal, 'text'>): string {
-  return `Danışanın önerisi: ${proposal.text}`;
+export function approvalNote(proposal: Pick<Proposal, 'text'>, locale: Locale = DEFAULT_LOCALE): string {
+  return ptProgramMessages(locale).proposals.approvalNote(proposal.text);
 }
 
 export type ApprovalPlan =
@@ -397,31 +392,28 @@ export function planApproval(input: {
   ctx: DiffContext;
   now: Date;
   random?: (n: number) => Uint8Array;
+  /** Yazanın dili (kayıtta saklanan not ve cümleler); yoksa `ctx.locale`, o da yoksa Türkçe. */
+  locale?: Locale;
 }): ApprovalPlan {
   const { program, file, id, now } = input;
+  const locale = input.locale ?? input.ctx.locale ?? DEFAULT_LOCALE;
   const proposal = file.items.find((item) => item.id === id);
   if (!proposal) return { status: 'missing' };
   if (proposal.status !== 'pending') return { status: 'decided' };
   const stale = (reason: string): ApprovalPlan => ({ status: 'stale', proposals: decideProposal(file, id, { status: 'stale', at: now }) ?? file, reason });
 
-  const applied = applyProposal(program, proposal, programIdSource(program.phases, input.random));
+  const applied = applyProposal(program, proposal, programIdSource(program.phases, input.random), locale);
   if (applied.status === 'stale') return stale(applied.reason);
   const normalized = normalizeProgram({ phased: program.phased, phases: applied.phases }, input.library, program);
-  if (Object.keys(normalized.errors).length > 0) return stale('Hareket kütüphanede yok.');
+  if (Object.keys(normalized.errors).length > 0) return stale(ptProgramMessages(locale).proposals.stale.libraryMissing);
   const result = applyProgramEdit(
     program,
     { phased: program.phased, currentPhaseId: program.current.phaseId, phases: normalized.phases },
-    input.ctx,
+    { ...input.ctx, locale },
     now,
-    [{ text: approvalNote(proposal) }],
+    [{ text: approvalNote(proposal, locale) }],
   );
   const revision = result?.program.revision ?? program.revision;
   const proposals = decideProposal(file, id, { status: 'approved', at: now, revision }) ?? file;
   return { status: 'approved', program: result?.program ?? null, proposals, changes: result?.changes ?? [], revision };
-}
-
-/* --- dil: imza dondurma (i18n planı §7 F). Sahibi görev çevirir; şimdilik Türkçe döner. --- */
-
-export function outcomeLabels(_locale: Locale = DEFAULT_LOCALE): Record<Exclude<ProposalStatus, 'pending'>, string> {
-  return OUTCOME_LABELS;
 }

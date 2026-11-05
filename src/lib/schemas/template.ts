@@ -1,4 +1,7 @@
 import * as v from 'valibot';
+import { DEFAULT_LOCALE, isLocale, type Locale } from '../../i18n/locale.ts';
+import { ptProgramMessages } from '../../i18n/messages/pt-program/index.ts';
+import { msg } from '../../i18n/valibot.ts';
 import { CARDIO_LIMITS, CARDIO_SPEED_MAX_KMH, cardioSpeedIssue } from '../cardio.ts';
 import { PROGRESSION_SCHEMES } from '../progression.ts';
 import { SET_LIMITS, isFullLoad } from '../set-plan.ts';
@@ -31,20 +34,23 @@ export { BLOCK_KINDS, BLOCK_KIND_LABELS, TEMPLATE_ID_PATTERN, type BlockKind } f
 /** Egzersiz ve cihaz kimlikleriyle aynı biçim. */
 const SLUG = /^[a-z0-9-]{2,60}$/;
 
-const int = (min: number, max: number, unit = '') =>
+/** Doğrulama mesajları (`msg`: şemayı ayrıştıran isteğin diliyle). */
+const text = (locale: Locale) => ptProgramMessages(locale).templateSchema;
+
+const int = (min: number, max: number, unit?: 'm' | 's') =>
   v.pipe(
-    v.number('Sayı gir.'),
-    v.integer('Tam sayı gir.'),
-    v.minValue(min, `En az ${min}${unit}.`),
-    v.maxValue(max, `En fazla ${max}${unit}.`),
+    v.number(msg((l) => text(l).enterNumber)),
+    v.integer(msg((l) => text(l).enterInteger)),
+    v.minValue(min, msg((l) => text(l).atLeastUnit(min, unit ? text(l).units[unit] : ''))),
+    v.maxValue(max, msg((l) => text(l).atMostUnit(max, unit ? text(l).units[unit] : ''))),
   );
 
 /** Yük yüzdesi: bozuk giriş (NaN) "Sayı gir." der; boş alan tam yüktür (alan yok). */
 const loadPct = v.pipe(
-  v.number('Sayı gir.'),
-  v.integer('Tam sayı gir.'),
-  v.minValue(SET_LIMITS.loadPctMin, `Yük en az %${SET_LIMITS.loadPctMin} olur.`),
-  v.maxValue(100, 'Yük en fazla %100 olur.'),
+  v.number(msg((l) => text(l).enterNumber)),
+  v.integer(msg((l) => text(l).enterInteger)),
+  v.minValue(SET_LIMITS.loadPctMin, msg((l) => text(l).loadMin(SET_LIMITS.loadPctMin))),
+  v.maxValue(100, msg((l) => text(l).loadMax)),
 );
 
 /** Bir set: hedef (tekrar ya da saniye; min = max → sabit), isteğe bağlı yük yüzdesi, AMRAP, kardiyoda mesafe ve eğim. */
@@ -57,23 +63,23 @@ export const setSpecSchema = v.pipe(
     /** "Yapabildiği kadar". */
     amrap: v.optional(v.boolean()),
     /** Kardiyo: mesafe (m); yürüyüş/koşuda eğim (%). Hangi harekette durduğunu sunucuda `normalizeTemplate` denetler. */
-    distanceM: v.optional(int(1, CARDIO_LIMITS.distanceMax, ' m')),
+    distanceM: v.optional(int(1, CARDIO_LIMITS.distanceMax, 'm')),
     inclinePct: v.optional(
       v.pipe(
-        v.number('Sayı gir.'),
-        v.minValue(0, 'Eğim en az %0 olur.'),
-        v.maxValue(CARDIO_LIMITS.inclineReadMax, `Eğim en fazla %${CARDIO_LIMITS.inclineReadMax} olur.`),
-        v.multipleOf(CARDIO_LIMITS.inclineStep, 'Eğim 0,5 adımla olur.'),
+        v.number(msg((l) => text(l).enterNumber)),
+        v.minValue(0, msg((l) => text(l).inclineMin)),
+        v.maxValue(CARDIO_LIMITS.inclineReadMax, msg((l) => text(l).inclineMax(CARDIO_LIMITS.inclineReadMax))),
+        v.multipleOf(CARDIO_LIMITS.inclineStep, msg((l) => text(l).inclineStep)),
       ),
     ),
   }),
-  v.forward(v.partialCheck([['min'], ['max']], (set) => set.max >= set.min, 'Üst sınır alt sınırdan küçük olamaz.'), ['max']),
+  v.forward(v.partialCheck([['min'], ['max']], (set) => set.max >= set.min, msg((l) => text(l).upperBelowLower)), ['max']),
   // İnsan sınırı: hareketin türü (yürüyüş/koşu) burada bilinmez, en geniş kardiyo sınırı (antrenmanda türüne göre).
   v.forward(
     v.partialCheck(
       [['max'], ['distanceM']],
       (set) => cardioSpeedIssue('machine', { seconds: set.max, distanceM: set.distanceM }) === null,
-      `Bu sürede bu mesafe olmaz: hız en fazla ${CARDIO_SPEED_MAX_KMH.machine} km/sa.`,
+      msg((l) => text(l).distanceSpeed(CARDIO_SPEED_MAX_KMH.machine)),
     ),
     ['distanceM'],
   ),
@@ -82,53 +88,56 @@ export const setSpecSchema = v.pipe(
 
 /** Satırın setleri: 1–10, en az biri tam yükte. */
 export const rowSetsSchema = v.pipe(
-  v.array(setSpecSchema, 'Setler okunamadı.'),
-  v.minLength(1, 'En az bir set olmalı.'),
-  v.maxLength(L.sets, `Bir harekette en fazla ${L.sets} set olur.`),
-  v.check((sets) => sets.length === 0 || sets.some(isFullLoad), 'En az bir set tam yükte (yüzdesiz) olmalı.'),
+  v.array(setSpecSchema, msg((l) => text(l).setsUnreadable)),
+  v.minLength(1, msg((l) => text(l).setsMin)),
+  v.maxLength(L.sets, msg((l) => text(l).setsMax(L.sets))),
+  v.check((sets) => sets.length === 0 || sets.some(isFullLoad), msg((l) => text(l).fullLoadRequired)),
 );
 
 /** Satır okunamazsa: setleri yoksa (hedefsiz eski satır da) bunu söyler. */
-const rowMessage = (issue: v.ObjectIssue) => (issue.expected === '"sets"' ? 'Setler okunamadı.' : 'Satır okunamadı.');
+const rowMessage = msg((l, issue: v.ObjectIssue) => (issue.expected === '"sets"' ? text(l).setsUnreadable : text(l).rowUnreadable));
 
 /** Satırın kural değişikliği: yalnız tür ve yedekte tekrar (hedefler setlerde durur). */
 export const ruleOverrideSchema = v.object({
-  scheme: v.picklist(PROGRESSION_SCHEMES, 'Geçerli bir ilerleme türü seç.'),
+  scheme: v.picklist(PROGRESSION_SCHEMES, msg((l) => text(l).pickProgression)),
   targetRir: int(0, 4),
 });
 
 export const templateRowSchema = v.object(
   {
-  id: v.pipe(v.string(), v.regex(ROW_ID_PATTERN, 'Satır kimliği geçersiz.')),
-  exerciseId: v.pipe(v.string(), v.regex(SLUG, 'Egzersiz seç.')),
+  id: v.pipe(v.string(), v.regex(ROW_ID_PATTERN, msg((l) => text(l).rowIdInvalid))),
+  exerciseId: v.pipe(v.string(), v.regex(SLUG, msg((l) => text(l).pickExercise))),
   sets: rowSetsSchema,
   rule: v.optional(ruleOverrideSchema),
   /** Aynı hareket başka cihazda. Yoksa egzersizin kendi cihazı. */
-  deviceId: v.optional(v.pipe(v.string(), v.regex(SLUG, 'Cihaz kimliği geçersiz.'))),
-  note: v.optional(v.pipe(v.string(), v.trim(), v.maxLength(L.note, `Not en fazla ${L.note} karakter.`))),
+  deviceId: v.optional(v.pipe(v.string(), v.regex(SLUG, msg((l) => text(l).deviceIdInvalid)))),
+  note: v.optional(v.pipe(v.string(), v.trim(), v.maxLength(L.note, msg((l) => text(l).noteMax(L.note))))),
   },
   rowMessage,
 );
 
 export const templateBlockSchema = v.pipe(
   v.object({
-    id: v.pipe(v.string(), v.regex(BLOCK_ID_PATTERN, 'Blok kimliği geçersiz.')),
-    kind: v.picklist(BLOCK_KINDS, 'Grup türünü seç.'),
+    id: v.pipe(v.string(), v.regex(BLOCK_ID_PATTERN, msg((l) => text(l).blockIdInvalid))),
+    kind: v.picklist(BLOCK_KINDS, msg((l) => text(l).pickKind)),
     /** Tek harekette setler arası; grupta tur sonu dinlenme (tur = en çok seti olan hareket). */
-    restSeconds: int(0, L.restSeconds, ' sn'),
+    restSeconds: int(0, L.restSeconds, 's'),
     /** Yalnız devre: istasyonlar arası geçiş. */
-    transitionSeconds: v.optional(int(0, L.transitionSeconds, ' sn')),
+    transitionSeconds: v.optional(int(0, L.transitionSeconds, 's')),
     rows: v.pipe(
       v.array(templateRowSchema),
-      v.minLength(1, 'Blokta hareket yok.'),
-      v.maxLength(8, 'Bir grupta en fazla 8 hareket olur.'),
+      v.minLength(1, msg((l) => text(l).blockEmpty)),
+      v.maxLength(8, msg((l) => text(l).groupMax)),
     ),
   }),
   v.forward(
     v.partialCheck(
       [['kind'], ['rows']],
       (block) => blockShapeProblem(block.kind, block.rows.length) === null,
-      (issue) => blockShapeProblem(issue.input.kind, issue.input.rows.length) ?? 'Grup geçersiz.',
+      (issue) => {
+        const l = isLocale(issue.lang) ? issue.lang : DEFAULT_LOCALE;
+        return blockShapeProblem(issue.input.kind, issue.input.rows.length, l) ?? text(l).groupInvalid;
+      },
     ),
     ['rows'],
   ),
@@ -138,17 +147,17 @@ export const templateBlockSchema = v.pipe(
 export const templateNameSchema = v.pipe(
   v.string(),
   v.trim(),
-  v.minLength(2, 'Şablon adı çok kısa.'),
-  v.maxLength(L.name, `En fazla ${L.name} karakter.`),
+  v.minLength(2, msg((l) => text(l).nameShort)),
+  v.maxLength(L.name, msg((l) => text(l).nameMax(L.name))),
 );
 
 /** Şablonun blokları: en az bir hareket, 30 blok, 40 hareket, benzersiz kimlikler. */
 export const templateBlocksSchema = v.pipe(
   v.array(templateBlockSchema),
-  v.minLength(1, 'En az bir hareket ekle.'),
-  v.maxLength(L.blocks, `En fazla ${L.blocks} blok.`),
-  v.check((blocks) => countRows(blocks) <= L.rows, `Bir şablonda en fazla ${L.rows} hareket olur.`),
-  v.check((blocks) => duplicateIds(blocks).length === 0, 'Satır ve blok kimlikleri benzersiz olmalı.'),
+  v.minLength(1, msg((l) => text(l).blocksMin)),
+  v.maxLength(L.blocks, msg((l) => text(l).blocksMax(L.blocks))),
+  v.check((blocks) => countRows(blocks) <= L.rows, msg((l) => text(l).rowsMax(L.rows))),
+  v.check((blocks) => duplicateIds(blocks).length === 0, msg((l) => text(l).idsUnique)),
 );
 
 /** Dosya ve kayıt ucu: eski biçim (blokta `sets`, satırda `target`) önce yeniye çevrilir. */
@@ -160,7 +169,7 @@ export const blocksHostSchema = v.object({ blocks: templateBlocksSchema });
 const textFields = {
   name: templateNameSchema,
   description: v.optional(
-    v.pipe(v.string(), v.trim(), v.maxLength(L.description, `Açıklama en fazla ${L.description} karakter.`)),
+    v.pipe(v.string(), v.trim(), v.maxLength(L.description, msg((l) => text(l).descriptionMax(L.description)))),
     '',
   ),
 };
@@ -184,7 +193,7 @@ export const templateSaveSchema = v.object({
   ...textFields,
   blocks: storedBlocksSchema,
   sharedWithClients: v.optional(v.boolean()),
-  id: v.optional(v.pipe(v.string(), v.regex(TEMPLATE_ID_PATTERN, 'Şablon kimliği geçersiz.'))),
+  id: v.optional(v.pipe(v.string(), v.regex(TEMPLATE_ID_PATTERN, msg((l) => text(l).idInvalid)))),
   baseSha: v.optional(v.pipe(v.string(), v.regex(/^[0-9a-f]{40}$/))),
 });
 

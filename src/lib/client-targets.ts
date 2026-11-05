@@ -1,4 +1,7 @@
 import { DEFAULT_LOCALE, type Locale } from '../i18n/locale.ts';
+import { catalogMessages } from '../i18n/messages/catalog/index.ts';
+import { ptProgramMessages } from '../i18n/messages/pt-program/index.ts';
+import { getFormat } from './format.ts';
 import type { ClientTarget, ClientTargets, ProgramChange, ProgramPhase } from './program-plan.ts';
 import type { TrackingType } from './progression.ts';
 import { isStraight, resizeSets, setShape, setsText, type SetSpec } from './set-plan.ts';
@@ -92,14 +95,15 @@ export function plainSets(sets: readonly SetSpec[]): boolean {
 }
 
 /** "10–14", "40–60 sn"; düz olmayan setlerde kısa biçim ("12/10/8+"). */
-export function targetLabel(sets: readonly SetSpec[], trackingType: TrackingType, _locale: Locale = DEFAULT_LOCALE): string {
+export function targetLabel(sets: readonly SetSpec[], trackingType: TrackingType, locale: Locale = DEFAULT_LOCALE): string {
   const first = sets[0];
   if (!first) return '';
   if (plainSets(sets)) {
-    const range = first.min === first.max ? first.min.toLocaleString('tr-TR') : `${first.min.toLocaleString('tr-TR')}–${first.max.toLocaleString('tr-TR')}`;
-    return trackingType === 'duration' ? `${range} sn` : range;
+    const { number } = getFormat(locale);
+    const range = first.min === first.max ? number(first.min) : `${number(first.min)}–${number(first.max)}`;
+    return trackingType === 'duration' ? catalogMessages(locale).time.seconds(range) : range;
   }
-  return setsText(sets, trackingType);
+  return setsText(sets, trackingType, null, locale);
 }
 
 /**
@@ -110,6 +114,7 @@ export function clientTargetNotes(
   phases: readonly ProgramPhase[],
   targets: ClientTargets | undefined,
   trackingOf: (exerciseId: string) => TrackingType,
+  locale: Locale = DEFAULT_LOCALE,
 ): Record<string, { text: string; sets: SetSpec[]; baseSets: SetSpec[]; at: string }> {
   const live = liveClientTargets(phases, targets);
   const rows = rowsOf(phases);
@@ -117,7 +122,8 @@ export function clientTargetNotes(
     Object.entries(live ?? {}).flatMap(([rowId, target]) => {
       const found = rows.get(rowId);
       if (!found) return [];
-      return [[rowId, { text: `hedef ${targetLabel(target.sets, trackingOf(found.row.exerciseId))}`, sets: target.sets, baseSets: target.baseSets, at: target.at }]];
+      const label = targetLabel(target.sets, trackingOf(found.row.exerciseId), locale);
+      return [[rowId, { text: ptProgramMessages(locale).targets.note(label), sets: target.sets, baseSets: target.baseSets, at: target.at }]];
     }),
   );
 }
@@ -152,8 +158,10 @@ export function ptTargetsEdit(
   storedPhases: readonly ProgramPhase[],
   nextPhases: readonly ProgramPhase[],
   targets: ClientTargets | undefined,
-  ctx: { titleOf: (exerciseId: string) => string; trackingOf: (exerciseId: string) => TrackingType; multiPhase: boolean },
+  ctx: { titleOf: (exerciseId: string) => string; trackingOf: (exerciseId: string) => TrackingType; multiPhase: boolean; locale?: Locale },
 ): { clientTargets: ClientTargets | undefined; changes: ProgramChange[] } {
+  const locale = ctx.locale ?? DEFAULT_LOCALE;
+  const t = ptProgramMessages(locale).targets;
   const live = liveClientTargets(storedPhases, targets);
   if (!live) return { clientTargets: undefined, changes: [] };
   const before = rowsOf(storedPhases);
@@ -175,9 +183,7 @@ export function ptTargetsEdit(
     const adopted = next.row.exerciseId === old.row.exerciseId && sameSets(next.row.sets, resizeSets(target.sets, next.row.sets.length));
     changes.push({
       scope,
-      text: adopted
-        ? `${title}: danışanın hedefi programa alındı`
-        : `${title}: danışanın hedefi (${targetLabel(target.sets, ctx.trackingOf(old.row.exerciseId))}) kaldırıldı`,
+      text: adopted ? t.adopted(title) : t.removed(title, targetLabel(target.sets, ctx.trackingOf(old.row.exerciseId), locale)),
     });
   }
   return { clientTargets: Object.keys(kept).length > 0 ? kept : undefined, changes };

@@ -1,4 +1,6 @@
 import { DEFAULT_LOCALE, type Locale } from '../i18n/locale.ts';
+import { ptProgramMessages } from '../i18n/messages/pt-program/index.ts';
+import { langConfig } from '../i18n/valibot.ts';
 import {freezeWeeklyGoals} from './weekly-goals';
 import {readIndex} from './session-files-core';
 import {sessionRepo} from './session-files';
@@ -8,6 +10,7 @@ import type { DeviceWithSource } from './devices';
 import type { ExerciseWithSource } from './exercises';
 import { clientRepoName, GithubError } from './github/client';
 import { deleteFile, getFileSha, readJson, writeJson } from './github/files';
+import { LocalizedGithubError } from './localized-github-error';
 import { dropNotices } from './notices-store';
 import { applyProgramEdit, commitMessage, type DiffContext } from './program-diff';
 import {
@@ -41,15 +44,21 @@ import { programWeekTarget } from './training-days';
  */
 
 export const PROGRAM_PATH = 'program.json';
-export const PROGRAM_DELETE_MESSAGE = 'Program silindi';
+export function programDeleteMessage(locale: Locale = DEFAULT_LOCALE): string {
+  return ptProgramMessages(locale).programs.deleted;
+}
+
+/** Türkçe commit mesajı (eski çağrılar); yazan `programDeleteMessage(locale)` kullanır. */
+export const PROGRAM_DELETE_MESSAGE = programDeleteMessage('tr');
 
 export type ProgramFile =
   | { sha: string; program: Program; problem: null }
   /** Okunamayan dosya (bozuk JSON ya da şemaya uymuyor): silinebilsin diye sha'sıyla. */
   | { sha: string; program: null; problem: string };
 
-/** Taze okuma. `null`: dosya yok. Bozuk dosya hata değil, sorunuyla döner. */
-export async function readProgramFile(clientId: string): Promise<ProgramFile | null> {
+/** Taze okuma. `null`: dosya yok. Bozuk dosya hata değil, sorunuyla döner (sorun okuyanın dilinde). */
+export async function readProgramFile(clientId: string, locale: Locale = DEFAULT_LOCALE): Promise<ProgramFile | null> {
+  const t = ptProgramMessages(locale).programs;
   const repo = clientRepoName(clientId);
   let stored: Awaited<ReturnType<typeof readJson<unknown>>>;
   try {
@@ -58,15 +67,15 @@ export async function readProgramFile(clientId: string): Promise<ProgramFile | n
     // Bozuk JSON: silinebilsin ya da üzerine yazılabilsin diye sha ayrıca alınır.
     if (error instanceof GithubError && error.status === 500) {
       const sha = await getFileSha(repo, PROGRAM_PATH);
-      return sha ? { sha, program: null, problem: 'Dosya JSON olarak okunamadı.' } : null;
+      return sha ? { sha, program: null, problem: t.unreadable } : null;
     }
     throw error;
   }
   if (!stored) return null;
-  const parsed = v.safeParse(programSchema, stored.content);
+  const parsed = v.safeParse(programSchema, stored.content, langConfig(locale));
   if (!parsed.success) {
     const issue = parsed.issues[0];
-    return { sha: stored.sha, program: null, problem: `${v.getDotPath(issue) ?? 'dosya'}: ${issue.message}` };
+    return { sha: stored.sha, program: null, problem: `${v.getDotPath(issue) ?? t.fileFallback}: ${issue.message}` };
   }
   return { sha: stored.sha, program: parsed.output, problem: null };
 }
@@ -80,7 +89,13 @@ export async function writeProgramFile(
   const parsed = v.safeParse(programSchema, program);
   if (!parsed.success) {
     const issue = parsed.issues[0];
-    throw new GithubError(`Program kaydı geçersiz: ${v.getDotPath(issue) ?? 'dosya'}: ${issue.message}`, 500);
+    // Alan yolu ve mesajı dosyaya yazanın değil, hatayı okuyanın dilinde.
+    const path = v.getDotPath(issue);
+    throw new LocalizedGithubError((l) => {
+      const t = ptProgramMessages(l).programs;
+      const first = v.safeParse(programSchema, program, langConfig(l)).issues?.[0] ?? issue;
+      return t.invalidRecord(path ?? t.fileFallback, first.message);
+    }, 500);
   }
   const prior=await readProgramFile(clientId);
   // Bugün'deki "Bu hafta x/y" ile aynı: atanmış gün sayısı, yoksa sıklık (`programWeekTarget`). Eski programın ilk PT
@@ -96,9 +111,10 @@ export async function writeProgramFile(
 export function programDiffContext(
   exercises: readonly ExerciseWithSource[],
   devices: readonly DeviceWithSource[],
-  _locale: Locale = DEFAULT_LOCALE,
+  locale: Locale = DEFAULT_LOCALE,
 ): DiffContext {
   return {
+    locale,
     exercises: new Map(exercises.map((exercise) => [exercise.id, { title: exercise.title, trackingType: exercise.trackingType }])),
     devices: new Map(devices.map((device) => [device.id, { name: device.name }])),
   };
@@ -130,6 +146,7 @@ export async function saveProgram(
   library: { exercises: ReadonlyMap<string, PlanExercise>; deviceIds: ReadonlySet<string> },
   ctx: DiffContext,
 ): Promise<SaveProgramResult> {
+  const locale = ctx.locale ?? DEFAULT_LOCALE;
   const body = bodyWithAssignments(input);
   for (let attempt = 0; ; attempt += 1) {
     const stored = await readProgramFile(clientId);
@@ -139,8 +156,8 @@ export async function saveProgram(
         if (stored) return { status: 'exists' };
         const normalized = normalizeProgram(body, library, null);
         if (Object.keys(normalized.errors).length > 0) return { status: 'invalid', errors: normalized.errors };
-        const program = createProgramRecord({ ...body, phases: normalized.phases }, now);
-        await writeProgramFile(clientId, program, { message: commitMessage('create', program.log[0]?.changes ?? []) });
+        const program = createProgramRecord({ ...body, phases: normalized.phases }, now, locale);
+        await writeProgramFile(clientId, program, { message: commitMessage('create', program.log[0]?.changes ?? [], locale) });
         return { status: 'created', revision: program.revision, droppedDevices: normalized.droppedDeviceRowIds.length };
       }
       if (!stored) return { status: 'missing' };
@@ -153,7 +170,7 @@ export async function saveProgram(
       if (!result) return { status: 'unchanged', revision: stored.program.revision, droppedDevices };
       await writeProgramFile(clientId, result.program, {
         sha: stored.sha,
-        message: commitMessage(result.program.log[0]?.kind ?? 'edit', result.changes),
+        message: commitMessage(result.program.log[0]?.kind ?? 'edit', result.changes, locale),
       });
       return { status: 'saved', revision: result.program.revision, droppedDevices };
     } catch (error) {
@@ -169,20 +186,20 @@ export type SwitchPhaseResult =
   | { status: 'missing' | 'stale' | 'unknown' };
 
 /** PT onaylı evre geçişi (program sayfasındaki öneri). */
-export async function switchPhase(clientId: string, phaseId: string, base: ProgramBase): Promise<SwitchPhaseResult> {
+export async function switchPhase(clientId: string, phaseId: string, base: ProgramBase, locale: Locale = DEFAULT_LOCALE): Promise<SwitchPhaseResult> {
   for (let attempt = 0; ; attempt += 1) {
     const stored = await readProgramFile(clientId);
     if (!stored) return { status: 'missing' };
     if (!stored.program || !sameProgramBase(stored.program, base)) return { status: 'stale' };
     const program = stored.program;
-    const next = startPhase(program, phaseId, new Date());
+    const next = startPhase(program, phaseId, new Date(), locale);
     if (!next) {
       return program.phases.some((phase) => phase.id === phaseId)
         ? { status: 'unchanged', revision: program.revision }
         : { status: 'unknown' };
     }
     try {
-      await writeProgramFile(clientId, next, { sha: stored.sha, message: commitMessage('phase', next.log[0]?.changes ?? []) });
+      await writeProgramFile(clientId, next, { sha: stored.sha, message: commitMessage('phase', next.log[0]?.changes ?? [], locale) });
       return { status: 'saved', revision: next.revision };
     } catch (error) {
       if (attempt === 0 && isConflict(error)) continue;
@@ -192,11 +209,11 @@ export async function switchPhase(clientId: string, phaseId: string, base: Progr
 }
 
 /** Programı siler (bozuk dosya da silinir). Geçmişi git'te durur. `false`: dosya yoktu. */
-export async function deleteProgram(clientId: string): Promise<boolean> {
+export async function deleteProgram(clientId: string, locale: Locale = DEFAULT_LOCALE): Promise<boolean> {
   const repo = clientRepoName(clientId);
   const sha = await getFileSha(repo, PROGRAM_PATH);
   if (!sha) return false;
-  await deleteFile(repo, PROGRAM_PATH, { sha, message: PROGRAM_DELETE_MESSAGE });
+  await deleteFile(repo, PROGRAM_PATH, { sha, message: programDeleteMessage(locale) });
   dropNotices(clientId);
   return true;
 }

@@ -1,3 +1,5 @@
+import { DEFAULT_LOCALE, type Locale } from '../i18n/locale.ts';
+import { ptProgramMessages } from '../i18n/messages/pt-program/index.ts';
 import { deviceSwapTarget, type AlternativeCandidate } from './alternatives.ts';
 import type { DeviceKind, DeviceLoadSettings } from './device-loads.ts';
 import type { Equipment, Muscle } from '@/lib/schemas/exercise';
@@ -671,6 +673,8 @@ type SwapContext = {
   exercises: readonly EditorExercise[];
   devices: ReadonlyMap<string, { kind: DeviceKind }>;
   familyOf: (muscle: string) => string;
+  /** Seçicinin etiketlerinin dili; yoksa Türkçe. */
+  locale?: Locale;
 };
 
 function withoutDevice(row: TemplateRow): TemplateRow {
@@ -726,6 +730,7 @@ export function deviceChoices(
 ): DeviceChoice[] {
   const exercise = ctx.exercises.find((item) => item.id === row.exerciseId);
   const byId = new Map(ctx.exercises.map((item) => [item.id, item]));
+  const t = ptProgramMessages(ctx.locale ?? DEFAULT_LOCALE).templatesLib;
   const choices: DeviceChoice[] = [];
   for (const device of ctx.deviceList) {
     const result = swapDevice(row, device.id, ctx);
@@ -733,8 +738,8 @@ export function deviceChoices(
     const label =
       result.kind === 'reset'
         ? exercise?.deviceId
-          ? `Egzersizin cihazı: ${device.name}`
-          : 'Cihazsız'
+          ? t.exerciseDevice(device.name)
+          : t.noDevice
         : result.kind === 'device'
           ? device.name
           : `${device.name} → ${byId.get(result.to)?.title ?? result.to}`;

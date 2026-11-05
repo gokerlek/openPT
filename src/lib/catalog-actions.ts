@@ -1,5 +1,9 @@
 import { createHash } from 'node:crypto';
 import * as v from 'valibot';
+import { messageOf } from '../i18n/errors.ts';
+import { DEFAULT_LOCALE, type Locale } from '../i18n/locale.ts';
+import { ptLibraryMessages } from '../i18n/messages/pt-library/index.ts';
+import { langConfig, msg } from '../i18n/valibot.ts';
 import {
   attachmentChoiceProblem,
   dropAttachmentFromDevices,
@@ -38,7 +42,7 @@ import {
 } from './schemas/device.ts';
 import { exerciseSchema } from './schemas/exercise.ts';
 import { newRecordId } from './slug.ts';
-import { brokenRecordMessage, hasUnreadable, storedIds } from './stored-list.ts';
+import { hasUnreadable, storedIds } from './stored-list.ts';
 
 /**
  * Egzersiz, cihaz ve aparat uçlarının çekirdeği (SPEC §7.2, §7.3). Rota yalnız oturumu denetler
@@ -60,38 +64,43 @@ import { brokenRecordMessage, hasUnreadable, storedIds } from './stored-list.ts'
 /** Ucun yanıtı: rota bunu olduğu gibi döner (`{ error, fields? }` ya da başarı verisi). */
 export type Outcome = { status: number; body: Record<string, unknown> };
 
+/** Uçların metinleri (yanıt, alan hatası, commit mesajı) isteği yapanın dilinde. */
+const text = (locale: Locale) => ptLibraryMessages(locale).catalogActions;
+
 const ok = (body: Record<string, unknown> = { ok: true }): Outcome => ({ status: 200, body });
 const problem = (status: number, error: string): Outcome => ({ status, body: { error } });
-const fieldProblem = (field: string, message: string): Outcome => ({
+const fieldProblem = (field: string, message: string, locale: Locale): Outcome => ({
   status: 400,
-  body: { error: 'Bilgileri kontrol et.', fields: { [field]: message } },
+  body: { error: text(locale).checkInput, fields: { [field]: message } },
 });
-const brokenRecord = (path: string): Outcome => problem(409, brokenRecordMessage(path));
-const noIdFromName = (field: string): Outcome => ({
+const brokenRecord = (path: string, locale: Locale): Outcome => problem(409, text(locale).brokenRecord(path));
+const noIdFromName = (field: string, locale: Locale): Outcome => ({
   status: 400,
-  body: { error: 'Bu addan geçerli bir kimlik üretilemedi. Adı değiştirip tekrar dene.', fields: { [field]: 'Bu addan kimlik üretilemedi.' } },
+  body: { error: text(locale).noIdFromNameBody, fields: { [field]: text(locale).noIdFromNameField } },
 });
 
-/** Şema hataları alan alan (her alanın ilk hatası). */
-function invalidInput(issues: readonly v.BaseIssue<unknown>[]): Outcome {
+/** Şema hataları alan alan (her alanın ilk hatası; mesajlar şemayı ayrıştıran isteğin dilinde). */
+function invalidInput(issues: readonly v.BaseIssue<unknown>[], locale: Locale): Outcome {
   const fields: Record<string, string> = {};
   for (const issue of issues) {
     const key = issue.path?.map((segment) => String(segment.key)).join('.');
     if (key && !fields[key]) fields[key] = issue.message;
   }
-  return { status: 400, body: { error: 'Bilgileri kontrol et.', fields } };
+  return { status: 400, body: { error: text(locale).checkInput, fields } };
 }
 
+// i18n-followup(T2): GitHub katmanının kendi `GithubError` iletileri (`src/lib/github/**`) Türkçe; yerelleşince bu iki
+// yardımcı onları `messageOf` ile zaten o dilde verir (bu dosyanın kendi hataları `LocalizedGithubError`).
 /** Beklenmeyen hata: GitHub'ın nedeni ve durumu, yoksa 502. */
-function failed(error: unknown, fallback: string): Outcome {
+function failed(error: unknown, fallback: string, locale: Locale): Outcome {
   const failure = error instanceof GithubError ? error : null;
-  return problem(failure?.status ?? 502, failure?.message ?? fallback);
+  return problem(failure?.status ?? 502, failure ? (messageOf(failure, locale) ?? failure.message) : fallback);
 }
 
 /** İş bir adımda durdu: ne yapıldığı ve GitHub'ın nedeni (409'da istemci bir kez yeniden dener). */
-function stopped(error: unknown, message: string): Outcome {
+function stopped(error: unknown, message: string, locale: Locale): Outcome {
   const failure = error instanceof GithubError ? error : null;
-  return problem(failure?.status ?? 502, failure ? `${message} ${failure.message}` : message);
+  return problem(failure?.status ?? 502, failure ? `${message} ${messageOf(failure, locale) ?? failure.message}` : message);
 }
 
 /** Görsel artıkta kalmasın; silinemezse kayıt yine doğru, yalnız repo'da artık kalır. */
@@ -100,19 +109,18 @@ async function removeMedia(files: RepoFiles, path: string, message: string): Pro
   if (sha) await files.deleteFile(path, { sha, message }).catch(() => undefined);
 }
 
-const RETIRE_FAILED: Record<CatalogKind, string> = {
-  exercises: 'Egzersiz silindi ama silinenler listesine yazılamadı; silmeyi tekrar dene.',
-  devices: 'Cihaz silindi ama silinenler listesine yazılamadı; silmeyi tekrar dene.',
-  attachments: 'Aparat silindi ama silinenler listesine yazılamadı; silmeyi tekrar dene.',
-};
+function retireFailed(kind: CatalogKind, locale: Locale): string {
+  const t = text(locale);
+  return kind === 'exercises' ? t.retireFailedExercise : kind === 'devices' ? t.retireFailedDevice : t.retireFailedAttachment;
+}
 
 /** Silmenin son adımı: kimlik bir daha verilmesin. Durursa kayıt gitmiştir; silmeyi yeniden denemek bunu tamamlar. */
-async function retire(files: RepoFiles, kind: CatalogKind, id: string): Promise<Outcome> {
+async function retire(files: RepoFiles, kind: CatalogKind, id: string, locale: Locale): Promise<Outcome> {
   try {
-    await retireId(files, kind, id, `Silinen kimlik bir daha verilmeyecek: ${id}`);
+    await retireId(files, kind, id, text(locale).retired(id));
     return ok();
   } catch (error) {
-    return stopped(error, RETIRE_FAILED[kind]);
+    return stopped(error, retireFailed(kind, locale), locale);
   }
 }
 
@@ -127,13 +135,13 @@ async function finishDeletion(
   idSchema: v.GenericSchema<string>,
   id: string,
   notFound: string,
+  locale: Locale,
 ): Promise<Outcome> {
   if (!v.is(idSchema, id)) return problem(404, notFound);
-  return retire(files, kind, id);
+  return retire(files, kind, id, locale);
 }
 
-/** Cihaz: hazır katalogda ya da PT'nin (okunabilen) cihazlarında olmalı. */
-const DEVICE_MISSING = 'Bu cihaz bulunamadı: silinmiş ya da dosyada okunamıyor olabilir.';
+/** Cihaz: hazır katalogda ya da PT'nin (okunabilen) cihazlarında olmalı (yoksa `deviceMissing`). */
 
 async function findDevice(files: RepoFiles, id: string): Promise<Device | undefined> {
   return withLibrary((await readCatalog(files, DEVICES)).items, DEVICES.library).find((item) => item.id === id);
@@ -155,28 +163,29 @@ const exerciseSaveSchema = v.object({ ...exerciseSchema.entries, id: v.optional(
  *   uymayan bir kayıt girer, bir sonraki cihaz kaydında sessizce değişirdi. PT'nin kendi seçtiği
  *   (kütüphanedekinden farklı) aparat cihazda yoksa yine 400.
  */
-export async function saveExercise(files: RepoFiles, raw: unknown): Promise<Outcome> {
-  const parsed = v.safeParse(exerciseSaveSchema, raw);
-  if (!parsed.success) return invalidInput(parsed.issues);
+export async function saveExercise(files: RepoFiles, raw: unknown, locale: Locale = DEFAULT_LOCALE): Promise<Outcome> {
+  const t = text(locale);
+  const parsed = v.safeParse(exerciseSaveSchema, raw, langConfig(locale));
+  if (!parsed.success) return invalidInput(parsed.issues, locale);
   // Sabitlenen muadiller kendi ucundan yazılır; burada istemcinin gönderdiği yok sayılır.
   const { id: requestedId, primaryMuscles, secondaryMuscles, stabilizerMuscles, alternatives: _ignored, ...rest } = parsed.output;
 
   try {
     const file = await readCatalog(files, EXERCISES);
-    if (requestedId && hasUnreadable(file, requestedId)) return brokenRecord(EXERCISES.path);
+    if (requestedId && hasUnreadable(file, requestedId)) return brokenRecord(EXERCISES.path, locale);
     const index = requestedId ? file.items.findIndex((item) => item.id === requestedId) : -1;
     const library = requestedId ? EXERCISES.library.find((item) => item.id === requestedId) : undefined;
     // Kimlikle gelen istek var olan kaydı günceller: silinmiş kimlik (eski sekmeden) yeniden doğmaz.
-    if (requestedId && index < 0 && !library) return problem(404, 'Egzersiz bulunamadı.');
+    if (requestedId && index < 0 && !library) return problem(404, t.exerciseNotFound);
 
     let attachmentId = rest.attachmentId;
     if (rest.deviceId || attachmentId) {
       const device = rest.deviceId ? await findDevice(files, rest.deviceId) : undefined;
-      if (rest.deviceId && !device) return fieldProblem('deviceId', DEVICE_MISSING);
+      if (rest.deviceId && !device) return fieldProblem('deviceId', t.deviceMissing, locale);
       const inherited = index < 0 && library !== undefined && attachmentId === library.attachmentId && rest.deviceId === library.deviceId;
-      if (inherited && attachmentChoiceProblem({ deviceId: rest.deviceId, attachmentId }, device)) attachmentId = undefined;
-      const choice = attachmentChoiceProblem({ deviceId: rest.deviceId, attachmentId }, device);
-      if (choice) return fieldProblem('attachmentId', choice);
+      if (inherited && attachmentChoiceProblem({ deviceId: rest.deviceId, attachmentId }, device, locale)) attachmentId = undefined;
+      const choice = attachmentChoiceProblem({ deviceId: rest.deviceId, attachmentId }, device, locale);
+      if (choice) return fieldProblem('attachmentId', choice, locale);
     }
 
     // Bir kas yalnız bir seviyede: hedef > yardımcı > dengeleyici.
@@ -192,7 +201,7 @@ export async function saveExercise(files: RepoFiles, raw: unknown): Promise<Outc
       const stored = file.items[index] ?? library;
       const entry = { ...input, id: requestedId, alternatives: stored?.alternatives };
       const next = index >= 0 ? file.items.map((item, i) => (i === index ? entry : item)) : [...file.items, entry];
-      await writeCatalog(files, EXERCISES, next, `Egzersiz güncellendi: ${input.title}`, file);
+      await writeCatalog(files, EXERCISES, next, t.exerciseUpdated(input.title), file);
       return ok({ id: requestedId });
     }
 
@@ -200,11 +209,11 @@ export async function saveExercise(files: RepoFiles, raw: unknown): Promise<Outc
     const { ids: retired } = await readRetiredIds(files);
     const taken = new Set([...storedIds(file), ...EXERCISES.library.map((item) => item.id), ...retired.exercises]);
     const id = newRecordId(input.title, taken, exerciseSchema.entries.id);
-    if (!id) return noIdFromName('title');
-    await writeCatalog(files, EXERCISES, [...file.items, { ...input, id }], `Egzersiz eklendi: ${input.title}`, file);
+    if (!id) return noIdFromName('title', locale);
+    await writeCatalog(files, EXERCISES, [...file.items, { ...input, id }], t.exerciseAdded(input.title), file);
     return ok({ id });
   } catch (error) {
-    return failed(error, 'Egzersiz kaydedilemedi.');
+    return failed(error, t.exerciseSaveFailed, locale);
   }
 }
 
@@ -214,30 +223,31 @@ export async function saveExercise(files: RepoFiles, raw: unknown): Promise<Outc
  * yazma), sonra kimliği silinenler listesine girer. Varsayılana dönüşte kimlik hazır kütüphanede
  * yaşar: sabitlemeler kalır, kimlik ayrılmaz.
  */
-export async function deleteExercise(files: RepoFiles, id: string): Promise<Outcome> {
+export async function deleteExercise(files: RepoFiles, id: string, locale: Locale = DEFAULT_LOCALE): Promise<Outcome> {
+  const t = text(locale);
   try {
     const file = await readCatalog(files, EXERCISES);
-    if (hasUnreadable(file, id)) return brokenRecord(EXERCISES.path);
+    if (hasUnreadable(file, id)) return brokenRecord(EXERCISES.path, locale);
     const target = file.items.find((item) => item.id === id);
     const inLibrary = EXERCISES.library.some((item) => item.id === id);
     if (!target) {
-      if (inLibrary) return problem(404, 'Bu egzersiz hazır kütüphaneden geliyor, silinemez.');
-      return finishDeletion(files, 'exercises', exerciseSchema.entries.id, id, 'Egzersiz bulunamadı.');
+      if (inLibrary) return problem(404, t.exerciseBuiltIn);
+      return finishDeletion(files, 'exercises', exerciseSchema.entries.id, id, t.exerciseNotFound, locale);
     }
 
     const rest = file.items.filter((item) => item.id !== id);
     const next = inLibrary ? rest : (dropPinnedAlternative(rest, id) ?? rest);
-    await writeCatalog(files, EXERCISES, next, `Egzersiz silindi: ${target.title}`, file);
-    return inLibrary ? ok() : retire(files, 'exercises', id);
+    await writeCatalog(files, EXERCISES, next, t.exerciseDeleted(target.title), file);
+    return inLibrary ? ok() : retire(files, 'exercises', id, locale);
   } catch (error) {
-    return failed(error, 'Egzersiz silinemedi.');
+    return failed(error, t.exerciseDeleteFailed, locale);
   }
 }
 
 const alternativesSchema = v.object({
   alternatives: v.pipe(
     v.array(v.pipe(v.string(), v.regex(/^[a-z0-9-]{2,60}$/))),
-    v.maxLength(12, 'En fazla 12 muadil sabitlenebilir.'),
+    v.maxLength(12, msg((l) => text(l).alternativesMax)),
   ),
 });
 
@@ -245,29 +255,30 @@ const alternativesSchema = v.object({
  * PT'nin sabitlediği muadilleri yazar (sıra korunur). Hazır bir egzersizde bu, düzenlemede olduğu
  * gibi PT'nin sürümünü oluşturur; kütüphanedeki aparat PT'nin cihaz sürümünde yoksa düşer (bkz. `saveExercise`).
  */
-export async function pinAlternatives(files: RepoFiles, id: string, raw: unknown): Promise<Outcome> {
-  const parsed = v.safeParse(alternativesSchema, raw);
+export async function pinAlternatives(files: RepoFiles, id: string, raw: unknown, locale: Locale = DEFAULT_LOCALE): Promise<Outcome> {
+  const t = text(locale);
+  const parsed = v.safeParse(alternativesSchema, raw, langConfig(locale));
   if (!parsed.success) return problem(400, parsed.issues[0].message);
 
   try {
     const file = await readCatalog(files, EXERCISES);
-    if (hasUnreadable(file, id)) return brokenRecord(EXERCISES.path);
+    if (hasUnreadable(file, id)) return brokenRecord(EXERCISES.path, locale);
     const own = file.items.find((item) => item.id === id);
     const entry = own ?? EXERCISES.library.find((item) => item.id === id);
-    if (!entry) return problem(404, 'Egzersiz bulunamadı.');
+    if (!entry) return problem(404, t.exerciseNotFound);
 
     const known = new Set([...file.items.map((item) => item.id), ...EXERCISES.library.map((item) => item.id)]);
     const alternatives = [...new Set(parsed.output.alternatives)].filter((other) => other !== id && known.has(other));
     let updated = { ...entry, alternatives: alternatives.length > 0 ? alternatives : undefined };
     if (!own && entry.attachmentId) {
       const device = entry.deviceId ? await findDevice(files, entry.deviceId) : undefined;
-      if (attachmentChoiceProblem(entry, device)) updated = { ...updated, attachmentId: undefined };
+      if (attachmentChoiceProblem(entry, device, locale)) updated = { ...updated, attachmentId: undefined };
     }
     const next = own ? file.items.map((item) => (item.id === id ? updated : item)) : [...file.items, updated];
-    await writeCatalog(files, EXERCISES, next, `Muadiller güncellendi: ${entry.title}`, file);
+    await writeCatalog(files, EXERCISES, next, t.alternativesUpdated(entry.title), file);
     return ok({ alternatives });
   } catch (error) {
-    return failed(error, 'Muadiller kaydedilemedi.');
+    return failed(error, t.alternativesFailed, locale);
   }
 }
 
@@ -279,9 +290,10 @@ export async function pinAlternatives(files: RepoFiles, id: string, raw: unknown
  * havuzda olmalı. Güncellemede cihazda artık olmayan aparat (çıkarıldı ya da tür aparat almıyor),
  * bu cihazı kullanan PT egzersizlerinden düşer.
  */
-export async function saveDevice(files: RepoFiles, raw: unknown): Promise<Outcome> {
-  const parsed = v.safeParse(deviceSaveSchema, raw);
-  if (!parsed.success) return invalidInput(parsed.issues);
+export async function saveDevice(files: RepoFiles, raw: unknown, locale: Locale = DEFAULT_LOCALE): Promise<Outcome> {
+  const t = text(locale);
+  const parsed = v.safeParse(deviceSaveSchema, raw, langConfig(locale));
+  if (!parsed.success) return invalidInput(parsed.issues, locale);
 
   const { id: requestedId, ...input } = parsed.output;
   const kind = input.kind;
@@ -304,29 +316,29 @@ export async function saveDevice(files: RepoFiles, raw: unknown): Promise<Outcom
     // Aparatlar havuzdan (hazır + PT'nin) seçilir: silinmiş ya da hiç olmamış kimlik yazılmaz.
     if (attachments.length > 0) {
       const pool = new Set(withLibrary((await readCatalog(files, ATTACHMENTS)).items, ATTACHMENTS.library).map((item) => item.id));
-      const unknown = unknownAttachmentsProblem(attachments, pool);
-      if (unknown) return fieldProblem('attachments', unknown);
+      const unknown = unknownAttachmentsProblem(attachments, pool, locale);
+      if (unknown) return fieldProblem('attachments', unknown, locale);
     }
 
     const file = await readCatalog(files, DEVICES);
     if (requestedId) {
-      if (hasUnreadable(file, requestedId)) return brokenRecord(DEVICES.path);
+      if (hasUnreadable(file, requestedId)) return brokenRecord(DEVICES.path, locale);
       const index = file.items.findIndex((item) => item.id === requestedId);
       const stored = file.items[index] ?? DEVICES.library.find((item) => item.id === requestedId);
-      if (!stored) return problem(404, 'Cihaz bulunamadı.');
+      if (!stored) return problem(404, t.deviceNotFound);
       // Görsel yalnız görsel ucundan yazılır; kayıtlı olan korunur.
       const entry: Device = { ...clean, ...withAttachments, id: requestedId, ...(stored.image ? { image: stored.image } : {}) };
       const next = index >= 0 ? file.items.map((item, i) => (i === index ? entry : item)) : [...file.items, entry];
-      await writeCatalog(files, DEVICES, next, `Cihaz güncellendi: ${clean.name}`, file);
+      await writeCatalog(files, DEVICES, next, t.deviceUpdated(clean.name), file);
       try {
         await updateCatalog(
           files,
           EXERCISES,
           (items) => dropDetachedAttachments(items, requestedId, entry.attachments),
-          `Cihazdan çıkarılan aparat egzersizlerden düştü: ${clean.name}`,
+          t.detachedDropped(clean.name),
         );
       } catch (error) {
-        return stopped(error, 'Cihaz kaydedildi ama cihazdan çıkarılan aparat egzersizlerden düşürülemedi; yeniden kaydet.');
+        return stopped(error, t.detachedDropFailed, locale);
       }
       return ok({ id: requestedId });
     }
@@ -335,11 +347,11 @@ export async function saveDevice(files: RepoFiles, raw: unknown): Promise<Outcom
     const { ids: retired } = await readRetiredIds(files);
     const taken = new Set([...storedIds(file), ...DEVICES.library.map((item) => item.id), ...retired.devices]);
     const id = newRecordId(clean.name, taken, deviceIdSchema);
-    if (!id) return noIdFromName('name');
-    await writeCatalog(files, DEVICES, [...file.items, { ...clean, ...withAttachments, id }], `Cihaz eklendi: ${clean.name}`, file);
+    if (!id) return noIdFromName('name', locale);
+    await writeCatalog(files, DEVICES, [...file.items, { ...clean, ...withAttachments, id }], t.deviceAdded(clean.name), file);
     return ok({ id });
   } catch (error) {
-    return failed(error, 'Cihaz kaydedilemedi.');
+    return failed(error, t.deviceSaveFailed, locale);
   }
 }
 
@@ -352,15 +364,16 @@ export async function saveDevice(files: RepoFiles, raw: unknown): Promise<Outcom
  *
  * Bağlar önce kalkar; yarıda kalırsa cihaz yerinde durur ve silme yeniden denenebilir.
  */
-export async function deleteDevice(files: RepoFiles, id: string): Promise<Outcome> {
+export async function deleteDevice(files: RepoFiles, id: string, locale: Locale = DEFAULT_LOCALE): Promise<Outcome> {
+  const t = text(locale);
   try {
     const file = await readCatalog(files, DEVICES);
-    if (hasUnreadable(file, id)) return brokenRecord(DEVICES.path);
+    if (hasUnreadable(file, id)) return brokenRecord(DEVICES.path, locale);
     const target = file.items.find((item) => item.id === id);
     const library = DEVICES.library.find((item) => item.id === id);
     if (!target) {
-      if (library) return problem(404, 'Bu cihaz hazır katalogdan geliyor, silinemez.');
-      return finishDeletion(files, 'devices', deviceIdSchema, id, 'Cihaz bulunamadı.');
+      if (library) return problem(404, t.deviceBuiltIn);
+      return finishDeletion(files, 'devices', deviceIdSchema, id, t.deviceNotFound, locale);
     }
 
     let unlinked = false;
@@ -369,54 +382,45 @@ export async function deleteDevice(files: RepoFiles, id: string): Promise<Outcom
         files,
         EXERCISES,
         (items) => (library ? dropDetachedAttachments(items, id, library.attachments) : dropDeviceFromExercises(items, id)),
-        library ? `Cihazın hazır sürümünde olmayan aparat egzersizlerden düştü: ${target.name}` : `Cihaz egzersizlerden çıkarıldı: ${target.name}`,
+        library ? t.deviceResetDropped(target.name) : t.deviceUnlinked(target.name),
       );
     } catch (error) {
-      return stopped(
-        error,
-        library
-          ? 'Cihaz varsayılana dönmedi: hazır sürümde olmayan aparat egzersizlerden düşürülemedi.'
-          : 'Cihaz silinmedi: bağlı egzersizlerden çıkarılamadı.',
-      );
+      return stopped(error, library ? t.deviceResetStopped : t.deviceDeleteStopped, locale);
     }
 
     try {
-      await writeCatalog(files, DEVICES, file.items.filter((item) => item.id !== id), `Cihaz silindi: ${target.name}`, file);
+      await writeCatalog(files, DEVICES, file.items.filter((item) => item.id !== id), t.deviceDeleted(target.name), file);
     } catch (error) {
       if (!unlinked) throw error;
-      return stopped(
-        error,
-        library
-          ? 'Hazır sürümde olmayan aparat egzersizlerden düştü ama cihaz varsayılana dönmedi.'
-          : 'Cihaz bağlı egzersizlerden çıkarıldı ama silinemedi.',
-      );
+      return stopped(error, library ? t.deviceResetPartial : t.deviceDeletePartial, locale);
     }
-    if (target.image) await removeMedia(files, target.image, 'Cihaz görseli silindi');
-    return library ? ok() : retire(files, 'devices', id);
+    if (target.image) await removeMedia(files, target.image, t.deviceImageFileRemoved);
+    return library ? ok() : retire(files, 'devices', id, locale);
   } catch (error) {
-    return failed(error, 'Cihaz silinemedi.');
+    return failed(error, t.deviceDeleteFailed, locale);
   }
 }
 
 // ── Aparatlar ──────────────────────────────────────────────────────────────────
 
 /** Yeni aparat ya da (kimlikle) güncelleme. Hazır bir aparatı değiştirmek PT'nin sürümünü oluşturur. */
-export async function saveAttachment(files: RepoFiles, raw: unknown): Promise<Outcome> {
-  const parsed = v.safeParse(attachmentSaveSchema, raw);
-  if (!parsed.success) return invalidInput(parsed.issues);
+export async function saveAttachment(files: RepoFiles, raw: unknown, locale: Locale = DEFAULT_LOCALE): Promise<Outcome> {
+  const t = text(locale);
+  const parsed = v.safeParse(attachmentSaveSchema, raw, langConfig(locale));
+  if (!parsed.success) return invalidInput(parsed.issues, locale);
 
   const { id: requestedId, name } = parsed.output;
   try {
     const file = await readCatalog(files, ATTACHMENTS);
     if (requestedId) {
-      if (hasUnreadable(file, requestedId)) return brokenRecord(ATTACHMENTS.path);
+      if (hasUnreadable(file, requestedId)) return brokenRecord(ATTACHMENTS.path, locale);
       const index = file.items.findIndex((item) => item.id === requestedId);
       const stored = file.items[index] ?? ATTACHMENTS.library.find((item) => item.id === requestedId);
-      if (!stored) return problem(404, 'Aparat bulunamadı.');
+      if (!stored) return problem(404, t.attachmentNotFound);
       // Fotoğraf yalnız görsel ucundan yazılır; kayıtlı olan korunur.
       const entry = { id: requestedId, name, ...(stored.image ? { image: stored.image } : {}) };
       const next = index >= 0 ? file.items.map((item, i) => (i === index ? entry : item)) : [...file.items, entry];
-      await writeCatalog(files, ATTACHMENTS, next, `Aparat güncellendi: ${name}`, file);
+      await writeCatalog(files, ATTACHMENTS, next, t.attachmentUpdated(name), file);
       return ok({ id: requestedId });
     }
 
@@ -429,11 +433,11 @@ export async function saveAttachment(files: RepoFiles, raw: unknown): Promise<Ou
       ...retired.attachments,
     ]);
     const id = newRecordId(name, taken, attachmentIdSchema);
-    if (!id) return noIdFromName('name');
-    await writeCatalog(files, ATTACHMENTS, [...file.items, { id, name }], `Aparat eklendi: ${name}`, file);
+    if (!id) return noIdFromName('name', locale);
+    await writeCatalog(files, ATTACHMENTS, [...file.items, { id, name }], t.attachmentAdded(name), file);
     return ok({ id });
   } catch (error) {
-    return failed(error, 'Aparat kaydedilemedi.');
+    return failed(error, t.attachmentSaveFailed, locale);
   }
 }
 
@@ -445,52 +449,48 @@ export async function saveAttachment(files: RepoFiles, raw: unknown): Promise<Ou
  * Bağlar önce kalkar (cihazlar, sonra egzersizler); yarıda kalırsa aparat yerinde durur ve silme
  * yeniden denenebilir: bağı kalmış silinmiş aparat olmaz.
  */
-export async function deleteAttachment(files: RepoFiles, id: string): Promise<Outcome> {
+export async function deleteAttachment(files: RepoFiles, id: string, locale: Locale = DEFAULT_LOCALE): Promise<Outcome> {
+  const t = text(locale);
   try {
     const file = await readCatalog(files, ATTACHMENTS);
-    if (hasUnreadable(file, id)) return brokenRecord(ATTACHMENTS.path);
+    if (hasUnreadable(file, id)) return brokenRecord(ATTACHMENTS.path, locale);
     const target = file.items.find((item) => item.id === id);
     const inLibrary = ATTACHMENTS.library.some((item) => item.id === id);
     if (!target) {
-      if (inLibrary) return problem(404, 'Bu aparat hazır havuzdan geliyor, silinemez.');
-      return finishDeletion(files, 'attachments', attachmentIdSchema, id, 'Aparat bulunamadı.');
+      if (inLibrary) return problem(404, t.attachmentBuiltIn);
+      return finishDeletion(files, 'attachments', attachmentIdSchema, id, t.attachmentNotFound, locale);
     }
 
     let unlinked = false;
     if (!inLibrary) {
       try {
-        unlinked = await updateCatalog(files, DEVICES, (items) => dropAttachmentFromDevices(items, id), `Aparat cihazlardan çıkarıldı: ${target.name}`);
+        unlinked = await updateCatalog(files, DEVICES, (items) => dropAttachmentFromDevices(items, id), t.attachmentUnlinkedDevices(target.name));
       } catch (error) {
-        return stopped(error, 'Aparat silinmedi: seçili olduğu cihazlardan çıkarılamadı.');
+        return stopped(error, t.attachmentDeleteStoppedDevices, locale);
       }
       try {
         const changed = await updateCatalog(
           files,
           EXERCISES,
           (items) => dropAttachmentFromExercises(items, id),
-          `Aparat egzersizlerden çıkarıldı: ${target.name}`,
+          t.attachmentUnlinkedExercises(target.name),
         );
         unlinked ||= changed;
       } catch (error) {
-        return stopped(
-          error,
-          unlinked
-            ? 'Aparat silinmedi: cihazlardan çıkarıldı ama seçili olduğu egzersizlerden çıkarılamadı.'
-            : 'Aparat silinmedi: seçili olduğu egzersizlerden çıkarılamadı.',
-        );
+        return stopped(error, unlinked ? t.attachmentDeleteStoppedBoth : t.attachmentDeleteStoppedExercises, locale);
       }
     }
 
     try {
-      await writeCatalog(files, ATTACHMENTS, file.items.filter((item) => item.id !== id), `Aparat silindi: ${target.name}`, file);
+      await writeCatalog(files, ATTACHMENTS, file.items.filter((item) => item.id !== id), t.attachmentDeleted(target.name), file);
     } catch (error) {
       if (!unlinked) throw error;
-      return stopped(error, 'Aparat bağlı kayıtlarından çıkarıldı ama silinemedi.');
+      return stopped(error, t.attachmentDeletePartial, locale);
     }
-    if (target.image) await removeMedia(files, target.image, 'Aparat fotoğrafı silindi');
-    return inLibrary ? ok() : retire(files, 'attachments', id);
+    if (target.image) await removeMedia(files, target.image, t.attachmentPhotoFileRemoved);
+    return inLibrary ? ok() : retire(files, 'attachments', id, locale);
   } catch (error) {
-    return failed(error, 'Aparat silinemedi.');
+    return failed(error, t.attachmentDeleteFailed, locale);
   }
 }
 
@@ -510,29 +510,35 @@ type ImageText = {
   removeFailed: string;
 };
 
-const DEVICE_IMAGE: ImageText = {
-  folder: 'media/devices',
-  notFound: 'Cihaz bulunamadı.',
-  upload: 'Cihaz görseli',
-  updated: 'Cihaz görseli güncellendi',
-  oldRemoved: 'Eski cihaz görseli kaldırıldı',
-  removed: 'Cihaz görseli kaldırıldı',
-  fileRemoved: 'Cihaz görseli silindi',
-  uploadFailed: 'Görsel yüklenemedi.',
-  removeFailed: 'Görsel kaldırılamadı.',
-};
+function deviceImageText(locale: Locale): ImageText {
+  const t = text(locale);
+  return {
+    folder: 'media/devices',
+    notFound: t.deviceNotFound,
+    upload: t.deviceImageUpload,
+    updated: t.deviceImageUpdated,
+    oldRemoved: t.deviceImageOldRemoved,
+    removed: t.deviceImageRemoved,
+    fileRemoved: t.deviceImageFileRemoved,
+    uploadFailed: t.imageUploadFailed,
+    removeFailed: t.imageRemoveFailed,
+  };
+}
 
-const ATTACHMENT_IMAGE: ImageText = {
-  folder: 'media/attachments',
-  notFound: 'Aparat bulunamadı.',
-  upload: 'Aparat fotoğrafı',
-  updated: 'Aparat fotoğrafı güncellendi',
-  oldRemoved: 'Eski aparat fotoğrafı kaldırıldı',
-  removed: 'Aparat fotoğrafı kaldırıldı',
-  fileRemoved: 'Aparat fotoğrafı silindi',
-  uploadFailed: 'Aparat fotoğrafı yüklenemedi.',
-  removeFailed: 'Aparat fotoğrafı kaldırılamadı.',
-};
+function attachmentImageText(locale: Locale): ImageText {
+  const t = text(locale);
+  return {
+    folder: 'media/attachments',
+    notFound: t.attachmentNotFound,
+    upload: t.attachmentPhotoUpload,
+    updated: t.attachmentPhotoUpdated,
+    oldRemoved: t.attachmentPhotoOldRemoved,
+    removed: t.attachmentPhotoRemoved,
+    fileRemoved: t.attachmentPhotoFileRemoved,
+    uploadFailed: t.attachmentPhotoUploadFailed,
+    removeFailed: t.attachmentPhotoRemoveFailed,
+  };
+}
 
 /**
  * Görsel yükleme (türü ve içeriği rota denetler): dosya `<klasör>/<kimlik>-<özet>.<uzantı>` olarak
@@ -541,54 +547,63 @@ const ATTACHMENT_IMAGE: ImageText = {
 async function saveImageOf<T extends ImageRecord>(
   files: RepoFiles,
   catalog: Catalog<T>,
-  text: ImageText,
+  images: ImageText,
   id: string,
   bytes: Uint8Array,
   extension: string,
+  locale: Locale,
 ): Promise<Outcome> {
   try {
     const file = await readCatalog(files, catalog);
-    if (hasUnreadable(file, id)) return brokenRecord(catalog.path);
+    if (hasUnreadable(file, id)) return brokenRecord(catalog.path, locale);
     const own = file.items.find((item) => item.id === id);
     const entry = own ?? catalog.library.find((item) => item.id === id);
-    if (!entry) return problem(404, text.notFound);
+    if (!entry) return problem(404, images.notFound);
 
     const digest = createHash('sha256').update(bytes).digest('hex').slice(0, 10);
-    const path = `${text.folder}/${id}-${digest}.${extension}`;
+    const path = `${images.folder}/${id}-${digest}.${extension}`;
     const existing = await files.getFileSha(path);
-    await files.writeBinary(path, bytes, { sha: existing ?? undefined, message: `${text.upload}: ${entry.name}` });
+    await files.writeBinary(path, bytes, { sha: existing ?? undefined, message: `${images.upload}: ${entry.name}` });
 
     const updated = { ...entry, image: path };
     const next = own ? file.items.map((item) => (item.id === id ? updated : item)) : [...file.items, updated];
-    await writeCatalog(files, catalog, next, `${text.updated}: ${entry.name}`, file);
-    if (entry.image && entry.image !== path) await removeMedia(files, entry.image, text.oldRemoved);
+    await writeCatalog(files, catalog, next, `${images.updated}: ${entry.name}`, file);
+    if (entry.image && entry.image !== path) await removeMedia(files, entry.image, images.oldRemoved);
     return ok({ image: path });
   } catch (error) {
-    return failed(error, text.uploadFailed);
+    return failed(error, images.uploadFailed, locale);
   }
 }
 
 /** Görseli kaldırır: kayıttan düşer, dosya silinir. Hazır kayıtta ya da görsel yoksa yapılacak iş yok. */
-async function removeImageOf<T extends ImageRecord>(files: RepoFiles, catalog: Catalog<T>, text: ImageText, id: string): Promise<Outcome> {
+async function removeImageOf<T extends ImageRecord>(
+  files: RepoFiles,
+  catalog: Catalog<T>,
+  images: ImageText,
+  id: string,
+  locale: Locale,
+): Promise<Outcome> {
   try {
     const file = await readCatalog(files, catalog);
-    if (hasUnreadable(file, id)) return brokenRecord(catalog.path);
+    if (hasUnreadable(file, id)) return brokenRecord(catalog.path, locale);
     const entry = file.items.find((item) => item.id === id);
     if (!entry?.image) return ok();
 
     const image = entry.image;
     const next = file.items.map((item) => (item.id === id ? { ...item, image: undefined } : item));
-    await writeCatalog(files, catalog, next, `${text.removed}: ${entry.name}`, file);
-    await removeMedia(files, image, text.fileRemoved);
+    await writeCatalog(files, catalog, next, `${images.removed}: ${entry.name}`, file);
+    await removeMedia(files, image, images.fileRemoved);
     return ok();
   } catch (error) {
-    return failed(error, text.removeFailed);
+    return failed(error, images.removeFailed, locale);
   }
 }
 
-export const saveDeviceImage = (files: RepoFiles, id: string, bytes: Uint8Array, extension: string) =>
-  saveImageOf(files, DEVICES, DEVICE_IMAGE, id, bytes, extension);
-export const removeDeviceImage = (files: RepoFiles, id: string) => removeImageOf(files, DEVICES, DEVICE_IMAGE, id);
-export const saveAttachmentImage = (files: RepoFiles, id: string, bytes: Uint8Array, extension: string) =>
-  saveImageOf(files, ATTACHMENTS, ATTACHMENT_IMAGE, id, bytes, extension);
-export const removeAttachmentImage = (files: RepoFiles, id: string) => removeImageOf(files, ATTACHMENTS, ATTACHMENT_IMAGE, id);
+export const saveDeviceImage = (files: RepoFiles, id: string, bytes: Uint8Array, extension: string, locale: Locale = DEFAULT_LOCALE) =>
+  saveImageOf(files, DEVICES, deviceImageText(locale), id, bytes, extension, locale);
+export const removeDeviceImage = (files: RepoFiles, id: string, locale: Locale = DEFAULT_LOCALE) =>
+  removeImageOf(files, DEVICES, deviceImageText(locale), id, locale);
+export const saveAttachmentImage = (files: RepoFiles, id: string, bytes: Uint8Array, extension: string, locale: Locale = DEFAULT_LOCALE) =>
+  saveImageOf(files, ATTACHMENTS, attachmentImageText(locale), id, bytes, extension, locale);
+export const removeAttachmentImage = (files: RepoFiles, id: string, locale: Locale = DEFAULT_LOCALE) =>
+  removeImageOf(files, ATTACHMENTS, attachmentImageText(locale), id, locale);

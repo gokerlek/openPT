@@ -1,9 +1,14 @@
 import 'server-only';
 import * as v from 'valibot';
+import { DEFAULT_LOCALE, type Locale } from '../i18n/locale.ts';
+import { ptProgramMessages } from '../i18n/messages/pt-program/index.ts';
+import { messageOf } from '../i18n/errors.ts';
+import { langConfig } from '../i18n/valibot.ts';
 import type { DeviceWithSource } from './devices';
 import type { ExerciseWithSource } from './exercises';
 import { appRepo, GithubError } from './github/client';
 import { deleteFile, getFileSha, listDir, readJson, writeJson } from './github/files';
+import { LocalizedGithubError } from './localized-github-error';
 import type { TemplateOption } from './program-plan';
 import { TEMPLATE_ID_PATTERN, templateSchema, type Template } from './schemas/template';
 import type { EditorDevice, PickerExercise } from './template-edit';
@@ -24,7 +29,7 @@ const READ_CHUNK = 8;
 
 /** Dosya yolu; kimlik kalıba uymuyorsa (ör. `../clients`) istek hiç çıkmaz. */
 export function templatePath(id: string): string {
-  if (!TEMPLATE_ID_PATTERN.test(id)) throw new GithubError(`Geçersiz şablon kimliği: ${id}`, 400);
+  if (!TEMPLATE_ID_PATTERN.test(id)) throw new LocalizedGithubError((l) => ptProgramMessages(l).templatesLib.invalidId(id), 400);
   return `${TEMPLATES_DIR}/${id}.json`;
 }
 
@@ -33,22 +38,23 @@ export type TemplateFile =
   /** Okunamayan dosya (bozuk JSON, şemaya uymuyor, kimlik dosya adıyla uyuşmuyor). */
   | { sha: string; template: null; name: string | null; problem: string; id: string };
 
-function parseTemplateFile(id: string, content: unknown, sha: string): TemplateFile {
+function parseTemplateFile(id: string, content: unknown, sha: string, locale: Locale): TemplateFile {
+  const t = ptProgramMessages(locale).templatesLib;
   const raw = content && typeof content === 'object' ? (content as Record<string, unknown>) : {};
   const name = typeof raw.name === 'string' ? raw.name : null;
-  const parsed = v.safeParse(templateSchema, content);
+  const parsed = v.safeParse(templateSchema, content, langConfig(locale));
   if (!parsed.success) {
     const issue = parsed.issues[0];
-    return { sha, template: null, name, id, problem: `${v.getDotPath(issue) ?? 'dosya'}: ${issue.message}` };
+    return { sha, template: null, name, id, problem: `${v.getDotPath(issue) ?? t.fileFallback}: ${issue.message}` };
   }
   if (parsed.output.id !== id) {
-    return { sha, template: null, name, id, problem: 'Dosyadaki kimlik dosya adıyla uyuşmuyor.' };
+    return { sha, template: null, name, id, problem: t.idMismatch };
   }
   return { sha, template: parsed.output, name: parsed.output.name, problem: null };
 }
 
-/** Taze okuma. `null`: yok ya da kimlik geçersiz. Bozuk dosya hata değil, sorunuyla döner. */
-export async function readTemplateFile(id: string): Promise<TemplateFile | null> {
+/** Taze okuma. `null`: yok ya da kimlik geçersiz. Bozuk dosya hata değil, sorunuyla döner (sorun okuyanın dilinde). */
+export async function readTemplateFile(id: string, locale: Locale = DEFAULT_LOCALE): Promise<TemplateFile | null> {
   if (!TEMPLATE_ID_PATTERN.test(id)) return null;
   const path = templatePath(id);
   let stored: Awaited<ReturnType<typeof readJson<unknown>>>;
@@ -58,17 +64,21 @@ export async function readTemplateFile(id: string): Promise<TemplateFile | null>
     // Bozuk JSON: silinebilsin ya da üzerine yazılabilsin diye sha ayrıca alınır.
     if (error instanceof GithubError && error.status === 500) {
       const sha = await getFileSha(appRepo(), path);
-      return sha ? { sha, template: null, name: null, id, problem: 'Dosya JSON olarak okunamadı.' } : null;
+      return sha ? { sha, template: null, name: null, id, problem: ptProgramMessages(locale).templatesLib.unreadable } : null;
     }
     throw error;
   }
-  return stored ? parseTemplateFile(id, stored.content, stored.sha) : null;
+  return stored ? parseTemplateFile(id, stored.content, stored.sha, locale) : null;
 }
 
-/** İçerik özeti → okunmuş dosya. Ekleme sırasıyla en eskisi düşer. */
+/**
+ * İçerik özeti → okunmuş dosya. Ekleme sırasıyla en eskisi düşer. Yalnız okunabilen şablonlar tutulur: okunamayanın
+ * sorun metni okuyanın dilindedir, önbellekte dil karışmasın.
+ */
 const cache = new Map<string, TemplateFile>();
 
 function remember(file: TemplateFile) {
+  if (!file.template) return;
   cache.delete(file.sha);
   cache.set(file.sha, file);
   while (cache.size > CACHE_LIMIT) {
@@ -87,7 +97,7 @@ function sortKey(file: TemplateFile): string {
  * 8'erli okunur. Tek dosyanın hatası listeyi düşürmez (okunamayan olarak görünür);
  * klasör okunamazsa hata fırlar.
  */
-export async function listTemplates(): Promise<TemplateFile[]> {
+export async function listTemplates(locale: Locale = DEFAULT_LOCALE): Promise<TemplateFile[]> {
   const entries = (await listDir(appRepo(), TEMPLATES_DIR)).filter((entry) => entry.type === 'file' && FILE_PATTERN.test(entry.name));
   const files = new Map<string, TemplateFile>();
   const misses = entries.filter((entry) => {
@@ -101,13 +111,13 @@ export async function listTemplates(): Promise<TemplateFile[]> {
       misses.slice(start, start + READ_CHUNK).map(async (entry) => {
         const id = entry.name.replace(/\.json$/, '');
         try {
-          const file = await readTemplateFile(id);
+          const file = await readTemplateFile(id, locale);
           if (!file) return;
           // Okunan sürümün sha'sıyla saklanır: liste ile okuma arasında değiştiyse bir sonraki liste yeniden okur.
           remember(file);
           files.set(entry.name, file);
         } catch (error) {
-          const message = error instanceof Error ? error.message : 'Okunamadı.';
+          const message = messageOf(error, locale) ?? ptProgramMessages(locale).templatesLib.readFailed;
           files.set(entry.name, { sha: entry.sha, template: null, name: null, id, problem: message });
         }
       }),

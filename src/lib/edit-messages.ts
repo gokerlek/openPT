@@ -1,9 +1,14 @@
+import { DEFAULT_LOCALE, type Locale } from '../i18n/locale.ts';
+import { ptProgramMessages } from '../i18n/messages/pt-program/index.ts';
+import { lower } from '../i18n/text.ts';
 import type { JoiningOutcome } from './drop-target.ts';
 import type { AddToGroupOutcome, CombineOutcome, GroupCheck } from './template-edit.ts';
 import { setsText, type SetSpec } from './set-plan.ts';
-import { BLOCK_KIND_LABELS, type TemplateBlock } from './template-plan.ts';
+import { blockKindLabels, type TemplateBlock } from './template-plan.ts';
 import type { CardioKind } from './cardio.ts';
 import type { TrackingType } from './progression.ts';
+
+export { dativeOf } from '../i18n/messages/pt-program/dative.ts';
 
 /**
  * Düzenleyicinin duyuru ve toast cümleleri (canlı bölge, "Geri al" bildirimleri): taşıma,
@@ -30,21 +35,21 @@ function placeOf(blocks: readonly TemplateBlock[], itemId: string): Place | null
 }
 
 /** Grubun adı: türü ve sırası ("Süperset 2"). */
-function groupName(block: TemplateBlock, blockIndex: number): string {
-  return `${BLOCK_KIND_LABELS[block.kind]} ${blockIndex + 1}`;
+function groupName(block: TemplateBlock, blockIndex: number, locale: Locale): string {
+  return `${blockKindLabels(locale)[block.kind]} ${blockIndex + 1}`;
 }
 
 /** Taşınan grubun anlatımı: "Süperset (Bench Press + Cable Row)", uzun grupta ilk ikisi ve "…". */
-function groupDescription(block: TemplateBlock, titleOf: TitleOf): string {
+function groupDescription(block: TemplateBlock, titleOf: TitleOf, locale: Locale): string {
   const titles = block.rows.map((row) => titleOf(row.exerciseId));
-  return `${BLOCK_KIND_LABELS[block.kind]} (${titles.slice(0, 2).join(' + ')}${titles.length > 2 ? ' + …' : ''})`;
+  return `${blockKindLabels(locale)[block.kind]} (${titles.slice(0, 2).join(' + ')}${titles.length > 2 ? ' + …' : ''})`;
 }
 
 /** Öğenin adı: satırda hareketin, grupta grubun adı. */
-export function titleOfItem(blocks: readonly TemplateBlock[], itemId: string, titleOf: TitleOf): string {
+export function titleOfItem(blocks: readonly TemplateBlock[], itemId: string, titleOf: TitleOf, locale: Locale = DEFAULT_LOCALE): string {
   for (const [blockIndex, block] of blocks.entries()) {
     const only = block.rows[0];
-    if (block.id === itemId) return block.kind === 'single' && only ? titleOf(only.exerciseId) : groupName(block, blockIndex);
+    if (block.id === itemId) return block.kind === 'single' && only ? titleOf(only.exerciseId) : groupName(block, blockIndex, locale);
     const row = block.rows.find((item) => item.id === itemId);
     if (row) return titleOf(row.exerciseId);
   }
@@ -56,21 +61,28 @@ export function titleOfItem(blocks: readonly TemplateBlock[], itemId: string, ti
  * 1. sıraya taşındı", "Cable Row gruptan çıktı · 4. sırada", "Squat gruba katıldı (Devre 2)",
  * tür değiştiyse "Squat gruba katıldı · grup devre oldu".
  */
-export function moveMessage(before: readonly TemplateBlock[], after: readonly TemplateBlock[], itemId: string, titleOf: TitleOf): string {
+export function moveMessage(
+  before: readonly TemplateBlock[],
+  after: readonly TemplateBlock[],
+  itemId: string,
+  titleOf: TitleOf,
+  locale: Locale = DEFAULT_LOCALE,
+): string {
+  const t = ptProgramMessages(locale).edit;
   const group = after.find((block) => block.id === itemId && block.kind !== 'single');
-  const title = group ? groupDescription(group, titleOf) : titleOfItem(after, itemId, titleOf);
+  const title = group ? groupDescription(group, titleOf, locale) : titleOfItem(after, itemId, titleOf, locale);
   const from = placeOf(before, itemId);
   const to = placeOf(after, itemId);
   if (!to) return '';
   if (to.level === 'top') {
-    return from?.level === 'group' ? `${title} gruptan çıktı · ${to.index + 1}. sırada` : `${title} ${to.index + 1}. sıraya taşındı`;
+    return from?.level === 'group' ? t.leftGroup(title, to.index + 1) : t.movedTo(title, to.index + 1);
   }
-  if (from?.level === 'group' && from.block.id === to.block.id) return `${title} grupta ${to.index + 1}. sıraya taşındı`;
+  if (from?.level === 'group' && from.block.id === to.block.id) return t.movedInGroup(title, to.index + 1);
   const previousKind = before.find((block) => block.id === to.block.id)?.kind;
   if (previousKind && previousKind !== to.block.kind) {
-    return `${title} gruba katıldı · grup ${BLOCK_KIND_LABELS[to.block.kind].toLocaleLowerCase('tr-TR')} oldu`;
+    return t.joinedAndBecame(title, lower(locale, blockKindLabels(locale)[to.block.kind]));
   }
-  return `${title} gruba katıldı (${groupName(to.block, to.blockIndex)})`;
+  return t.joined(title, groupName(to.block, to.blockIndex, locale));
 }
 
 /**
@@ -85,23 +97,33 @@ export function combineMessage(
   targetId: string,
   outcome: JoiningOutcome,
   titleOf: TitleOf,
+  locale: Locale = DEFAULT_LOCALE,
 ): string {
-  const source = titleOfItem(before, sourceId, titleOf);
-  if (outcome === 'superset') return `Süperset yapıldı: ${titleOfItem(before, targetId, titleOf)} + ${source}`;
+  const t = ptProgramMessages(locale).edit;
+  const source = titleOfItem(before, sourceId, titleOf, locale);
+  if (outcome === 'superset') return t.madeSuperset(`${titleOfItem(before, targetId, titleOf, locale)} + ${source}`);
   const holdsTarget = (block: TemplateBlock) => block.id === targetId || block.rows.some((row) => row.id === targetId);
   const group = before.find(holdsTarget);
   if (!group) return '';
-  if (outcome === 'becomes_circuit') return `${BLOCK_KIND_LABELS[group.kind]} devreye dönüştü`;
+  if (outcome === 'becomes_circuit') return t.becameCircuit(blockKindLabels(locale)[group.kind]);
   const blockIndex = after.findIndex(holdsTarget);
   const joined = after[blockIndex];
-  return joined ? `${source} gruba eklendi (${groupName(joined, blockIndex)})` : '';
+  return joined ? t.addedToGroupAs(source, groupName(joined, blockIndex, locale)) : '';
 }
 
 /** Klavyeyle taşımada öğe zaten uçta: "Squat zaten ilk sırada", üyede "grupta zaten son sırada". */
-export function edgeMessage(blocks: readonly TemplateBlock[], itemId: string, towardsStart: boolean, titleOf: TitleOf): string {
-  const title = titleOfItem(blocks, itemId, titleOf);
-  const where = placeOf(blocks, itemId)?.level === 'group' ? 'grupta zaten' : 'zaten';
-  return `${title} ${where} ${towardsStart ? 'ilk' : 'son'} sırada`;
+export function edgeMessage(
+  blocks: readonly TemplateBlock[],
+  itemId: string,
+  towardsStart: boolean,
+  titleOf: TitleOf,
+  locale: Locale = DEFAULT_LOCALE,
+): string {
+  const t = ptProgramMessages(locale).edit;
+  const title = titleOfItem(blocks, itemId, titleOf, locale);
+  const inGroup = placeOf(blocks, itemId)?.level === 'group';
+  if (towardsStart) return inGroup ? t.firstAlreadyInGroup(title) : t.firstAlready(title);
+  return inGroup ? t.lastAlreadyInGroup(title) : t.lastAlready(title);
 }
 
 /** Seçili blokların hareket sayısı (gruplardaki üyeler dahil; toast'lardaki sayı). */
@@ -114,17 +136,23 @@ export function selectedRowCount(blocks: readonly TemplateBlock[], blockIds: Rea
  * kopya sığmıyorsa sonuna eklenir ("Kopyala" pasif). Pasif düğmenin nedeni burada yazar. Hiç
  * seçim yokken seçimin ne işe yaradığını da söyler ("2 hareket seç, süperset olsun").
  */
-export function selectionStatus(count: number, check: GroupCheck, pointer: 'touch' | 'mouse' = 'touch'): string {
-  if (count === 0) return `Seçmek için kartlara ${pointer === 'touch' ? 'dokun' : 'tıkla'} · 2 hareket seç, süperset olsun`;
+export function selectionStatus(
+  count: number,
+  check: GroupCheck,
+  pointer: 'touch' | 'mouse' = 'touch',
+  locale: Locale = DEFAULT_LOCALE,
+): string {
+  const t = ptProgramMessages(locale).edit;
+  if (count === 0) return pointer === 'touch' ? t.selectHintTouch : t.selectHintMouse;
   return check === 'superset'
-    ? `${count} seçili · süperset olur`
+    ? t.selectedSuperset(count)
     : check === 'circuit'
-      ? `${count} seçili · devre olur`
+      ? t.selectedCircuit(count)
       : check === 'not_singles'
-        ? 'Grup seçili: yalnız tek hareketler gruplanır'
+        ? t.selectedGroup
         : check === 'too_many'
-          ? `${count} seçili · grup en çok 8 hareket`
-          : `${count} seçili · gruplamak için en az 2 hareket`;
+          ? t.selectedTooMany(count)
+          : t.selectedTooFew(count);
 }
 
 /** "Grupla" sonrası (toast ve duyuru): "Süperset yapıldı: Squat + Bench Press", "Devre yapıldı (4 hareket)". */
@@ -133,30 +161,22 @@ export function groupedMessage(
   blockIds: ReadonlySet<string>,
   kind: 'superset' | 'circuit',
   titleOf: TitleOf,
+  locale: Locale = DEFAULT_LOCALE,
 ): string {
+  const t = ptProgramMessages(locale).edit;
   const titles = blocks.filter((block) => blockIds.has(block.id)).flatMap((block) => block.rows.map((row) => titleOf(row.exerciseId)));
-  return kind === 'superset' ? `Süperset yapıldı: ${titles.join(' + ')}` : `Devre yapıldı (${titles.length} hareket)`;
+  return kind === 'superset' ? t.madeSuperset(titles.join(' + ')) : t.madeCircuit(titles.length);
 }
 
 /** Toplu kopya ve silmenin cümlesi: "3 hareket kopyalandı", "1 hareket silindi". */
-export function bulkMessage(rows: number, action: 'copied' | 'removed'): string {
-  return `${rows} hareket ${action === 'copied' ? 'kopyalandı' : 'silindi'}`;
-}
-
-/** Sayıya gelen yönelme eki ("2'ye", "6'ya", "3'e", "10'a"): son okunan sözcüğün ünlüsüne göre. */
-export function dativeOf(value: number): string {
-  const n = Math.abs(Math.trunc(value));
-  const units = ["'a", "'e", "'ye", "'e", "'e", "'e", "'ya", "'ye", "'e", "'a"];
-  const tens = ["'a", "'a", "'ye", "'a", "'a", "'ye", "'a", "'e", "'e", "'a"];
-  if (n === 0) return `${n}'a`;
-  if (n % 100 === 0) return `${n}'e`;
-  const unit = n % 10;
-  return `${n}${unit === 0 ? tens[Math.floor(n / 10) % 10] : units[unit]}`;
+export function bulkMessage(rows: number, action: 'copied' | 'removed', locale: Locale = DEFAULT_LOCALE): string {
+  const t = ptProgramMessages(locale).edit;
+  return action === 'copied' ? t.bulkCopied(rows) : t.bulkRemoved(rows);
 }
 
 /** "Gruba hareket ekle" sheet'inin başlığı: "Süperset 2'ye ekle". */
-export function addToGroupTitle(kind: TemplateBlock['kind'], blockIndex: number): string {
-  return `${BLOCK_KIND_LABELS[kind]} ${dativeOf(blockIndex + 1)} ekle`;
+export function addToGroupTitle(kind: TemplateBlock['kind'], blockIndex: number, locale: Locale = DEFAULT_LOCALE): string {
+  return ptProgramMessages(locale).edit.addToGroupTitle(blockKindLabels(locale)[kind], blockIndex + 1);
 }
 
 /**
@@ -171,24 +191,25 @@ export type DeviceChange =
   | { kind: 'device'; device: string; title: string }
   | { kind: 'reset'; device: string | null; title: string };
 
-export function deviceChangeMessage(change: DeviceChange): string {
+export function deviceChangeMessage(change: DeviceChange, locale: Locale = DEFAULT_LOCALE): string {
+  const t = ptProgramMessages(locale).edit;
   switch (change.kind) {
     case 'swapped':
-      return `${change.device} → ${change.to} (${change.from} yerine)`;
+      return t.deviceSwapped(change.device, change.to, change.from);
     case 'device':
-      return `${change.title} · cihaz: ${change.device}`;
+      return t.deviceSet(change.title, change.device);
     case 'reset':
-      return change.device ? `${change.title} · egzersizin cihazı: ${change.device}` : `${change.title} · cihazsız`;
+      return change.device ? t.deviceReset(change.title, change.device) : t.deviceNone(change.title);
   }
 }
 
 /** "Üstüne bırak"ın sonuç hapı (hedefte ve sürüklenen kartın üstünde). */
-export const DROP_OUTCOME_LABELS: Record<Exclude<CombineOutcome, 'not_allowed'>, string> = {
-  superset: 'Süperset yap',
-  becomes_circuit: 'Ekle · devre olur',
-  join: 'Gruba ekle',
-  full: 'Grup dolu (8)',
-};
+export function dropOutcomeLabels(locale: Locale = DEFAULT_LOCALE): Record<Exclude<CombineOutcome, 'not_allowed'>, string> {
+  return ptProgramMessages(locale).edit.dropOutcomes;
+}
+
+/** Türkçe adlar (eski çağrılar ve testler); arayüz `dropOutcomeLabels(locale)` kullanır. */
+export const DROP_OUTCOME_LABELS: Record<Exclude<CombineOutcome, 'not_allowed'>, string> = dropOutcomeLabels('tr');
 
 /**
  * "Üstüne bırak" devredeyken sürüklenen kartın üstündeki etiket: sonuç ve hedef ("Süperset yap:
@@ -196,23 +217,31 @@ export const DROP_OUTCOME_LABELS: Record<Exclude<CombineOutcome, 'not_allowed'>,
  * grubun adı yazılır (bırakılan gruba katılır). Dolu grupta yalnız "Grup dolu (8)"; olmayan birleştirmede
  * ve bilinmeyen hedefte `null`.
  */
-export function dropTargetLabel(blocks: readonly TemplateBlock[], targetId: string, outcome: CombineOutcome, titleOf: TitleOf): string | null {
+export function dropTargetLabel(
+  blocks: readonly TemplateBlock[],
+  targetId: string,
+  outcome: CombineOutcome,
+  titleOf: TitleOf,
+  locale: Locale = DEFAULT_LOCALE,
+): string | null {
   if (outcome === 'not_allowed') return null;
-  if (outcome === 'full') return DROP_OUTCOME_LABELS.full;
+  const labels = dropOutcomeLabels(locale);
+  if (outcome === 'full') return labels.full;
   for (const [blockIndex, block] of blocks.entries()) {
     const only = block.rows[0];
-    if (block.kind === 'single' && only?.id === targetId) return `${DROP_OUTCOME_LABELS[outcome]}: ${titleOf(only.exerciseId)}`;
+    if (block.kind === 'single' && only?.id === targetId) return `${labels[outcome]}: ${titleOf(only.exerciseId)}`;
     if (block.kind !== 'single' && (block.id === targetId || block.rows.some((row) => row.id === targetId))) {
-      return `${DROP_OUTCOME_LABELS[outcome]}: ${groupName(block, blockIndex)}`;
+      return `${labels[outcome]}: ${groupName(block, blockIndex, locale)}`;
     }
   }
   return null;
 }
 
 /** Dinlenme: saniyeyle (stepper'daki gibi), yoksa "dinlenme yok"; bozuk girdide "? sn". */
-function restText(seconds: number): string {
-  if (!Number.isFinite(seconds)) return '? sn';
-  return seconds > 0 ? `${seconds} sn` : 'dinlenme yok';
+function restText(seconds: number, locale: Locale): string {
+  const t = ptProgramMessages(locale).edit;
+  if (!Number.isFinite(seconds)) return t.restUnknown;
+  return seconds > 0 ? t.restSeconds(seconds) : t.restNone;
 }
 
 /**
@@ -225,41 +254,60 @@ export function rowWorkText(
   trackingType: TrackingType,
   restSeconds?: number,
   cardio: CardioKind | null = null,
+  locale: Locale = DEFAULT_LOCALE,
 ): string {
-  const line = setsText(sets, trackingType, cardio);
-  return restSeconds === undefined ? line : `${line} · ${restText(restSeconds)}`;
+  const line = setsText(sets, trackingType, cardio, locale);
+  return restSeconds === undefined ? line : `${line} · ${restText(restSeconds, locale)}`;
 }
 
 /**
  * Grubun özeti, tek biçim (düzenleyicide grubun yüzü, şablon detayı, programın PT görünümü):
  * "2 hareket · 3 tur · 90 sn tur sonu", devrede " · istasyon 15 sn".
  */
-export function groupWorkText(block: Pick<TemplateBlock, 'kind' | 'restSeconds' | 'transitionSeconds'> & { rows: readonly unknown[] }, rounds: number): string {
-  const rest = Number.isFinite(block.restSeconds) && block.restSeconds <= 0 ? 'tur sonu dinlenme yok' : `${restText(block.restSeconds)} tur sonu`;
+export function groupWorkText(
+  block: Pick<TemplateBlock, 'kind' | 'restSeconds' | 'transitionSeconds'> & { rows: readonly unknown[] },
+  rounds: number,
+  locale: Locale = DEFAULT_LOCALE,
+): string {
+  const t = ptProgramMessages(locale).edit;
+  const rest =
+    Number.isFinite(block.restSeconds) && block.restSeconds <= 0 ? t.groupRestNone : t.groupRestAfter(restText(block.restSeconds, locale));
   const station =
     block.kind === 'circuit' && block.transitionSeconds !== undefined
-      ? ` · istasyon ${Number.isFinite(block.transitionSeconds) ? `${block.transitionSeconds} sn` : '? sn'}`
+      ? t.groupStation(Number.isFinite(block.transitionSeconds) ? t.restSeconds(block.transitionSeconds) : t.restUnknown)
       : '';
-  return `${block.rows.length} hareket · ${rounds} tur · ${rest}${station}`;
+  return t.groupSummary(block.rows.length, rounds, rest, station);
 }
 
 /** Kütüphane sheet'i sona eklerken şablon dolu: liste pasif, neden durum satırında (`sheetStatus`). */
-export const SHEET_FULL_MESSAGE = 'Şablon dolu: en fazla 40 hareket ve 30 blok olur.';
+export function sheetFullMessage(locale: Locale = DEFAULT_LOCALE): string {
+  return ptProgramMessages(locale).edit.sheetFull;
+}
+
+/** Türkçe metin (eski çağrılar ve testler); arayüz `sheetFullMessage(locale)` kullanır. */
+export const SHEET_FULL_MESSAGE = sheetFullMessage('tr');
 
 /**
  * "Gruba hareket ekle" sheet'inin durum satırı, eklemeden önce: dolu grupta ve dolu
  * şablonda liste pasif, süpersette ya da 6'lı komplekste "Eklenirse devre olur".
  */
-export function addToGroupHint(outcome: AddToGroupOutcome): { blocked: string | null; hint: string } {
-  if (outcome === 'full') return { blocked: 'Grup dolu (8)', hint: '' };
-  if (outcome === 'limit') return { blocked: 'Şablon dolu: en fazla 40 hareket, 30 blok', hint: '' };
-  if (outcome === 'not_allowed') return { blocked: 'Bu grup artık yok', hint: '' };
-  return { blocked: null, hint: outcome === 'becomes_circuit' ? 'Eklenirse devre olur' : '' };
+export function addToGroupHint(outcome: AddToGroupOutcome, locale: Locale = DEFAULT_LOCALE): { blocked: string | null; hint: string } {
+  const t = ptProgramMessages(locale).edit;
+  if (outcome === 'full') return { blocked: t.groupFull, hint: '' };
+  if (outcome === 'limit') return { blocked: t.templateFull, hint: '' };
+  if (outcome === 'not_allowed') return { blocked: t.groupGone, hint: '' };
+  return { blocked: null, hint: outcome === 'becomes_circuit' ? t.becomesCircuit : '' };
 }
 
 /** Gruba eklendikten sonra: "Cable Row eklendi", tür değiştiyse "Cable Row eklendi · grup devre oldu". */
-export function addedToGroupMessage(title: string, before: TemplateBlock['kind'], after: TemplateBlock['kind']): string {
-  return before === after ? `${title} eklendi` : `${title} eklendi · grup ${BLOCK_KIND_LABELS[after].toLocaleLowerCase('tr-TR')} oldu`;
+export function addedToGroupMessage(
+  title: string,
+  before: TemplateBlock['kind'],
+  after: TemplateBlock['kind'],
+  locale: Locale = DEFAULT_LOCALE,
+): string {
+  const t = ptProgramMessages(locale).edit;
+  return before === after ? t.addedToGroup(title) : t.addedToGroupBecame(title, lower(locale, blockKindLabels(locale)[after]));
 }
 
 /**

@@ -1,9 +1,13 @@
 import 'server-only';
 import * as v from 'valibot';
+import { DEFAULT_LOCALE, type Locale } from '../i18n/locale.ts';
+import { ptProgramMessages } from '../i18n/messages/pt-program/index.ts';
+import { langConfig } from '../i18n/valibot.ts';
 import { listDevices } from './devices';
 import { listExercises } from './exercises';
 import { clientRepoName, GithubError } from './github/client';
 import { commitFiles, readJson, repoHead, writeJson } from './github/files';
+import { LocalizedGithubError } from './localized-github-error';
 import { dropNotices } from './notices-store';
 import { commitMessage } from './program-diff';
 import { PROGRAM_PATH, programDiffContext } from './programs';
@@ -43,7 +47,8 @@ export type ApproveResult =
   | { status: 'stale'; reason: string }
   | { status: 'missing' | 'decided' | 'changed' | 'no_program' | 'invalid_program' };
 
-export async function approveProposal(clientId: string, id: string, sessionId: string): Promise<ApproveResult> {
+export async function approveProposal(clientId: string, id: string, sessionId: string, locale: Locale = DEFAULT_LOCALE): Promise<ApproveResult> {
+  const t = ptProgramMessages(locale).proposals;
   const repo = clientRepoName(clientId);
   // Kütüphane yalnız bekleyen bir öneri uygulanacaksa okunur (bir kez).
   let catalog: { library: Parameters<typeof planApproval>[0]['library']; ctx: Parameters<typeof planApproval>[0]['ctx'] } | null = null;
@@ -51,7 +56,7 @@ export async function approveProposal(clientId: string, id: string, sessionId: s
     const [exercises, devices] = await Promise.all([listExercises(), listDevices()]);
     return {
       library: { exercises: new Map(exercises.map((exercise) => [exercise.id, exercise])), deviceIds: new Set(devices.map((device) => device.id)) },
-      ctx: programDiffContext(exercises, devices),
+      ctx: programDiffContext(exercises, devices, locale),
     };
   };
   for (let attempt = 0; ; attempt += 1) {
@@ -70,17 +75,23 @@ export async function approveProposal(clientId: string, id: string, sessionId: s
     if (item.status !== 'pending') return { status: 'decided' };
     if (item.sessionId !== sessionId) return { status: 'changed' };
     catalog ??= await loadCatalog();
-    const plan = planApproval({ program: program.output, file, id, library: catalog.library, ctx: catalog.ctx, now: new Date() });
+    const plan = planApproval({ program: program.output, file, id, library: catalog.library, ctx: catalog.ctx, now: new Date(), locale });
     if (plan.status !== 'approved' && plan.status !== 'stale') return { status: plan.status };
 
     const files: { path: string; content: unknown }[] = [{ path: PROPOSALS_PATH, content: serializeProposals(plan.proposals) }];
-    let message = plan.status === 'stale' ? 'Öneri uygulanamadı (program değişti)' : 'Öneri onaylandı';
+    let message = plan.status === 'stale' ? t.commitStale : t.commitApproved;
     if (plan.status === 'approved' && plan.program) {
       // Geçersiz program hiçbir koşulda yazılmaz (`writeProgramFile` gibi).
       const checked = v.safeParse(programSchema, plan.program);
-      if (!checked.success) throw new GithubError(`Program kaydı geçersiz: ${checked.issues[0]?.message ?? ''}`, 500);
+      if (!checked.success) {
+        const issues = checked.issues;
+        throw new LocalizedGithubError((l) => {
+          const again = v.safeParse(programSchema, plan.program, langConfig(l));
+          return ptProgramMessages(l).programs.invalidRecordShort((again.issues ?? issues)[0]?.message ?? '');
+        }, 500);
+      }
       files.unshift({ path: PROGRAM_PATH, content: checked.output });
-      message = commitMessage('edit', plan.changes);
+      message = commitMessage('edit', plan.changes, locale);
     }
     try {
       await commitFiles(repo, { head, files, message });
@@ -96,7 +107,13 @@ export async function approveProposal(clientId: string, id: string, sessionId: s
 
 export type DeclineResult = { status: 'declined' } | { status: 'missing' | 'decided' | 'changed' };
 
-export async function declineProposal(clientId: string, id: string, sessionId: string, note: string | undefined): Promise<DeclineResult> {
+export async function declineProposal(
+  clientId: string,
+  id: string,
+  sessionId: string,
+  note: string | undefined,
+  locale: Locale = DEFAULT_LOCALE,
+): Promise<DeclineResult> {
   const repo = clientRepoName(clientId);
   for (let attempt = 0; ; attempt += 1) {
     const stored = await readJson<unknown>(repo, PROPOSALS_PATH);
@@ -109,7 +126,7 @@ export async function declineProposal(clientId: string, id: string, sessionId: s
     const next = decideProposal(file, id, { status: 'declined', at: new Date(), note });
     if (!next) return { status: 'decided' };
     try {
-      await writeJson(repo, PROPOSALS_PATH, serializeProposals(next), { sha: stored.sha, message: `Öneri reddedildi: ${item.text}`.slice(0, 120) });
+      await writeJson(repo, PROPOSALS_PATH, serializeProposals(next), { sha: stored.sha, message: ptProgramMessages(locale).proposals.commitDeclined(item.text).slice(0, 120) });
     } catch (error) {
       if (attempt === 0 && isConflict(error)) continue;
       throw error;

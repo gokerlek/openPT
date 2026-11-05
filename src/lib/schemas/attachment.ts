@@ -1,4 +1,7 @@
 import * as v from 'valibot';
+import { type Locale } from '../../i18n/locale.ts';
+import { ptLibraryMessages } from '../../i18n/messages/pt-library/index.ts';
+import { msg } from '../../i18n/valibot.ts';
 
 /**
  * Aparat şeması — sunucu ve istemci ortak.
@@ -13,17 +16,20 @@ import * as v from 'valibot';
 export const ATTACHMENT_NAME_MAX = 40;
 export const ATTACHMENTS_MAX = 12;
 
+/** Doğrulama mesajları (`msg`: şemayı ayrıştıran isteğin diliyle). */
+const text = (locale: Locale) => ptLibraryMessages(locale).attachmentSchema;
+
 /** Aparat fotoğrafı: PNG, JPG, WebP; en fazla 1 MB (cihaz görseliyle aynı kural). */
 export const ATTACHMENT_IMAGE_MAX_BYTES = 1024 * 1024;
 
-export const attachmentIdSchema = v.pipe(v.string(), v.regex(/^[a-z0-9-]{2,60}$/, 'Aparat kimliği geçersiz.'));
+export const attachmentIdSchema = v.pipe(v.string(), v.regex(/^[a-z0-9-]{2,60}$/, msg((l) => text(l).idInvalid)));
 
 const attachmentFields = {
   name: v.pipe(
     v.string(),
     v.trim(),
-    v.minLength(2, 'Aparat adı çok kısa.'),
-    v.maxLength(ATTACHMENT_NAME_MAX, `En fazla ${ATTACHMENT_NAME_MAX} karakter.`),
+    v.minLength(2, msg((l) => text(l).nameShort)),
+    v.maxLength(ATTACHMENT_NAME_MAX, msg((l) => text(l).nameMax(ATTACHMENT_NAME_MAX))),
   ),
   /** `media/attachments/<kimlik>-<özet>.<uzantı>`; yalnız görsel ucu yazar. */
   image: v.optional(v.pipe(v.string(), v.regex(/^media\/attachments\/[a-z0-9-]+\.(png|jpg|webp)$/))),
