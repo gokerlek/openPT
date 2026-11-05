@@ -1503,7 +1503,7 @@ test('İngilizce uçtan uca hata: özet, ne yapmalı ve oluşturulanlar İngiliz
   const code = await kur.main(world.ctx);
   assert.equal(code, 1);
   const output = world.ctx.io.lines.join('\n');
-  assert.match(output, /^openPT setup — I will say what is happening at each step\. Press Ctrl\+C to stop\./);
+  assert.match(output, /^openPT setup — I'll explain each step as it happens\. Press Ctrl\+C to stop\./);
   assert.match(output, /Setup could not be completed: Some settings could not be written to Vercel: GITHUB_APP_PRIVATE_KEY \(env_conflict\)/);
   assert.match(output, /What to do: Open Settings → Environment Variables in the Vercel project/);
   assert.match(output, /Created so far \(still in place\):/);

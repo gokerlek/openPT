@@ -203,7 +203,7 @@ export const EXERCISE_LIBRARY_EN: Readonly<Record<string, ExerciseTextEn>> = {
     cues: [
       'Upper back on the edge of the bench',
       'Chin near your chest, ribs down',
-      'Squeeze your glutes for 1 sec at the top',
+      'Squeeze your glutes for 1 second at the top',
     ],
   },
   'leg-extension': {
@@ -211,7 +211,7 @@ export const EXERCISE_LIBRARY_EN: Readonly<Record<string, ExerciseTextEn>> = {
     description: 'Quad isolation.',
     cues: [
       "Knee joint aligned with the machine's axis",
-      'Squeeze for 1 sec at the top',
+      'Squeeze for 1 second at the top',
       'Lower under control without dropping the weight',
     ],
   },
@@ -229,7 +229,7 @@ export const EXERCISE_LIBRARY_EN: Readonly<Record<string, ExerciseTextEn>> = {
     description: 'Calf muscles.',
     cues: [
       'Stretch fully at the bottom',
-      'Pause 1 sec on your toes',
+      'Pause 1 second on your toes',
       "Don't lock your knees",
     ],
   },
@@ -360,8 +360,8 @@ export const EXERCISE_LIBRARY_EN: Readonly<Record<string, ExerciseTextEn>> = {
     ],
   },
   'kedi-deve-mobilite': {
-    title: 'Cat-Camel Mobility',
-    description: 'Spinal mobility for the cooldown.',
+    title: 'Cat-Camel',
+    description: 'Spinal mobility for the cool-down.',
     cues: [
       'Start on all fours',
       'Round your back as you exhale',
@@ -370,7 +370,7 @@ export const EXERCISE_LIBRARY_EN: Readonly<Record<string, ExerciseTextEn>> = {
   },
   'cocuk-pozu': {
     title: "Child's Pose",
-    description: 'Back and hip relaxation for the cooldown.',
+    description: 'Back and hip relaxation for the cool-down.',
     cues: [
       'Knees apart, hips back toward your heels',
       'Reach your arms forward',
@@ -379,7 +379,7 @@ export const EXERCISE_LIBRARY_EN: Readonly<Record<string, ExerciseTextEn>> = {
   },
   'kapi-araliginda-gogus-esnetme': {
     title: 'Doorway Chest Stretch',
-    description: 'Chest and front-shoulder stretch for the cooldown.',
+    description: 'Chest and front-shoulder stretch for the cool-down.',
     cues: [
       'Rest your forearm against the door frame',
       'Lean your torso slowly forward',
@@ -481,7 +481,7 @@ export const EXERCISE_LIBRARY_EN: Readonly<Record<string, ExerciseTextEn>> = {
     description: 'Raising your torso on a hyperextension bench, working the lower back and glutes.',
     cues: [
       'Hip bone just above the edge of the pad',
-      "Back neutral; don't bend excessively at the lower back",
+      "Back neutral; don't overextend your lower back at the top",
       'Squeeze your glutes at the top, torso in line with your legs',
     ],
   },
@@ -607,7 +607,7 @@ export const EXERCISE_LIBRARY_EN: Readonly<Record<string, ExerciseTextEn>> = {
     description: 'Diagonal pull on the functional trainer; rotational torso power.',
     cues: [
       'Rotate through your hips and torso; your arms just carry',
-      'Rear foot pivots on the ball',
+      'Rear foot pivots on the ball of the foot',
       'Do equal reps to both sides',
     ],
   },
@@ -634,7 +634,7 @@ export const EXERCISE_LIBRARY_EN: Readonly<Record<string, ExerciseTextEn>> = {
     description: 'Climbing a continuously rotating staircase; cardio that emphasizes the hips and legs.',
     cues: [
       "Don't lean on the handrails; stand tall",
-      'Press through the whole step',
+      'Place your whole foot on each step',
       'Keep the pace at a level where you can talk',
     ],
   },
@@ -649,7 +649,7 @@ export const EXERCISE_LIBRARY_EN: Readonly<Record<string, ExerciseTextEn>> = {
   },
   'ters-tutus-lat-pulldown': {
     title: 'Reverse-Grip Lat Pulldown',
-    description: 'Pulldown on the lat pulldown machine with a narrow, palms-facing (supinated) grip; increases biceps involvement.',
+    description: 'Pulldown on the lat pulldown machine with a narrow, underhand (supinated) grip; increases biceps involvement.',
     cues: [
       'Hands narrower than shoulder width, palms facing you',
       'Pull the bar to your upper chest, elbows close to your torso',
@@ -707,7 +707,7 @@ export const EXERCISE_LIBRARY_EN: Readonly<Record<string, ExerciseTextEn>> = {
     cues: [
       'Bar travels on a diagonal: from shoulder height up and forward',
       "Keep your ribs down; don't lean back",
-      'At the top, reach up toward your ear and let your shoulder blade rotate freely',
+      'At the top, let your shoulder rise toward your ear and your shoulder blade rotate freely',
     ],
   },
   'dar-tutus-upright-row': {
@@ -778,7 +778,7 @@ export const EXERCISE_LIBRARY_EN: Readonly<Record<string, ExerciseTextEn>> = {
     description: 'Leaning back and rotating side to side with a weight. Loaded flexion plus rotation is the riskiest loading for the disc; it is kept in the library as an example of a risky movement.',
     cues: [
       'Remove this movement from the program; use the Pallof press instead',
-      'If you must, do it without weight, rotate from your chest and lock your lower back',
+      'If you must, do it without weight, rotate from your chest and keep your lower back braced and neutral',
       "Keep your feet on the floor; don't lean your torso back",
     ],
   },

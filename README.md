@@ -20,7 +20,7 @@ Windows kullanıyorsan aşağıdaki **Tarayıcıdan** yolunu kullan.
 node --input-type=module -e "$(curl -fsSL https://raw.githubusercontent.com/gokerlek/openPT/main/kur/kur.mjs)"
 ```
 
-Komut her adımda ne yaptığını Türkçe söyler: Vercel'e giriş (tarayıcıda onay), uygulama adı, GitHub'da **Create GitHub App** ve **Install** (tarayıcıda iki düğme), kod ve veri repolarının açılması, Vercel ayarları ve ilk yayın. Sonunda uygulamanın adresini yazar ve açar; **GitHub ile giriş yap**.
+Komut her adımda ne yaptığını bilgisayarın diline göre Türkçe ya da İngilizce söyler (Türkçe dışındaki her dil İngilizce; zorlamak için başına `KUR_LANG=tr ` ya da `KUR_LANG=en ` ekle): Vercel'e giriş (tarayıcıda onay), uygulama adı, GitHub'da **Create GitHub App** ve **Install** (tarayıcıda iki düğme), kod ve veri repolarının açılması, Vercel ayarları ve ilk yayın. Sonunda uygulamanın adresini yazar ve açar; **GitHub ile giriş yap**.
 
 ### Tarayıcıdan (Deploy düğmesi)
 
