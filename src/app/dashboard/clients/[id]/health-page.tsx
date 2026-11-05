@@ -3,6 +3,8 @@ import Link from 'next/link';
 import { Info } from '@phosphor-icons/react/dist/ssr';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
+import { healthMessages } from '@/i18n/messages/health';
+import { getLocale } from '@/i18n/server';
 import { canRecordHealth } from '@/lib/client-status';
 import { pendingReports } from '@/lib/constraints';
 import { healthLockInfo, type HealthLock } from '@/lib/measurement-log';
@@ -31,8 +33,10 @@ export function HealthStrip({ client, record }: { client: Client; record: Health
 }
 
 /** Parça kilitliyse içeriğin yerine: neden ve ne yapılmalı (ölçümlerdeki uyarının parçalı hali). */
-export function HealthLockAlert({ field, lock, clientId }: { field: HealthField; lock: HealthLock; clientId: string }) {
-  const info = healthLockInfo(field, lock);
+export async function HealthLockAlert({ field, lock, clientId }: { field: HealthField; lock: HealthLock; clientId: string }) {
+  const locale = await getLocale();
+  const t = healthMessages(locale).parts;
+  const info = healthLockInfo(field, lock, locale);
   const byPt = lock === 'off' || lock === 'not_selected';
   return (
     <Alert>
@@ -46,7 +50,7 @@ export function HealthLockAlert({ field, lock, clientId }: { field: HealthField;
           className="mt-1"
           nativeButton={false}
           render={<Link href={byPt ? `/dashboard/clients/${clientId}/edit` : `/dashboard/clients/${clientId}`} />}>
-          {byPt ? 'Danışanın düzenleme sayfasına git' : 'Danışanın sayfasına dön'}
+          {byPt ? t.lockEdit : t.lockBack}
         </Button>
       </AlertDescription>
     </Alert>

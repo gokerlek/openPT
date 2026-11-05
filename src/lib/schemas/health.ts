@@ -1,4 +1,6 @@
 import * as v from 'valibot';
+import { healthMessages } from '../../i18n/messages/health/index.ts';
+import { msg } from '../../i18n/valibot.ts';
 import {cameraMeasurementSchema,CAMERA_RECORD_LIMIT} from './camera-measurement.ts';
 import { IRRITABILITY_LEVELS, RED_FLAG_CHECKS, SYMPTOM_DIRECTIONS, TOLERANCE_MODES } from '../check-in.ts';
 import { parseCondition } from '../conditions.ts';
@@ -20,6 +22,9 @@ import { isCalendarDate } from '../measurement-log.ts';
 import { MEASUREMENT_IDS } from '../measurements.ts';
 import { LEG_LENGTH_CM, NOT_TESTED_REASONS, RESULT_CHOICES, SCREENING_LIMIT, SCREENING_PROTOCOL } from '../screening.ts';
 
+/** Şema mesajı okuyanın dilinde (`issue.lang`; yoksa Türkçe). */
+const m = (pick: (t: ReturnType<typeof healthMessages>['validation']) => string) => msg((locale) => pick(healthMessages(locale).validation));
+
 /**
  * Danışanın sağlık kaydı — `client-<id>` repo'sunda `health.json` (SPEC §4).
  *
@@ -36,11 +41,11 @@ import { LEG_LENGTH_CM, NOT_TESTED_REASONS, RESULT_CHOICES, SCREENING_LIMIT, SCR
  */
 const isoDate = v.pipe(
   v.string(),
-  v.isoDate('Tarih YYYY-AA-GG olmalı.'),
-  v.check(isCalendarDate, 'Takvimde olmayan tarih.'),
+  v.isoDate(m((t) => t.isoDate)),
+  v.check(isCalendarDate, m((t) => t.calendarDate)),
 );
-const nprs = v.pipe(v.number('Sayı gir.'), v.integer('Tam sayı gir.'), v.minValue(0, 'En az 0.'), v.maxValue(10, 'En fazla 10.'));
-const minutes = v.pipe(v.number('Sayı gir.'), v.minValue(0, 'Negatif olamaz.'), v.maxValue(600, 'En fazla 600 dakika.'));
+const nprs = v.pipe(v.number(m((t) => t.number)), v.integer(m((t) => t.integer)), v.minValue(0, m((t) => t.min(0))), v.maxValue(10, m((t) => t.max(10))));
+const minutes = v.pipe(v.number(m((t) => t.number)), v.minValue(0, m((t) => t.nonNegative)), v.maxValue(600, m((t) => t.maxMinutes(600))));
 
 /** Program satırı (`r_` + 6). */
 const rowId = v.pipe(v.string(), v.regex(/^r_[a-z0-9]{6}$/));
@@ -48,11 +53,11 @@ const rowId = v.pipe(v.string(), v.regex(/^r_[a-z0-9]{6}$/));
 /** "lumbar_disc_herniation:acute" gibi; sözlükte olmalı. */
 const conditionRef = v.pipe(
   v.string(),
-  v.check((value) => parseCondition(value) !== null, 'Bilinmeyen kısıt kimliği.'),
+  v.check((value) => parseCondition(value) !== null, m((t) => t.unknownCondition)),
 );
 
 /** 1 (çok kötü) – 5 (çok iyi); v1'deki hazır oluşluk sorularıyla aynı ölçek. */
-const wellness = v.pipe(v.number('Sayı gir.'), v.integer('Tam sayı gir.'), v.minValue(1, 'En az 1.'), v.maxValue(5, 'En fazla 5.'));
+const wellness = v.pipe(v.number(m((t) => t.number)), v.integer(m((t) => t.integer)), v.minValue(1, m((t) => t.min(1))), v.maxValue(5, m((t) => t.max(5))));
 
 /**
  * Hazır oluşluk: antrenman öncesi dört kısa soru. Yalnız sayılar tutulur, serbest metin
@@ -92,10 +97,10 @@ export const healthCheckInSchema = v.object({
   painBaseline: v.optional(nprs),
   painPeak: v.optional(nprs),
   returnedToBaseline: v.optional(v.boolean()),
-  symptomDirection: v.optional(v.picklist(SYMPTOM_DIRECTIONS, 'Semptom yönünü seç.')),
-  irritability: v.optional(v.picklist(IRRITABILITY_LEVELS, 'İrritabiliteyi seç.')),
+  symptomDirection: v.optional(v.picklist(SYMPTOM_DIRECTIONS, m((t) => t.symptomDirection))),
+  irritability: v.optional(v.picklist(IRRITABILITY_LEVELS, m((t) => t.irritability))),
   painFreeWalkingMin: v.optional(minutes),
-  redFlag: v.optional(v.picklist(RED_FLAG_CHECKS, 'Kırmızı bayrak sorusunu cevapla.')),
+  redFlag: v.optional(v.picklist(RED_FLAG_CHECKS, m((t) => t.redFlag))),
 });
 export type HealthCheckIn = v.InferOutput<typeof healthCheckInSchema>;
 
@@ -109,7 +114,7 @@ export const checkInPostSchema = v.pipe(
   v.omit(healthCheckInSchema, ['date', 'skippedRows']),
   v.check(
     (body) => Object.entries(body).some(([key, value]) => key !== 'sessionId' && value !== undefined),
-    'Kaydedilecek cevap yok.',
+    m((t) => t.nothingToSave),
   ),
 );
 export type CheckInPost = v.InferOutput<typeof checkInPostSchema>;
@@ -117,16 +122,16 @@ export type CheckInPost = v.InferOutput<typeof checkInPostSchema>;
 /** Seans dosyasına giden efor bilgisi (sağlık verisi değil). */
 export const sessionEffortSchema = v.object({
   /** CR-10; seans bitiminden ~10 dk sonra sorulur, zamanlama sabit tutulur. */
-  sessionRpe: v.optional(v.pipe(v.number('Sayı gir.'), v.minValue(0), v.maxValue(10, 'En fazla 10.'))),
-  durationMin: v.optional(v.pipe(minutes, v.minValue(1, 'En az 1 dakika.'))),
+  sessionRpe: v.optional(v.pipe(v.number(m((t) => t.number)), v.minValue(0), v.maxValue(10, m((t) => t.max(10))))),
+  durationMin: v.optional(v.pipe(minutes, v.minValue(1, m((t) => t.minMinutes(1))))),
 });
 export type SessionEffort = v.InferOutput<typeof sessionEffortSchema>;
 
 /** Periyodik ölçüm: tek değer, gerekiyorsa taraf. */
 export const measurementEntrySchema = v.object({
   date: isoDate,
-  id: v.picklist(MEASUREMENT_IDS, 'Bilinmeyen ölçüm.'),
-  value: v.pipe(v.number('Sayı gir.'), v.minValue(0, 'Negatif olamaz.'), v.maxValue(1000)),
+  id: v.picklist(MEASUREMENT_IDS, m((t) => t.unknownMeasurement)),
+  value: v.pipe(v.number(m((t) => t.number)), v.minValue(0, m((t) => t.nonNegative)), v.maxValue(1000)),
   side: v.optional(v.picklist(['left', 'right'] as const)),
 });
 export type MeasurementEntry = v.InferOutput<typeof measurementEntrySchema>;
@@ -134,27 +139,27 @@ export type MeasurementEntry = v.InferOutput<typeof measurementEntrySchema>;
 /* --- kısıtlar (tasarım `kisit-tarama.md` §2, §5.3) --- */
 
 const timestamp = v.pipe(v.string(), v.isoTimestamp());
-const text = (max: number) => v.pipe(v.string(), v.trim(), v.maxLength(max, `En fazla ${max} karakter.`));
-const constraintId = v.pipe(v.string(), v.regex(CONSTRAINT_ID_PATTERN, 'Kısıt kimliği geçersiz.'));
-const exerciseId = v.pipe(v.string(), v.regex(/^[a-z0-9-]{2,60}$/, 'Egzersiz kimliği geçersiz.'));
-const severity = v.picklist(SEVERITIES, 'Şiddeti seç.');
+const text = (max: number) => v.pipe(v.string(), v.trim(), v.maxLength(max, m((t) => t.maxChars(max))));
+const constraintId = v.pipe(v.string(), v.regex(CONSTRAINT_ID_PATTERN, m((t) => t.constraintIdInvalid)));
+const exerciseId = v.pipe(v.string(), v.regex(/^[a-z0-9-]{2,60}$/, m((t) => t.exerciseIdInvalid)));
+const severity = v.picklist(SEVERITIES, m((t) => t.severity));
 
 /** "2026", "2026-09" ya da "2026-09-12": bilinen kesinlikte. */
 const onsetSchema = v.pipe(
   v.string(),
-  v.regex(/^\d{4}(-\d{2}(-\d{2})?)?$/, 'Başlangıç YYYY, YYYY-AA ya da YYYY-AA-GG olmalı.'),
+  v.regex(/^\d{4}(-\d{2}(-\d{2})?)?$/, m((t) => t.onset)),
   v.check((value) => {
     if (value.length === 10) return isCalendarDate(value);
     if (value.length === 7) return Number(value.slice(5)) >= 1 && Number(value.slice(5)) <= 12;
     return true;
-  }, 'Takvimde olmayan tarih.'),
+  }, m((t) => t.calendarDate)),
 );
 
 export const constraintSchema = v.object({
   id: constraintId,
-  region: v.picklist(CONSTRAINT_REGIONS, 'Bölgeyi seç.'),
-  side: v.optional(v.picklist(CONSTRAINT_SIDES, 'Tarafı seç.')),
-  type: v.picklist(CONSTRAINT_TYPES, 'Türü seç.'),
+  region: v.picklist(CONSTRAINT_REGIONS, m((t) => t.region)),
+  side: v.optional(v.picklist(CONSTRAINT_SIDES, m((t) => t.side))),
+  type: v.picklist(CONSTRAINT_TYPES, m((t) => t.type)),
   /** Sağlık profesyonelinin koyduğu tanı (sözlükte `kind: 'diagnosis'`). */
   conditionId: v.optional(conditionRef),
   diagnosisSource: v.optional(v.picklist(DIAGNOSIS_SOURCES)),
@@ -249,14 +254,14 @@ export const screeningSideSchema = v.object({
   missed: v.optional(v.pipe(v.array(pointId), v.maxLength(8))),
   pain: v.optional(v.literal(true)),
   painNote: v.optional(text(140)),
-  seconds: v.optional(v.pipe(v.number('Sayı gir.'), v.minValue(0, 'Negatif olamaz.'), v.maxValue(300, 'En fazla 300 sn.'))),
-  reachCm: v.optional(v.pipe(v.number('Sayı gir.'), v.minValue(0, 'Negatif olamaz.'), v.maxValue(250, 'En fazla 250 cm.'))),
+  seconds: v.optional(v.pipe(v.number(m((t) => t.number)), v.minValue(0, m((t) => t.nonNegative)), v.maxValue(300, m((t) => t.maxSeconds(300))))),
+  reachCm: v.optional(v.pipe(v.number(m((t) => t.number)), v.minValue(0, m((t) => t.nonNegative)), v.maxValue(250, m((t) => t.maxCm(250))))),
   /** Bacak boyu (cm; ASIS → iç ayak bileği kemiği): ön uzanma bununla yüzdeye çevrilir (Plisky 2006). İsteğe bağlı. */
   legCm: v.optional(
     v.pipe(
-      v.number('Sayı gir.'),
-      v.minValue(LEG_LENGTH_CM.min, `En az ${LEG_LENGTH_CM.min} cm.`),
-      v.maxValue(LEG_LENGTH_CM.max, `En fazla ${LEG_LENGTH_CM.max} cm.`),
+      v.number(m((t) => t.number)),
+      v.minValue(LEG_LENGTH_CM.min, m((t) => t.minCm(LEG_LENGTH_CM.min))),
+      v.maxValue(LEG_LENGTH_CM.max, m((t) => t.maxCm(LEG_LENGTH_CM.max))),
     ),
   ),
 });
@@ -295,7 +300,7 @@ export const healthRecordSchema = v.object({
   /** Ağrı tavanı: ağrısız (3/10) ya da ağrı izleme (5/10, tendinopati). */
   toleranceMode: v.optional(v.picklist(TOLERANCE_MODES)),
   /** Eski biçim (sürüm 1): kısıt kimlikleri. Okunurken kısıta çevrilir; ilk kısıt yazımı düşürür. */
-  conditions: v.optional(v.pipe(v.array(conditionRef), v.maxLength(12, 'En fazla 12 kısıt.'))),
+  conditions: v.optional(v.pipe(v.array(conditionRef), v.maxLength(12, m((t) => t.tooManyConditions(12))))),
   /** Eski biçim: tek ameliyat tarihi (kısıtın `details`'ine taşınır). */
   surgeryDate: v.optional(isoDate),
   checkIns: v.array(healthCheckInSchema),

@@ -1,5 +1,6 @@
 import 'server-only';
 import { DEFAULT_LOCALE, type Locale } from '../i18n/locale.ts';
+import { healthMessages } from '../i18n/messages/health/index.ts';
 import { canRecordHealth, healthFieldState } from './client-status';
 import { careInputOf, careStampOf, editorCareOf, type CareInput, type EditorCare } from './constraint-filter';
 import { constraintsOf, type CareTags } from './constraints';
@@ -15,13 +16,16 @@ import { screeningMarks } from './screening-care';
  */
 
 /** Süzgecin girdisi; onay yoksa ya da dosya okunamıyorsa null. */
-export async function loadCareInput(client: Client, today: string, _locale: Locale = DEFAULT_LOCALE): Promise<CareInput | null> {
+export async function loadCareInput(client: Client, today: string, locale: Locale = DEFAULT_LOCALE): Promise<CareInput | null> {
   if (!canRecordHealth(client, 'conditions')) return null;
   const record = await readHealthIfAllowed(client, ['conditions']).catch(() => null);
-  return record ? careInputOf(record, { today, painConsent: canRecordHealth(client, 'check_in') }) : null;
+  return record ? careInputOf(record, { today, painConsent: canRecordHealth(client, 'check_in'), ...localeOption(locale) }) : null;
 }
 
-const NO_CONSENT = 'Kısıtlar kullanılamıyor: danışanın sağlık onayı yok.';
+/** Türkçe varsayılanda süzgecin girdisine dil yazılmaz (eski çıktı aynı kalır). */
+function localeOption(locale: Locale | undefined): { locale?: Locale } {
+  return locale && locale !== DEFAULT_LOCALE ? { locale } : {};
+}
 
 /**
  * Program düzenleyicisinin kısıt ve tarama bilgisi. Modülde kısıtlar seçili değil ve tarama onaylı değilse null
@@ -40,11 +44,12 @@ export async function loadEditorCare(
   const screening = options.screening !== false && canRecordHealth(client, 'screening');
   if (!conditionsSelected && !screening) return null;
   const parts: HealthField[] = [...(conditions ? (['conditions'] as const) : []), ...(screening ? (['screening'] as const) : [])];
+  const locale = options.locale ?? DEFAULT_LOCALE;
   const record = parts.length > 0 ? await readHealthIfAllowed(client, parts).catch(() => null) : null;
   const care: EditorCare =
     conditions && record
-      ? editorCareOf(client.id, items, careInputOf(record, { today, painConsent: canRecordHealth(client, 'check_in') }))
-      : { clientId: client.id, ...(conditionsSelected ? { unavailable: NO_CONSENT } : {}), summary: [], pending: [], map: {} };
+      ? editorCareOf(client.id, items, careInputOf(record, { today, painConsent: canRecordHealth(client, 'check_in'), ...localeOption(locale) }))
+      : { clientId: client.id, ...(conditionsSelected ? { unavailable: healthMessages(locale).care.noConsent } : {}), summary: [], pending: [], map: {} };
   if (!screening || !record) return care;
   const screenings = record.screenings ?? [];
   if (screenings.length === 0) return care;
@@ -54,8 +59,9 @@ export async function loadEditorCare(
   const marks = screeningMarks(screenings, items, {
     titleOf: (id) => (blocked.has(id) ? undefined : titles.get(id)),
     suppress: conditions ? constraintSuppress(constraintsOf(record)) : undefined,
+    locale,
   });
-  const pain = painHistory(screenings).open.map((item) => cellTitle(item.testId, item.side));
+  const pain = painHistory(screenings).open.map((item) => cellTitle(item.testId, item.side, false, locale));
   return { ...care, screening: marks, ...(pain.length > 0 ? { screeningPain: pain } : {}) };
 }
 
@@ -67,11 +73,11 @@ export type TodayCare = { stamp: string; input: CareInput | null };
  * ile aynı hesap; onay yoksa boş), `input` süzgecin girdisi (`loadCareInput` ile aynı; onay yoksa ya da dosya
  * okunamıyorsa null).
  */
-export async function loadTodayCare(client: Client, today: string, _locale: Locale = DEFAULT_LOCALE): Promise<TodayCare> {
+export async function loadTodayCare(client: Client, today: string, locale: Locale = DEFAULT_LOCALE): Promise<TodayCare> {
   if (!canRecordHealth(client, 'conditions')) return { stamp: '', input: null };
   const record = await readHealthIfAllowed(client, ['conditions']).catch(() => null);
   return {
     stamp: careStampOf(record),
-    input: record ? careInputOf(record, { today, painConsent: canRecordHealth(client, 'check_in') }) : null,
+    input: record ? careInputOf(record, { today, painConsent: canRecordHealth(client, 'check_in'), ...localeOption(locale) }) : null,
   };
 }

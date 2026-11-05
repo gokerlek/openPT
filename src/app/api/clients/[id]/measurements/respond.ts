@@ -1,6 +1,10 @@
 import 'server-only';
 import { NextResponse } from 'next/server';
 import type * as v from 'valibot';
+import { messageOf } from '@/i18n/errors';
+import { DEFAULT_LOCALE, type Locale } from '@/i18n/locale';
+import { healthMessages } from '@/i18n/messages/health';
+import { measurementsMessages } from '@/i18n/messages/measurements';
 import { readAppConfig } from '@/lib/config';
 import { todayIn } from '@/lib/format';
 import { GithubError } from '@/lib/github/client';
@@ -11,19 +15,20 @@ import { checkValues, type MeasurementValue } from '@/lib/measurement-log';
  * günlüğe sızmasın (yalnız alanın adı ve kural).
  */
 
-export function forbidden() {
-  return NextResponse.json({ error: 'Bu işlem için yetkin yok.' }, { status: 403 });
+export function forbidden(locale: Locale = DEFAULT_LOCALE) {
+  return NextResponse.json({ error: healthMessages(locale).api.forbidden }, { status: 403 });
 }
 
-export function failed(error: unknown, fallback: string) {
+/** GitHub hatası mesajıyla (okuyanın dilinde, `messageOf`), başkası `fallback` (çağıran o dilde verir). */
+export function failed(error: unknown, fallback: string, locale: Locale = DEFAULT_LOCALE) {
   const failure = error instanceof GithubError ? error : null;
-  return NextResponse.json({ error: failure?.message ?? fallback }, { status: failure?.status ?? 502 });
+  return NextResponse.json({ error: (failure ? messageOf(failure, locale) : null) ?? fallback }, { status: failure?.status ?? 502 });
 }
 
 /** Şema hataları: üst düzey alanlar (tarih, cinsiyet) formda alanın altında görünür. */
-export function invalid(issues: readonly v.BaseIssue<unknown>[]) {
+export function invalid(issues: readonly v.BaseIssue<unknown>[], locale: Locale = DEFAULT_LOCALE) {
   const fields: Record<string, string> = {};
-  let message = 'Bilgileri kontrol et.';
+  let message = healthMessages(locale).api.invalid;
   for (const issue of issues) {
     const key = issue.path?.[0]?.key;
     if (key === 'values') {
@@ -43,15 +48,16 @@ export function invalid(issues: readonly v.BaseIssue<unknown>[]) {
 export async function checkDay(
   date: string,
   values: readonly MeasurementValue[],
+  locale: Locale = DEFAULT_LOCALE,
 ): Promise<{ response: NextResponse } | { values: MeasurementValue[] }> {
-  const checked = checkValues(values);
+  const checked = checkValues(values, locale);
   const fields: Record<string, string> = Object.fromEntries(
     Object.entries(checked.errors).map(([key, message]) => [`values.${key}`, message]),
   );
   const { timeZone } = await readAppConfig();
-  if (date > todayIn(timeZone)) fields.date = 'Gelecek bir güne ölçüm girilemez.';
+  if (date > todayIn(timeZone)) fields.date = measurementsMessages(locale).validation.futureDate;
   if (Object.keys(fields).length > 0) {
-    return { response: NextResponse.json({ error: 'Bilgileri kontrol et.', fields }, { status: 400 }) };
+    return { response: NextResponse.json({ error: healthMessages(locale).api.invalid, fields }, { status: 400 }) };
   }
   return { values: checked.values };
 }

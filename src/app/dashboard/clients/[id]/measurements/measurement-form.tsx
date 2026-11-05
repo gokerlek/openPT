@@ -18,14 +18,17 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Field, FieldDescription, FieldError, FieldLabel, FieldLegend, FieldSet } from '@/components/ui/field';
 import { InputGroup, InputGroupAddon, InputGroupInput, InputGroupText } from '@/components/ui/input-group';
 import { Spinner } from '@/components/ui/spinner';
-import { formatDay } from '@/lib/format';
-import { isSided, SIDE_LABELS, SIDES, slotKey, valuesFromSlots, type MeasurementValue } from '@/lib/measurement-log';
-import { MEASUREMENT_IDS, MEASUREMENTS, type MeasurementDef, type MeasurementId } from '@/lib/measurements';
+import { useLocale, useMessages } from '@/i18n/client';
+import { commonMessages } from '@/i18n/messages/common';
+import { measurementsMessages } from '@/i18n/messages/measurements';
+import { getFormat } from '@/lib/format';
+import { isSided, SIDES, slotKey, valuesFromSlots, type MeasurementValue } from '@/lib/measurement-log';
+import { MEASUREMENT_IDS, MEASUREMENTS, measurementDef, type MeasurementDef, type MeasurementId } from '@/lib/measurements';
 import { fetchJson } from '@/lib/query/errors';
 import { applyFieldErrors } from '@/lib/query/field-errors';
 import { useServiceMutation } from '@/lib/query/use-service';
-import { decimalText, measurementFormSchema, SEX_LABELS, SEX_UNKNOWN, type SexChoice } from '@/lib/schemas/measurement';
-import { GROUP_INFO, groupSummary, UNIT_LABELS } from './measurement-text';
+import { decimalText, measurementFormSchema, SEX_UNKNOWN, sexLabels, type SexChoice } from '@/lib/schemas/measurement';
+import { GROUP_INFO, groupSummary } from './measurement-text';
 
 type FormStore = ReturnType<typeof useForm<typeof measurementFormSchema>>;
 type Group = MeasurementDef['group'];
@@ -39,10 +42,6 @@ export type MeasurementFormMode =
 const GROUPS = Object.keys(GROUP_INFO) as Group[];
 const FORM_ID = 'measurement-form';
 
-/** Alan açıklaması: ne sıklıkla ve katalogdaki not ("Önerilen" rozeti etikette). */
-function describe(def: MeasurementDef): string {
-  return [`${def.frequency}.`, def.note].filter(Boolean).join(' ');
-}
 
 const inputId = (key: string) => `m-${key.replace(':', '-')}`;
 
@@ -66,9 +65,10 @@ function revealFirstError(form: HTMLFormElement | null) {
 
 /** Etiketin yanında: önerilen ölçümler (SPEC §7.5) işaretli; formda bütün ölçümler isteğe bağlı. */
 function Recommended({ def }: { def: MeasurementDef }) {
+  const t = useMessages(measurementsMessages).form;
   return def.tier === 'recommended' ? (
     <Badge variant="secondary" className="font-normal">
-      Önerilen
+      {t.recommended}
     </Badge>
   ) : null;
 }
@@ -130,8 +130,12 @@ function ValueInput({
 }
 
 function MeasurementField({ form, id, onEdit }: { form: FormStore; id: MeasurementId; onEdit: () => void }) {
-  const def = MEASUREMENTS[id];
-  const unit = UNIT_LABELS[def.unit];
+  const locale = useLocale();
+  const messages = useMessages(measurementsMessages);
+  const def = measurementDef(id, locale);
+  const unit = messages.units[def.unit];
+  // Alan açıklaması: ne sıklıkla ve katalogdaki not ("Önerilen" rozeti etikette).
+  const describe = (item: MeasurementDef) => messages.form.describe(item.frequency, item.note);
   if (isSided(id)) {
     return (
       <FieldSet className="gap-2">
@@ -148,7 +152,7 @@ function MeasurementField({ form, id, onEdit }: { form: FormStore; id: Measureme
               slot={slotKey(id, side)}
               id={inputId(slotKey(id, side))}
               unit={unit}
-              label={SIDE_LABELS[side]}
+              label={messages.sides[side]}
               onEdit={onEdit}
             />
           ))}
@@ -171,16 +175,18 @@ function MeasurementField({ form, id, onEdit }: { form: FormStore; id: Measureme
 
 /** Bölüm başlığının ikinci satırı: doluysa girilen değerler, boşsa bölümün ne olduğu. */
 function GroupSummary({ form, group }: { form: FormStore; group: Group }) {
+  const locale = useLocale();
+  const messages = useMessages(measurementsMessages);
   const values = useField(form, { path: ['values'] }).input as Record<string, string | undefined>;
-  const summary = groupSummary(group, values);
+  const summary = groupSummary(group, values, locale);
   return (
     <span className="text-sm text-muted-foreground">
       {summary.count > 0 ? (
         <>
-          <span className="font-medium text-foreground">{summary.count} değer</span> · {summary.text}
+          <span className="font-medium text-foreground">{messages.form.values(summary.count)}</span> · {summary.text}
         </>
       ) : (
-        GROUP_INFO[group].description
+        messages.groups[group].description
       )}
     </span>
   );
@@ -189,8 +195,9 @@ function GroupSummary({ form, group }: { form: FormStore; group: Group }) {
 /** Telefonda Kaydet'in yanında: kaç değer girildiği. */
 function FilledCount({ form }: { form: FormStore }) {
   const values = useField(form, { path: ['values'] }).input as Record<string, string | undefined>;
+  const t = useMessages(measurementsMessages).form;
   const count = GROUPS.reduce((sum, group) => sum + groupSummary(group, values).count, 0);
-  return <span className="text-sm text-muted-foreground">{count > 0 ? `${count} değer girildi` : 'Henüz değer yok'}</span>;
+  return <span className="text-sm text-muted-foreground">{count > 0 ? t.filled(count) : t.noValues}</span>;
 }
 
 /**
@@ -221,13 +228,16 @@ export function MeasurementForm({
   actions?: React.ReactNode;
 }) {
   const router = useRouter();
+  const locale = useLocale();
+  const messages = useMessages(measurementsMessages);
+  const t = messages.form;
   const base = `/dashboard/clients/${clientId}/measurements`;
   const form = useForm({
     schema: measurementFormSchema,
     initialInput: {
       date: mode.kind === 'new' ? mode.today : mode.date,
       sex: SEX_UNKNOWN,
-      values: Object.fromEntries(Object.entries(initialValues).map(([key, value]) => [key, decimalText(value)])),
+      values: Object.fromEntries(Object.entries(initialValues).map(([key, value]) => [key, decimalText(value, locale)])),
     },
   });
   const [emptyError, setEmptyError] = useState<string | null>(null);
@@ -251,7 +261,7 @@ export function MeasurementForm({
         ? fetchJson<{ ok: true }>(`/api/clients/${clientId}/measurements`, { method: 'POST', body: JSON.stringify({ ...body, date }) })
         : fetchJson<{ ok: true }>(`/api/clients/${clientId}/measurements/${mode.date}`, { method: 'PUT', body: JSON.stringify(body) });
     },
-    notify: { success: mode.kind === 'new' ? 'Ölçüm kaydedildi.' : 'Ölçüm güncellendi.' },
+    notify: { success: mode.kind === 'new' ? t.saved : t.updated },
     onError: (error) => applyFieldErrors(form as never, error),
     onSuccess: () => {
       router.push(base);
@@ -270,7 +280,8 @@ export function MeasurementForm({
 
   const hiddenError = getDeepError(form);
   const guarded = form.isDirty && !save.isPending && !save.isSuccess;
-  const saveLabel = save.isPending ? 'Kaydediliyor…' : 'Kaydet';
+  const common = useMessages(commonMessages).actions;
+  const saveLabel = save.isPending ? common.saving : common.save;
   const saveIcon = save.isPending ? <Spinner data-icon="inline-start" /> : <Check data-icon="inline-start" />;
   const reveal = (event: React.MouseEvent<HTMLButtonElement>) =>
     revealFirstError(event.currentTarget.form ?? (document.getElementById(FORM_ID) as HTMLFormElement | null));
@@ -278,7 +289,7 @@ export function MeasurementForm({
   return (
     <div className="flex flex-col gap-6">
       <SectionHeader
-        back={{ href: base, label: 'Ölçümler' }}
+        back={{ href: base, label: t.back }}
         title={title}
         description={description}
         actions={
@@ -300,11 +311,7 @@ export function MeasurementForm({
         onSubmit={(output) => {
           const values = valuesFromSlots(output.values);
           if (values.length === 0) {
-            setEmptyError(
-              mode.kind === 'new'
-                ? 'En az bir ölçüm gir; boş alanlar kaydedilmez.'
-                : 'Bütün değerleri boşalttın. Bu günü tamamen kaldırmak için başlıktaki “Sil”i kullan.',
-            );
+            setEmptyError(mode.kind === 'new' ? t.emptyNew : t.emptyEdit);
             return;
           }
           setEmptyError(null);
@@ -316,12 +323,8 @@ export function MeasurementForm({
         {mode.kind === 'new' || askSex ? (
           <Card>
             <CardHeader>
-              <CardTitle>{mode.kind === 'new' ? 'Ölçüm günü' : 'Cinsiyet'}</CardTitle>
-              <CardDescription>
-                {mode.kind === 'new'
-                  ? 'Ölçümün alındığı gün; bugün varsayılan. Aynı gün birden çok kez girersen değerler o güne eklenir.'
-                  : 'Kayıtta cinsiyet yok; bel-kalça oranının eşiği buna göre.'}
-              </CardDescription>
+              <CardTitle>{mode.kind === 'new' ? t.dayTitle : t.sexTitle}</CardTitle>
+              <CardDescription>{mode.kind === 'new' ? t.dayDescription : t.sexMissing}</CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-5">
               {mode.kind === 'new' ? (
@@ -331,7 +334,7 @@ export function MeasurementForm({
                     return (
                       <Field data-invalid={Boolean(field.errors) || undefined} className="max-w-sm">
                         <FieldLabel htmlFor="date" className="flex items-baseline gap-2">
-                          Tarih <span className="text-xs font-normal text-muted-foreground">zorunlu</span>
+                          {t.date} <span className="text-xs font-normal text-muted-foreground">{t.required}</span>
                         </FieldLabel>
                         <DatePicker
                           id="date"
@@ -344,8 +347,8 @@ export function MeasurementForm({
                         />
                         {taken && typeof field.input === 'string' ? (
                           <FieldDescription>
-                            {formatDay(field.input)} tarihinde ölçüm var: aynı ölçümü girersen eskisinin yerine geçer, diğerleri
-                            kalır. Değerleri görmek için <Link href={`${base}/${field.input}/edit`}>o günü düzenle</Link>.
+                            {t.dateTaken(getFormat(locale).day(field.input))}
+                            <Link href={`${base}/${field.input}/edit`}>{t.editDay}</Link>.
                           </FieldDescription>
                         ) : null}
                         <FieldError>{field.errors?.[0]}</FieldError>
@@ -360,17 +363,15 @@ export function MeasurementForm({
                   {(field) => (
                     <Field data-invalid={Boolean(field.errors) || undefined} className="max-w-sm">
                       <FieldLabel htmlFor="sex" className="flex items-baseline gap-2">
-                        Cinsiyet <span className="text-xs font-normal text-muted-foreground">isteğe bağlı</span>
+                        {t.sex} <span className="text-xs font-normal text-muted-foreground">{t.optional}</span>
                       </FieldLabel>
                       <LabeledSelect
                         id="sex"
                         value={field.input}
-                        labels={SEX_LABELS}
+                        labels={sexLabels(locale)}
                         onChange={(sex) => setInput(form, { path: ['sex'], input: sex })}
                       />
-                      <FieldDescription>
-                        Bel-kalça oranı ve gövde dayanıklılığının başvuru değerleri cinsiyete göre. Bir kez girilir.
-                      </FieldDescription>
+                      <FieldDescription>{t.sexHint}</FieldDescription>
                       <FieldError>{field.errors?.[0]}</FieldError>
                     </Field>
                   )}
@@ -390,7 +391,7 @@ export function MeasurementForm({
               <h3>
                 <Collapsible.Trigger className="group/section -mx-2 -my-1 flex min-h-11 w-[calc(100%+1rem)] items-center gap-3 rounded-lg px-2 py-1 text-left outline-none hover:bg-muted/50 focus-visible:ring-3 focus-visible:ring-ring/50">
                   <span className="flex min-w-0 flex-1 flex-col gap-1">
-                    <span className="font-heading text-base leading-snug font-medium">{GROUP_INFO[group].title}</span>
+                    <span className="font-heading text-base leading-snug font-medium">{messages.groups[group].title}</span>
                     <GroupSummary form={form} group={group} />
                   </span>
                   <CaretDown
@@ -413,7 +414,7 @@ export function MeasurementForm({
         {emptyError || hiddenError ? (
           <Alert variant="destructive" data-form-error>
             <WarningCircle />
-            <AlertTitle>Form gönderilemedi</AlertTitle>
+            <AlertTitle>{t.submitFailed}</AlertTitle>
             <AlertDescription>{emptyError ?? hiddenError}</AlertDescription>
           </Alert>
         ) : null}
@@ -428,7 +429,7 @@ export function MeasurementForm({
         </div>
       </Form>
 
-      <UnsavedChangesGuard active={guarded} description="Çıkarsan girdiğin ölçümler kaydedilmez." onLeave={() => undefined} />
+      <UnsavedChangesGuard active={guarded} description={t.leave} onLeave={() => undefined} />
     </div>
   );
 }

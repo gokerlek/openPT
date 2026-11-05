@@ -24,7 +24,10 @@ import { Field, FieldLabel } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Spinner } from '@/components/ui/spinner';
 import { Textarea } from '@/components/ui/textarea';
-import { CLEARANCE_BASES, CLEARANCE_BASIS_LABELS, CONSTRAINT_LIMITS, type ClearanceBasis } from '@/lib/constraints';
+import { useMessages } from '@/i18n/client';
+import { commonMessages } from '@/i18n/messages/common';
+import { healthMessages } from '@/i18n/messages/health';
+import { CLEARANCE_BASES, CONSTRAINT_LIMITS, type ClearanceBasis } from '@/lib/constraints';
 import { fetchJson } from '@/lib/query/errors';
 import { useServiceMutation } from '@/lib/query/use-service';
 
@@ -49,42 +52,42 @@ function usePatch(clientId: string, id: string, success: string, after?: () => v
  */
 export function ReportActions({ clientId, id, baseUpdatedAt, avoidPreview }: { clientId: string; id: string; baseUpdatedAt: string; avoidPreview: string | null }) {
   const [note, setNote] = useState('');
-  const confirm = usePatch(clientId, id, avoidPreview ? 'Bildirim onaylandı.' : 'Bildirim kaydedildi.');
-  const decline = usePatch(clientId, id, 'Bildirim kapatıldı.');
+  const t = useMessages(healthMessages).constraintActions;
+  const common = useMessages(commonMessages).actions;
+  const confirm = usePatch(clientId, id, avoidPreview ? t.reportConfirmed : t.reportSaved);
+  const decline = usePatch(clientId, id, t.reportDeclined);
   return (
     <div className="flex flex-wrap items-center gap-2">
       <Button nativeButton={false} render={<Link href={`/dashboard/clients/${clientId}/constraints/${id}/edit`} />}>
         <PencilSimple data-icon="inline-start" />
-        Onayla ve düzenle
+        {t.confirmEdit}
       </Button>
       <Button variant="outline" disabled={confirm.isPending} onClick={() => confirm.mutate({ action: 'confirm_as_is', baseUpdatedAt })}>
         {confirm.isPending ? <Spinner data-icon="inline-start" /> : <Check data-icon="inline-start" />}
-        {avoidPreview ? 'Olduğu gibi onayla' : 'Kaydet (süzgeçsiz)'}
+        {avoidPreview ? t.confirmAsIs : t.saveUnfiltered}
       </Button>
       <AlertDialog>
-        <AlertDialogTrigger render={<Button variant="ghost" />}>Kaydetmeden kapat</AlertDialogTrigger>
+        <AlertDialogTrigger render={<Button variant="ghost" />}>{t.decline}</AlertDialogTrigger>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Bildirim kısıt olmadan kapansın mı?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Hiçbir hareket değişmez; danışanın bildirdiği zorlayanların dikkati de kalkar. İstersen danışana kısa bir not bırak.
-            </AlertDialogDescription>
+            <AlertDialogTitle>{t.declineTitle}</AlertDialogTitle>
+            <AlertDialogDescription>{t.declineBody}</AlertDialogDescription>
           </AlertDialogHeader>
           <Field>
-            <FieldLabel htmlFor={`decline-${id}`}>Danışana not (isteğe bağlı)</FieldLabel>
+            <FieldLabel htmlFor={`decline-${id}`}>{t.declineNote}</FieldLabel>
             <Textarea
               id={`decline-${id}`}
               maxLength={CONSTRAINT_LIMITS.reportNote}
-              placeholder="Kas ağrısı; yoklamada söylemen yeter."
+              placeholder={t.declinePlaceholder}
               value={note}
               onChange={(event) => setNote(event.currentTarget.value)}
             />
           </Field>
           <AlertDialogFooter>
-            <AlertDialogCancel>Vazgeç</AlertDialogCancel>
+            <AlertDialogCancel>{common.cancel}</AlertDialogCancel>
             <AlertDialogAction disabled={decline.isPending} onClick={() => decline.mutate({ action: 'decline', baseUpdatedAt, note })}>
               {decline.isPending ? <Spinner data-icon="inline-start" /> : null}
-              Kaydetmeden kapat
+              {t.decline}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -95,12 +98,13 @@ export function ReportActions({ clientId, id, baseUpdatedAt, avoidPreview }: { c
 
 /** Onaylı kısıtta danışanın güncellemesi: kötüleştiyse "Gördüm"; düzeldi dediyse "Kapat" ya da "Etkin kalsın". */
 export function ChangeActions({ clientId, id, baseUpdatedAt, kind }: { clientId: string; id: string; baseUpdatedAt: string; kind: 'worse' | 'better' }) {
-  const ack = usePatch(clientId, id, kind === 'worse' ? 'Gördün olarak işaretlendi.' : 'Kaydedildi.');
+  const t = useMessages(healthMessages).constraintActions;
+  const ack = usePatch(clientId, id, kind === 'worse' ? t.seenMarked : t.saved);
   if (kind === 'worse') {
     return (
       <Button size="sm" variant="outline" disabled={ack.isPending} onClick={() => ack.mutate({ action: 'ack_change', baseUpdatedAt })}>
         {ack.isPending ? <Spinner data-icon="inline-start" /> : <Check data-icon="inline-start" />}
-        Gördüm
+        {t.seen}
       </Button>
     );
   }
@@ -108,10 +112,10 @@ export function ChangeActions({ clientId, id, baseUpdatedAt, kind }: { clientId:
     <div className="flex flex-wrap gap-2">
       <Button size="sm" disabled={ack.isPending} onClick={() => ack.mutate({ action: 'ack_change', baseUpdatedAt, close: true })}>
         <CheckCircle data-icon="inline-start" />
-        Kapat
+        {t.close}
       </Button>
       <Button size="sm" variant="outline" disabled={ack.isPending} onClick={() => ack.mutate({ action: 'ack_change', baseUpdatedAt })}>
-        Etkin kalsın
+        {t.keepActive}
       </Button>
     </div>
   );
@@ -139,21 +143,24 @@ export function RedFlagActions({
   const [basis, setBasis] = useState<ClearanceBasis | undefined>(undefined);
   const [scope, setScope] = useState('');
   const [open, setOpen] = useState(false);
-  const refer = usePatch(clientId, id, 'Yönlendirme kaydedildi.');
-  const clear = usePatch(clientId, id, 'Görüş kaydedildi.', () => setOpen(false));
+  const messages = useMessages(healthMessages);
+  const t = messages.constraintActions;
+  const common = useMessages(commonMessages).actions;
+  const refer = usePatch(clientId, id, t.referSaved);
+  const clear = usePatch(clientId, id, t.opinionSaved, () => setOpen(false));
   return (
     <div className="flex flex-col gap-3">
       {step === 'refer' ? (
         <div className="flex flex-wrap items-end gap-2">
           <Field className="w-auto">
             <FieldLabel htmlFor={`refer-${id}`} className="text-xs">
-              Yönlendirme günü
+              {t.referDate}
             </FieldLabel>
             <DatePicker id={`refer-${id}`} max={today} value={referDate} onValueChange={setReferDate} className="w-40" />
           </Field>
           <Button size="sm" disabled={refer.isPending || !referDate} onClick={() => refer.mutate({ action: 'refer', baseUpdatedAt, date: referDate })}>
             {refer.isPending ? <Spinner data-icon="inline-start" /> : <Check data-icon="inline-start" />}
-            Sağlık profesyoneline yönlendirdim
+            {t.referred}
           </Button>
         </div>
       ) : null}
@@ -161,29 +168,29 @@ export function RedFlagActions({
         <div className="flex flex-col gap-3 rounded-lg border p-3">
           <Field className="w-auto">
             <FieldLabel htmlFor={`clear-${id}`} className="text-xs">
-              Görüş günü
+              {t.opinionDate}
             </FieldLabel>
             <DatePicker id={`clear-${id}`} max={today} value={date} onValueChange={setDate} className="w-40" />
           </Field>
           <Field>
             <FieldLabel id={`basis-${id}`} className="text-xs">
-              Dayanak
+              {t.basis}
             </FieldLabel>
             <ChoiceChips
               labelledBy={`basis-${id}`}
               value={basis}
-              options={CLEARANCE_BASES.map((item) => ({ value: item, label: CLEARANCE_BASIS_LABELS[item] }))}
+              options={CLEARANCE_BASES.map((item) => ({ value: item, label: messages.constraints.clearanceBases[item] }))}
               onChange={setBasis}
             />
           </Field>
           <Field>
             <FieldLabel htmlFor={`scope-${id}`} className="text-xs">
-              Kapsam (isteğe bağlı)
+              {t.scope}
             </FieldLabel>
             <Input
               id={`scope-${id}`}
               maxLength={CONSTRAINT_LIMITS.scope}
-              placeholder="Tam yük; derin squat 6 hafta yok"
+              placeholder={t.scopePlaceholder}
               value={scope}
               onChange={(event) => setScope(event.currentTarget.value)}
             />
@@ -191,16 +198,16 @@ export function RedFlagActions({
           <div className="flex gap-2">
             <Button size="sm" disabled={clear.isPending || !basis || !date} onClick={() => clear.mutate({ action: 'clear', baseUpdatedAt, date, basis, scope })}>
               {clear.isPending ? <Spinner data-icon="inline-start" /> : <Check data-icon="inline-start" />}
-              Kaydet
+              {common.save}
             </Button>
             <Button size="sm" variant="ghost" onClick={() => setOpen(false)}>
-              Vazgeç
+              {common.cancel}
             </Button>
           </div>
         </div>
       ) : (
         <Button size="sm" variant={step === 'opinion' ? 'default' : 'outline'} className="w-fit" onClick={() => setOpen(true)}>
-          Görüş alındı
+          {t.opinionReceived}
         </Button>
       )}
     </div>
@@ -210,15 +217,16 @@ export function RedFlagActions({
 /** İzni kaldırır: hareket yine kısıtın süzgecinden geçer. */
 export function OverrideRemove({ clientId, exerciseId, source, title }: { clientId: string; exerciseId: string; source: string; title: string }) {
   const router = useRouter();
+  const t = useMessages(healthMessages).constraintActions;
   const remove = useServiceMutation({
     fn: () => fetchJson<{ ok: true }>(`/api/clients/${clientId}/constraints/overrides/${exerciseId}?source=${source}`, { method: 'DELETE' }),
-    notify: { success: 'İzin kaldırıldı.' },
+    notify: { success: t.overrideRemoved },
     onSuccess: () => router.refresh(),
   });
   return (
-    <Button size="sm" variant="ghost" className="min-h-11" aria-label={`${title} iznini kaldır`} disabled={remove.isPending} onClick={() => remove.mutate()}>
+    <Button size="sm" variant="ghost" className="min-h-11" aria-label={t.removeOverride(title)} disabled={remove.isPending} onClick={() => remove.mutate()}>
       {remove.isPending ? <Spinner data-icon="inline-start" /> : <X data-icon="inline-start" />}
-      Kaldır
+      {t.remove}
     </Button>
   );
 }
@@ -239,11 +247,13 @@ export function ConstraintEditActions({
 }) {
   const router = useRouter();
   const [confirming, setConfirming] = useState(false);
+  const t = useMessages(healthMessages).constraintActions;
+  const common = useMessages(commonMessages).actions;
   const base = `/dashboard/clients/${clientId}/constraints`;
-  const toggle = usePatch(clientId, id, status === 'closed' ? 'Kısıt yeniden açıldı.' : 'Kısıt kapatıldı.', () => router.push(base));
+  const toggle = usePatch(clientId, id, status === 'closed' ? t.reopened : t.closed, () => router.push(base));
   const remove = useServiceMutation({
     fn: () => fetchJson<{ ok: true }>(`/api/clients/${clientId}/constraints/${id}`, { method: 'DELETE' }),
-    notify: { success: 'Kısıt silindi.' },
+    notify: { success: t.deleted },
     onSuccess: () => {
       router.push(base);
       router.refresh();
@@ -257,18 +267,18 @@ export function ConstraintEditActions({
           disabled={toggle.isPending}
           onClick={() => toggle.mutate({ action: status === 'closed' ? 'reopen' : 'resolve', baseUpdatedAt })}>
           {status === 'closed' ? <ArrowCounterClockwise data-icon="inline-start" /> : <CheckCircle data-icon="inline-start" />}
-          {status === 'closed' ? 'Yeniden aç' : 'Kapat'}
+          {status === 'closed' ? t.reopen : t.close}
         </Button>
       ) : null}
       <Button variant="outline" className="text-destructive-text" onClick={() => setConfirming(true)}>
         <Trash data-icon="inline-start" />
-        Sil
+        {common.delete}
       </Button>
       <ConfirmDeleteDialog
         open={confirming}
         onOpenChange={setConfirming}
-        title={`${label} silinsin mi?`}
-        body="Yanlış kayıt içindir; geçmişi kalsın istiyorsan “Kapat”. Bu kısıta verilen izinler de silinir. Danışanın kaydının değişiklik geçmişinde bir kopyası kalır."
+        title={t.deleteTitle(label)}
+        body={t.deleteBody}
         busy={remove.isPending}
         onConfirm={() => remove.mutate()}
       />

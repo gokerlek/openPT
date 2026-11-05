@@ -5,6 +5,9 @@ import { useRouter } from 'next/navigation';
 import { Trash } from '@phosphor-icons/react';
 import { ConfirmDeleteDialog } from '@/components/confirm-delete-dialog';
 import { Button } from '@/components/ui/button';
+import { commonMessages } from '@/i18n/messages/common';
+import { measurementsMessages } from '@/i18n/messages/measurements';
+import { useMessages } from '@/i18n/client';
 import { fetchJson } from '@/lib/query/errors';
 import { useServiceMutation } from '@/lib/query/use-service';
 
@@ -12,11 +15,13 @@ import { useServiceMutation } from '@/lib/query/use-service';
 export function MeasurementActions({ clientId, date, dateLabel }: { clientId: string; date: string; dateLabel: string }) {
   const [open, setOpen] = useState(false);
   const router = useRouter();
+  const t = useMessages(measurementsMessages).actions;
+  const common = useMessages(commonMessages).actions;
   const base = `/dashboard/clients/${clientId}/measurements`;
 
   const remove = useServiceMutation({
     fn: () => fetchJson<{ ok: true }>(`/api/clients/${clientId}/measurements/${date}`, { method: 'DELETE' }),
-    notify: { success: 'O günün ölçümleri silindi.' },
+    notify: { success: t.deleted },
     onSuccess: () => {
       router.push(base);
       router.refresh();
@@ -27,13 +32,13 @@ export function MeasurementActions({ clientId, date, dateLabel }: { clientId: st
     <>
       <Button variant="destructive" onClick={() => setOpen(true)}>
         <Trash data-icon="inline-start" />
-        Sil
+        {common.delete}
       </Button>
       <ConfirmDeleteDialog
         open={open}
         onOpenChange={setOpen}
-        title={`${dateLabel} ölçümleri silinsin mi?`}
-        body="O günün bütün değerleri kayıttan ve grafiklerden çıkar. Danışanın kaydının değişiklik geçmişinde bir kopyası kalır; tamamen gitmesi için danışanın kendisi silinmelidir."
+        title={t.deleteTitle(dateLabel)}
+        body={t.deleteBody}
         busy={remove.isPending}
         onConfirm={() => remove.mutate()}
       />

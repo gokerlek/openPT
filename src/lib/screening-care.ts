@@ -1,17 +1,18 @@
+import { DEFAULT_LOCALE, type Locale } from '../i18n/locale.ts';
+import { screeningMessages } from '../i18n/messages/screening/index.ts';
 import type { MovementPattern } from './alternatives.ts';
 import type { Screening } from './schemas/health.ts';
 import {
   cellsOf,
   cellTitle,
   newestFirst,
-  OUTCOME_LABELS,
+  outcomeLabels,
   painHistory,
   rankOf,
   SCREENING_PROTOCOL,
   SCREENING_TEST_IDS,
   SCREENING_TESTS,
   screeningHints,
-  SIDE_KEY_LABELS,
   type Outcome,
   type ScreeningCell,
   type ScreeningTestId,
@@ -39,10 +40,10 @@ export type ScreeningMark = {
 };
 
 /** Taramanın ağrısı dikkat verir; bu kalıptaki hareketler ("Hareket testinde ağrı: …"). */
-export function painWarnings(screenings: readonly Screening[]): Map<MovementPattern, string[]> {
+export function painWarnings(screenings: readonly Screening[], locale: Locale = DEFAULT_LOCALE): Map<MovementPattern, string[]> {
   const byPattern = new Map<MovementPattern, string[]>();
   for (const pain of painHistory(screenings).open) {
-    const text = `Hareket testinde ağrı: ${cellTitle(pain.testId, pain.side)}`;
+    const text = screeningMessages(locale).care.pain(cellTitle(pain.testId, pain.side, false, locale));
     for (const pattern of SCREENING_TESTS[pain.testId].painPatterns) {
       const list = byPattern.get(pattern) ?? [];
       if (!list.includes(text)) list.push(text);
@@ -64,13 +65,20 @@ type TestSummary = { testId: ScreeningTestId; label: string; order: number; deta
  * tarafsız). Açık ağrılı taraf rozete girmez (dikkati zaten söyler); test yapılmadıysa ya da yalnız açık ağrı
  * kaldıysa null.
  */
-function testSummary(testId: ScreeningTestId, cells: readonly ScreeningCell[], openKeys: ReadonlySet<string>, hint: string): TestSummary | null {
+function testSummary(
+  testId: ScreeningTestId,
+  cells: readonly ScreeningCell[],
+  openKeys: ReadonlySet<string>,
+  hint: string,
+  locale: Locale,
+): TestSummary | null {
   const shown = cells.filter((cell) => cell.outcome !== 'not_tested' && !openKeys.has(cell.key));
   if (shown.length === 0) return null;
   const worst = [...shown].sort((a, b) => severity(a.outcome) - severity(b.outcome))[0]!;
   const same = shown.length > 1 && shown.every((cell) => cell.outcome === worst.outcome);
-  const side = worst.side === 'center' || same ? '' : ` (${SIDE_KEY_LABELS[worst.side].toLocaleLowerCase('tr')})`;
-  return { testId, label: `${SCREENING_TESTS[testId].short}${side} · ${OUTCOME_LABELS[worst.outcome]}`, order: severity(worst.outcome), detail: hint };
+  const t = screeningMessages(locale);
+  const label = t.care.summary(t.tests[testId].short, same ? null : worst.side, outcomeLabels(locale)[worst.outcome]);
+  return { testId, label, order: severity(worst.outcome), detail: hint };
 }
 
 /**
@@ -81,16 +89,18 @@ function testSummary(testId: ScreeningTestId, cells: readonly ScreeningCell[], o
 export function screeningMarks(
   screenings: readonly Screening[],
   items: readonly { id: string; pattern?: MovementPattern | undefined }[],
-  options: { titleOf: (id: string) => string | undefined; suppress?: SideSuppress | undefined },
+  options: { titleOf: (id: string) => string | undefined; suppress?: SideSuppress | undefined; /** Metinlerin dili; yoksa Türkçe. */ locale?: Locale },
 ): Record<string, ScreeningMark> {
   const marks: Record<string, ScreeningMark> = {};
-  const pains = painWarnings(screenings);
+  const locale = options.locale ?? DEFAULT_LOCALE;
+  const t = screeningMessages(locale).care;
+  const pains = painWarnings(screenings, locale);
   const latest = newestFirst(screenings).find((item) => item.protocol === SCREENING_PROTOCOL);
   const openKeys = new Set(painHistory(screenings).open.filter((pain) => pain.date === latest?.date).map((pain) => pain.key));
   const summaries = new Map<MovementPattern, TestSummary[]>();
   if (latest) {
     const cells = cellsOf(latest);
-    const hints = screeningHints(latest, options.titleOf, options.suppress);
+    const hints = screeningHints(latest, options.titleOf, options.suppress, locale);
     for (const testId of SCREENING_TEST_IDS) {
       const hint = hints
         .filter((item) => item.testId === testId)
@@ -101,6 +111,7 @@ export function screeningMarks(
         cells.filter((cell) => cell.testId === testId),
         openKeys,
         hint,
+        locale,
       );
       if (!summary) continue;
       for (const pattern of SCREENING_TESTS[testId].patterns) summaries.set(pattern, [...(summaries.get(pattern) ?? []), summary]);
@@ -113,8 +124,8 @@ export function screeningMarks(
     const first = tests[0];
     const info = first
       ? {
-          label: `Hareket testi: ${first.label}${tests.length > 1 ? ` · +${tests.length - 1}` : ''}`,
-          detail: tests.map((test) => test.detail || `${test.label}.`).join(' '),
+          label: t.badge(first.label, tests.length - 1),
+          detail: tests.map((test) => test.detail || t.detailFallback(test.label)).join(' '),
         }
       : undefined;
     if (pain.length === 0 && !info) continue;

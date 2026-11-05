@@ -50,6 +50,7 @@ export function usePoseDetection(videoRef:RefObject<HTMLVideoElement|null>,enabl
     };
     worker.postMessage({type:'init'});armWatchdog();
     return()=>{disposed=true;ready=false;clearTimeout(frameTimer);clearTimeout(watchdog);clearTimeout(staleTimer);worker.terminate();};
+  // Dil bağımlılık değil: dil değişince çekim ortasında algılayıcı yeniden başlamasın (`Metric.label` gösterilmez).
   },[enabled,task,videoRef,stream]);
   // Old results cannot appear after stopping/restarting or switching tasks.
   return enabled && detection?.stream===stream && detection.task===task?detection.value:null;

@@ -1,4 +1,5 @@
 import { DEFAULT_LOCALE, type Locale } from '../i18n/locale.ts';
+import { measurementsMessages } from '../i18n/messages/measurements/index.ts';
 import {
   ENDURANCE_NOISE,
   MEASUREMENT_IDS,
@@ -38,11 +39,16 @@ export type NoiseRule = {
   source: string;
 };
 
+/** Eşiklerin kaynağı okuyanın dilinde. */
+function sources(locale: Locale) {
+  return measurementsMessages(locale).noiseSources;
+}
+
 const ENDURANCE_RULE: NoiseRule = {
   threshold: ENDURANCE_NOISE,
   relative: true,
   better: 'higher',
-  source: 'Gövde dayanıklılık testlerinde tipik hata %12–24',
+  source: sources('tr').endurance,
 };
 
 /**
@@ -59,24 +65,41 @@ export const NOISE_RULES: Partial<Record<MeasurementId, NoiseRule>> = {
     threshold: WAIST_HIP_GIRTH_NOISE_CM,
     relative: false,
     better: 'lower',
-    source: 'WHO: bel çevresinde teknik ölçüm hatası ~1,3–1,6 cm',
+    source: sources('tr').waist,
   },
   hip_girth: {
     threshold: WAIST_HIP_GIRTH_NOISE_CM,
     relative: false,
     better: null,
-    source: 'WHO: kalça çevresinde teknik ölçüm hatası ~1,2–1,4 cm',
+    source: sources('tr').hip,
   },
   sit_to_stand_5x: {
     threshold: SIT_TO_STAND_MCID,
     relative: false,
     better: 'lower',
-    source: '5 tekrar otur-kalk: en küçük saptanabilir ve anlamlı fark 2,3 sn',
+    source: sources('tr').sitToStand,
   },
   trunk_flexor_endurance: ENDURANCE_RULE,
   trunk_extensor_endurance: ENDURANCE_RULE,
   side_bridge_endurance: ENDURANCE_RULE,
 };
+
+const SOURCE_KEYS: Partial<Record<MeasurementId, keyof ReturnType<typeof sources>>> = {
+  waist_girth: 'waist',
+  hip_girth: 'hip',
+  sit_to_stand_5x: 'sitToStand',
+  trunk_flexor_endurance: 'endurance',
+  trunk_extensor_endurance: 'endurance',
+  side_bridge_endurance: 'endurance',
+};
+
+/** Ölçümün eşiği, kaynağı okuyanın dilinde (Türkçede `NOISE_RULES`'un kendisi). */
+export function noiseRule(id: MeasurementId, locale: Locale = DEFAULT_LOCALE): NoiseRule | null {
+  const rule = NOISE_RULES[id];
+  const key = SOURCE_KEYS[id];
+  if (!rule || !key || locale === DEFAULT_LOCALE) return rule ?? null;
+  return { ...rule, source: sources(locale)[key] };
+}
 
 /** Yönü tanımlı ölçümde gelişme/gerileme; yönsüzde artış/azalma; eşiğin altında gürültü. */
 export type ChangeKind = Change | 'increased' | 'decreased';
@@ -146,14 +169,14 @@ function lineChange(points: readonly Point[], rule: NoiseRule | null): LineChang
 export function measurementTrends(
   entries: readonly MeasurementEntry[],
   { from, to }: { from?: string | undefined; to?: string | undefined } = {},
-  _locale: Locale = DEFAULT_LOCALE,
+  locale: Locale = DEFAULT_LOCALE,
 ): MeasurementTrend[] {
   const trends: MeasurementTrend[] = [];
   for (const id of MEASUREMENT_IDS) {
     const own = entries.filter((entry) => entry.id === id && (!to || entry.date <= to));
     const shown = own.filter((entry) => !from || entry.date >= from);
     if (shown.length === 0) continue;
-    const rule = NOISE_RULES[id] ?? null;
+    const rule = noiseRule(id, locale);
     const lines = LINE_ORDER.flatMap((key): MeasurementLine[] => {
       const values = new Map<string, number>();
       for (const entry of own) if ((entry.side ?? 'value') === key) values.set(entry.date, entry.value);
@@ -279,6 +302,7 @@ const ALERT_ORDER: Record<MeasurementAlert['kind'], number> = { declining: 0, pl
  * dilimindeki gün (`todayIn`).
  */
 export function measurementAlerts(entries: readonly MeasurementEntry[], today: string, _locale: Locale = DEFAULT_LOCALE): MeasurementAlert[] {
+  // Uyarı metin taşımaz (kod: kimlik, çizgi, tür, değişim); dil yalnız imzada, metni çağıran kurar.
   const since = rangeStart('4h', today);
   const alerts: MeasurementAlert[] = [];
   for (const trend of measurementTrends(entries)) {
@@ -376,11 +400,12 @@ export function measurementsInRange(
   sex: Sex | undefined,
   from?: string,
   to?: string,
+  locale: Locale = DEFAULT_LOCALE,
 ): { entries: MeasurementEntry[]; trends: MeasurementTrend[]; indicators: MeasurementIndicators } {
   const inRange = entriesInRange(entries, from, to);
   return {
     entries: inRange,
-    trends: measurementTrends(entries, { from, to }),
+    trends: measurementTrends(entries, { from, to }, locale),
     indicators: {
       waistHip: latestWaistHip(inRange, sex),
       sitToStand: latestSitToStand(inRange),
