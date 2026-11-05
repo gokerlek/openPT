@@ -5,6 +5,7 @@ import { setupMessages } from '../i18n/messages/setup/index.ts';
 import { BrokenJsonError, describeError, GithubError, writeToFreshRepo } from './github/errors.ts';
 import { appConfigSchema, CONFIG_PATH, defaultConfig, type AppConfig } from './schemas/config.ts';
 import type { SetupForm } from './schemas/setup.ts';
+import { isTimeZone } from './time-zone.ts';
 
 /**
  * Ayar okuma ve yazmanın kuralları (SPEC §2, §9.8, §10) — saf mantık, GitHub'a dokunmaz.
@@ -187,13 +188,17 @@ function firstWrite(store: Pick<ConfigStore, 'wait' | 'refreshAccess'>, created:
   return created ? writeToFreshRepo(write, store.wait, store.refreshAccess) : write();
 }
 
-/** Görünüm kaydı (sihirbaz ve Ayarlar → Görünüm). Formda olmayan alanlar (logo, saat dilimi) korunur. */
+/**
+ * Görünüm kaydı (sihirbaz ve Ayarlar → Görünüm). Formda olmayan alan (logo) korunur. Saat dilimi yalnız geçerli bir
+ * IANA adıysa yazılır; yoksa ya da geçersizse kayıtlı değer (ilk kurulumda varsayılan) kalır.
+ */
 export async function saveAppearance(store: ConfigStore, values: SetupForm): Promise<void> {
   const base = await readConfigBase(store);
   const { created } = await ensureAppRepo(store, base);
+  const { timeZone, ...appearance } = values;
   await firstWrite(store, created, () =>
     store.write(
-      { ...base.config, ...values, setupCompleted: true },
+      { ...base.config, ...appearance, ...(isTimeZone(timeZone) ? { timeZone } : {}), setupCompleted: true },
       base.sha,
       base.config.setupCompleted ? 'Görünüm ayarları güncellendi' : 'Kurulum tamamlandı',
     ),

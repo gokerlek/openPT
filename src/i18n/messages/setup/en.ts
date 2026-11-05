@@ -23,6 +23,8 @@ const en: Shape<typeof tr> = {
     radius: 'Corners',
     theme: 'Default theme',
     themeHint: 'A dark theme is easy on the eyes in the gym.',
+    timeZone: 'Time zone',
+    timeZoneHint: 'Today, weeks and missed days are counted in this time zone.',
     saving: 'Saving…',
     finish: 'Finish setup',
     save: 'Save',

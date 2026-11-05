@@ -5,12 +5,13 @@ import { getLocale } from '@/i18n/server';
 import { loadAppConfig } from '@/lib/config';
 import { SetupForm } from '@/app/setup/setup-form';
 import { requirePt } from '@/lib/guards';
+import { timeZoneOptions } from '@/lib/time-zone';
 
 export async function generateMetadata(): Promise<Metadata> {
   return { title: ptShellMessages(await getLocale()).settings.appearance.title };
 }
 
-/** Ayarlar → Görünüm. Kurulum sihirbazıyla aynı form; kaydedince sayfada kalır. */
+/** Ayarlar → Görünüm. Kurulum sihirbazıyla aynı form, saat dilimi seçimiyle; kaydedince sayfada kalır. */
 export default async function SettingsPage() {
   await requirePt();
   const t = ptShellMessages(await getLocale()).settings.appearance;
@@ -24,12 +25,14 @@ export default async function SettingsPage() {
         firstRun={false}
         hasLogo={Boolean(config.logo)}
         afterSave="/dashboard/settings"
+        timeZones={timeZoneOptions(config.timeZone)}
         initial={{
           appName: config.appName,
           accent: config.accent,
           theme: config.theme,
           radius: config.radius,
           palette: config.palette,
+          timeZone: config.timeZone,
         }}
       />
     </div>

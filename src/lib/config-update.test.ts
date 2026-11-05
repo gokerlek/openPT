@@ -241,6 +241,29 @@ describe('ayar yazmanın tabanı: taze okuma, aynı sha (SPEC §10)', () => {
     ]);
   });
 
+  test('saat dilimi: ilk kurulumda tarayıcınınki kaydedilir; IANA adı değilse varsayılan kalır', async () => {
+    const fresh = fakeGithub();
+    await saveAppearance(fresh.store, { ...FORM, timeZone: 'America/New_York' });
+    assert.equal(fresh.writes[0]?.config.timeZone, 'America/New_York');
+    for (const bad of ['Mars/Olympus', '+03:00', '', 'Europe/Istanbul; rm -rf', 'x'.repeat(200)]) {
+      const gh = fakeGithub();
+      await saveAppearance(gh.store, { ...FORM, timeZone: bad });
+      assert.equal(gh.writes[0]?.config.timeZone, defaultConfig.timeZone, bad);
+    }
+  });
+
+  test('saat dilimi: Ayarlar\'da değişir; Europe/Istanbul\'daki Türkçe kurulumda hiçbir şey değişmez', async () => {
+    const turkish = fakeGithub({ stored: { content: BRAND, sha: 'sha-1' } });
+    await saveAppearance(turkish.store, { ...FORM, timeZone: 'Europe/Istanbul' });
+    assert.deepEqual(turkish.writes, [{ config: BRAND, sha: 'sha-1', message: 'Görünüm ayarları güncellendi' }]);
+    const moved = fakeGithub({ stored: { content: BRAND, sha: 'sha-1' } });
+    await saveAppearance(moved.store, { ...FORM, timeZone: 'Europe/London' });
+    assert.deepEqual(moved.writes[0]?.config, { ...BRAND, timeZone: 'Europe/London' });
+    const invalid = fakeGithub({ stored: { content: { ...BRAND, timeZone: 'America/Chicago' }, sha: 'sha-1' } });
+    await saveAppearance(invalid.store, { ...FORM, timeZone: 'Nowhere/Land' });
+    assert.equal(invalid.writes[0]?.config.timeZone, 'America/Chicago');
+  });
+
   test('logo yükleme markayı korur, yalnız logo değişir; eski dosya ancak ayar yazıldıktan SONRA silinir', async () => {
     const gh = fakeGithub({ stored: { content: BRAND, sha: 'sha-1' }, files: { [BRAND.logo!]: 'eski' } });
     await replaceLogo(gh.store, gh.logo, NEW_LOGO, BYTES);

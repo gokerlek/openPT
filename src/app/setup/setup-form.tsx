@@ -9,6 +9,7 @@ import {
   useForm,
 } from "@formisch/react";
 import { WarningCircle } from "@phosphor-icons/react";
+import { LabeledSelect } from "@/components/labeled-select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
@@ -42,20 +43,24 @@ import { useAppearancePreview } from "./use-appearance-preview";
 const THEMES = ["dark", "light", "system"] as const;
 
 /**
- * Tema ayarı: uygulama adı, logo, ana renk, köşe yuvarlaklığı, tema.
+ * Tema ayarı: uygulama adı, logo, ana renk, köşe yuvarlaklığı, tema; Ayarlar'da saat dilimi de.
  *
  * Seçimler tüm ekranda anında önizlenir; Kaydet PT'nin repo'suna yazar.
- * Kaydetmeden ayrılınca önceki görünüm geri gelir.
+ * Kaydetmeden ayrılınca önceki görünüm geri gelir. Sihirbaz saat dilimi sormaz, tarayıcınınkini gönderir
+ * (sunucu IANA adı değilse varsayılanı korur).
  */
 export function SetupForm({
   initial,
   firstRun,
   hasLogo,
+  timeZones,
   afterSave = "/dashboard",
 }: {
   initial: SetupValues;
   firstRun: boolean;
   hasLogo: boolean;
+  /** Ayarlar'daki saat dilimi seçenekleri (sunucuda `timeZoneOptions`); verilmezse alan görünmez. */
+  timeZones?: readonly string[];
   /** Kayıttan sonra gidilecek sayfa (sihirbazda panele, ayarlarda aynı sayfada kal). */
   afterSave?: string;
 }) {
@@ -74,7 +79,11 @@ export function SetupForm({
     fn: (values: SetupValues) =>
       fetchJson<{ ok: true }>("/api/setup/config", {
         method: "POST",
-        body: JSON.stringify(values),
+        body: JSON.stringify(
+          firstRun
+            ? { ...values, timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone }
+            : values,
+        ),
       }),
     // Hata balonda değil formda kalır: veri repo'su açık ya da fork gibi Vercel'de
     // düzeltilecek bir sebep, kaybolan bir balonda okunamaz.
@@ -180,6 +189,23 @@ export function SetupForm({
                 </Field>
               )}
             </FormField>
+
+            {timeZones ? (
+              <FormField of={form} path={["timeZone"]}>
+                {(field) => (
+                  <Field>
+                    <FieldLabel htmlFor="timeZone">{t.timeZone}</FieldLabel>
+                    <LabeledSelect
+                      id="timeZone"
+                      value={field.input ?? undefined}
+                      labels={Object.fromEntries(timeZones.map((zone) => [zone, zone]))}
+                      onChange={(next) => setInput(form, { path: ["timeZone"], input: next })}
+                    />
+                    <FieldDescription>{t.timeZoneHint}</FieldDescription>
+                  </Field>
+                )}
+              </FormField>
+            ) : null}
 
             {save.error ? (
               <Alert variant="destructive">

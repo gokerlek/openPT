@@ -27,6 +27,8 @@ const tr = {
     radius: 'Köşeler',
     theme: 'Varsayılan tema',
     themeHint: 'Salonda koyu tema göz yormaz.',
+    timeZone: 'Saat dilimi',
+    timeZoneHint: 'Bugün, hafta ve kaçırılan günler bu saat dilimine göre sayılır.',
     saving: 'Kaydediliyor…',
     finish: 'Kurulumu tamamla',
     save: 'Kaydet',

@@ -6,8 +6,7 @@ import { appConfigSchema } from './config.ts';
 /**
  * Kurulum sihirbazı formu — şema hem formda hem sunucuda kullanılır.
  *
- * `setupCompleted`, `logo` ve `timeZone` formda yok: ilki sunucuda işaretlenir,
- * logo ayrı yükleme ucundan gelir, saat dilimi şimdilik sabit.
+ * `setupCompleted` ve `logo` formda yok: ilki sunucuda işaretlenir, logo ayrı yükleme ucundan gelir.
  */
 export const setupFormSchema = v.object({
   appName: appConfigSchema.entries.appName,
@@ -16,6 +15,11 @@ export const setupFormSchema = v.object({
   theme: appConfigSchema.entries.theme,
   radius: appConfigSchema.entries.radius,
   palette: appConfigSchema.entries.palette,
+  /**
+   * Sihirbazda tarayıcının saat dilimi, Ayarlar'da seçilen. Yoksa kayıtlı değer kalır. IANA adı olup olmadığına
+   * `saveAppearance` bakar (`isTimeZone`): geçersizse hata vermez, kayıtlı (ilk kurulumda varsayılan) değer kalır.
+   */
+  timeZone: v.optional(v.string()),
 });
 
 export type SetupForm = v.InferOutput<typeof setupFormSchema>;
