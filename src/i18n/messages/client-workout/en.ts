@@ -332,6 +332,38 @@ const en: Shape<typeof tr> = {
     dismissAlert: 'Dismiss alert',
   },
 
+  startCheck: {
+    stopCause: (flag) => (flag ? `You reported a new symptom (${flag.toLowerCase()}).` : 'Your pain is spreading into an arm or leg.'),
+    stop: (cause, urgent) =>
+      `${cause} Don't load up today; let your trainer know and see a health professional.${urgent ? ' If this symptom just started, go to the emergency room without waiting.' : ''}`,
+    lightenedPain: "Today's plan was lightened for your pain.",
+    lightened: "Today's plan was lightened.",
+    noIncrease: 'No increase today because of your pain.',
+    noLoadToast: 'No load today. Let your trainer know.',
+    title: 'How are you feeling today?',
+    text: "We ask because you've given health consent; your answers only go to your health record. You can skip it today.",
+    pain: 'Pain',
+    painBaseline: 'How much pain did you have in the last 24 hours?',
+    returned: 'Did the pain after your last workout settle back to its usual level by the next morning?',
+    returnedYes: 'Yes, as usual',
+    returnedNo: 'No, it was worse',
+    direction: 'How is your pain or numbness changing?',
+    ifAny: 'Pick one if it applies.',
+    irritability: 'How easily does your pain flare up?',
+    redFlag: 'Did any of these start recently?',
+    redFlagHint: 'Asked every workout; “No” is an answer too.',
+    begin: 'Start',
+    skipToday: 'Skip today',
+    lightenTitle: 'Lighten the volume?',
+    lightenText: (score) =>
+      `Your readiness is ${score}/100. Today the weights would be about 15% lower, with one set fewer on exercises with 3 or more sets. Only today's plan changes; your trainer is told it was "lightened".`,
+    lightenYes: 'Yes, lighten it',
+    keepPlan: 'Keep the plan',
+    stopTitle: 'No load today',
+    backToToday: 'Back to Today',
+    fixAnswers: 'Change my answers',
+  },
+
   rest: {
     holding: 'Rest is extended for your heart rate',
     remainingLabel: 'Rest remaining',

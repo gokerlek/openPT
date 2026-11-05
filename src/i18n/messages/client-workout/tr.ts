@@ -344,6 +344,40 @@ const tr = {
     dismissAlert: 'Uyarıyı kapat',
   },
 
+  /** Antrenman başı yoklaması (`start-check.tsx`). */
+  startCheck: {
+    stopCause: (flag: string | null) =>
+      flag ? `Yeni başlayan bir belirti bildirdin (${flag.toLocaleLowerCase('tr')}).` : 'Ağrın kola ya da bacağa yayılıyor.',
+    stop: (cause: string, urgent: boolean) =>
+      `${cause} Bugün yüklenme; antrenörüne haber ver ve bir sağlık uzmanına görün.${urgent ? ' Bu belirti yeni başladıysa beklemeden acil servise başvur.' : ''}`,
+    lightenedPain: 'Ağrına göre bugünkü plan hafifletildi.',
+    lightened: 'Bugünkü plan hafifletildi.',
+    noIncrease: 'Ağrına göre bugün artış yok.',
+    noLoadToast: 'Bugün yük yok. Antrenörüne haber ver.',
+    title: 'Bugün nasıl hissediyorsun?',
+    text: 'Sağlık onayın olduğu için soruluyor; cevapların yalnız sağlık kaydına yazılır. İstersen bugün atla.',
+    pain: 'Ağrı',
+    painBaseline: 'Son 24 saatte ağrın ne kadardı?',
+    returned: 'Geçen antrenmandan sonraki ağrın ertesi sabah her zamanki düzeyine döndü mü?',
+    returnedYes: 'Evet, her zamanki gibi',
+    returnedNo: 'Hayır, daha fazlaydı',
+    direction: 'Ağrın ya da uyuşman nasıl değişiyor?',
+    ifAny: 'Varsa seç.',
+    irritability: 'Ağrın ne kadar kolay tetikleniyor?',
+    redFlag: 'Bunlardan biri yeni mi başladı?',
+    redFlagHint: 'Her antrenmanda sorulur; “Hayır” da bir cevaptır.',
+    begin: 'Başla',
+    skipToday: 'Bugün atla',
+    lightenTitle: 'Hacmi hafifletelim mi?',
+    lightenText: (score: string) =>
+      `Hazır oluşluğun ${score}/100. Bugün ağırlıklar yaklaşık %15 az, 3 ve üstü setli harekette bir set eksik olur. Yalnız bugünün planı değişir; antrenörüne "hafifletildi" diye bildirilir.`,
+    lightenYes: 'Evet, hafiflet',
+    keepPlan: 'Planı koru',
+    stopTitle: 'Bugün yük yok',
+    backToToday: "Bugün'e dön",
+    fixAnswers: 'Cevaplarımı düzelt',
+  },
+
   /** Dinlenme paneli (`rest-panel.tsx`). */
   rest: {
     holding: 'Dinlenme nabız için uzuyor',
