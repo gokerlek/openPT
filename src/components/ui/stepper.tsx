@@ -6,7 +6,7 @@ import { Minus, Plus } from '@/components/line-icons';
 import { useLocale, useMessages } from '@/i18n/client';
 import { intlLocale, type Locale } from '@/i18n/locale';
 import { uiMessages } from '@/i18n/messages/ui';
-import { commaToPoint } from './decimal-text';
+import { normalizeDecimal, pastedDecimal } from './decimal-text';
 import { cn } from '@/lib/utils';
 
 /**
@@ -81,16 +81,36 @@ function wideText(locale: Locale): Intl.NumberFormat {
 }
 
 /**
- * İngilizce ondalık kutusunda yazılan virgül nokta olur: Base UI `en-GB`'de virgülü ondalık saymaz ve "2,5"i 2 okur.
- * `onInput` Base UI'ın `onChange`'inden önce çalışır, o da noktalı metni okur. Türkçede gerekmez (virgül de nokta da ondalık).
+ * İngilizce ondalık kutusunda yazılan virgül nokta olur (nokta zaten varsa düşer, `decimal-text.ts`): Base UI `en-GB`'de
+ * virgülü ondalık saymaz ve "2,5"i 2 okur. `onInput` Base UI'ın `onChange`'inden önce çalışır, o da düzeltilmiş metni okur.
+ * Türkçede gerekmez (virgül de nokta da ondalık).
  */
 export function commaAsDecimal(event: React.FormEvent<HTMLInputElement>): void {
   const input = event.currentTarget;
-  const next = commaToPoint(input.value);
-  if (next === input.value) return;
-  const caret = input.selectionStart;
-  input.value = next;
-  if (caret !== null) input.setSelectionRange(caret, caret);
+  const { text, caret } = normalizeDecimal(input.value, input.selectionStart ?? input.value.length);
+  if (text === input.value) return;
+  input.value = text;
+  input.setSelectionRange(caret, caret);
+}
+
+/**
+ * İngilizce ondalık kutusuna yapıştırma: Base UI kendi `onPaste`'inde metni `en-GB`'ye göre okur ("2,5" → 2) ve
+ * `preventDefault` çağırır. Bu işleyici öne geçer (Base UI, kendi işleyicisinden önce çağrılır: sağdaki props önce çalışır; o
+ * da `defaultPrevented` ise hemen döner), virgüllü metni düzeltip seçimin yerine yazar ve `input` olayıyla Base UI'a bildirir.
+ * Virgülsüz yapıştırmaya karışmaz.
+ */
+export function pasteDecimal(event: React.ClipboardEvent<HTMLInputElement>): void {
+  const pasted = event.clipboardData?.getData('text/plain') ?? '';
+  if (!pasted.includes(',')) return;
+  event.preventDefault();
+  const input = event.currentTarget;
+  const current = input.value;
+  const start = input.selectionStart ?? current.length;
+  const { text, caret } = pastedDecimal(current, start, input.selectionEnd ?? start, pasted);
+  // `value` atamak yerine `setRangeText`: React'in değer izleyicisi eskide kalır ve aşağıdaki `input` olayı `onChange`'i çalıştırır.
+  input.setRangeText(text, 0, current.length, 'end');
+  input.setSelectionRange(caret, caret);
+  input.dispatchEvent(new Event('input', { bubbles: true }));
 }
 
 const REPEAT = { delay: 400, interval: 100 } as const;
@@ -323,6 +343,7 @@ export function Stepper({
       onFocus={onFocus}
       onKeyDown={onKeyDown}
       onInput={locale === 'en' && inputMode === 'decimal' ? commaAsDecimal : undefined}
+      onPaste={locale === 'en' && inputMode === 'decimal' ? pasteDecimal : undefined}
       onBlur={() => {
         onBlur?.();
         // Base UI boş kutuyu `null` bildirir; çağıran yazmadıysa (değer duruyorsa) kutu değere döner.
