@@ -7,6 +7,8 @@
  * rengi kurulum anındaki ayardan gelir (düğme yazısı renge göre okunaklı); tema cihazın açık/koyu
  * tercihine uyar.
  */
+import { DEFAULT_LOCALE, type Locale } from '../i18n/locale.ts';
+import { shellMessages } from '../i18n/messages/shell/index.ts';
 import { readableOn } from './color.ts';
 
 const DEFAULT_ACCENT = '#c4f000';
@@ -17,16 +19,18 @@ function escapeHtml(text: string): string {
   return text.replace(/[&<>"']/g, (char) => ENTITIES[char] ?? char);
 }
 
-export function offlineHtml({ appName, accent }: { appName: string; accent: string | null }): string {
+/** Dil `/offline` isteğinin dili (`localeFromRequest`): service worker'ın isteği çerezi taşır. */
+export function offlineHtml({ appName, accent, locale = DEFAULT_LOCALE }: { appName: string; accent: string | null; locale?: Locale }): string {
+  const t = shellMessages(locale).offline;
   const name = escapeHtml(appName);
   const color = accent && /^#[0-9a-fA-F]{6}$/.test(accent) ? accent : DEFAULT_ACCENT;
   return `<!doctype html>
-<html lang="tr">
+<html lang="${locale}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex">
-<title>Bağlantı yok · ${name}</title>
+<title>${escapeHtml(t.title)} · ${name}</title>
 <style>
 :root { --accent: ${color}; --on-accent: ${readableOn(color)}; --bg: #171717; --fg: #fafafa; --muted: #a3a3a3; color-scheme: dark; }
 @media (prefers-color-scheme: light) { :root { --bg: #fafafa; --fg: #171717; --muted: #525252; color-scheme: light; } }
@@ -44,9 +48,9 @@ button { margin-top: 1rem; min-height: 2.75rem; width: 100%; border: 0; border-r
 <main>
 <svg viewBox="0 0 240 40" fill="none" aria-hidden="true"><path d="M0 20h78l8-13 10 26 9-19 7 6h128" stroke="var(--accent)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>
 <p>${name}</p>
-<h1>Bağlantı yok</h1>
-<p>Sayfa internete bağlanınca açılır. Antrenmanda girilen setler telefonda durur, bağlantı gelince gönderilir.</p>
-<button type="button" onclick="location.reload()">Yeniden dene</button>
+<h1>${escapeHtml(t.title)}</h1>
+<p>${escapeHtml(t.body)}</p>
+<button type="button" onclick="location.reload()">${escapeHtml(t.retry)}</button>
 </main>
 </body>
 </html>

@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { PulseLine } from '@/components/pulse-line';
 import { Card, CardContent } from '@/components/ui/card';
+import { LocaleSwitch } from '@/i18n/locale-switch';
 import { clientManifestHref } from '@/lib/client-manifest';
 import { readAppConfig } from '@/lib/config';
 import { CLIENT_ID_PATTERN } from '@/lib/schemas/client';
@@ -50,12 +51,15 @@ export default async function ClientLoginPage({
           </CardContent>
         </Card>
       </div>
-      <p className="text-center text-sm text-muted-foreground">
-        Antrenör müsün?{' '}
-        <Link href="/login" className="inline-flex min-h-11 items-center underline underline-offset-4">
-          Buradan gir
-        </Link>
-      </p>
+      <div className="flex flex-col items-center gap-1">
+        <p className="text-center text-sm text-muted-foreground">
+          Antrenör müsün?{' '}
+          <Link href="/login" className="inline-flex min-h-11 items-center underline underline-offset-4">
+            Buradan gir
+          </Link>
+        </p>
+        <LocaleSwitch />
+      </div>
     </main>
   );
 }

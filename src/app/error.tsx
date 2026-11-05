@@ -3,6 +3,8 @@
 import { WarningCircle } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
+import { useMessages } from '@/i18n/client';
+import { shellMessages } from '@/i18n/messages/shell';
 
 /**
  * Beklenmeyen hata sınırı (Next `error.js`). Kök segmentte durur ki panel kabuğunun
@@ -12,6 +14,7 @@ import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTi
  * Sunucu hatasının mesajı üretimde gizlenir; bu yüzden metin genel.
  */
 export default function ErrorPage({ retry }: { error: Error & { digest?: string }; retry: () => void }) {
+  const t = useMessages(shellMessages).error;
   return (
     <main className="grid min-h-dvh place-items-center px-4 py-8">
       <Empty>
@@ -19,11 +22,11 @@ export default function ErrorPage({ retry }: { error: Error & { digest?: string 
           <EmptyMedia variant="icon">
             <WarningCircle weight="fill" />
           </EmptyMedia>
-          <EmptyTitle>Sayfa yüklenemedi</EmptyTitle>
-          <EmptyDescription>Veriler şu an okunamadı. Biraz sonra tekrar dene.</EmptyDescription>
+          <EmptyTitle>{t.title}</EmptyTitle>
+          <EmptyDescription>{t.description}</EmptyDescription>
         </EmptyHeader>
         <EmptyContent>
-          <Button onClick={() => retry()}>Tekrar dene</Button>
+          <Button onClick={() => retry()}>{t.retry}</Button>
         </EmptyContent>
       </Empty>
     </main>

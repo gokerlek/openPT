@@ -2,6 +2,8 @@ import type { Metadata, Viewport } from 'next';
 import { Geist_Mono, Outfit } from 'next/font/google';
 import { PwaRoot } from '@/components/install/pwa-root';
 import { Providers } from '@/components/providers';
+import { shellMessages } from '@/i18n/messages/shell';
+import { getLocale } from '@/i18n/server';
 import { CLIENT_MANIFEST_PATH } from '@/lib/client-manifest';
 import { readAppConfig } from '@/lib/config';
 import { RADIUS_OPTIONS } from '@/lib/schemas/config';
@@ -16,12 +18,12 @@ const outfit = Outfit({ subsets: ['latin', 'latin-ext'], variable: '--font-sans'
 const geistMono = Geist_Mono({ subsets: ['latin', 'latin-ext'], variable: '--font-mono' });
 
 export async function generateMetadata(): Promise<Metadata> {
-  const config = await readAppConfig();
+  const [config, locale] = await Promise.all([readAppConfig(), getLocale()]);
   return {
     // Her sayfa kendi adını verir (`metadata.title`): sekme, geçmiş ve ekran okuyucunun geçiş
     // duyurusu (Next yalnız `document.title` değişince duyurur) sayfayı ayırt eder.
     title: { default: config.appName, template: `%s · ${config.appName}` },
-    description: `${config.appName} — antrenman takibi`,
+    description: shellMessages(locale).appDescription(config.appName),
     applicationName: config.appName,
     appleWebApp: { capable: true, title: config.appName, statusBarStyle: 'black-translucent' },
     // Danışan manifest'i; danışan sayfaları kimlikle (`?c=`), panel kendi manifest'iyle ezer (`lib/client-manifest.ts`).
@@ -42,7 +44,8 @@ export const viewport: Viewport = {
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  const config = await readAppConfig();
+  // Dil isteğin çerezinden ya da tarayıcının dilinden (`i18n/server.ts`); adresler dile göre değişmez.
+  const [config, locale] = await Promise.all([readAppConfig(), getLocale()]);
 
   // PT'nin seçtiği ana renk temanın --primary değişkenini ezer; üzerindeki yazı rengi ve yüzey
   // üstünde okunan türevleri (--primary-text, --primary-strong) kontrasta göre hesaplanır.
@@ -53,13 +56,13 @@ export default async function RootLayout({ children }: { children: React.ReactNo
 
   return (
     <html
-      lang="tr"
+      lang={locale}
       suppressHydrationWarning
       style={brandStyle}
       className={cn('font-sans antialiased', outfit.variable, geistMono.variable)}>
       <body className="min-h-dvh bg-background text-foreground">
         <style id="app-palette">{paletteCss(config.palette)}</style>
-        <Providers defaultTheme={config.theme}>{children}</Providers>
+        <Providers defaultTheme={config.theme} locale={locale}>{children}</Providers>
         <PwaRoot />
       </body>
     </html>

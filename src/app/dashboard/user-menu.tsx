@@ -15,6 +15,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { confirmLeave } from '@/components/unsaved-changes-guard';
+import { LocaleSwitch } from '@/i18n/locale-switch';
 
 /**
  * Sağ üstteki kullanıcı menüsü: AI koç paneli, Ayarlar ve çıkış burada (üst çubuk yok, SPEC §6).
@@ -67,6 +68,8 @@ export function UserMenu({ login, appName }: { login: string; appName: string })
             Ayarlar
           </DropdownMenuItem>
         </DropdownMenuGroup>
+        <DropdownMenuSeparator />
+        <LocaleSwitch variant="menu" />
         <DropdownMenuSeparator />
         <DropdownMenuItem variant="destructive" className="touch:min-h-11" onClick={signOut}>
           <SignOut />

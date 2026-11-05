@@ -1,5 +1,7 @@
 import { MutationCache, QueryCache, QueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
+import { currentClientLocale } from '@/i18n/client';
+import { commonMessages } from '@/i18n/messages/common';
 import { ApiError } from './errors';
 
 /**
@@ -25,7 +27,7 @@ declare module '@tanstack/react-query' {
 function showError(error: unknown, notify: NotifyOption | undefined) {
   if (notify === 'none') return;
   if (typeof notify === 'object' && notify.error === false) return;
-  toast.error(error instanceof ApiError ? error.message : 'Beklenmeyen bir hata oldu.');
+  toast.error(error instanceof ApiError ? error.message : commonMessages(currentClientLocale()).errors.unexpected);
 }
 
 export function makeQueryClient(): QueryClient {

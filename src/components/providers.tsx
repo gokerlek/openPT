@@ -7,11 +7,14 @@ import { MotionConfig } from 'motion/react';
 import { IconContext } from '@phosphor-icons/react';
 import { Toaster } from '@/components/ui/sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { LocaleProvider } from '@/i18n/client';
+import type { Locale } from '@/i18n/locale';
 import { makeQueryClient } from '@/lib/query/client';
 import { GlobalLoading } from './global-loading';
 
 /**
  * İstemci sağlayıcıları.
+ * - Dil: kök düzenin okuduğu isteğin dili (`getLocale`); istemci bileşenleri `useLocale`/`useMessages` ile okur.
  * - Tema: `next-themes`, `.dark` sınıfıyla (shadcn teması bu sınıfı okur). Varsayılan PT'nin ayarı.
  * - QueryClient bir kez kurulur (her render'da kurulursa önbellek sıfırlanır).
  * - Bildirimler tek bir Toaster'dan çıkar.
@@ -37,30 +40,34 @@ const THEME_SCRIPT = { type: typeof window === 'undefined' ? 'text/javascript' :
 export function Providers({
   children,
   defaultTheme,
+  locale,
 }: {
   children: React.ReactNode;
   defaultTheme: 'dark' | 'light' | 'system';
+  locale: Locale;
 }) {
   const [queryClient] = useState(makeQueryClient);
 
   return (
-    <ThemeProvider
-      attribute="class"
-      defaultTheme={defaultTheme}
-      enableSystem
-      disableTransitionOnChange
-      scriptProps={THEME_SCRIPT}>
-      <QueryClientProvider client={queryClient}>
-        <IconContext.Provider value={ICONS}>
-          <MotionConfig reducedMotion="user">
-            <TooltipProvider>
-              <GlobalLoading />
-              {children}
-              <Toaster position="top-center" richColors closeButton />
-            </TooltipProvider>
-          </MotionConfig>
-        </IconContext.Provider>
-      </QueryClientProvider>
-    </ThemeProvider>
+    <LocaleProvider locale={locale}>
+      <ThemeProvider
+        attribute="class"
+        defaultTheme={defaultTheme}
+        enableSystem
+        disableTransitionOnChange
+        scriptProps={THEME_SCRIPT}>
+        <QueryClientProvider client={queryClient}>
+          <IconContext.Provider value={ICONS}>
+            <MotionConfig reducedMotion="user">
+              <TooltipProvider>
+                <GlobalLoading />
+                {children}
+                <Toaster position="top-center" richColors closeButton />
+              </TooltipProvider>
+            </MotionConfig>
+          </IconContext.Provider>
+        </QueryClientProvider>
+      </ThemeProvider>
+    </LocaleProvider>
   );
 }

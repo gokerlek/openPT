@@ -1,4 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
+import { localeFromRequest } from './i18n/locale';
+import { shellMessages } from './i18n/messages/shell';
 import { environmentStatus } from './lib/installation/readiness';
 import { PATH_HEADER } from '@/lib/navigation';
 
@@ -10,7 +12,9 @@ import { PATH_HEADER } from '@/lib/navigation';
 export function proxy(request: NextRequest) {
   const path = request.nextUrl.pathname;
   if (environmentStatus(process.env) !== 'ready' && !path.startsWith('/install') && !path.startsWith('/api/install')) {
-    if (path.startsWith('/api/')) return NextResponse.json({ error: 'Kurulum tamamlanmalı.' }, { status: 503 });
+    if (path.startsWith('/api/')) {
+      return NextResponse.json({ error: shellMessages(localeFromRequest(request)).setupRequired }, { status: 503 });
+    }
     return NextResponse.redirect(new URL('/install', request.url));
   }
   const headers = new Headers(request.headers);

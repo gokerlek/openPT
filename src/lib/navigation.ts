@@ -1,3 +1,5 @@
+import { DEFAULT_LOCALE, type Locale } from '../i18n/locale.ts';
+import { shellMessages } from '../i18n/messages/shell/index.ts';
 import type { LinkClick } from './unsaved-changes.ts';
 
 /**
@@ -70,19 +72,15 @@ export function loginPath(from: string | null | undefined): string {
 }
 
 /** "Sayfa yok" ekranında dönülecek liste: adresin ait olduğu bölüm, yoksa genel bakış. */
-const SECTIONS: Record<string, { href: string; label: string }> = {
-  templates: { href: '/dashboard/templates', label: 'Şablonlara dön' },
-  exercises: { href: '/dashboard/exercises', label: 'Egzersizlere dön' },
-  devices: { href: '/dashboard/devices', label: 'Cihazlara dön' },
-  attachments: { href: '/dashboard/attachments', label: 'Aparatlara dön' },
-  clients: { href: '/dashboard/clients', label: 'Danışanlara dön' },
-};
+const SECTIONS = ['templates', 'exercises', 'devices', 'attachments', 'clients'] as const;
 
-export function notFoundBackLink(pathname: string): { href: string; label: string } {
+export function notFoundBackLink(pathname: string, locale: Locale = DEFAULT_LOCALE): { href: string; label: string } {
+  const backTo = shellMessages(locale).backTo;
   const [root, section] = pathname.split('/').filter(Boolean);
-  // `in` değil: "constructor" gibi yollar nesnenin prototipine düşmesin.
-  if (root === 'dashboard' && section && Object.hasOwn(SECTIONS, section)) return SECTIONS[section]!;
-  return root === 'dashboard' ? { href: PT_AREA, label: 'Genel bakışa dön' } : { href: '/', label: 'Ana sayfaya dön' };
+  // Yalnız listedeki adlar: "constructor" gibi yollar nesnenin prototipine düşmesin.
+  const known = SECTIONS.find((name) => name === section);
+  if (root === 'dashboard' && known) return { href: `${PT_AREA}/${known}`, label: backTo[known] };
+  return root === 'dashboard' ? { href: PT_AREA, label: backTo.overview } : { href: '/', label: backTo.home };
 }
 
 /** Kütüphane bölümünün listeleri (sekmeleriyle açılan sayfalar). */
@@ -92,12 +90,18 @@ const LIBRARY_LISTS = ['/dashboard/templates', '/dashboard/exercises', '/dashboa
  * Ayarlar bölümünün sayfaları, sekme sırasıyla (tek yer): sekmeleri `settings/settings-tabs.tsx` çizer, geçiş
  * iskeleti (`skeletonKind`) buradan tanır. Avatar menüsündeki tek "Ayarlar" öğesi bölümün girişine (Görünüm) açılır.
  */
-export const SETTINGS_SECTIONS = [
-  { href: '/dashboard/settings', label: 'Görünüm' },
-  { href: '/dashboard/settings/ai', label: 'Yapay zekâ' },
-  { href: '/dashboard/settings/updates', label: 'Sürüm' },
-  { href: '/dashboard/settings/app', label: 'Uygulama' },
-] as const;
+export function settingsSections(locale: Locale = DEFAULT_LOCALE): readonly { href: string; label: string }[] {
+  const label = shellMessages(locale).settingsSections;
+  return [
+    { href: '/dashboard/settings', label: label.appearance },
+    { href: '/dashboard/settings/ai', label: label.ai },
+    { href: '/dashboard/settings/updates', label: label.updates },
+    { href: '/dashboard/settings/app', label: label.app },
+  ];
+}
+
+/** Türkçe sekmeler (eski çağrılar); arayüz `settingsSections(locale)` kullanır. */
+export const SETTINGS_SECTIONS = settingsSections('tr');
 
 const SETTINGS_PAGES: readonly string[] = SETTINGS_SECTIONS.map((section) => section.href);
 

@@ -7,6 +7,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
+import { LocaleSwitch } from '@/i18n/locale-switch';
 import { readAppConfig } from '@/lib/config';
 import { emailLoginEnabled } from '@/lib/env';
 import { githubLoginEnabled } from '@/lib/github-oauth';
@@ -94,7 +95,10 @@ export default async function LoginPage({
           </CardContent>
         </Card>
       </div>
-      <p className="text-center text-sm text-muted-foreground">Danışansan antrenörünün verdiği kare kodu kullan.</p>
+      <div className="flex flex-col items-center gap-1">
+        <p className="text-center text-sm text-muted-foreground">Danışansan antrenörünün verdiği kare kodu kullan.</p>
+        <LocaleSwitch />
+      </div>
     </main>
   );
 }

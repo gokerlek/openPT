@@ -1,4 +1,6 @@
 import type { MetadataRoute } from 'next';
+import { DEFAULT_LOCALE, type Locale } from '../i18n/locale.ts';
+import { shellMessages } from '../i18n/messages/shell/index.ts';
 import { manifestIcons } from './brand-icon.ts';
 import { CLIENT_ID_PATTERN } from './schemas/client.ts';
 
@@ -27,14 +29,23 @@ export function clientManifestHref(clientId: string | null | undefined): string 
   return id ? `${CLIENT_MANIFEST_PATH}?c=${id}` : CLIENT_MANIFEST_PATH;
 }
 
-export function clientManifest({ appName, clientId }: { appName: string; clientId: string | null }): MetadataRoute.Manifest {
+/** Dil isteğin dili (`localeFromRequest`; tarayıcı manifest'i çerezsiz alır, pratikte `Accept-Language`). */
+export function clientManifest({
+  appName,
+  clientId,
+  locale = DEFAULT_LOCALE,
+}: {
+  appName: string;
+  clientId: string | null;
+  locale?: Locale;
+}): MetadataRoute.Manifest {
   const id = clientIdParam(clientId);
   return {
     id: '/',
     name: appName,
     short_name: appName,
-    description: `${appName} — antrenman takibi`,
-    lang: 'tr',
+    description: shellMessages(locale).appDescription(appName),
+    lang: locale,
     start_url: id ? `/giris?c=${id}` : '/me',
     scope: '/',
     display: 'standalone',

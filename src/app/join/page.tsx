@@ -6,6 +6,7 @@ import { PulseLine } from '@/components/pulse-line';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
+import { LocaleSwitch } from '@/i18n/locale-switch';
 import { clientManifestHref } from '@/lib/client-manifest';
 import { canSetPassword } from '@/lib/client-status';
 import { readAppConfig } from '@/lib/config';
@@ -114,12 +115,15 @@ export default async function JoinPage({
           </Card>
         )}
       </div>
-      <p className="text-center text-sm text-muted-foreground">
-        Antrenör müsün?{' '}
-        <Link href="/login" className="inline-flex min-h-11 items-center underline underline-offset-4">
-          Buradan gir
-        </Link>
-      </p>
+      <div className="flex flex-col items-center gap-1">
+        <p className="text-center text-sm text-muted-foreground">
+          Antrenör müsün?{' '}
+          <Link href="/login" className="inline-flex min-h-11 items-center underline underline-offset-4">
+            Buradan gir
+          </Link>
+        </p>
+        <LocaleSwitch />
+      </div>
     </main>
   );
 }

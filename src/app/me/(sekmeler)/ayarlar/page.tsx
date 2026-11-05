@@ -2,6 +2,7 @@ import { CoachPreferenceForm } from '@/components/coach/coach-preference-form';
 import type { Metadata } from 'next';
 import { FirstAidKit, Key } from '@phosphor-icons/react/dist/ssr';
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { LocaleSwitch } from '@/i18n/locale-switch';
 import { canRecordHealth, canSetPassword, hasHealthSection, hasPassword, healthConsentState, outdatedHealthFields } from '@/lib/client-status';
 import { readAppConfig } from '@/lib/config';
 import { currentClient } from '@/lib/guards';
@@ -85,6 +86,8 @@ export default async function ClientSettingsPage() {
           </CardHeader>
         </Card>
       )}
+
+      <LocaleSwitch variant="card" />
     </main>
   );
 }

@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { InstallHelper } from '@/components/install/install-helper';
 import { PageHeader } from '@/components/page-header';
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { LocaleSwitch } from '@/i18n/locale-switch';
 import { requirePt } from '@/lib/guards';
 
 export const metadata: Metadata = { title: 'Uygulama' };
@@ -34,6 +35,7 @@ export default async function AppSettingsPage() {
           </CardDescription>
         </CardHeader>
       </Card>
+      <LocaleSwitch variant="card" />
     </div>
   );
 }

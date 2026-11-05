@@ -1,3 +1,6 @@
+import { currentClientLocale } from '@/i18n/client';
+import { commonMessages } from '@/i18n/messages/common';
+
 /**
  * Uygulama genelinde tek hata tipi.
  *
@@ -24,14 +27,6 @@ export class ApiError extends Error {
   }
 }
 
-const defaultMessages: Record<number, string> = {
-  401: 'Oturumun düşmüş. Yeniden giriş yap.',
-  403: 'Bu işlem için yetkin yok.',
-  404: 'Aradığın kayıt bulunamadı.',
-  409: 'Bu kayıt sen çalışırken değişti. Tekrar dene.',
-  429: 'Çok fazla istek gönderildi. Biraz bekle.',
-};
-
 export async function fetchJson<T>(input: string, init?: RequestInit): Promise<T> {
   let response: Response;
   try {
@@ -42,14 +37,17 @@ export async function fetchJson<T>(input: string, init?: RequestInit): Promise<T
       headers: isFormData ? init?.headers : { 'Content-Type': 'application/json', ...init?.headers },
     });
   } catch {
-    throw new ApiError('Bağlantı kurulamadı. İnternetini kontrol et.', 0);
+    throw new ApiError(commonMessages(currentClientLocale()).errors.network, 0);
   }
 
   if (!response.ok) {
     const body = (await response.json().catch(() => null)) as
       | { error?: string; fields?: FieldErrors }
       | null;
-    const message = body?.error ?? defaultMessages[response.status] ?? 'Beklenmeyen bir hata oldu.';
+    // Sunucu mesajı yoksa sayfanın dilinde genel mesaj.
+    const t = commonMessages(currentClientLocale()).errors;
+    const defaultMessages: Record<number, string> = t.status;
+    const message = body?.error ?? defaultMessages[response.status] ?? t.unexpected;
     throw new ApiError(message, response.status, body?.fields ?? {});
   }
 

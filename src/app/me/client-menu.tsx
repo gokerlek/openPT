@@ -13,6 +13,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { LocaleSwitch } from '@/i18n/locale-switch';
 import { LogoutDialog } from './logout-dialog';
 
 /** Adın baş harfleri (en çok iki): "Gizem Gonca" → "GG". Türkçe büyük harf. */
@@ -67,6 +68,8 @@ export function ClientMenu({
               Ayarlar
             </DropdownMenuItem>
           </DropdownMenuGroup>
+          <DropdownMenuSeparator />
+          <LocaleSwitch variant="menu" />
           <DropdownMenuSeparator />
           <DropdownMenuItem variant="destructive" className="min-h-11" onClick={() => setLeaving(true)}>
             <SignOut />

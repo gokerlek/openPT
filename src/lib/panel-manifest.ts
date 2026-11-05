@@ -1,4 +1,6 @@
 import type { MetadataRoute } from 'next';
+import { DEFAULT_LOCALE, type Locale } from '../i18n/locale.ts';
+import { shellMessages } from '../i18n/messages/shell/index.ts';
 import { manifestIcons } from './brand-icon.ts';
 
 /**
@@ -25,13 +27,14 @@ export function panelShortName(appName: string): string {
   return `${Array.from(first).slice(0, HOME_SCREEN_LABEL_MAX - length(SUFFIX) - 1).join('')}…${SUFFIX}`;
 }
 
-export function panelManifest({ appName }: { appName: string }): MetadataRoute.Manifest {
+/** Dil isteğin dili (`localeFromRequest`). Ad ve kısa ad dile göre değişmez ("<ad> Panel"). */
+export function panelManifest({ appName, locale = DEFAULT_LOCALE }: { appName: string; locale?: Locale }): MetadataRoute.Manifest {
   return {
     id: '/dashboard',
     name: `${appName}${SUFFIX}`,
     short_name: panelShortName(appName),
-    description: `${appName} — antrenör paneli`,
-    lang: 'tr',
+    description: shellMessages(locale).panelDescription(appName),
+    lang: locale,
     start_url: '/dashboard',
     scope: '/',
     display: 'standalone',

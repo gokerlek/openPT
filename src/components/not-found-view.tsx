@@ -5,6 +5,8 @@ import { usePathname } from 'next/navigation';
 import { MagnifyingGlass } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
+import { useLocale, useMessages } from '@/i18n/client';
+import { shellMessages } from '@/i18n/messages/shell';
 import { notFoundBackLink } from '@/lib/navigation';
 
 /**
@@ -13,7 +15,8 @@ import { notFoundBackLink } from '@/lib/navigation';
  * menüsü yerinde kalır (`dashboard/not-found.tsx`).
  */
 export function NotFoundView() {
-  const back = notFoundBackLink(usePathname());
+  const back = notFoundBackLink(usePathname(), useLocale());
+  const t = useMessages(shellMessages).notFound;
   return (
     <Empty className="py-16">
       <EmptyHeader>
@@ -21,9 +24,9 @@ export function NotFoundView() {
           <MagnifyingGlass />
         </EmptyMedia>
         <EmptyTitle>
-          <h1 className="text-lg font-semibold">Böyle bir sayfa yok</h1>
+          <h1 className="text-lg font-semibold">{t.title}</h1>
         </EmptyTitle>
-        <EmptyDescription>Adres yanlış yazılmış ya da kayıt silinmiş olabilir.</EmptyDescription>
+        <EmptyDescription>{t.description}</EmptyDescription>
       </EmptyHeader>
       <EmptyContent>
         <Button nativeButton={false} render={<Link href={back.href} />}>

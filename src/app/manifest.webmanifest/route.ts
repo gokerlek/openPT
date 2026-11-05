@@ -1,3 +1,4 @@
+import { localeFromRequest } from '@/i18n/locale';
 import { clientIdParam, clientManifest } from '@/lib/client-manifest';
 import { readAppConfig } from '@/lib/config';
 
@@ -7,12 +8,13 @@ import { readAppConfig } from '@/lib/config';
  * uygulama kimlikli girişle açılır (`lib/client-manifest.ts`). Geçersiz kimlik yok sayılır. Kök düzen yalın
  * adresi bağlar; ikisi aynı adreste olamayacağı için `manifest.ts` yok.
  *
- * Marka ayarı değişince yeni kurulumlar güncel adı görür (istek anında okunur, önbellek yok).
+ * Marka ayarı değişince yeni kurulumlar güncel adı görür (istek anında okunur, önbellek yok). Dil isteğin dili:
+ * tarayıcı manifest'i çerezsiz alır, pratikte `Accept-Language` (`id` ve `start_url` dile göre değişmez).
  */
 export async function GET(request: Request) {
   const config = await readAppConfig();
   const clientId = clientIdParam(new URL(request.url).searchParams.get('c'));
-  return new Response(JSON.stringify(clientManifest({ appName: config.appName, clientId })), {
-    headers: { 'Content-Type': 'application/manifest+json; charset=utf-8', 'Cache-Control': 'no-cache' },
+  return new Response(JSON.stringify(clientManifest({ appName: config.appName, clientId, locale: localeFromRequest(request) })), {
+    headers: { 'Content-Type': 'application/manifest+json; charset=utf-8', 'Cache-Control': 'no-cache', Vary: 'Accept-Language, Cookie' },
   });
 }
