@@ -1,4 +1,6 @@
 import * as v from 'valibot';
+import { setupMessages } from '../../i18n/messages/setup/index.ts';
+import { msg } from '../../i18n/valibot.ts';
 import { appConfigSchema } from './config.ts';
 
 /**
@@ -10,7 +12,7 @@ import { appConfigSchema } from './config.ts';
 export const setupFormSchema = v.object({
   appName: appConfigSchema.entries.appName,
   /** null = temanın kendi ana rengi (koyu ve açık mod için ayrı ayarlı); hiçbir şey ezilmez. */
-  accent: v.nullable(v.pipe(v.string(), v.regex(/^#[0-9a-fA-F]{6}$/, 'Renk #RRGGBB biçiminde olmalı.'))),
+  accent: v.nullable(v.pipe(v.string(), v.regex(/^#[0-9a-fA-F]{6}$/, msg((l) => setupMessages(l).colors.hexInvalid)))),
   theme: appConfigSchema.entries.theme,
   radius: appConfigSchema.entries.radius,
   palette: appConfigSchema.entries.palette,

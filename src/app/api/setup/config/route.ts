@@ -1,4 +1,9 @@
 import { NextResponse } from 'next/server';
+import { messageOf } from '@/i18n/errors';
+import { localeFromRequest } from '@/i18n/locale';
+import { commonMessages } from '@/i18n/messages/common';
+import { setupMessages } from '@/i18n/messages/setup';
+import { langConfig } from '@/i18n/valibot';
 import * as v from 'valibot';
 import { readPtSession } from '@/lib/session';
 import { GithubError } from '@/lib/github/client';
@@ -15,12 +20,14 @@ import { setupFormSchema } from '@/lib/schemas/setup';
  * Sebep sunucu günlüğüne de yazılır. Kurallar ve sıra `config-update.ts`'te, orada test edilir.
  */
 export async function POST(request: Request) {
+  const locale = localeFromRequest(request);
+  const t = setupMessages(locale).api;
   const session = await readPtSession();
   if (session?.role !== 'pt') {
-    return NextResponse.json({ error: 'Bu işlem için yetkin yok.' }, { status: 403 });
+    return NextResponse.json({ error: commonMessages(locale).errors.status[403] }, { status: 403 });
   }
 
-  const parsed = v.safeParse(setupFormSchema, await request.json().catch(() => null));
+  const parsed = v.safeParse(setupFormSchema, await request.json().catch(() => null), langConfig(locale));
   if (!parsed.success) {
     // Alan bazlı hatalar forma basılır (applyFieldErrors).
     const fields: Record<string, string> = {};
@@ -28,7 +35,7 @@ export async function POST(request: Request) {
       const key = issue.path?.map((segment) => String(segment.key)).join('.');
       if (key && !fields[key]) fields[key] = issue.message;
     }
-    return NextResponse.json({ error: 'Bilgileri kontrol et.', fields }, { status: 400 });
+    return NextResponse.json({ error: t.checkInfo, fields }, { status: 400 });
   }
 
   try {
@@ -37,7 +44,7 @@ export async function POST(request: Request) {
   } catch (error) {
     const failure = error instanceof GithubError || error instanceof ConfigUnavailableError ? error : null;
     return NextResponse.json(
-      { error: failure?.message ?? 'Ayar kaydedilemedi.' },
+      { error: messageOf(failure, locale) ?? t.configSaveFailed },
       { status: failure?.status ?? 502 },
     );
   }

@@ -1,4 +1,7 @@
 import * as v from 'valibot';
+import type { Localizable } from '../i18n/errors.ts';
+import type { Locale } from '../i18n/locale.ts';
+import { setupMessages } from '../i18n/messages/setup/index.ts';
 import { BrokenJsonError, describeError, GithubError, writeToFreshRepo } from './github/errors.ts';
 import { appConfigSchema, CONFIG_PATH, defaultConfig, type AppConfig } from './schemas/config.ts';
 import type { SetupForm } from './schemas/setup.ts';
@@ -50,15 +53,19 @@ export type LogoFiles = {
   remove(path: string, sha: string, message: string): Promise<void>;
 };
 
-export const CONFIG_UNAVAILABLE = 'Ayarlar şu an okunamadı, tekrar dene.';
+export const CONFIG_UNAVAILABLE = setupMessages('tr').api.configUnavailable;
 
 /** Ayar geçici olarak okunamadı (ağ, istek sınırı, izin). Hiçbir şey yazılmaz; uçlar 503 döner. */
-export class ConfigUnavailableError extends Error {
+export class ConfigUnavailableError extends Error implements Localizable {
   readonly status = 503;
 
   constructor(options?: ErrorOptions) {
     super(CONFIG_UNAVAILABLE, options);
     this.name = 'ConfigUnavailableError';
+  }
+
+  localized(locale: Locale): string {
+    return setupMessages(locale).api.configUnavailable;
   }
 }
 

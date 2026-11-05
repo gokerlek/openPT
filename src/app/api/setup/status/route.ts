@@ -1,4 +1,8 @@
 import { NextResponse } from 'next/server';
+import { messageOf } from '@/i18n/errors';
+import { localeFromRequest } from '@/i18n/locale';
+import { commonMessages } from '@/i18n/messages/common';
+import { setupMessages } from '@/i18n/messages/setup';
 import { readPtSession } from '@/lib/session';
 import { appRepo, githubConnection, GithubError, owner } from '@/lib/github/client';
 import { checkAppRepo, listClientIds } from '@/lib/github/repos';
@@ -13,10 +17,11 @@ import { checkAppRepo, listClientIds } from '@/lib/github/repos';
  * kurulumun sorunları ("All repositories" değil, izin eksik, askıda) `githubUyarilari` ile ve GitHub'daki
  * kurulum ayarının adresiyle döner. Kişisel anahtarda bu alanlar boş.
  */
-export async function GET() {
+export async function GET(request: Request) {
+  const locale = localeFromRequest(request);
   const session = await readPtSession();
   if (session?.role !== 'pt') {
-    return NextResponse.json({ error: 'Bu işlem için yetkin yok.' }, { status: 403 });
+    return NextResponse.json({ error: commonMessages(locale).errors.status[403] }, { status: 403 });
   }
 
   try {
@@ -29,7 +34,7 @@ export async function GET() {
       appRepoExists = (await checkAppRepo()).exists;
     } catch (error) {
       if (!(error instanceof GithubError && error.status === 409)) throw error;
-      problem = error.message;
+      problem = error.localized(locale);
     }
 
     const clientIds = appRepoExists ? await listClientIds() : [];
@@ -46,7 +51,7 @@ export async function GET() {
   } catch (error) {
     const failure = error instanceof GithubError ? error : null;
     return NextResponse.json(
-      { error: failure?.message ?? 'GitHub ile konuşulamadı. Token geçerli mi?' },
+      { error: messageOf(failure, locale) ?? setupMessages(locale).api.githubFailed },
       { status: failure?.status ?? 502 },
     );
   }

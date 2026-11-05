@@ -1,15 +1,17 @@
 import * as v from 'valibot';
+import { DEFAULT_LOCALE, type Locale } from '../i18n/locale.ts';
+import { setupMessages } from '../i18n/messages/setup/index.ts';
+import { msg } from '../i18n/valibot.ts';
 import { readableOn, contrastRatio } from './color.ts';
 
-export const COLOR_GROUPS = [
-  { label: 'Yüzeyler ve yazılar', tokens: { background: 'Sayfa zemini', foreground: 'Ana yazı', card: 'Kart zemini', 'card-foreground': 'Kart yazısı', popover: 'Açılır pencere', 'popover-foreground': 'Pencere yazısı', muted: 'Silik zemin', 'muted-foreground': 'İkincil yazı' } },
-  { label: 'Butonlar ve seçimler', tokens: { primary: 'Ana renk', 'primary-foreground': 'Buton yazısı', 'primary-text': 'Vurgulu yazı', 'primary-strong': 'Seçili öğe', 'primary-strong-foreground': 'Seçili öğe yazısı', secondary: 'İkincil buton', 'secondary-foreground': 'İkincil buton yazısı', accent: 'Üzerine gelme zemini', 'accent-foreground': 'Üzerine gelme yazısı' } },
-  { label: 'Çizgiler ve durumlar', tokens: { border: 'Kenarlık', input: 'Alan kenarlığı', ring: 'Odak halkası', success: 'Başarı', warning: 'Uyarı', destructive: 'Hata', 'destructive-text': 'Hata yazısı' } },
-  { label: 'Grafikler', tokens: { 'chart-1': 'Grafik 1', 'chart-2': 'Grafik 2', 'chart-3': 'Grafik 3', 'chart-4': 'Grafik 4', 'chart-5': 'Grafik 5' } },
-  { label: 'Menü', tokens: { sidebar: 'Menü zemini', 'sidebar-foreground': 'Menü yazısı', 'sidebar-primary': 'Menü ana rengi', 'sidebar-primary-foreground': 'Menü ana renk yazısı', 'sidebar-accent': 'Menü seçimi', 'sidebar-accent-foreground': 'Menü seçim yazısı', 'sidebar-border': 'Menü kenarlığı', 'sidebar-ring': 'Menü odağı' } },
-] as const;
+/** Renk jetonları gruplarıyla ve adlarıyla (`setupMessages().colors.groups`); sıra panelde yazılan sıradır. */
+export function colorGroups(locale: Locale = DEFAULT_LOCALE) {
+  return setupMessages(locale).colors.groups;
+}
+/** Türkçe adlar (eski çağrılar); arayüz `colorGroups(locale)` kullanır. */
+export const COLOR_GROUPS = colorGroups('tr');
 export const TOKEN_KEYS = COLOR_GROUPS.flatMap(g => Object.keys(g.tokens));
-const colorsSchema = v.partial(v.object(Object.fromEntries(TOKEN_KEYS.map(key => [key, v.pipe(v.string(), v.regex(/^#[\da-f]{6}$/i, 'Renk #RRGGBB biçiminde olmalı.'))]))));
+const colorsSchema = v.partial(v.object(Object.fromEntries(TOKEN_KEYS.map(key => [key, v.pipe(v.string(), v.regex(/^#[\da-f]{6}$/i, msg((l) => setupMessages(l).colors.hexInvalid)))]))));
 export const paletteSchema = v.object({ name: v.picklist(['volt', 'ocean', 'forest', 'violet', 'ember', 'slate', 'custom']), base: v.optional(v.picklist(['volt', 'ocean', 'forest', 'violet', 'ember', 'slate'])), light: colorsSchema, dark: colorsSchema });
 export type Palette = v.InferOutput<typeof paletteSchema>;
 export type ColorMode = 'light' | 'dark';
@@ -29,14 +31,22 @@ function colors(dark: boolean, primary: string, background: string, card: string
     sidebar: card, 'sidebar-foreground': fg, 'sidebar-primary': primary, 'sidebar-primary-foreground': readableOn(primary), 'sidebar-accent': muted, 'sidebar-accent-foreground': fg, 'sidebar-border': line, 'sidebar-ring': fg,
   };
 }
-export const THEME_PRESETS: { label: string; description: string; palette: Palette }[] = [
-  { label: 'Volt', description: 'Canlı yeşil · Kömür', palette: { name: 'volt', light: colors(false, '#426600', '#fafbf7', '#ffffff', '#edf0e5'), dark: colors(true, '#a3e635', '#141711', '#20261b', '#2b3325') } },
-  { label: 'Ocean', description: 'Mavi · Gece laciverti', palette: { name: 'ocean', light: colors(false, '#1d4ed8', '#f3f7fc', '#ffffff', '#e7eef8'), dark: colors(true, '#60a5fa', '#0c1424', '#152238', '#22324a') } },
-  { label: 'Forest', description: 'Zümrüt · Orman', palette: { name: 'forest', light: colors(false, '#047857', '#f3f8f5', '#ffffff', '#e3eee8'), dark: colors(true, '#6ee7b7', '#0d1916', '#172b24', '#243b32') } },
-  { label: 'Violet', description: 'Mor · Mürekkep', palette: { name: 'violet', light: colors(false, '#6d28d9', '#f8f5fc', '#ffffff', '#eee7f6'), dark: colors(true, '#c4b5fd', '#171221', '#261e35', '#352944') } },
-  { label: 'Ember', description: 'Bakır · Sıcak taş', palette: { name: 'ember', light: colors(false, '#9a3412', '#fbf6f0', '#fffdf9', '#f1e7dc'), dark: colors(true, '#fdba74', '#1d1511', '#2d211b', '#403027') } },
-  { label: 'Slate', description: 'Gri · Sade kontrast', palette: { name: 'slate', light: colors(false, '#334155', '#f7f8fa', '#ffffff', '#e9edf2'), dark: colors(true, '#cbd5e1', '#13171d', '#20262f', '#303946') } },
+const PRESET_BASES: { label: string; palette: Palette }[] = [
+  { label: 'Volt', palette: { name: 'volt', light: colors(false, '#426600', '#fafbf7', '#ffffff', '#edf0e5'), dark: colors(true, '#a3e635', '#141711', '#20261b', '#2b3325') } },
+  { label: 'Ocean', palette: { name: 'ocean', light: colors(false, '#1d4ed8', '#f3f7fc', '#ffffff', '#e7eef8'), dark: colors(true, '#60a5fa', '#0c1424', '#152238', '#22324a') } },
+  { label: 'Forest', palette: { name: 'forest', light: colors(false, '#047857', '#f3f8f5', '#ffffff', '#e3eee8'), dark: colors(true, '#6ee7b7', '#0d1916', '#172b24', '#243b32') } },
+  { label: 'Violet', palette: { name: 'violet', light: colors(false, '#6d28d9', '#f8f5fc', '#ffffff', '#eee7f6'), dark: colors(true, '#c4b5fd', '#171221', '#261e35', '#352944') } },
+  { label: 'Ember', palette: { name: 'ember', light: colors(false, '#9a3412', '#fbf6f0', '#fffdf9', '#f1e7dc'), dark: colors(true, '#fdba74', '#1d1511', '#2d211b', '#403027') } },
+  { label: 'Slate', palette: { name: 'slate', light: colors(false, '#334155', '#f7f8fa', '#ffffff', '#e9edf2'), dark: colors(true, '#cbd5e1', '#13171d', '#20262f', '#303946') } },
 ];
+
+/** Hazır paletler; adları marka adı gibi çevrilmez, açıklamaları dile göre. */
+export function themePresets(locale: Locale = DEFAULT_LOCALE): { label: string; description: string; palette: Palette }[] {
+  const descriptions = setupMessages(locale).colors.presets;
+  return PRESET_BASES.map((preset) => ({ ...preset, description: descriptions[preset.palette.name as keyof typeof descriptions] }));
+}
+/** Türkçe açıklamalı paletler (eski çağrılar ve testler); arayüz `themePresets(locale)` kullanır. */
+export const THEME_PRESETS = themePresets('tr');
 
 /** Whitelisted property names and HEX-only values also make server-rendered CSS safe. */
 export function paletteCss(palette?: Palette | null): string {
@@ -49,7 +59,8 @@ export function paletteCss(palette?: Palette | null): string {
   }).join('\n');
 }
 
-export function contrastWarnings(colors: Record<string, string | undefined>): string[] {
-  const pairs: [string, string, string][] = [['foreground', 'background', 'Ana yazı'], ['card-foreground', 'card', 'Kart yazısı'], ['popover-foreground', 'popover', 'Pencere yazısı'], ['muted-foreground', 'muted', 'İkincil yazı'], ['primary-foreground', 'primary', 'Buton yazısı'], ['primary-text', 'background', 'Vurgulu yazı'], ['secondary-foreground', 'secondary', 'İkincil buton yazısı'], ['accent-foreground', 'accent', 'Seçim yazısı'], ['sidebar-foreground', 'sidebar', 'Menü yazısı']];
+export function contrastWarnings(colors: Record<string, string | undefined>, locale: Locale = DEFAULT_LOCALE): string[] {
+  const names = setupMessages(locale).colors.contrast;
+  const pairs: [string, string, string][] = [['foreground', 'background', names.foreground], ['card-foreground', 'card', names.cardForeground], ['popover-foreground', 'popover', names.popoverForeground], ['muted-foreground', 'muted', names.mutedForeground], ['primary-foreground', 'primary', names.primaryForeground], ['primary-text', 'background', names.primaryText], ['secondary-foreground', 'secondary', names.secondaryForeground], ['accent-foreground', 'accent', names.accentForeground], ['sidebar-foreground', 'sidebar', names.sidebarForeground]];
   return pairs.flatMap(([fg, bg, label]) => colors[fg] && colors[bg] && contrastRatio(colors[fg]!, colors[bg]!) < 4.5 ? [label] : []);
 }
