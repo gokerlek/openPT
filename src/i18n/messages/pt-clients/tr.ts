@@ -5,23 +5,6 @@
  * yazılmış gelir (`n: string`); çoğul gerektiren yerde sayı da (`count: number`) verilir.
  */
 const tr = {
-  /** Danışan şemasının doğrulama mesajları (`lib/schemas/client.ts`). */
-  validation: {
-    clientId: 'Danışan kimliği geçersiz.',
-    number: 'Sayı olmalı.',
-    integer: 'Tam sayı olmalı.',
-    atLeast: (min: number) => `En az ${min} olmalı.`,
-    atMost: (max: number) => `En fazla ${max} olmalı.`,
-    nameRequired: 'Ad gir.',
-    nameShort: 'Ad çok kısa.',
-    maxChars: (max: number) => `En fazla ${max} karakter.`,
-    pickExperience: 'Antrenman geçmişini seç.',
-    digitsOnly: 'Yalnız rakam girilmeli.',
-    heartPair: 'İkisi birlikte girilmeli ya da ikisi de boş bırakılmalı.',
-    heartOrder: 'Toparlanma sınırı uyarı sınırından düşük olmalı.',
-    pickStatus: 'Durumu seç.',
-    pickHealthPart: 'Modül açıksa en az bir parça seç.',
-  },
   /** Danışan uçlarının ve çekirdeklerinin kullanıcıya giden mesajları (`api/clients/**`, `lib/clients*.ts`). */
   errors: {
     invalidRequest: 'İstek geçersiz.',
@@ -258,7 +241,7 @@ const tr = {
       currentPhaseLabel: 'Şu anki evrenin programları',
       programsLabel: 'Programlar',
       noDays: 'Gün atanmadı',
-      summary: (rows: string, sets: string, minutes: string) => `${rows} hareket · ${sets} set · ≈ ${minutes} dk`,
+      summary: (_rowCount: number, rows: string, _setCount: number, sets: string, minutes: string) => `${rows} hareket · ${sets} set · ≈ ${minutes} dk`,
       today: 'Bugün',
       next: 'Sıradaki',
       lastChange: (date: string) => `Son değişiklik: ${date}`,

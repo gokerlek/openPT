@@ -67,7 +67,7 @@ export default async function DashboardPage() {
           href="/dashboard/exercises"
           label={t.home.exercisesLabel}
           count={number(exercises.length)}
-          hint={t.home.exercisesHint(number(custom))}
+          hint={t.home.exercisesHint(custom, number(custom))}
         />
 
         {/* Danışan başına bir koşullu okuma; sayfanın geri kalanı beklemesin. */}

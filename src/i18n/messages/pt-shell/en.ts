@@ -51,7 +51,8 @@ const en: Shape<typeof tr> = {
     clientsLabel: 'Clients',
     clientsHint: 'Open the client list',
     exercisesLabel: 'Exercises',
-    exercisesHint: (custom: string) => `${custom} are yours · open the library`,
+    exercisesHint: (count: number, custom: string) =>
+      plural('en', count, { one: `${custom} is yours · open the library`, other: `${custom} are yours · open the library` }),
     loadingRecords: "Reading clients' records…",
   },
   skeleton: {
@@ -72,7 +73,7 @@ const en: Shape<typeof tr> = {
     failedRecords: (count: number, n: string) =>
       plural('en', count, { one: `${n} client's record couldn't be read.`, other: `${n} clients' records couldn't be read.` }),
     emptyTitle: 'Nothing needs attention right now',
-    emptyBody: 'It shows up here when a client misses a training day, an exercise stalls or a decision is waiting.',
+    emptyBody: 'It shows up here when a client misses a workout day, an exercise stalls or a decision is waiting.',
     urgent: 'Urgent',
     askAi: 'Ask AI',
     moreItems: (count: number, n: string) => plural('en', count, { one: `+${n} more item`, other: `+${n} more items` }),
@@ -80,7 +81,7 @@ const en: Shape<typeof tr> = {
     labels: {
       constraint: 'Limitation',
       missed: 'Missed day',
-      screening: 'Movement screening',
+      screening: 'Movement test',
       stalled: 'Progress',
       phase: 'Phase',
       proposals: 'Suggestion',
@@ -106,10 +107,10 @@ const en: Shape<typeof tr> = {
     missed: {
       many: (lookback: string, count: number, n: string, days: string) =>
         plural('en', count, {
-          one: `Missed ${n} training day in the last ${lookback} days: ${days}`,
-          other: `Missed ${n} training days in the last ${lookback} days: ${days}`,
+          one: `Missed ${n} workout day in the last ${lookback} days: ${days}`,
+          other: `Missed ${n} workout days in the last ${lookback} days: ${days}`,
         }),
-      one: (day: string) => `Missed a training day: ${day}`,
+      one: (day: string) => `Missed a workout day: ${day}`,
     },
     phase: {
       own: (own: string, name: string) => `The client is following ${own} · phase '${name}' has ended`,
@@ -142,8 +143,8 @@ const en: Shape<typeof tr> = {
       waiting: (list: string) => `Waiting for a professional's opinion · ${list}`,
     },
     screening: {
-      pain: (list: string) => `Pain in the movement screening: ${list}`,
-      asymmetry: (name: string) => `Large asymmetry in the movement screening: ${name}`,
+      pain: (list: string) => `Pain in the movement test: ${list}`,
+      asymmetry: (name: string) => `Large asymmetry in the movement test: ${name}`,
     },
     listMore: (n: string) => `+${n}`,
   },
@@ -165,7 +166,7 @@ const en: Shape<typeof tr> = {
       other_day: 'Different program',
       unfinished: 'Unfinished',
       overload: 'Overload',
-      lighter: 'Lightened',
+      lighter: 'Lighter day',
       pain: 'Pain',
       program: 'Program',
       proposal: 'Pending suggestion',
@@ -174,13 +175,13 @@ const en: Shape<typeof tr> = {
     },
     defaultDay: 'Workout',
     adjustReason: { readiness: 'readiness', pain: 'pain' },
-    otherDayPlanned: (planned: string, day: string) => `${day} done instead of ${planned}`,
+    otherDayPlanned: (planned: string, day: string) => `Did ${day} instead of ${planned}`,
     otherDay: (day: string) => `Different program chosen: ${day}`,
     unfinished: (day: string, progress: { done: string; planned: string } | null) =>
       `${day} left unfinished${progress ? ` (${progress.done}/${progress.planned} sets)` : ''}`,
     overloadNone: (day: string) => `${day}: a set well above target was confirmed`,
     overloadRow: (title: string, kg: string, planned: string | null) => `${title} ${kg}${planned !== null ? ` (target ${planned})` : ''}`,
-    lighter: (day: string, reason: string | null) => `${day} was lightened${reason ? ` (${reason})` : ''}`,
+    lighter: (day: string, reason: string | null) => `${day} made lighter${reason ? ` (${reason})` : ''}`,
     painSkips: (day: string, count: number, n: string) =>
       plural('en', count, { one: `${day}: ${n} exercise skipped because of pain`, other: `${day}: ${n} exercises skipped because of pain` }),
     ownActive: (name: string) => `Today's program: ${name}`,
@@ -199,9 +200,9 @@ const en: Shape<typeof tr> = {
     seenFailed: "Couldn't save the read status. Try again in a moment.",
   },
   live: {
-    title: 'Training now',
+    title: 'Working out now',
     reading: "Reading clients' workouts…",
-    nobody: 'Nobody is training right now. It shows up here live as a client logs sets.',
+    nobody: 'Nobody is working out right now. It shows up here live as a client logs sets.',
     failed: (count: number, n: string) =>
       plural('en', count, { one: `${n} client's status couldn't be read.`, other: `${n} clients' status couldn't be read.` }),
     justNow: 'just now',
@@ -210,7 +211,7 @@ const en: Shape<typeof tr> = {
       plannedText !== null ? `${doneText}/${plannedText} sets` : plural('en', done, { one: `${doneText} set`, other: `${doneText} sets` }),
     lastSet: (ago: string) => `last set ${ago}`,
     started: (ago: string) => `started ${ago}`,
-    line: (detail: string) => `Training now · ${detail}`,
+    line: (detail: string) => `Working out now · ${detail}`,
     defaultClient: 'Client',
   },
 };

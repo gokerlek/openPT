@@ -60,7 +60,7 @@ const tr = {
     clientsLabel: 'Danışan',
     clientsHint: 'Danışan listesini aç',
     exercisesLabel: 'Egzersiz',
-    exercisesHint: (custom: string) => `${custom} tanesi senin · kütüphaneyi aç`,
+    exercisesHint: (_count: number, custom: string) => `${custom} tanesi senin · kütüphaneyi aç`,
     loadingRecords: 'Danışanların kayıtları okunuyor…',
   },
   /** Sayfa geçişi iskeleti (`dashboard/route-skeleton.tsx`). */

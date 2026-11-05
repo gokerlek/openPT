@@ -67,7 +67,7 @@ const en: Shape<typeof tr> = {
     sessionClosed: 'Your session has ended. Ask your trainer for a new QR code.',
     failed: "Couldn't sign in.",
     brokenLink: 'The link is broken. Scan the QR code again.',
-    welcome: 'Welcome to your training.',
+    welcome: 'Welcome to your workouts.',
     stepLabel: (step: number, total: number) => `Step ${step} of ${total}`,
     confirmTitle: 'Confirm your code',
     confirmBody: "If you came from the QR code, the code is filled in. Next you'll set a password and add the app to your home screen.",
@@ -84,7 +84,7 @@ const en: Shape<typeof tr> = {
       submit: 'Save password and continue',
       installTitle: 'Add the app to your home screen',
       installedBody: "The app is installed. From now on your program opens from the icon on your home screen.",
-      savedBody: 'Your password is saved. Have your program open full screen from the home screen icon, without the browser bar.',
+      savedBody: 'Your password is saved. Open your program full screen from the home screen icon, without the browser bar.',
     },
   },
   trainer: {

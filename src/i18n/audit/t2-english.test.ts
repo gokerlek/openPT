@@ -20,6 +20,8 @@ import { checkUpdates } from '../../lib/updates/check.ts';
 import { authMessages } from '../messages/auth/index.ts';
 import { installMessages } from '../messages/install/index.ts';
 import { ptClientsMessages } from '../messages/pt-clients/index.ts';
+import { ptShellMessages } from '../messages/pt-shell/index.ts';
+import { uiMessages } from '../messages/ui/index.ts';
 import { langConfig } from '../valibot.ts';
 
 /**
@@ -118,8 +120,8 @@ describe('danışan kayıtları (pt-clients)', () => {
     assert.equal(en.steps.length, tr.steps.length);
     assert.equal(en.steps.length, 5);
     for (const step of en.steps) english(step);
-    assert.equal(en.lastStep.badge, 'Close access');
-    assert.equal(en.lastStep.before + en.lastStep.badge + en.lastStep.after, 'If they lose their phone, edit the client and choose Close access (their sessions and password stop working), then create a new QR code.');
+    assert.equal(en.lastStep.badge, 'Revoke access');
+    assert.equal(en.lastStep.before + en.lastStep.badge + en.lastStep.after, 'If they lose their phone, edit the client and choose Revoke access (their sessions and password stop working), then create a new QR code.');
   });
 
   test('antrenman değişikliği etiketleri', () => {
@@ -163,8 +165,8 @@ describe('PT kabuğu (pt-shell)', () => {
   test('canlı antrenman metinleri', () => {
     const live = { sessionId: 's1', dayName: 'Day A', done: 7, planned: 17, startedAt: '2026-11-02T11:00:00Z', lastSetAt: '2026-11-02T11:56:00Z', updatedAt: '2026-11-02T11:56:00Z' };
     assert.equal(agoText('2026-11-02T11:59:50Z', now, 'en'), 'just now');
-    assert.equal(liveText({ ...live, planned: null, done: 1, lastSetAt: null }, now, 'en').startsWith('Training now · Day A · 1 set · started '), true);
-    assert.ok(liveText(live, now, 'en').startsWith('Training now · Day A · 7/17 sets · last set '));
+    assert.equal(liveText({ ...live, planned: null, done: 1, lastSetAt: null }, now, 'en').startsWith('Working out now · Day A · 1 set · started '), true);
+    assert.ok(liveText(live, now, 'en').startsWith('Working out now · Day A · 7/17 sets · last set '));
   });
 });
 
@@ -223,5 +225,54 @@ describe('kurulum (setup, install)', () => {
     );
     assert.equal(failing.automationError, 'boom');
     assert.equal(installMessages('en').updates.panel.noRelease, 'No newer stable version found.');
+  });
+});
+
+describe('sözcük seçimi ve çoğullar (sözlük kararları)', () => {
+  test('çoğul gerektiren özetler tek sayıda tekil', () => {
+    const shell = ptShellMessages('en');
+    assert.equal(shell.home.exercisesHint(1, '1'), '1 is yours · open the library');
+    assert.equal(shell.home.exercisesHint(12, '12'), '12 are yours · open the library');
+    const summary = ptClientsMessages('en').detail.program.summary;
+    assert.equal(summary(1, '1', 1, '1', '5'), '1 exercise · 1 set · ≈ 5 min');
+    assert.equal(summary(8, '8', 24, '24', '55'), '8 exercises · 24 sets · ≈ 55 min');
+    assert.equal(summary(1, '1', 3, '3', '5'), '1 exercise · 3 sets · ≈ 5 min');
+  });
+
+  test('Türkçe çoğul parametreleri çıktıyı değiştirmez', () => {
+    assert.equal(ptShellMessages('tr').home.exercisesHint(1, '1'), '1 tanesi senin · kütüphaneyi aç');
+    assert.equal(ptClientsMessages('tr').detail.program.summary(1, '1', 3, '3', '5'), '1 hareket · 3 set · ≈ 5 dk');
+  });
+
+  test('sözlük: antrenman = workout, hareket testi = movement test', () => {
+    const shell = ptShellMessages('en');
+    assert.equal(shell.attention.labels.screening, 'Movement test');
+    assert.equal(shell.attention.screening.pain('knee'), 'Pain in the movement test: knee');
+    assert.equal(shell.attention.screening.asymmetry('Squat'), 'Large asymmetry in the movement test: Squat');
+    assert.equal(shell.attention.missed.one('Mon'), 'Missed a workout day: Mon');
+    assert.equal(shell.attention.missed.many('14', 2, '2', 'Mon, Wed'), 'Missed 2 workout days in the last 14 days: Mon, Wed');
+    assert.equal(shell.attention.missed.many('14', 1, '1', 'Mon'), 'Missed 1 workout day in the last 14 days: Mon');
+    assert.equal(shell.attention.emptyBody, 'It shows up here when a client misses a workout day, an exercise stalls or a decision is waiting.');
+    assert.equal(shell.live.title, 'Working out now');
+    assert.equal(shell.live.nobody, 'Nobody is working out right now. It shows up here live as a client logs sets.');
+    assert.equal(shell.live.line('Day A'), 'Working out now · Day A');
+    assert.equal(uiMessages('en').weekdays.label, 'Workout days');
+    assert.equal(authMessages('en').join.welcome, 'Welcome to your workouts.');
+    const clients = ptClientsMessages('en');
+    assert.equal(clients.detail.health.noScreening, 'no movement test yet');
+    assert.equal(clients.progress.healthHidden('Waiting'), "Waiting: readiness, pain, circumference measurements and the movement test aren't shown here.");
+  });
+
+  test('bildirim ve erişim sözcükleri', () => {
+    const notices = ptShellMessages('en').notices;
+    assert.equal(notices.labels.lighter, 'Lighter day');
+    assert.equal(notices.lighter('Day A', 'readiness'), 'Day A made lighter (readiness)');
+    assert.equal(notices.lighter('Day A', null), 'Day A made lighter');
+    assert.equal(notices.otherDayPlanned('Day B', 'Day A'), 'Did Day A instead of Day B');
+    const clients = ptClientsMessages('en');
+    assert.equal(clients.actions.revokeTrigger, 'Revoke access');
+    assert.equal(clients.actions.revokeTitle('Ada'), 'Revoke access for Ada?');
+    assert.equal(clients.errors.revokeFailed, "Couldn't revoke access.");
+    assert.equal(authMessages('en').join.passwordStep.savedBody, 'Your password is saved. Open your program full screen from the home screen icon, without the browser bar.');
   });
 });

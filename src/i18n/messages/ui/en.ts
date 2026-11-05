@@ -21,7 +21,7 @@ const en: Shape<typeof tr> = {
     clear: 'Clear date',
   },
   weekdays: {
-    label: 'Training days',
+    label: 'Workout days',
     taken: (day: string, owner: string) => `${day}, taken by ${owner}`,
   },
   dock: { soon: (label: string) => `${label} · coming soon` },

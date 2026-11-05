@@ -2,22 +2,6 @@ import { plural, type Shape } from '../../define.ts';
 import type tr from './tr.ts';
 
 const en: Shape<typeof tr> = {
-  validation: {
-    clientId: 'Invalid client id.',
-    number: 'Must be a number.',
-    integer: 'Must be a whole number.',
-    atLeast: (min: number) => `Must be at least ${min}.`,
-    atMost: (max: number) => `Must be at most ${max}.`,
-    nameRequired: 'Enter a name.',
-    nameShort: 'Name is too short.',
-    maxChars: (max: number) => `At most ${max} characters.`,
-    pickExperience: 'Choose the training history.',
-    digitsOnly: 'Digits only.',
-    heartPair: 'Enter both or leave both empty.',
-    heartOrder: 'The recovery limit must be lower than the alert limit.',
-    pickStatus: 'Choose a status.',
-    pickHealthPart: 'Choose at least one part when the module is on.',
-  },
   errors: {
     invalidRequest: 'Invalid request.',
     checkInfo: 'Check the details.',
@@ -33,7 +17,7 @@ const en: Shape<typeof tr> = {
     saveFailed: "Couldn't save the client.",
     deleteFailed: "Couldn't delete the client.",
     inviteFailed: "Couldn't create the invite.",
-    revokeFailed: "Couldn't close access.",
+    revokeFailed: "Couldn't revoke access.",
     liveFailed: "Couldn't read the live status.",
     confirmMismatch: "Confirmation didn't match.",
     confirmName: "Type the client's name exactly.",
@@ -67,7 +51,7 @@ const en: Shape<typeof tr> = {
   },
   access: {
     joined: 'Joined',
-    revoked: 'Access closed',
+    revoked: 'Access revoked',
     used: 'Joined',
     none: 'No invite',
     pending: 'Invite pending',
@@ -87,7 +71,7 @@ const en: Shape<typeof tr> = {
             ? `Too many wrong password attempts were made (${lockedAt}); password sign-in is closed. Create a new QR code so the client can set a new password.`
             : 'No password: if they sign out, they need a new QR code to sign back in.'
       } First sign-in: ${first}.${newCodeExpires ? ` A new QR code is waiting (expires ${newCodeExpires}); the client signs in with it and sets a new password.` : ''}`,
-    revokedDetail: (at: string) => `Access was closed on ${at}; the old password no longer works either. Create a new QR code so they can sign in again.`,
+    revokedDetail: (at: string) => `Access was revoked on ${at}; the old password no longer works either. Create a new QR code so they can sign in again.`,
     usedDetail: (at: string | null) => (at ? `The client signed in with the QR code on ${at}.` : 'The client signed in with the QR code.'),
     noneDetail: "No QR code has been created yet.",
     pendingDetail: (expires: string) => `The QR code hasn't been used yet. Expires: ${expires}.`,
@@ -170,12 +154,12 @@ const en: Shape<typeof tr> = {
     add: 'Add client',
   },
   actions: {
-    revokeTrigger: 'Close access',
-    revokeTitle: (name: string) => `Close access for ${name}?`,
+    revokeTrigger: 'Revoke access',
+    revokeTitle: (name: string) => `Revoke access for ${name}?`,
     revokeBody:
       "Their open sessions end right away, and an unused QR code and their password stop working. Their data stays; they sign in with a new QR code and set a new password. Don't do this if they only forgot their password: a new QR code on the invite screen is enough.",
     cancel: 'Cancel',
-    revoked: 'Access closed. Create a new QR code so they can sign in again.',
+    revoked: 'Access revoked. Create a new QR code so they can sign in again.',
     delete: 'Delete',
     deleteTitle: (label: string) => `Permanently delete ${label}?`,
     deleteFallbackLabel: 'this client',
@@ -227,7 +211,7 @@ const en: Shape<typeof tr> = {
       severe: (n: string) => `${n} severe (not reviewed)`,
       pending: (count: number, n: string) => plural('en', count, { one: `${n} report waiting`, other: `${n} reports waiting` }),
       awaiting: (n: string) => `${n} waiting for an opinion`,
-      noScreening: 'no movement screening yet',
+      noScreening: 'no movement test yet',
       lastScreening: (day: string, pain: string | null) => `last ${day}${pain ? ` · ${pain} pain` : ''}`,
     },
     program: {
@@ -242,7 +226,8 @@ const en: Shape<typeof tr> = {
       currentPhaseLabel: "Current phase's programs",
       programsLabel: 'Programs',
       noDays: 'No days assigned',
-      summary: (rows: string, sets: string, minutes: string) => `${rows} exercises · ${sets} sets · ≈ ${minutes} min`,
+      summary: (rowCount: number, rows: string, setCount: number, sets: string, minutes: string) =>
+        `${plural('en', rowCount, { one: `${rows} exercise`, other: `${rows} exercises` })} · ${plural('en', setCount, { one: `${sets} set`, other: `${sets} sets` })} · ≈ ${minutes} min`,
       today: 'Today',
       next: 'Next',
       lastChange: (date: string) => `Last change: ${date}`,
@@ -276,7 +261,7 @@ const en: Shape<typeof tr> = {
     ],
     lastStep: {
       before: 'If they lose their phone, edit the client and choose ',
-      badge: 'Close access',
+      badge: 'Revoke access',
       after: ' (their sessions and password stop working), then create a new QR code.',
     },
     panel: {
@@ -287,7 +272,7 @@ const en: Shape<typeof tr> = {
       pendingTitle: 'There is a pending QR code',
       noneTitle: 'No QR code yet',
       joinedBody:
-        "They sign in with their password, so no new QR code is needed. Once a new code is used the old password stops working; open sessions aren't closed. If their phone was lost, close access on the edit page first.",
+        "They sign in with their password, so no new QR code is needed. Once a new code is used the old password stops working; open sessions aren't closed. If their phone was lost, revoke access on the edit page first.",
       pendingBody: "The code itself isn't stored, so it can't be shown again. If you create a new one, the old one stops working immediately.",
       noneBody: (name: string) => `${name} scans the QR code, sets a password and adds the app to their home screen. The code can be used once.`,
       codeTitle: (name: string) => `QR code for ${name}`,
@@ -366,7 +351,7 @@ const en: Shape<typeof tr> = {
     description: "The client's trajectory: strength progress per muscle, exercise charts, weekly load, training consistency, records and achievements.",
     unavailableTitle: "Progress can't be opened right now",
     unavailableBody: "The client's data repo couldn't be reached. Reload the page in a moment.",
-    healthHidden: (state: string) => `${state}: readiness, pain, circumference measurements and the movement screening aren't shown here.`,
+    healthHidden: (state: string) => `${state}: readiness, pain, circumference measurements and the movement test aren't shown here.`,
   },
 };
 

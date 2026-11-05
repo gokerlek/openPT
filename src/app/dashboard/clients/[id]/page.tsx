@@ -325,7 +325,7 @@ function ProgramCard({
                     <ItemTitle className="break-words">{day.name}</ItemTitle>
                     <ItemDescription>{weekdaysText(day.weekdays ?? [], locale) || t.noDays}</ItemDescription>
                     <ItemDescription className="tabular-nums">
-                      {t.summary(format.number(summary.rows), format.number(summary.workingSets), format.number(summary.minutes))}
+                      {t.summary(summary.rows, format.number(summary.rows), summary.workingSets, format.number(summary.workingSets), format.number(summary.minutes))}
                     </ItemDescription>
                   </ItemContent>
                   {isNext ? (
