@@ -4,8 +4,8 @@ import type { Exercise } from '../lib/schemas/exercise.ts';
 import type { Locale } from '../i18n/locale.ts';
 import { ATTACHMENT_LIBRARY_EN } from './attachment-library.en.ts';
 import { DEVICE_LIBRARY_EN } from './device-library.en.ts';
-import { EXERCISE_LIBRARY } from './exercise-library.ts';
 import { EXERCISE_LIBRARY_EN } from './exercise-library.en.ts';
+import { LIBRARY_TITLES } from './library-titles.ts';
 
 /**
  * Hazır kataloğun metni okuyanın dilinde. Kütüphane Türkçe yazılı (`*-library.ts`); İngilizcesi kimliğe göre ayrı
@@ -49,22 +49,15 @@ export function localizeAttachment<T extends Attachment>(attachment: T, locale: 
   return text?.name ? { ...attachment, name: text.name } : attachment;
 }
 
-let titles: Map<string, { tr: string; en?: string }> | null = null;
-
-/** Kimlik → kütüphanedeki ad, iki dilde (ilk kullanımda bir kez kurulur). */
-function libraryTitles(): Map<string, { tr: string; en?: string }> {
-  titles ??= new Map(EXERCISE_LIBRARY.map((exercise) => [exercise.id, { tr: exercise.title, en: EXERCISE_LIBRARY_EN[exercise.id]?.title }]));
-  return titles;
-}
-
 /**
  * Geçmişte saklanan egzersiz adı (o günkü adın kopyası: set kaydı, geri bildirim, öneri) okuyanın dilinde:
  * kopya o kimliğin kütüphanedeki adıyla (herhangi bir dilde) aynıysa kütüphanenin bu dildeki adı; değilse kopya
  * (PT'nin verdiği ad, sonradan değişen ya da silinen egzersiz). Türkçe çıktı değişmez; İngilizce kaydedilmiş geçmiş
- * Türkçe okuyana Türkçe görünür.
+ * Türkçe okuyana Türkçe görünür. Adlar küçük, üretilmiş bir tablodan (`library-titles.ts`) gelir: istemci paketine
+ * kütüphanenin kendisi girmez.
  */
 export function localizedLibraryTitle(exerciseId: string, snapshot: string, locale: Locale): string {
-  const entry = libraryTitles().get(exerciseId);
-  if (!entry || (snapshot !== entry.tr && snapshot !== entry.en)) return snapshot;
-  return locale === 'en' ? (entry.en ?? entry.tr) : entry.tr;
+  const entry = Object.hasOwn(LIBRARY_TITLES, exerciseId) ? LIBRARY_TITLES[exerciseId] : undefined;
+  if (!entry || (snapshot !== entry[0] && snapshot !== entry[1])) return snapshot;
+  return locale === 'en' ? entry[1] : entry[0];
 }
