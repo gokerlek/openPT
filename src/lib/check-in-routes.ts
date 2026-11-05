@@ -1,4 +1,6 @@
 import * as v from 'valibot';
+import { DEFAULT_LOCALE } from '../i18n/locale.ts';
+import { clientHomeMessages } from '../i18n/messages/client-home/index.ts';
 import { postGuard } from './client-auth-routes.ts';
 import { todayIn } from './format.ts';
 import { GithubError } from './github/errors.ts';
@@ -71,6 +73,7 @@ async function readDoc(repo: SessionRepo, sha: string): Promise<SessionDoc | nul
 }
 
 export function checkInContextRoute(deps: SessionRouteDeps): Promise<SessionRouteResult> {
+  const locale = deps.locale ?? DEFAULT_LOCALE;
   return run(deps, null, 'check-in', async ({ client, repo }) => {
     const parts = checkParts(client);
     const [timeZone, health, repaired] = await Promise.all([
@@ -86,33 +89,35 @@ export function checkInContextRoute(deps: SessionRouteDeps): Promise<SessionRout
       ...checkContextOf({ parts, record: health && health !== 'broken' ? health.record : null, today: todayIn(timeZone, now) }),
       timeZone,
       broken: health === 'broken',
-      after: doc ? afterPromptOf(doc) : null,
+      after: doc ? afterPromptOf(doc, locale) : null,
     };
     return { status: 200, body };
   });
 }
 
 export function checkInPostRoute(deps: SessionRouteDeps, headers: Headers, origin: string, input: unknown): Promise<SessionRouteResult> {
-  const blocked = postGuard(headers, origin);
+  const locale = deps.locale ?? DEFAULT_LOCALE;
+  const t = clientHomeMessages(locale);
+  const blocked = postGuard(headers, origin, locale);
   if (blocked) return Promise.resolve(blocked);
   return run(deps, null, 'check-in-post', async ({ client, repo }) => {
     const parsed = v.safeParse(checkInPostSchema, input);
-    if (!parsed.success) return { status: 400, body: { error: 'Kayıt geçersiz.' } };
+    if (!parsed.success) return { status: 400, body: { error: t.routes.invalid } };
     // Onay her yazımda taze kayıttan (`loadClient`): arayüzdeki denetim tek başına güvence değil.
     const entry = allowedCheckIn(client, parsed.output);
-    if (!entry) return { status: 403, body: { error: 'Sağlık kaydı için onayın yok.', reason: 'consent' } };
+    if (!entry) return { status: 403, body: { error: t.routes.noHealthConsent, reason: 'consent' } };
     const date = todayIn(await deps.timeZone(), deps.now());
     for (let attempt = 0; ; attempt += 1) {
       const file = await readHealthFile(repo);
       if (file === 'broken') {
         deps.log(`[yoklama] ${client.id}: ${HEALTH_PATH} bozuk, yazılmadı.`);
-        return { status: 500, body: { error: 'Sağlık kaydın şu an açılamıyor. Antrenörüne haber ver.', reason: 'broken' } };
+        return { status: 500, body: { error: t.routes.healthBroken, reason: 'broken' } };
       }
       const record = file?.record ?? EMPTY_HEALTH;
       const next = withCheckIn(record, { date, entry });
       if (file && next === record) return { status: 200, body: { ok: true, unchanged: true } };
       try {
-        await repo.write(HEALTH_PATH, next, { sha: file?.sha, message: 'Yoklama kaydedildi' });
+        await repo.write(HEALTH_PATH, next, { sha: file?.sha, message: t.commits.checkIn });
         deps.log(`[yoklama] ${client.id} kaydedildi`);
         return { status: 200, body: { ok: true } };
       } catch (error) {

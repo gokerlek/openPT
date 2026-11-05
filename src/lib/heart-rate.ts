@@ -1,4 +1,5 @@
-import { dative } from './turkish.ts';
+import { DEFAULT_LOCALE, type Locale } from '../i18n/locale.ts';
+import { clientWorkoutMessages } from '../i18n/messages/client-workout/index.ts';
 
 /**
  * Nabız (tasarım `docs/plans/2026-11-05-mobil-uygulama-ve-kolay-kurulum-design.md`, Paket C) — saf. Göğüs bandı ya da
@@ -80,12 +81,13 @@ export function readingBpm(last: HeartReading | null, now: number): number | nul
 export type HeartLimitSource = 'pt' | 'age' | 'default';
 export type HeartLimits = { recovery: number; alert: number; source: HeartLimitSource };
 
-/** Danışanın gördüğü kaynak (bağlantı panelinde, sınırların altında). */
-export const HEART_LIMIT_SOURCE_TEXT: Record<HeartLimitSource, string> = {
-  pt: 'Antrenörünün belirlediği sınırlar.',
-  age: 'Yaşına göre hesaplandı.',
-  default: 'Genel değerler; antrenörün ayrıca sınır girmedi.',
-};
+/** Danışanın gördüğü kaynak (bağlantı panelinde, sınırların altında), okuyanın dilinde. */
+export function heartLimitSourceText(locale: Locale = DEFAULT_LOCALE): Record<HeartLimitSource, string> {
+  return clientWorkoutMessages(locale).heartRate.source;
+}
+
+/** Türkçe metinler (eski çağrılar); arayüz `heartLimitSourceText(locale)` kullanır. */
+export const HEART_LIMIT_SOURCE_TEXT: Record<HeartLimitSource, string> = heartLimitSourceText('tr');
 
 /** Sınırlar kullanılabilir mi: aralıkta, tam sayı ve toparlanma uyarıdan düşük. */
 export function heartLimitsValid(recovery: number, alert: number): boolean {
@@ -168,8 +170,8 @@ export function restHoldStep(
 }
 
 /** Dinlenme panelinde uzarken: "Nabzın 120'ye inince devam" (sınırın kendisi; sınırda ya da altında 3 sn). */
-export function calmText(recovery: number): string {
-  return `Nabzın ${dative(String(recovery))} inince devam`;
+export function calmText(recovery: number, locale: Locale = DEFAULT_LOCALE): string {
+  return clientWorkoutMessages(locale).heartRate.calm(recovery);
 }
 
 /* --- uyarı --- */
@@ -193,8 +195,8 @@ export function heartAlertStep(state: HeartAlertState, bpm: number | null, alert
 }
 
 /** Uyarı şeridinin metni. */
-export function heartAlertText(bpm: number): string {
-  return `Nabzın çok yüksek (${bpm}). Tempoyu düşür ve dinlen.`;
+export function heartAlertText(bpm: number, locale: Locale = DEFAULT_LOCALE): string {
+  return clientWorkoutMessages(locale).heartRate.alert(bpm);
 }
 
 /* --- deneme nabzı (yalnız yerel geliştirmede) --- */

@@ -1,11 +1,14 @@
-import { DEFAULT_LOCALE, type Locale } from '../i18n/locale.ts';
-import { formatDay, formatKg, formatNumber, todayIn } from './format.ts';
+import { localizedLibraryTitle } from '../data/library-text.ts';
+import { DEFAULT_LOCALE, intlLocale, type Locale } from '../i18n/locale.ts';
+import { clientProgressMessages } from '../i18n/messages/client-progress/index.ts';
+import { upper } from '../i18n/text.ts';
+import { getFormat, todayIn } from './format.ts';
 import { sessionDayText } from './own-program-text.ts';
-import { EFFORT_LABELS } from './progression.ts';
+import { effortLabels } from './progression.ts';
 import type { SessionDoc, SessionIndex, SessionIndexRow, SkipReason } from './schemas/session.ts';
 import { sessionEnd, volumeOf, waterOf, workingSetCount } from './session-index.ts';
 import { addDays } from './training-days.ts';
-import { FINISH_REASON_LABELS } from './workout-flow.ts';
+import { finishReasonLabels } from './workout-flow.ts';
 import { setValueText } from './workout-session.ts';
 import { clockOf, entriesInOrder, minutesText } from './workout-summary.ts';
 
@@ -45,9 +48,22 @@ export type HistoryRow = {
 export type HistoryMonth = { key: string; label: string; rows: HistoryRow[] };
 export type HistoryList = { recent: string | null; months: HistoryMonth[]; count: number };
 
-const weekdayFormat = new Intl.DateTimeFormat('tr-TR', { weekday: 'short', timeZone: 'UTC' });
-const monthShortFormat = new Intl.DateTimeFormat('tr-TR', { month: 'short', timeZone: 'UTC' });
-const monthFormat = new Intl.DateTimeFormat('tr-TR', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+type DateFormats = { weekday: Intl.DateTimeFormat; monthShort: Intl.DateTimeFormat; month: Intl.DateTimeFormat };
+const dateFormats = new Map<Locale, DateFormats>();
+
+function formatsOf(locale: Locale): DateFormats {
+  let formats = dateFormats.get(locale);
+  if (!formats) {
+    const intl = intlLocale(locale);
+    formats = {
+      weekday: new Intl.DateTimeFormat(intl, { weekday: 'short', timeZone: 'UTC' }),
+      monthShort: new Intl.DateTimeFormat(intl, { month: 'short', timeZone: 'UTC' }),
+      month: new Intl.DateTimeFormat(intl, { month: 'long', year: 'numeric', timeZone: 'UTC' }),
+    };
+    dateFormats.set(locale, formats);
+  }
+  return formats;
+}
 
 /** Yarım antrenmanın süresi eski index satırlarında ya da setsizse (bitiş son sete göre kısılamaz) şişik olabilir; bundan uzunu gösterilmez. */
 const UNFINISHED_MAX_MIN = 180;
@@ -62,40 +78,45 @@ function time(iso: string | undefined): number {
   return Number.isNaN(at) ? 0 : at;
 }
 
-function rowOf(row: SessionIndexRow): HistoryRow {
+function rowOf(row: SessionIndexRow, locale: Locale): HistoryRow {
+  const f = getFormat(locale);
+  const t = clientProgressMessages(locale).history;
+  const formats = formatsOf(locale);
   const date = new Date(`${row.date}T00:00:00Z`);
   const prs = row.prs ?? 0;
   // Kendi programdan antrenman programın adıyla ("Evde · Gün A"): program silinse de anlık görüntü kalır.
-  const day = sessionDayText(row);
+  const day = sessionDayText(row, undefined, locale);
   const minutes = shownMinutes(row);
-  const title = [day, ...(minutes !== undefined ? [minutesText(minutes)] : [])].join(' · ');
-  const meta = `${formatNumber(row.sets)} set · ${formatKg(row.volumeKg)}`;
+  const title = [day, ...(minutes !== undefined ? [minutesText(minutes, locale)] : [])].join(' · ');
+  const meta = `${t.sets(f.number(row.sets), row.sets)} · ${f.kg(row.volumeKg)}`;
   return {
     id: row.id,
     dayOfMonth: String(date.getUTCDate()),
-    month: monthShortFormat.format(date),
-    weekday: weekdayFormat.format(date),
+    month: formats.monthShort.format(date),
+    weekday: formats.weekday.format(date),
     title,
     meta,
     otherDay: row.otherDay,
     unfinished: row.unfinished,
     prs,
-    ...(row.programId ? { program: row.programName ?? 'Kendi programı' } : {}),
+    ...(row.programId ? { program: row.programName ?? t.ownProgram } : {}),
   };
 }
 
 /** Geçmiş listesi: yalnız bitmiş antrenmanlar (yarım kalan etkin antrenman Bugün'dedir). */
-export function historyList(index: SessionIndex, now: Date, timeZone: string): HistoryList {
+export function historyList(index: SessionIndex, now: Date, timeZone: string, locale: Locale = DEFAULT_LOCALE): HistoryList {
+  const f = getFormat(locale);
+  const t = clientProgressMessages(locale).history;
   const rows = index.items.filter((row) => row.finishedAt).sort((a, b) => time(b.startedAt ?? b.date) - time(a.startedAt ?? a.date));
   const months: HistoryMonth[] = [];
   for (const row of rows) {
     const key = row.date.slice(0, 7);
     let month = months.at(-1);
     if (!month || month.key !== key) {
-      month = { key, label: monthFormat.format(new Date(`${key}-01T00:00:00Z`)).toLocaleUpperCase('tr-TR'), rows: [] };
+      month = { key, label: upper(locale, formatsOf(locale).month.format(new Date(`${key}-01T00:00:00Z`))), rows: [] };
       months.push(month);
     }
-    month.rows.push(rowOf(row));
+    month.rows.push(rowOf(row, locale));
   }
   const since = addDays(todayIn(timeZone, now), -(HISTORY_RECENT_DAYS - 1));
   const recent = rows.filter((row) => row.date >= since);
@@ -103,7 +124,12 @@ export function historyList(index: SessionIndex, now: Date, timeZone: string): H
   const prs = recent.reduce((sum, row) => sum + (row.prs ?? 0), 0);
   const summary =
     recent.length > 0
-      ? [`Son ${HISTORY_RECENT_DAYS} gün`, `${formatNumber(recent.length)} antrenman`, minutesText(minutes), ...(prs > 0 ? [`${formatNumber(prs)} rekor`] : [])].join(' · ')
+      ? [
+          t.lastDays(HISTORY_RECENT_DAYS),
+          t.workouts(f.number(recent.length), recent.length),
+          minutesText(minutes, locale),
+          ...(prs > 0 ? [t.records(f.number(prs), prs)] : []),
+        ].join(' · ')
       : null;
   return { recent: summary, months, count: rows.length };
 }
@@ -166,15 +192,19 @@ export type SessionDetail = {
   subject: string;
 };
 
-function skipText(reason: SkipReason | undefined): string {
-  return reason ? `geçildi · ${FINISH_REASON_LABELS[reason]}` : 'geçildi';
+function skipText(reason: SkipReason | undefined, locale: Locale): string {
+  const t = clientProgressMessages(locale).history;
+  return reason ? t.skippedFor(finishReasonLabels(locale)[reason]) : t.skipped;
 }
 
 /**
  * Antrenmanın detayı: setleri olan ya da geçilen hareketler, yapılış sırasıyla. `bodyMassKg` (ölçüm onayıyla, seansın
  * günündeki kilo) verilirse yürüyüş/koşu setinin metninde kalori de (`cardio.ts`).
  */
-export function sessionDetail(doc: SessionDoc, timeZone: string, bodyMassKg?: number, _locale: Locale = DEFAULT_LOCALE): SessionDetail {
+export function sessionDetail(doc: SessionDoc, timeZone: string, bodyMassKg?: number, locale: Locale = DEFAULT_LOCALE): SessionDetail {
+  const f = getFormat(locale);
+  const t = clientProgressMessages(locale).history;
+  const efforts = effortLabels(locale);
   const exercises: DetailExercise[] = [];
   for (const entry of entriesInOrder(doc)) {
     const working = entry.sets.filter((set) => set.type === 'working');
@@ -183,47 +213,58 @@ export function sessionDetail(doc: SessionDoc, timeZone: string, bodyMassKg?: nu
     const planned = Math.max(0, ...working.map((set) => set.plannedSetCount ?? 0), entry.plannedSets ?? 0);
     const count =
       working.length === 0
-        ? skipText(entry.skip?.reason)
-        : `${formatNumber(working.length)}${planned > working.length ? `/${formatNumber(planned)}` : ''} set`;
-    const note = [count, ...(entry.oneOff ? ['bir defalık'] : []), ...(entry.lighter ? ['hafif'] : [])].join(' · ');
+        ? skipText(entry.skip?.reason, locale)
+        : planned > working.length
+          ? t.setsOf(f.number(working.length), f.number(planned), planned)
+          : t.sets(f.number(working.length), working.length);
+    const note = [count, ...(entry.oneOff ? [t.oneOff] : []), ...(entry.lighter ? [t.lighter] : [])].join(' · ');
     const sets: DetailSet[] = [
-      ...warmups.map((set) => ({ id: set.id, label: 'Isınma', text: setValueText(set), effort: null, warmup: true, extra: false })),
+      ...warmups.map((set) => ({ id: set.id, label: t.warmup, text: setValueText(set, undefined, locale), effort: null, warmup: true, extra: false })),
       ...working.map((set, position) => ({
         id: set.id,
-        label: formatNumber(position + 1),
-        text: setValueText(set, bodyMassKg),
-        effort: set.effort ? EFFORT_LABELS[set.effort] : null,
+        label: f.number(position + 1),
+        text: setValueText(set, bodyMassKg, locale),
+        effort: set.effort ? efforts[set.effort] : null,
         warmup: false,
         extra: Boolean(set.extra),
       })),
     ];
-    exercises.push({ entryId: entry.id, title: entry.title, note, ...(entry.setupNote ? { setupNote: entry.setupNote } : {}), sets });
+    // Kütüphane adının anlık görüntüsü okuyanın dilinde; PT'nin adı ve silinmiş hareket olduğu gibi.
+    const title = localizedLibraryTitle(entry.exerciseId, entry.title, locale);
+    exercises.push({ entryId: entry.id, title, note, ...(entry.setupNote ? { setupNote: entry.setupNote } : {}), sets });
   }
   const sets = workingSetCount(doc);
   // Yarım bırakılan antrenmanın saat aralığı son setten en çok 10 dk sonra biter (`sessionEnd`).
   const end = sessionEnd(doc) ?? doc.startedAt;
-  const dayName = sessionDayText(doc.program);
-  const title = `${dayName} · ${formatDay(doc.date)}`;
+  const dayName = sessionDayText(doc.program, undefined, locale);
+  const title = `${dayName} · ${f.day(doc.date)}`;
   return {
     id: doc.id,
     title,
-    meta: [`${clockOf(doc.startedAt, timeZone)}–${clockOf(end, timeZone)}`, `${formatNumber(sets)} set`, formatKg(volumeOf(doc))].join(' · '),
+    meta: [`${clockOf(doc.startedAt, timeZone)}–${clockOf(end, timeZone)}`, t.sets(f.number(sets), sets), f.kg(volumeOf(doc))].join(' · '),
     water: waterOf(doc),
-    effort: doc.effort?.sessionRpe !== undefined ? `Zorluk ${formatNumber(doc.effort.sessionRpe)}/10` : null,
+    effort: doc.effort?.sessionRpe !== undefined ? t.effort(f.number(doc.effort.sessionRpe)) : null,
     otherDay: !doc.program?.programId && Boolean(doc.program?.plannedDayId && doc.program.plannedDayId !== doc.program.dayId),
     unfinished: doc.notices.some((notice) => notice.kind === 'unfinished'),
     exercises,
-    subject: `${title} · ${formatNumber(sets)} set ve özeti`,
+    subject: t.subject(title, f.number(sets), sets),
   };
 }
 
 /* --- silme --- */
 
-/** Onay metni (§2.10): aynı iki cümle; veri depoda gerçekten kalır, bu yüzden "kalır". */
-export const DELETE_BODY = 'Uygulamadan kalkar, geri getirilemez. Antrenörünün veri deposunun geçmişinde kalır.';
-/** "Ayrıntı" açılınca: neyin silinmediği ve tam temizlik için kime yazılacağı. */
-export const DELETE_DETAIL =
-  'Deponun eski sürümlerinde ve kayıt notlarında kalır. Programındaki değişiklik kaydı (ör. "Bench Press 60 → 65 kg") silinmez. Rekorların ve önerilerin kalan kayıtlara göre yeniden hesaplanır. Tamamen silinmesi için antrenörüne yaz.';
+/**
+ * Onay metni (§2.10): aynı iki cümle; veri depoda gerçekten kalır, bu yüzden "kalır". `detail`: "Ayrıntı" açılınca,
+ * neyin silinmediği ve tam temizlik için kime yazılacağı.
+ */
+export function deleteText(locale: Locale = DEFAULT_LOCALE): { body: string; detail: string } {
+  const t = clientProgressMessages(locale).history;
+  return { body: t.deleteBody, detail: t.deleteDetail };
+}
+
+/* Türkçe metinler (eski çağrılar); arayüz `deleteText(locale)` kullanır. */
+export const DELETE_BODY = deleteText('tr').body;
+export const DELETE_DETAIL = deleteText('tr').detail;
 
 export type DeleteTarget =
   | { kind: 'set'; entryId: string; setId: string }
@@ -231,17 +272,18 @@ export type DeleteTarget =
   | { kind: 'session' };
 
 /** Onayın başlığı ve konusu ("Bench Press · Set 2 · 60 kg × 9"); hedef belgede yoksa null. */
-export function deleteCopy(detail: SessionDetail, target: DeleteTarget): { title: string; subject: string } | null {
-  if (target.kind === 'session') return { title: 'Bu antrenman silinsin mi?', subject: detail.subject };
+export function deleteCopy(detail: SessionDetail, target: DeleteTarget, locale: Locale = DEFAULT_LOCALE): { title: string; subject: string } | null {
+  const t = clientProgressMessages(locale).history;
+  if (target.kind === 'session') return { title: t.deleteSession, subject: detail.subject };
   const exercise = detail.exercises.find((item) => item.entryId === target.entryId);
   if (!exercise) return null;
   if (target.kind === 'entry') {
     const count = exercise.sets.filter((set) => !set.warmup).length;
-    return { title: 'Bu hareket silinsin mi?', subject: `${exercise.title} · ${count > 0 ? `${formatNumber(count)} set` : exercise.note}` };
+    return { title: t.deleteEntry, subject: `${exercise.title} · ${count > 0 ? t.sets(getFormat(locale).number(count), count) : exercise.note}` };
   }
   const set = exercise.sets.find((item) => item.id === target.setId);
   if (!set) return null;
-  return { title: 'Bu set silinsin mi?', subject: `${exercise.title} · ${set.warmup ? 'Isınma' : `Set ${set.label}`} · ${set.text}` };
+  return { title: t.deleteSet, subject: `${exercise.title} · ${set.warmup ? t.warmup : t.set(set.label)} · ${set.text}` };
 }
 
 /**

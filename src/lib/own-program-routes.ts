@@ -1,7 +1,9 @@
 import { DEFAULT_LOCALE, type Locale } from '../i18n/locale.ts';
+import { clientProgramsMessages } from '../i18n/messages/client-programs/index.ts';
+import { langConfig } from '../i18n/valibot.ts';
 import * as v from 'valibot';
 import { originGuard, postGuard } from './client-auth-routes.ts';
-import { BLOCKED_TEXT } from './exercise-caution.ts';
+import { blockedText } from './exercise-caution.ts';
 import { deleteOwnProgram, saveOwnProgram, selectOwnActive, shareOwnProgram, type OwnGuard, type OwnLibrary, type OwnSaveResult } from './own-program-files.ts';
 import { isOwnProgramId, OWN_PROGRAM_LIMITS } from './own-programs.ts';
 import type { DiffContext } from './program-diff.ts';
@@ -28,8 +30,13 @@ export type OwnRouteDeps = SessionRouteDeps & {
   guard?(client: Client): Promise<OwnGuard | null>;
 };
 
-const MISSING = { status: 404, body: { error: 'Program bulunamadı.' } };
-const INVALID = { status: 400, body: { error: 'İstek geçersiz.' } };
+function missing(locale: Locale = DEFAULT_LOCALE): SessionRouteResult {
+  return { status: 404, body: { error: clientProgramsMessages(locale).errors.missing } };
+}
+
+function badRequest(locale: Locale = DEFAULT_LOCALE): SessionRouteResult {
+  return { status: 400, body: { error: clientProgramsMessages(locale).errors.badRequest } };
+}
 
 function fieldsOf(issues: readonly v.BaseIssue<unknown>[]): Record<string, string> {
   const fields: Record<string, string> = {};
@@ -41,7 +48,8 @@ function fieldsOf(issues: readonly v.BaseIssue<unknown>[]): Record<string, strin
 }
 
 /** Kaydın sonucu yanıta (danışan ve PT uçları ortak). */
-export function saveResponse(result: OwnSaveResult, by: 'client' | 'pt', _locale: Locale = DEFAULT_LOCALE): SessionRouteResult {
+export function saveResponse(result: OwnSaveResult, by: 'client' | 'pt', locale: Locale = DEFAULT_LOCALE): SessionRouteResult {
+  const t = clientProgramsMessages(locale).errors;
   switch (result.status) {
     case 'created':
       return {
@@ -53,56 +61,51 @@ export function saveResponse(result: OwnSaveResult, by: 'client' | 'pt', _locale
     case 'unchanged':
       return { status: 200, body: { id: result.program.id, revision: result.program.revision, unchanged: true, droppedDevices: result.droppedDevices } };
     case 'invalid':
-      return { status: 400, body: { error: 'Bilgileri kontrol et.', fields: result.errors } };
+      return { status: 400, body: { error: t.check, fields: result.errors } };
     case 'blocked':
-      return { status: 400, body: { error: BLOCKED_TEXT, reason: 'blocked', fields: result.errors } };
+      return { status: 400, body: { error: blockedText(locale), reason: 'blocked', fields: result.errors } };
     case 'missing':
-      return { status: 404, body: { error: 'Program silindi.', reason: 'missing' } };
+      return { status: 404, body: { error: t.deleted, reason: 'missing' } };
     case 'stale':
-      return {
-        status: 412,
-        body: {
-          error:
-            by === 'pt'
-              ? 'Bu program sen düzenlerken değişti. Değişikliklerin kaybolmasın diye kaydetmedim.'
-              : 'Bu program sen düzenlerken değişti (antrenörün ya da başka bir cihazın kaydetti).',
-        },
-      };
+      return { status: 412, body: { error: by === 'pt' ? t.staleForPt : t.stale } };
     case 'exists':
-      return { status: 409, body: { error: 'Bu program başka bir yerde oluşturuldu.', reason: 'exists' } };
+      return { status: 409, body: { error: t.exists, reason: 'exists' } };
     case 'limit':
-      return { status: 409, body: { error: `En fazla ${OWN_PROGRAM_LIMITS.programs} program; yenisi için birini sil.`, reason: 'limit' } };
+      return { status: 409, body: { error: t.limit(OWN_PROGRAM_LIMITS.programs), reason: 'limit' } };
     case 'forbidden':
-      return { status: 403, body: { error: 'Danışan bu programın paylaşımını kapattı.', reason: 'unshared' } };
+      return { status: 403, body: { error: t.unshared, reason: 'unshared' } };
   }
 }
 
 /** Oluştur (`baseRevision: null`) ya da kaydet; ad oluştururken zorunlu. */
 export function saveOwnRoute(deps: OwnRouteDeps, headers: Headers, origin: string, pid: string, input: unknown): Promise<SessionRouteResult> {
-  const blocked = postGuard(headers, origin);
+  const locale = deps.locale ?? DEFAULT_LOCALE;
+  const t = clientProgramsMessages(locale);
+  const blocked = postGuard(headers, origin, locale);
   if (blocked) return Promise.resolve(blocked);
-  if (!isOwnProgramId(pid)) return Promise.resolve(MISSING);
+  if (!isOwnProgramId(pid)) return Promise.resolve(missing(locale));
   return run(deps, null, 'own-program', async ({ client, repo }) => {
-    const parsed = v.safeParse(ownProgramSaveSchema, input);
-    if (!parsed.success) return { status: 400, body: { error: 'Bilgileri kontrol et.', fields: fieldsOf(parsed.issues) } };
-    if (parsed.output.baseRevision === null && parsed.output.name === undefined) return { status: 400, body: { error: 'Bilgileri kontrol et.', fields: { name: 'Ad gir.' } } };
+    const parsed = v.safeParse(ownProgramSaveSchema, input, langConfig(locale));
+    if (!parsed.success) return { status: 400, body: { error: t.errors.check, fields: fieldsOf(parsed.issues) } };
+    if (parsed.output.baseRevision === null && parsed.output.name === undefined) return { status: 400, body: { error: t.errors.check, fields: { name: t.name.empty } } };
     const [{ library, ctx }, guard] = await Promise.all([deps.library(), deps.guard ? deps.guard(client) : null]);
-    const result = await saveOwnProgram(repo, { id: pid, body: parsed.output, by: 'client', library, ctx, now: deps.now(), guard });
+    const result = await saveOwnProgram(repo, { id: pid, body: parsed.output, by: 'client', library, ctx: { ...ctx, locale }, now: deps.now(), guard });
     if (result.status === 'created' || result.status === 'saved') deps.log(`[kendi program] ${client.id} ${result.status}`);
-    return saveResponse(result, 'client');
+    return saveResponse(result, 'client', locale);
   });
 }
 
 /** Sil; yarım antrenman bu programdansa 409 ve seansın kimliği ([Yarım antrenmanı sil]). */
 export function deleteOwnRoute(deps: SessionRouteDeps, headers: Headers, origin: string, pid: string): Promise<SessionRouteResult> {
-  const blocked = originGuard(headers, origin);
+  const locale = deps.locale ?? DEFAULT_LOCALE;
+  const blocked = originGuard(headers, origin, locale);
   if (blocked) return Promise.resolve(blocked);
-  if (!isOwnProgramId(pid)) return Promise.resolve(MISSING);
+  if (!isOwnProgramId(pid)) return Promise.resolve(missing(locale));
   return run(deps, null, 'own-program-delete', async ({ client, repo }) => {
-    const result = await deleteOwnProgram(repo, pid, deps.now());
-    if (result.status === 'missing') return MISSING;
+    const result = await deleteOwnProgram(repo, pid, deps.now(), locale);
+    if (result.status === 'missing') return missing(locale);
     if (result.status === 'active_session') {
-      return { status: 409, body: { error: 'Yarım antrenmanın bu programdan; önce bitir ya da sil.', reason: 'active_session', sessionId: result.sessionId } };
+      return { status: 409, body: { error: clientProgramsMessages(locale).errors.activeSession, reason: 'active_session', sessionId: result.sessionId } };
     }
     deps.log(`[kendi program] ${client.id} silindi`);
     return { status: 200, body: { ok: true } };
@@ -111,28 +114,30 @@ export function deleteOwnRoute(deps: SessionRouteDeps, headers: Headers, origin:
 
 /** Paylaş ya da kapat (`{ shared }`); revision artmaz. */
 export function shareOwnRoute(deps: SessionRouteDeps, headers: Headers, origin: string, pid: string, input: unknown): Promise<SessionRouteResult> {
-  const blocked = postGuard(headers, origin);
+  const locale = deps.locale ?? DEFAULT_LOCALE;
+  const blocked = postGuard(headers, origin, locale);
   if (blocked) return Promise.resolve(blocked);
-  if (!isOwnProgramId(pid)) return Promise.resolve(MISSING);
+  if (!isOwnProgramId(pid)) return Promise.resolve(missing(locale));
   return run(deps, null, 'own-program-share', async ({ repo }) => {
     const parsed = v.safeParse(ownProgramShareSchema, input);
-    if (!parsed.success) return INVALID;
-    const result = await shareOwnProgram(repo, pid, parsed.output.shared, deps.now());
-    if (result.status === 'missing') return MISSING;
-    if (result.status === 'invalid') return { status: 409, body: { error: 'Program şu an açılamıyor.' } };
+    if (!parsed.success) return badRequest(locale);
+    const result = await shareOwnProgram(repo, pid, parsed.output.shared, deps.now(), locale);
+    if (result.status === 'missing') return missing(locale);
+    if (result.status === 'invalid') return { status: 409, body: { error: clientProgramsMessages(locale).errors.unavailable } };
     return { status: 200, body: { shared: Boolean(result.program.shared), ...(result.status === 'unchanged' ? { unchanged: true } : {}) } };
   });
 }
 
 /** Bugün'ün programı (kalıcı seçim): kendi programın kimliği ya da null (PT'nin programı). Yarım antrenman engellemez. */
 export function activeOwnRoute(deps: SessionRouteDeps, headers: Headers, origin: string, input: unknown): Promise<SessionRouteResult> {
-  const blocked = postGuard(headers, origin);
+  const locale = deps.locale ?? DEFAULT_LOCALE;
+  const blocked = postGuard(headers, origin, locale);
   if (blocked) return Promise.resolve(blocked);
   return run(deps, null, 'own-program-active', async ({ repo }) => {
     const parsed = v.safeParse(ownProgramActiveSchema, input);
-    if (!parsed.success) return INVALID;
-    const result = await selectOwnActive(repo, parsed.output.programId, deps.now());
-    if (result.status === 'missing') return MISSING;
+    if (!parsed.success) return badRequest(locale);
+    const result = await selectOwnActive(repo, parsed.output.programId, deps.now(), locale);
+    if (result.status === 'missing') return missing(locale);
     return { status: 200, body: { active: parsed.output.programId, ...(result.status === 'unchanged' ? { unchanged: true } : {}) } };
   });
 }

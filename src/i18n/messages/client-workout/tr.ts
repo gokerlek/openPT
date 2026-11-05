@@ -1,0 +1,357 @@
+import { listText } from '../../define.ts';
+import { dative } from '../../../lib/turkish.ts';
+
+/**
+ * Danışanın antrenman ekranı ve antrenmanın saf metinleri (`lib/client-set-text`, `heart-rate`, `workout-*`,
+ * `session-*`, `recommend`, `program-feedback`, `me/antrenman/**`, `components/workout`). Sayılar çağıranda
+ * biçimlenir (`getFormat`); İngilizcenin çoğulu için sayının kendisi de verilir.
+ */
+const tr = {
+  /** Birimler, sayıdan sonra: "12 tekrar", "45 sn", "30 dk" (İngilizcede çoğul sayıya göre). */
+  units: {
+    reps: (_n: number) => 'tekrar',
+    seconds: (_n: number) => 'sn',
+    minutes: (_n: number) => 'dk',
+    sets: (_n: number) => 'set',
+  },
+
+  /** Setlerin danışanın dilinde anlatımı (`clientSetText`). */
+  setText: {
+    oneAmrap: (min: string, unit: string) => `1 set: yapabildiğin kadar (en az ${min} ${unit})`,
+    one: (range: string, unit: string) => `1 set: ${range} ${unit}`,
+    allAmrap: (_n: number, count: string, min: string, unit: string) => `${count} set, her sette yapabildiğin kadar (en az ${min} ${unit})`,
+    straight: (_n: number, count: string, range: string, unit: string) => `${count} set, her sette ${range} ${unit}`,
+    lastAmrap: (base: string) => `${base}; son sette yapabildiğin kadar`,
+    someAmrap: (base: string, positions: readonly number[]) => `${base}; ${listText('tr', positions.map((position) => `${position}.`))} sette yapabildiğin kadar`,
+    /** Setler farklıyken AMRAP seti: "son sette yapabildiğin kadar (en az 8)". */
+    amrapAt: (position: number | 'last', min: string, unit: string) =>
+      `${position === 'last' ? 'son sette' : `${position}. sette`} yapabildiğin kadar (en az ${min}${unit ? ` ${unit}` : ''})`,
+    mixed: (_n: number, count: string, items: readonly string[]) => `${count} set: ${listText('tr', items)}`,
+    pyramid: 'ağırlık her sette artar',
+    backoff: (pct: string) => `ilk set en ağır, sonrakiler %${pct} daha hafif`,
+    percents: (pcts: readonly string[]) => `ağırlık en ağır sete göre: ${pcts.map((pct) => `%${pct}`).join(', ')}`,
+    rest: (rest: string) => `${rest} dinlenme`,
+    noRest: 'setler arası dinlenme yok',
+  },
+
+  /** Nabız (`heart-rate.ts`). */
+  heartRate: {
+    source: {
+      pt: 'Antrenörünün belirlediği sınırlar.',
+      age: 'Yaşına göre hesaplandı.',
+      default: 'Genel değerler; antrenörün ayrıca sınır girmedi.',
+    },
+    calm: (recovery: number) => `Nabzın ${dative(String(recovery))} inince devam`,
+    alert: (bpm: number) => `Nabzın çok yüksek (${bpm}). Tempoyu düşür ve dinlen.`,
+  },
+
+  /** Antrenman özeti (`workout-summary.ts`). */
+  summary: {
+    minutes: (minutes: string) => `${minutes} dk`,
+    hours: (hours: string) => `${hours} sa`,
+    hoursMinutes: (hours: string, minutes: string) => `${hours} sa ${minutes} dk`,
+    heaviestBefore: (value: string) => `Önceki en ağır: ${value}`,
+    bestBefore: (value: string, gain: string) => `Önceki en iyi: ${value}${gain ? ` · tahmini 1RM +%${gain}` : ''}`,
+    repsAtWeightBefore: (reps: string, _n: number) => `Bu ağırlıkta önceki en çok: ${reps} tekrar`,
+    repsBefore: (reps: string, _n: number) => `Önceki en çok: ${reps} tekrar`,
+    secondsBefore: (seconds: string) => `Önceki en uzun: ${seconds} sn`,
+    changes: {
+      applied: 'programa yazıldı',
+      pending: 'antrenörünün onayında',
+      approved: 'antrenörün onayladı',
+      declined: 'antrenörün reddetti',
+      stale: 'uygulanamadı',
+    },
+    skipped: 'geçildi',
+    missed: 'yapılmadı',
+    top: (kg: string) => `${kg} üst`,
+    oneOff: 'bir defalık',
+    weekPast: (count: string, _n: number) => `O hafta ${count} antrenman`,
+    weekTarget: (done: string, target: string) => `Bu hafta ${done}/${target}`,
+    week: (done: string) => `Bu hafta ${done}`,
+    versusSame: (day: string) => `Önceki ${day} antrenmanıyla aynı toplam ağırlık`,
+    versus: (day: string, sign: string, pct: string) => `Önceki ${day} antrenmanına göre ${sign}%${pct}`,
+    water: (glasses: string, _n: number) => `${glasses} bardak su`,
+    unfinished: 'yarım bırakıldı',
+    firstTime: 'ilk kez',
+  },
+
+  /** Antrenmanın commit mesajları (`session-messages.ts`, bitiş): danışan repo'sunun günlüğü, yazanın dilinde. */
+  commits: {
+    deleted: 'Kayıt silindi',
+    warmup: (title: string, value: string) => `Isınma · ${title} · ${value}`,
+    setExtra: (number: number) => `Set ${number} (fazladan)`,
+    setOf: (number: number, total: number) => `Set ${number}/${total}`,
+    set: (number: number) => `Set ${number}`,
+    more: (count: number) => ` (+${count} set)`,
+    edited: (text: string) => `${text} düzeltildi`,
+    withDeletion: (text: string) => `${text} · kayıt silindi`,
+    started: (day: string | null) => (day !== null ? `Antrenman başladı · ${day}` : 'Antrenman başladı'),
+    updated: 'Antrenman güncellendi',
+    finished: (day: string | null, sets: number) => `Antrenman bitti${day !== null ? ` · ${day}` : ''} · ${sets} set`,
+    setsAdded: (count: number) => `Set eklendi (+${count} set)`,
+    effortSaved: 'Antrenman zorluğu kaydedildi',
+    waterUpdated: 'Su güncellendi',
+    ownProgram: 'Kendi programı',
+    clientProgram: 'Program (danışan)',
+    proposals: (count: number) => `${count} öneri`,
+  },
+
+  /** Antrenmandaki rekor ve artış bildirimi (`workout-achievements.ts`). */
+  achievements: {
+    recordTitle: 'Yeni kişisel rekor!',
+    seconds: (now: string, before: string) => `${now} sn · önceki rekor ${before} sn`,
+    e1rm: (kg: string, reps: number) => `Tahmini maksimum arttı · ${kg} kg × ${reps} tekrar`,
+    heaviest: (kg: string, reps: number, before: string) => `${kg} kg × ${reps} tekrar · önceki en ağır set ${before} kg`,
+    reps: (kg: string | null, reps: number, before: number) => `${kg ? `${kg} kg ile ` : ''}${reps} tekrar · önceki en iyi ${before} tekrar`,
+    progressTitle: 'Önceki antrenmana göre artış',
+    volume: (now: string, before: string) => `${now} kg hacim · önceki ${before} kg`,
+    sets: (now: number, before: number) => `${now} set · önceki ${before} set`,
+    totalReps: (now: number, before: number) => `${now} toplam tekrar · önceki ${before}`,
+    progressEnd: (changes: string) => `${changes}. Daha fazlasını yapmak zorunda değilsin.`,
+  },
+
+  /** Antrenman başı yoklaması ve antrenman sonrası (`session-check.ts`). */
+  check: {
+    readiness: {
+      sleep: { question: 'Dün gece nasıl uyudun?', answers: ['Çok kötü', 'Kötü', 'İdare eder', 'İyi', 'Harika'] as const },
+      energy: { question: 'Enerjin nasıl?', answers: ['Bitkin', 'Düşük', 'Normal', 'Yüksek', 'Çok enerjik'] as const },
+      soreness: { question: 'Kaslarında ağrı var mı?', answers: ['Çok yoğun', 'Belirgin', 'Orta', 'Hafif', 'Hiç yok'] as const },
+      stress: { question: 'Stresin nasıl?', answers: ['Çok stresli', 'Yüksek', 'Orta', 'Hafif', 'Sakinim'] as const },
+    },
+    painEnds: { low: 'Ağrı yok', high: 'Dayanılmaz' },
+    direction: {
+      centralizing: 'Azalıyor, merkeze toplanıyor',
+      stable: 'Değişmedi',
+      peripheralizing: 'Kola ya da bacağa yayılıyor',
+    },
+    irritability: {
+      low: 'Ara ara, zor tetikleniyor',
+      moderate: 'Orta',
+      high: 'Sürekli, kolay tetikleniyor',
+    },
+    redFlag: {
+      none: 'Hayır, hiçbiri',
+      new_neuro_deficit: 'Yeni uyuşma ya da güç kaybı',
+      bladder_bowel_change: 'İdrar ya da dışkılamada değişiklik',
+      night_pain: 'Geceleri uyandıran ağrı',
+      new_trauma: 'Yeni düşme ya da darbe',
+    },
+    cr10: {
+      0: 'Dinlenme',
+      1: 'Çok çok kolay',
+      2: 'Kolay',
+      3: 'Orta',
+      4: 'Biraz zor',
+      5: 'Zor',
+      7: 'Çok zor',
+      10: 'Maksimal',
+    } as Readonly<Partial<Record<number, string>>>,
+    /** Adsız basamak: "6 · Zor ile çok zor arası". */
+    cr10Between: (value: string, lower: string, upper: string) => `${value} · ${lower} ile ${upper.toLocaleLowerCase('tr')} arası`,
+    painfulExercise: 'Bu hareket son günlerde ağrı yaptı: artış yok.',
+    causes: {
+      notBackToBaseline: 'geçen antrenmandan sonraki ağrın ertesi sabah her zamanki düzeyine dönmedi',
+      peakOverCeiling: (ceiling: string) => `geçen antrenmanda ağrın tavanı (${ceiling}/10) aştı`,
+      painRisingWeekly: 'ağrın bu hafta geçen haftaya göre arttı',
+      highIrritability: 'ağrın kolay tetikleniyor',
+      painfulExercise: 'bu hareket son günlerde ağrı yaptı',
+      noLoad: 'bugün yük verilmiyor',
+    },
+    why: {
+      fewerSets: (before: string, after: string, _n: number) => `${before} set yerine ${after}`,
+      reduceChip: (delta: string) => `Ağrı · ${delta}`,
+      reduceDetail: (cause: string, done: boolean, last: string, after: string, sets: string) =>
+        `${cause}. Bugün ağırlık ${done ? 'son yaptığın ' : ''}${last} yerine ${after}${sets ? `, ${sets}` : ''}. Sonraki antrenmanda yoklamana göre yeniden bakılır.`,
+      lightChipDelta: (delta: string) => `Hafif gün · ${delta}`,
+      lightChipFewer: 'Hafif gün · bir set az',
+      lightChip: 'Hafif gün',
+      lightWeight: (before: string, after: string) => `ağırlık ${before} yerine ${after}`,
+      lightPain: (cause: string) => ` ${cause}: bugün artış yok.`,
+      lightDetail: (parts: readonly string[], pain: string) =>
+        `Bugün hafif bir gün seçtin${parts.length > 0 ? `: ${parts.join(', ')}` : ''}.${pain} Yalnız bugünün planı değişti; sonraki antrenman planın kendi ağırlığıyla.`,
+      unavailableChip: (duration: boolean) => (duration ? 'Ağrı · süreyi azalt' : 'Ağrı · tekrarı azalt'),
+      unavailableDetail: (cause: string, weighted: boolean) =>
+        `${cause}. ${weighted ? 'Ağırlık zaten en hafif ayarda' : 'Bu harekette azaltılacak ağırlık yok'}: bugün aralığın altında kal, gerekirse bir set az yap.`,
+      holdChip: (weighted: boolean) => (weighted ? 'Ağrı · aynı ağırlık' : 'Ağrı · aynı hedef'),
+      holdDetail: (cause: string, kg: string | null) => `${cause}. Bugün artış yok: ${kg !== null ? `${kg} ile` : 'geçen seferki hedefle'} kal.`,
+    },
+  },
+
+  /** Öneri motorunun danışana gerekçesi (`recommend.ts`). */
+  recommend: {
+    values: (values: string, duration: boolean) => `${values}${duration ? ' sn' : ''}`,
+    firstChip: (weighted: boolean) => (weighted ? 'Rahat bir ağırlıkla başla' : 'Rahat başla'),
+    firstDetail: (weighted: boolean) =>
+      `Bu harekette geçmişin yok. ${weighted ? 'Rahat bir ağırlıkla başla' : 'Rahat bir tempoyla başla'}; setler iyi geçerse sonraki sefer artar.`,
+    rangeChip: 'Yeni aralık · ağırlık çevrildi',
+    increaseTwoForTwo: (kg: string) => `Son iki antrenmanda ${kg} ile bütün setlerde hedefin tepesine ulaştın.`,
+    increaseLinear: (kg: string, values: string) => `Geçen sefer ${kg} ile bütün setleri tamamladın (${values}).`,
+    increaseTop: (kg: string, values: string) => `Geçen sefer ${kg} ile bütün setlerde hedefin tepesine ulaştın (${values}).`,
+    increaseRepsDone: ' Tekrarları da ekledin; şimdi ağırlık zamanı.',
+    increaseDoubled: ' Kolay geçtiği için artış iki kat.',
+    increaseChip: (signed: string, why: 'twoForTwo' | 'repsDone' | 'doubled' | 'reached') =>
+      `${signed} · ${why === 'twoForTwo' ? '2 antrenmandır tepede' : why === 'repsDone' ? 'tekrarlar tamam' : why === 'doubled' ? 'kolay geçti' : 'hedefe ulaştın'}`,
+    increaseDetail: (lead: string, extra: string, signed: string, linear: boolean) =>
+      `${lead}${extra} Ağırlık ${signed}${linear ? '.' : '; tekrar aralığın altından başlar.'}`,
+    confirmChip: 'Bir kez daha, sonra artır',
+    confirmIntro: (weighted: boolean) => `Tepeye ulaştın ama zorladı. Aynı ${weighted ? 'ağırlıkla' : 'hedefle'} bir kez daha yap; rahat geçince artar.`,
+    confirm: (weighted: boolean) =>
+      `Tepeye ulaştın; bir kez daha yap, sonra ${weighted ? 'artır' : 'zor bir varyasyona geç'}. Bu aşamada ilerleme için iki antrenman üst üste tepede kalmak gerekir.`,
+    repsFirstChip: (goal: string, step: string) => `Önce tekrar · ${goal} olunca ${step}`,
+    repsFirstDetail: (next: string, pct: string, goal: string) =>
+      `Sonraki ağırlık (${next}) tek seferde %${pct} sınırını aşan bir sıçrama. Önce tekrar ekle: bütün setlerde ${goal} tekrar yapınca ağırlık artar.`,
+    addRepChip: '+1 tekrar hedefle',
+    addRepDetail: (values: string, weighted: boolean, top: string) =>
+      `Geçen sefer ${values}. Aynı ${weighted ? 'ağırlıkta' : 'harekette'} en düşük seti bir tekrar artır; bütün setlerde ${top} olunca ${weighted ? 'ağırlık artar' : 'zor bir varyasyon önerilir'}.`,
+    addTimeChip: (seconds: number) => `+${seconds} sn hedefle`,
+    addTimeDetail: (values: string, seconds: number, top: string) =>
+      `Geçen sefer ${values}. Her sette +${seconds} sn; bütün setlerde ${top} olunca zor bir varyasyon önerilir.`,
+    holdChip: (weighted: boolean) => (weighted ? 'Aynı ağırlık · hedefi tamamla' : 'Aynı hedef · tamamla'),
+    holdDetail: (values: string, weighted: boolean) => `Geçen sefer ${values}: bir set hedefin altında kaldı. Aynı ${weighted ? 'ağırlıkla' : 'hedefle'} tekrar dene.`,
+    incompleteChip: (weighted: boolean) => (weighted ? 'Aynı ağırlık · geçen sefer yarım' : 'Aynı hedef · geçen sefer yarım'),
+    decreaseChip: (signed: string) => `${signed} · geçen sefer zorladı`,
+    decreaseIntro: (values: string) => `Geçen sefer ${values}: hedefin altında kaldın. Tanışmada ağırlık hemen biraz iner; bu tıkanma sayılmaz.`,
+    decrease: (values: string, signed: string) => `Geçen sefer ${values}: setler hedefin altında kaldı. Ağırlık biraz iner (${signed}).`,
+    deloadChip: (signed: string | null) => (signed ? `Hafif antrenman · ${signed}` : 'Hafif antrenman · az set'),
+    deloadDetail: (pct: string) => `Üst üste üç antrenman hedefin altında kaldı. Bugün ağırlık yaklaşık %${pct} az ve daha az set; sonra yeniden artar.`,
+    calibrateChip: 'Aradan dönüş · hafif ayar',
+    calibrateDetail: (days: string, _n: number, pct: string | null) =>
+      `${days} gündür bu hareketi yapmadın. Bugün ${pct !== null ? `son ağırlığının yaklaşık %${pct} kadarıyla` : 'hedefin alt sınırıyla'} ayar antrenmanı; zorlanırsan tıkanma sayılmaz.`,
+    lighterRetryChip: 'Planı bir kez daha dene',
+    lighterRetryDetail: 'Geçen sefer plandan hafif yaptın. Bugün planlanan ağırlıkla bir kez daha dene; üst üste ikinci kez hafif kalırsa ağırlık biraz iner.',
+    deviceMaxChip: 'Cihazın en ağır ayarı',
+    harderChip: 'Tepedesin · zor varyasyon',
+    noProgressionChip: 'Aynı hedef',
+    returning: 'Aradan dönüş',
+    intro: 'Tanışma',
+    introOf: (n: number, length: number) => `Tanışma ${n}/${length}`,
+    tailOnceMore: 'bir kez daha',
+    tailFindWeight: 'rahat bir ağırlık bul',
+    tailEasyStart: 'rahat başla',
+    introDetail: (returning: boolean, detail: string) =>
+      `${returning ? 'Aradan döndün: ilk antrenmanlarda küçük adımlarla ilerlenir.' : 'Bu hareketle tanışıyorsun: doğru ağırlık küçük adımlarla bulunur.'} ${detail}`,
+    setIncreaseText: (title: string, from: number, to: number) => `${title} ${from} → ${to} set`,
+    setIncreaseWhy: (weeks: number, sets: string, target: number) =>
+      `${weeks} haftadır bu harekette; son 2 haftada ilerliyor. Hedef kasın son 7 günde ${sets} seti var (önerilen ~${target}).`,
+  },
+
+  /** Bitişin program güncellemesi (`program-feedback.ts`). */
+  feedback: {
+    skipReasons: {
+      busy: 'Alet dolu',
+      no_equipment: 'Ekipman yok',
+      no_time: 'Zamanım yok',
+      tired: 'Yoruldum',
+      other: 'Diğer',
+    },
+    repsTarget: (label: string) => `${label} tekrar`,
+    ownHint: 'İşaretsiz: program aynı kalır',
+    weightFromNow: (title: string, kg: string) => `${title}: bundan sonra ${kg}`,
+    weightUpHint: (kg: string) => `İşaretsiz: bir defalık (${kg} kalır)`,
+    weightDownHint: (kg: string) => `İşaretsiz: bu seferlik (${kg} kalır)`,
+    margin: (margin: number, duration: boolean) => (duration ? `${margin} sn` : `${margin} tekrar`),
+    target: (title: string, target: string) => `${title}: hedef ${target}`,
+    targetHint: 'İşaretsiz: hedef aynı kalır',
+    propose: 'Antrenörüne öner',
+    targetUpWhy: (margin: string) => `2 antrenmandır bütün setlerde hedefin en az ${margin} üstü`,
+    targetDownWhy: '2 antrenmandır bütün setlerde hedefin altı',
+    sets: (title: string, from: string, to: string, _n: number) => `${title}: ${from} → ${to} set`,
+    setsSameWhy: (done: string, _n: number) => `2 antrenmandır ${done} set yapıldı`,
+    setsWhy: (before: string, now: string) => `Son 2 antrenmanda ${before} ve ${now} set yapıldı`,
+    removeOwn: (title: string) => `${title}: programdan çıkar`,
+    remove: (title: string) => `${title}: çıkar ya da değiştir`,
+    removeWhy: (reason: string | null) => `2 antrenmandır geçildi${reason ? ` (${reason})` : ''}`,
+    swap: (title: string, other: string) => `${title} yerine ${other}`,
+    swapHint: 'Antrenörüne öner: bundan sonra bu',
+    swapWhy: (title: string) => `Bu antrenmanda ${title} yapıldı`,
+    add: (title: string) => `${title} ekle`,
+    addHint: 'Antrenörüne öner: programa ekle',
+    addWhy: 'Bu antrenmanda eklendi',
+    ownStale: (name: string, stale: number, staleText: string) => `${name} o arada değişti; ${stale > 1 ? `${staleText} değişiklik` : 'bu değişiklik'} yazılmadı.`,
+    ownOthers: (count: string, _n: number) => `Öteki ${count} değişiklik programa yazıldı.`,
+    ownReopen: 'Programını açıp yeniden düzenleyebilirsin.',
+    ownUpdated: (name: string) => `${name} güncellendi`,
+    written: (count: string, _n: number) => `${count} değişiklik programa yazıldı.`,
+    converted: 'Program o arada değişti; önerin antrenörüne gönderildi.',
+    afterApproval: 'Antrenörün onaylayınca programına yazılır.',
+    updated: 'Programın güncellendi',
+    pending: (count: string, _n: number) => `${count} öneri antrenörünün onayında`,
+    notified: 'Antrenörüne bildirildi',
+    sent: 'Önerin antrenörüne gönderildi',
+    workingWeight: (title: string, from: string, to: string) => `${title}: çalışma ağırlığı ${from} → ${to}`,
+    convertedWhy: 'Program o arada değişti; danışanın hedef önerisi',
+    proposalSets: (title: string, from: string, to: string, _n: number) => `${title} ${from} → ${to} set`,
+  },
+
+  /** Antrenman akışı (`workout-flow.ts`): muadil seçeneği ve bitişte neden. */
+  flow: {
+    startWith: (kg: string) => `${kg} ile başla`,
+    suggested: (kg: string) => `öneri ${kg}`,
+    finishReasons: {
+      no_time: 'Zamanım yok',
+      tired: 'Yoruldum',
+      busy: 'Alet dolu',
+      no_equipment: 'Ekipman yok',
+      other: 'Diğer',
+      pain: 'Ağrı',
+    },
+  },
+
+  /** Set tablosu ve panel metinleri (`workout-session.ts`, `workout-groups.ts`). */
+  session: {
+    targetAmrap: (min: string, unit: string, extra: string) => `En az ${min}${unit}, yapabildiğin kadar${extra}`,
+    target: (range: string, unit: string, extra: string) => `Hedef ${range}${unit}${extra}`,
+    next: (name: string | null, position: number, body: string) => `${name ? `${name} · ` : ''}Set ${position} · ${body}`,
+    workout: 'Antrenman',
+  },
+
+  /** Uçların hata mesajları (`session-routes.ts`, `workout-routes.ts`). */
+  errors: {
+    expired: 'Oturumun kapanmış. Yeniden giriş yap.',
+    notFound: 'Antrenman bulunamadı.',
+    gone: 'Bu antrenman silinmiş.',
+    programMismatch: 'Kayıt başka bir programa ait.',
+    invalid: 'Kayıt geçersiz.',
+    busy: 'Şu an çok yoğun; kayıtların telefonda duruyor, biraz sonra gönderilecek.',
+    sendFailed: 'Kayıt gönderilemedi. Biraz sonra tekrar dene.',
+    otherSession: 'Kayıt başka bir antrenmana ait.',
+    programMissing: 'Bu antrenmanın programı bulunamadı.',
+    finishedElsewhere: 'Bu antrenman başka bir cihazda bitirildi.',
+    programProblem: 'Programın şu an açılamıyor. Antrenörüne haber ver.',
+    programUnavailable: (name: string | null) => `${name ?? 'Seçtiğin program'} şu an açılamıyor.`,
+    yourProgramUnavailable: (name: string | null) => `${name ?? 'Programın'} şu an açılamıyor.`,
+    badRequest: 'İstek geçersiz.',
+    rowGone: 'Bu hareket programında artık yok; muadilleri açılamadı.',
+    careFirst: (many: boolean) => (many ? 'Kısıtlarına uygun olanlar önce.' : 'Kısıtına uygun olanlar önce.'),
+    notInLibrary: 'Bu hareket kütüphanede yok.',
+    daysByPt: 'Günlerini antrenörün belirliyor.',
+    daysInForm: 'Günleri programını düzenlerken seç.',
+    conflict: 'Kayıt şu an başka bir yazmayla çakıştı; biraz sonra tekrar denenecek.',
+    rowNotInPlan: 'Satır bu günün planında yok.',
+    addedNoEntry: 'Eklenen hareketin kaydı yok.',
+  },
+
+  /** Antrenman kaydının şema mesajları (`schemas/session.ts`). */
+  validation: {
+    sessionId: 'Antrenman kimliği geçersiz.',
+    entryId: 'Hareket kaydı kimliği geçersiz.',
+    setId: 'Set kimliği geçersiz.',
+    deviceId: 'Cihaz kimliği geçersiz.',
+    waterId: 'Su kaydı kimliği geçersiz.',
+    rowId: 'Satır kimliği geçersiz.',
+    blockId: 'Blok kimliği geçersiz.',
+    idChars: 'Kimlik yalnız küçük harf, rakam ve tire içerebilir.',
+    isoTime: 'Zaman ISO biçiminde olmalı.',
+    day: 'Tarih YYYY-AA-GG olmalı.',
+    repsOrSeconds: 'Sette ya tekrar ya süre olmalı.',
+    phaseId: 'Evre kimliği geçersiz.',
+    dayId: 'Gün kimliği geçersiz.',
+    programId: 'Program kimliği geçersiz.',
+    finishedOnly: 'Bitiş anı yalnız bitmiş antrenmanda olur.',
+    duplicateId: 'Aynı kimlik iki kez kullanılmış.',
+    noChange: 'Değişiklik yok.',
+  },
+};
+
+export default tr;

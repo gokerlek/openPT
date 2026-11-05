@@ -1,5 +1,7 @@
 import * as v from 'valibot';
-import { BLOCKED_TEXT } from './exercise-caution.ts';
+import { DEFAULT_LOCALE, type Locale } from '../i18n/locale.ts';
+import { clientProgramsMessages } from '../i18n/messages/client-programs/index.ts';
+import { blockedText } from './exercise-caution.ts';
 import { gitBlobSha, jsonText } from './github/blob.ts';
 import {
   addOwnEvent,
@@ -16,7 +18,7 @@ import {
   type UnreadableOwnProgram,
 } from './own-program-index.ts';
 import {
-  OWN_DELETE_MESSAGE,
+  ownDeleteMessage,
   OWN_INDEX_PATH,
   OWN_PROGRAM_LIMITS,
   OWN_PROGRAMS_DIR,
@@ -32,7 +34,7 @@ import {
   type OwnProgram,
   type OwnProgramPhase,
 } from './own-programs.ts';
-import { commitMessage, type DiffContext } from './program-diff.ts';
+import { formatChangeSummary, type DiffContext } from './program-diff.ts';
 import {
   bodyWithAssignments,
   keepStoredAssignments,
@@ -125,9 +127,29 @@ async function commitProgram(repo: SessionRepo, head: RepoHead, program: OwnProg
   });
 }
 
-/** Commit mesajı: "Kendi programı (Evde): Gün A: …" (gövdede bütün cümleler, `commitMessage` gibi). */
-function ownCommitMessage(name: string, kind: 'create' | 'edit', changes: readonly ProgramChange[]): string {
-  return commitMessage(kind, changes).replace(/^Program: |^/, `Kendi programı (${name}): `);
+/** Konu satırının sınırı (`program-diff.ts` `commitMessage` ile aynı). */
+const SUBJECT_MAX = 72;
+/** Düzenlemenin özeti PT programında "Program: " ile başlar; kendi programda o yer adın önekidir. */
+const EDIT_PREFIX_LENGTH = 'Program: '.length;
+
+function clip(text: string, max: number): string {
+  return text.length <= max ? text : `${text.slice(0, max - 1)}…`;
+}
+
+/**
+ * Commit mesajı (yazanın dilinde): "Kendi programı (Evde): Gün A: …"; gövdede bütün cümleler (`commitMessage` gibi).
+ * Parçalardan kurulur (önek, özet ya da genel cümle); PT programının mesajı metin olarak değiştirilmez.
+ */
+function ownCommitMessage(name: string, kind: 'create' | 'edit', changes: readonly ProgramChange[], locale: Locale): string {
+  const t = clientProgramsMessages(locale).commits;
+  const summary = formatChangeSummary(changes);
+  const full = summary || (kind === 'create' ? t.created : t.updated);
+  // Özet, PT programındaki "Program: " önekiyle aynı yere sığacak kadar kırpılır.
+  const subject = clip(full, summary && kind !== 'create' ? SUBJECT_MAX - EDIT_PREFIX_LENGTH : SUBJECT_MAX);
+  const head = `${t.own(name)}${subject}`;
+  if (changes.length <= 1 && subject === full) return head;
+  const lines = changes.map((change) => `- ${change.scope ? `${change.scope}: ` : ''}${change.text}`);
+  return `${head}\n\n${lines.join('\n')}`;
 }
 
 /* --- oluşturma ve kayıt --- */
@@ -191,7 +213,13 @@ async function otherIds(repo: OwnReader, state: OwnState, id: string, pt: Progra
  * Eklenen yasaklılar (§3.7 [sentez]): temel önceki kaydın aynı hareketi taşıyan satırları, günün kopyalandığı PT günü ve kaynağı olan
  * açık şablonlar (şablonlar yalnız gerekirse okunur). Hata satırın alanına, metin danışanın antrenmandaki ile aynı.
  */
-async function guardErrors(guard: OwnGuard, phases: readonly OwnProgramPhase[], stored: OwnProgram | null, pt: Program | null): Promise<Record<string, string> | null> {
+async function guardErrors(
+  guard: OwnGuard,
+  phases: readonly OwnProgramPhase[],
+  stored: OwnProgram | null,
+  pt: Program | null,
+  locale: Locale,
+): Promise<Record<string, string> | null> {
   const storedRows = new Map(stored?.phases.flatMap((phase) => phase.days.flatMap((day) => day.blocks.flatMap((block) => block.rows.map((row) => [row.id, row.exerciseId] as const)))) ?? []);
   const ptDays = new Map(pt?.phases.flatMap((phase) => phase.days.map((day) => [day.id, day] as const)) ?? []);
   const templates = new Map<string, readonly string[]>();
@@ -209,7 +237,7 @@ async function guardErrors(guard: OwnGuard, phases: readonly OwnProgramPhase[], 
         if (!templates.has(id)) templates.set(id, (await guard.templateExercises(id)) ?? []);
         for (const exerciseId of templates.get(id)!) allowed.add(exerciseId);
       }
-      for (const row of candidates) if (!allowed.has(row.exerciseId)) errors[row.path] = BLOCKED_TEXT;
+      for (const row of candidates) if (!allowed.has(row.exerciseId)) errors[row.path] = blockedText(locale);
     }
   }
   return Object.keys(errors).length > 0 ? errors : null;
@@ -236,6 +264,7 @@ export async function saveOwnProgram(
   },
 ): Promise<OwnSaveResult> {
   const { id, body, by, now } = input;
+  const locale = input.ctx.locale ?? DEFAULT_LOCALE;
   const guard = by === 'client' && input.guard && input.guard.blocked.size > 0 ? input.guard : null;
   if (!isOwnProgramId(id)) return { status: 'missing' };
   return withRetry(async (): Promise<OwnSaveResult> => {
@@ -254,20 +283,23 @@ export async function saveOwnProgram(
       if (stored.status === 'invalid') return { status: 'exists' };
       if (state.index.items.length + state.unreadable.length >= OWN_PROGRAM_LIMITS.programs) return { status: 'limit' };
       const name = body.name ?? '';
-      const problem = ownNameProblem(name, others);
+      const problem = ownNameProblem(name, others, locale);
       if (problem) return { status: 'invalid', errors: { name: problem } };
       const normalized = normalizeOwn(assigned.phases, input.library, null);
       if (Object.keys(normalized.errors).length > 0) return { status: 'invalid', errors: normalized.errors };
-      const refused = guard ? await guardErrors(guard, body.phases, null, pt.program) : null;
+      const refused = guard ? await guardErrors(guard, body.phases, null, pt.program, locale) : null;
       if (refused) return { status: 'blocked', errors: refused };
       const taken = await otherIds(repo, state, id, pt.program);
       const settled = reIdCollisions({ currentPhaseId: body.currentPhaseId, phases: normalized.phases }, taken, new Set(), input.random);
-      const program = { ...createOwnProgram({ id, name, currentPhaseId: settled.currentPhaseId, phases: settled.phases, now }), ...(input.shareOnCreate ? { shared: { at } } : {}) };
+      const program = {
+        ...createOwnProgram({ id, name, currentPhaseId: settled.currentPhaseId, phases: settled.phases, now, locale }),
+        ...(input.shareOnCreate ? { shared: { at } } : {}),
+      };
       let index = upsertOwnItem(state.index, ownIndexItemOf(program, shaOf(program)));
       // PT'nin programı yokken ilk kendi program Bugün'ün programı olur (§3.2): Bugün boş kalmasın.
       const activated = !pt.exists && state.index.items.length === 0;
       if (activated) index = withActive(index, id, now) ?? index;
-      await commitProgram(repo, head, program, index, ownCommitMessage(program.name, 'create', program.log[0]?.changes ?? []));
+      await commitProgram(repo, head, program, index, ownCommitMessage(program.name, 'create', program.log[0]?.changes ?? [], locale));
       repo.log(`[kendi program] oluşturuldu`);
       return { status: 'created', program, droppedDevices: normalized.droppedDevices, activated };
     }
@@ -279,13 +311,13 @@ export async function saveOwnProgram(
     if (by === 'pt' && !current.shared) return { status: 'forbidden' };
     if (!sameProgramBase(current, { revision: body.baseRevision, createdAt: body.baseCreatedAt })) return { status: 'stale' };
     if (by === 'client' && body.name !== undefined) {
-      const problem = ownNameProblem(body.name, others);
+      const problem = ownNameProblem(body.name, others, locale);
       if (problem) return { status: 'invalid', errors: { name: problem } };
     }
     const kept = keepStoredAssignments(body, current);
     const normalized = normalizeOwn(kept.phases, input.library, current);
     if (Object.keys(normalized.errors).length > 0) return { status: 'invalid', errors: normalized.errors };
-    const refused = guard ? await guardErrors(guard, body.phases, current, pt.program) : null;
+    const refused = guard ? await guardErrors(guard, body.phases, current, pt.program, locale) : null;
     if (refused) return { status: 'blocked', errors: refused };
     const taken = await otherIds(repo, state, id, pt.program);
     const settled = reIdCollisions({ currentPhaseId: body.currentPhaseId, phases: normalized.phases }, taken, programIds(current.phases), input.random);
@@ -295,7 +327,7 @@ export async function saveOwnProgram(
     let item: OwnIndexItem = ownIndexItemOf(result.program, shaOf(result.program), previous);
     if (result.program.shared) item = { ...item, ...(by === 'pt' ? { ptEditedAt: at } : { clientEditedAt: at }) };
     const kind = result.program.log[0]?.kind === 'create' ? 'create' : 'edit';
-    await commitProgram(repo, head, result.program, upsertOwnItem(state.index, item), ownCommitMessage(result.program.name, kind, result.changes));
+    await commitProgram(repo, head, result.program, upsertOwnItem(state.index, item), ownCommitMessage(result.program.name, kind, result.changes, locale));
     repo.log(`[kendi program] ${by === 'pt' ? 'PT' : 'danışan'} kaydetti`);
     return { status: 'saved', program: result.program, droppedDevices: normalized.droppedDevices };
   });
@@ -309,7 +341,7 @@ export type OwnDeleteResult = { status: 'deleted' | 'missing' } | { status: 'act
  * Silme (§3.7): dosya silinir, index satırı düşer (Bugün'ün programıysa seçim PT'nin programına, paylaşılmışsa
  * `deleted` olayı), tek commit, genel mesaj. Yarım antrenman bu programdansa silinmez.
  */
-export async function deleteOwnProgram(repo: SessionRepo, id: string, now: Date): Promise<OwnDeleteResult> {
+export async function deleteOwnProgram(repo: SessionRepo, id: string, now: Date, locale: Locale = DEFAULT_LOCALE): Promise<OwnDeleteResult> {
   if (!isOwnProgramId(id)) return { status: 'missing' };
   return withRetry(async (): Promise<OwnDeleteResult> => {
     const head = await repo.head();
@@ -319,7 +351,7 @@ export async function deleteOwnProgram(repo: SessionRepo, id: string, now: Date)
     if (!known) return { status: 'missing' };
     const half = sessions.index.items.find((row) => !row.finishedAt && row.programId === id);
     if (half) return { status: 'active_session', sessionId: half.id };
-    await repo.commit({ head, files: [{ path: OWN_INDEX_PATH, content: removeOwnItem(state.index, id, now) }], deletions: [path], message: OWN_DELETE_MESSAGE });
+    await repo.commit({ head, files: [{ path: OWN_INDEX_PATH, content: removeOwnItem(state.index, id, now) }], deletions: [path], message: ownDeleteMessage(locale) });
     return { status: 'deleted' };
   });
 }
@@ -329,19 +361,20 @@ export async function deleteOwnProgram(repo: SessionRepo, id: string, now: Date)
 export type OwnChangeResult = { status: 'saved' | 'unchanged'; program: OwnProgram } | { status: 'missing' } | { status: 'invalid' };
 
 /** Paylaşma ya da kapatma (§3.5, §2.7): revision artmaz; kapatınca paylaşılmış program için `unshared` olayı. */
-export async function shareOwnProgram(repo: SessionRepo, id: string, shared: boolean, now: Date): Promise<OwnChangeResult> {
+export async function shareOwnProgram(repo: SessionRepo, id: string, shared: boolean, now: Date, locale: Locale = DEFAULT_LOCALE): Promise<OwnChangeResult> {
   if (!isOwnProgramId(id)) return { status: 'missing' };
   return withRetry(async (): Promise<OwnChangeResult> => {
     const head = await repo.head();
     const [state, stored] = await Promise.all([readOwnState(repo, head), readOwnProgram(repo, id, head.commit)]);
     if (stored.status === 'missing') return { status: 'missing' };
     if (stored.status === 'invalid') return { status: 'invalid' };
-    const next = setOwnShared(stored.program, shared, now);
+    const next = setOwnShared(stored.program, shared, now, locale);
     if (!next) return { status: 'unchanged', program: stored.program };
     const previous = state.index.items.find((item) => item.id === id);
     let index = upsertOwnItem(state.index, ownIndexItemOf(next, shaOf(next), previous));
     if (!shared) index = addOwnEvent(index, { kind: 'unshared', id, name: next.name, at: now.toISOString() }, now);
-    await commitProgram(repo, head, next, index, `Kendi programı (${next.name}): ${shared ? 'antrenörle paylaşıldı' : 'paylaşım kapatıldı'}`);
+    const commits = clientProgramsMessages(locale).commits;
+    await commitProgram(repo, head, next, index, `${commits.own(next.name)}${commits.shared(shared)}`);
     return { status: 'saved', program: next };
   });
 }
@@ -349,7 +382,7 @@ export async function shareOwnProgram(repo: SessionRepo, id: string, shared: boo
 export type ActiveResult = { status: 'saved' | 'unchanged' } | { status: 'missing' };
 
 /** Bugün'ün programı (kalıcı seçim, §3.2): yalnız index; yarım antrenman engellemez. */
-export async function selectOwnActive(repo: SessionRepo, programId: string | null, now: Date): Promise<ActiveResult> {
+export async function selectOwnActive(repo: SessionRepo, programId: string | null, now: Date, locale: Locale = DEFAULT_LOCALE): Promise<ActiveResult> {
   if (programId !== null && !isOwnProgramId(programId)) return { status: 'missing' };
   return withRetry(async (): Promise<ActiveResult> => {
     const head = await repo.head();
@@ -361,7 +394,7 @@ export async function selectOwnActive(repo: SessionRepo, programId: string | nul
     await repo.commit({
       head,
       files: [{ path: OWN_INDEX_PATH, content: next }],
-      message: name ? `Bugün'ün programı: ${name}` : "Bugün'ün programı: antrenörün programı",
+      message: clientProgramsMessages(locale).commits.active(name),
     });
     return { status: 'saved' };
   });

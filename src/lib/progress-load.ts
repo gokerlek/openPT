@@ -1,4 +1,5 @@
-import type { Locale } from '../i18n/locale.ts';
+import { DEFAULT_LOCALE, type Locale } from '../i18n/locale.ts';
+import { clientProgressMessages } from '../i18n/messages/client-progress/index.ts';
 import { buildInsights, type HealthParts, type ProgressInsights } from './progress-insights.ts';
 import { buildProgressView, digestSession, PROGRESS_MAX_SESSIONS, type ProgressView, type SessionDigest } from './progress.ts';
 import type { TrainingExperience } from './schemas/client.ts';
@@ -39,7 +40,7 @@ export type RecordsLoad = { status: 'ok'; view: ProgressView } | ProgressError;
 
 export type ProgressClient = { id: string; experience?: TrainingExperience | undefined; health?: HealthParts | undefined };
 
-export const PROGRESS_ERROR = 'İlerlemen şu an açılamıyor. Biraz sonra yeniden dene; sürerse antrenörüne haber ver.';
+export const PROGRESS_ERROR = clientProgressMessages('tr').loadError;
 
 export type ProgressDeps<E extends PlanExercise> = {
   repo: SessionRepo;
@@ -128,6 +129,7 @@ export async function loadProgressWith<E extends PlanExercise>(
 ): Promise<ProgressLoad | RecordsLoad> {
   const max = deps.max ?? PROGRESS_MAX_SESSIONS;
   const charts = options.scope !== 'records';
+  const errorMessage = clientProgressMessages(options.locale ?? DEFAULT_LOCALE).loadError;
   let repaired: Awaited<ReturnType<typeof readIndex>>;
   let catalog: Awaited<ReturnType<ProgressDeps<E>['catalog']>>;
   let weeklyTarget: number | undefined;
@@ -135,7 +137,7 @@ export async function loadProgressWith<E extends PlanExercise>(
     [repaired, catalog, weeklyTarget] = await Promise.all([readIndex(deps.repo), deps.catalog(), deps.weeklyTarget().catch(() => undefined)]);
   } catch (error) {
     deps.log(`[ilerleme] ${client.id}: ${error instanceof Error ? error.message : String(error)}`);
-    return { status: 'error', message: PROGRESS_ERROR };
+    return { status: 'error', message: errorMessage };
   }
 
   const index = repaired.index;
@@ -175,7 +177,7 @@ export async function loadProgressWith<E extends PlanExercise>(
     weeklyTargets = deps.weeklyGoals ? await deps.weeklyGoals(index, weeklyTarget) : undefined;
   } catch {
     deps.log(`[ilerleme] ${client.id}: haftalık hedefler okunamadı veya sabitlenemedi.`);
-    return { status: 'error', message: PROGRESS_ERROR };
+    return { status: 'error', message: errorMessage };
   }
   const view = buildProgressView({
     index,
@@ -190,6 +192,7 @@ export async function loadProgressWith<E extends PlanExercise>(
     weeklyTargets,
     skipped,
     truncated: finished.length > rows.length,
+    ...(options.locale ? { locale: options.locale } : {}),
   });
   if (!charts) return { status: 'ok', view };
   const insights = buildInsights({

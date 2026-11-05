@@ -1,4 +1,7 @@
-import { exposureOf, STAGE_LABELS, type Exposure } from './exposure.ts';
+import { localizedLibraryTitle } from '../data/library-text.ts';
+import { DEFAULT_LOCALE, type Locale } from '../i18n/locale.ts';
+import { clientProgressMessages } from '../i18n/messages/client-progress/index.ts';
+import { exposureOf, stageLabels, type Exposure } from './exposure.ts';
 import { byPriority, recordsOf, sessionMarks, type RecordEvent, type RecordMark } from './personal-records.ts';
 import { mondayOf } from './program-plan.ts';
 import type { TrackingType } from './progression.ts';
@@ -189,9 +192,9 @@ export function seriesOf(digests: readonly SessionDigest[]): Map<string, Series>
 }
 
 /** Aşama rozeti (§5.7): "Başlangıç · 5. hafta" — hafta, hareketin ilk sayılan antrenmanından bugüne. */
-export function stageLabel(exposure: Pick<Exposure, 'sessions' | 'stage' | 'weeks'>): string | null {
+export function stageLabel(exposure: Pick<Exposure, 'sessions' | 'stage' | 'weeks'>, locale: Locale = DEFAULT_LOCALE): string | null {
   if (exposure.sessions === 0) return null;
-  return `${STAGE_LABELS[exposure.stage]} · ${Math.floor(exposure.weeks) + 1}. hafta`;
+  return clientProgressMessages(locale).stage(stageLabels(locale)[exposure.stage], Math.floor(exposure.weeks) + 1);
 }
 
 /* --- haftalar --- */
@@ -404,7 +407,10 @@ export function buildProgressView<E extends PlanExercise>(input: {
   weeklyTargets?: Record<string,number>;
   skipped?: number;
   truncated?: boolean;
+  /** Aşama rozetinin ve kütüphane adlarının dili; yoksa Türkçe. */
+  locale?: Locale;
 }): ProgressView {
+  const locale = input.locale ?? DEFAULT_LOCALE;
   const finished = input.index.items.filter((row) => row.finishedAt);
   const dates = finished.map((row) => row.date).sort();
 
@@ -422,14 +428,15 @@ export function buildProgressView<E extends PlanExercise>(input: {
       key,
       exerciseId: series.exerciseId,
       ...(series.deviceId ? { deviceId: series.deviceId } : {}),
-      title: exercise?.title ?? series.title,
+      // Kütüphanede yoksa antrenmandaki ad; kütüphane adının anlık görüntüsüyse okuyanın dilinde.
+      title: exercise?.title ?? localizedLibraryTitle(series.exerciseId, series.title, locale),
       inLibrary: Boolean(exercise),
       ...(shared ? { deviceName: input.deviceNames.get(series.deviceId!) ?? series.deviceId! } : {}),
       trackingType,
       sessions: series.sessions.length,
       firstDate: series.sessions[0]!.date,
       lastDate: series.sessions.at(-1)!.date,
-      stage: stageLabel(exposure),
+      stage: stageLabel(exposure, locale),
       points: exercisePoints(series.sessions),
       best,
       events,

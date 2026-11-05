@@ -1,5 +1,8 @@
+import { LocalizedError } from '../i18n/errors.ts';
+import { DEFAULT_LOCALE, type Locale } from '../i18n/locale.ts';
+import { clientWorkoutMessages } from '../i18n/messages/client-workout/index.ts';
 import { cardioParts, cardioText, minutesOf, walkKcal, type CardioKind } from './cardio.ts';
-import { formatKg, formatNumber } from './format.ts';
+import { getFormat } from './format.ts';
 import { isFullLoad, isOverload, nextSetInPlan, type Effort, type SetTarget, type TrackingType } from './progression.ts';
 import { SESSION_ID_LENGTHS, SESSION_LIMITS, type SessionDoc, type SessionEntry, type SessionSet } from './schemas/session.ts';
 import { volumeOf, waterOf, workingSetCount } from './session-index.ts';
@@ -449,11 +452,11 @@ function withStatus(entry: SessionEntry, planned: number, stamp: Stamp): Session
  */
 function entryFor(day: WorkoutDay, doc: SessionDoc, rowId: string, stamp: Stamp, taken: Set<string>, random?: Random): SessionEntry {
   const row = day.rows[rowId];
-  if (!row) throw new Error('Satır bu günün planında yok.');
+  if (!row) throw new LocalizedError((locale) => clientWorkoutMessages(locale).errors.rowNotInPlan);
   const existing = entryForRow(doc.entries, rowId);
   if (existing) return existing;
   // Eklenen hareketin kaydı eklenirken açılır; satırı kayıtsız kalamaz (plan satırı değildir).
-  if (!ROW_ID_PATTERN.test(rowId)) throw new Error('Eklenen hareketin kaydı yok.');
+  if (!ROW_ID_PATTERN.test(rowId)) throw new LocalizedError((locale) => clientWorkoutMessages(locale).errors.addedNoEntry);
   const id = rowEntryId(rowId, taken, random);
   taken.add(id);
   const planned = row.plan.sets.length;
@@ -527,7 +530,7 @@ export function logSet(
 ): { doc: SessionDoc; setId: string } {
   const row = day.rows[input.rowId];
   const template = templateRowOf(day, input.rowId);
-  if (!row || !template) throw new Error('Satır bu günün planında yok.');
+  if (!row || !template) throw new LocalizedError((locale) => clientWorkoutMessages(locale).errors.rowNotInPlan);
   const taken = takenIds(doc);
   const entry = entryFor(day, doc, input.rowId, input.stamp, taken, input.random);
   const extra = input.extra ? extraPlanOf(row, template) : null;
@@ -990,11 +993,15 @@ export function pendingExtra(day: WorkoutDay, doc: Pick<SessionDoc, 'entries' | 
 
 /* --- ekran metinleri --- */
 
-const unitOf = (trackingType: TrackingType, cardio: CardioKind | null = null) =>
-  cardio === 'walk' ? 'dk' : trackingType === 'duration' ? 'sn' : 'tekrar';
+/** Sayıdan sonraki birim: "dk", "sn", "tekrar" (İngilizcede çoğul `count`'a göre). */
+function unitOf(trackingType: TrackingType, cardio: CardioKind | null, locale: Locale, count: number): string {
+  const units = clientWorkoutMessages(locale).units;
+  return cardio === 'walk' ? units.minutes(count) : trackingType === 'duration' ? units.seconds(count) : units.reps(count);
+}
 
-function range(target: Pick<SetTarget, 'min' | 'max'>): string {
-  return target.min === target.max ? formatNumber(target.min) : `${formatNumber(target.min)}–${formatNumber(target.max)}`;
+function range(target: Pick<SetTarget, 'min' | 'max'>, locale: Locale): string {
+  const f = getFormat(locale);
+  return target.min === target.max ? f.number(target.min) : `${f.number(target.min)}–${f.number(target.max)}`;
 }
 
 /** Yürüyüş/koşuda hedef dakikayla anlatılır. */
@@ -1012,42 +1019,54 @@ export function boxColumn(texts: readonly string[], min: number): string {
 }
 
 /** Tablodaki "Hedef" sütunu: "12", "10–12", AMRAP'ta "8+", süreli harekette "30 sn", yürüyüş/koşuda "30 dk". */
-export function targetCell(target: SetTarget, trackingType: TrackingType, cardio: CardioKind | null = null): string {
+export function targetCell(target: SetTarget, trackingType: TrackingType, cardio: CardioKind | null = null, locale: Locale = DEFAULT_LOCALE): string {
   const shown = timed(target, cardio);
-  const text = shown.amrap ? `${formatNumber(shown.min)}+` : range(shown);
-  return trackingType === 'duration' ? `${text} ${unitOf(trackingType, cardio)}` : text;
+  const text = shown.amrap ? `${getFormat(locale).number(shown.min)}+` : range(shown, locale);
+  return trackingType === 'duration' ? `${text} ${unitOf(trackingType, cardio, locale, shown.max)}` : text;
 }
 
 /** Paneldeki hedef: "Hedef 8–10", AMRAP'ta "En az 8, yapabildiğin kadar", süreli "Hedef 30–45 sn"; kardiyoda mesafe ve eğim de. */
-export function targetText(target: SetTarget, trackingType: TrackingType, cardio: CardioKind | null = null): string {
+export function targetText(target: SetTarget, trackingType: TrackingType, cardio: CardioKind | null = null, locale: Locale = DEFAULT_LOCALE): string {
+  const t = clientWorkoutMessages(locale).session;
   const shown = timed(target, cardio);
-  const unit = trackingType === 'duration' ? ` ${unitOf(trackingType, cardio)}` : '';
-  const extra = cardio ? cardioParts(target).map((part) => ` · ${part}`).join('') : '';
-  if (shown.amrap) return `En az ${formatNumber(shown.min)}${unit}, yapabildiğin kadar${extra}`;
-  return `Hedef ${range(shown)}${unit}${extra}`;
+  const unit = trackingType === 'duration' ? ` ${unitOf(trackingType, cardio, locale, shown.max)}` : '';
+  const extra = cardio ? cardioParts(target, locale).map((part) => ` · ${part}`).join('') : '';
+  if (shown.amrap) return t.targetAmrap(getFormat(locale).number(shown.min), unit, extra);
+  return t.target(range(shown, locale), unit, extra);
 }
 
 /**
  * Kaydın metni: "62,5 kg × 10", "10 tekrar", "45 sn"; kardiyoda "30:00 · 3 km · %5", yürüyüş/koşuda kilo verilirse
  * "· ≈ 253 kcal" de (`cardio.ts`).
  */
-export function setValueText(set: Pick<SessionSet, 'kg' | 'reps' | 'seconds' | 'distanceM' | 'inclinePct'>, bodyMassKg?: number): string {
+export function setValueText(
+  set: Pick<SessionSet, 'kg' | 'reps' | 'seconds' | 'distanceM' | 'inclinePct'>,
+  bodyMassKg?: number,
+  locale: Locale = DEFAULT_LOCALE,
+): string {
   if (set.seconds !== undefined && (set.distanceM !== undefined || set.inclinePct !== undefined)) {
-    return cardioText(set, walkKcal(set, bodyMassKg));
+    return cardioText(set, walkKcal(set, bodyMassKg), locale);
   }
-  const load = set.kg !== undefined && set.kg > 0 ? formatKg(set.kg) : null;
-  if (set.seconds !== undefined) return load ? `${load} × ${set.seconds} sn` : `${set.seconds} sn`;
-  return load ? `${load} × ${set.reps ?? 0}` : `${set.reps ?? 0} tekrar`;
+  const units = clientWorkoutMessages(locale).units;
+  const load = set.kg !== undefined && set.kg > 0 ? getFormat(locale).kg(set.kg) : null;
+  if (set.seconds !== undefined) return load ? `${load} × ${set.seconds} ${units.seconds(set.seconds)}` : `${set.seconds} ${units.seconds(set.seconds)}`;
+  return load ? `${load} × ${set.reps ?? 0}` : `${set.reps ?? 0} ${units.reps(set.reps ?? 0)}`;
 }
 
 /** "Önceki" sütunu: "60 × 10", ağırlıksızda "10", süreli "45 sn", yürüyüş/koşuda "30:00 · 3 km · %5"; yoksa "—". */
-export function previousText(previous: PreviousSet | undefined, trackingType: TrackingType, cardio: CardioKind | null = null): string {
+export function previousText(
+  previous: PreviousSet | undefined,
+  trackingType: TrackingType,
+  cardio: CardioKind | null = null,
+  locale: Locale = DEFAULT_LOCALE,
+): string {
   if (!previous) return '—';
-  if (cardio === 'walk') return cardioText({ seconds: previous.value, distanceM: previous.distanceM, inclinePct: previous.inclinePct });
-  if (trackingType === 'duration') return [`${formatNumber(previous.value)} sn`, ...(cardio ? cardioParts(previous) : [])].join(' · ');
-  return previous.kg !== undefined && previous.kg > 0 && trackingType === 'weight_reps'
-    ? `${formatNumber(previous.kg)} × ${formatNumber(previous.value)}`
-    : formatNumber(previous.value);
+  const f = getFormat(locale);
+  if (cardio === 'walk') return cardioText({ seconds: previous.value, distanceM: previous.distanceM, inclinePct: previous.inclinePct }, undefined, locale);
+  if (trackingType === 'duration') {
+    return [`${f.number(previous.value)} ${clientWorkoutMessages(locale).units.seconds(previous.value)}`, ...(cardio ? cardioParts(previous, locale) : [])].join(' · ');
+  }
+  return previous.kg !== undefined && previous.kg > 0 && trackingType === 'weight_reps' ? `${f.number(previous.kg)} × ${f.number(previous.value)}` : f.number(previous.value);
 }
 
 /** Dinlenmedeki "Sıradaki": "Set 3 · 62,5 kg × 8–10"; başka harekette adıyla. */
@@ -1055,13 +1074,14 @@ export function nextText(
   next: Pick<NextSet, 'position' | 'target' | 'kg'>,
   row: Pick<WorkoutRow, 'title' | 'trackingType' | 'cardio'>,
   withName: boolean,
+  locale: Locale = DEFAULT_LOCALE,
 ): string {
+  const f = getFormat(locale);
   const cardio = row.cardio ?? null;
   const shown = timed(next.target, cardio);
-  const target = shown.amrap ? `${formatNumber(shown.min)}+` : range(shown);
-  const body =
-    next.kg !== undefined ? `${formatKg(next.kg)} × ${target}` : `${target} ${unitOf(row.trackingType, cardio)}`;
-  return `${withName ? `${row.title} · ` : ''}Set ${next.position + 1} · ${body}`;
+  const target = shown.amrap ? `${f.number(shown.min)}+` : range(shown, locale);
+  const body = next.kg !== undefined ? `${f.kg(next.kg)} × ${target}` : `${target} ${unitOf(row.trackingType, cardio, locale, shown.max)}`;
+  return clientWorkoutMessages(locale).session.next(withName ? row.title : null, next.position + 1, body);
 }
 
 /** Sayaç: 72 → "1:12", 5 → "0:05". */

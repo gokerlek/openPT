@@ -6,14 +6,29 @@
  * dock'ta tekrarlanmaz.
  */
 
-export const CLIENT_TABS = [
-  { href: '/me', label: 'Bugün' },
-  { href: '/me/programlar', label: 'Program' },
+import { DEFAULT_LOCALE, type Locale } from '../i18n/locale.ts';
+import { clientHomeMessages } from '../i18n/messages/client-home/index.ts';
+
+/** Sekmelerin adresleri ve sözlükteki adları (`clientTabs(locale)`). */
+const TABS = [
+  { href: '/me', key: 'today' },
+  { href: '/me/programlar', key: 'programs' },
   // Geçmiş, İlerleme'nin alt sekmesi (Özet · Geçmiş · Rekorlar); adresi yerinde kalır.
-  { href: '/me/ilerleme', label: 'İlerleme', also: ['/me/gecmis'] },
+  { href: '/me/ilerleme', key: 'progress', also: ['/me/gecmis'] },
   // Kamera ölçümü Sağlık'tan açılır, geri bağlantısı Sağlık.
-  { href: '/me/saglik', label: 'Sağlık', also: ['/me/olcum'] },
-] as const satisfies readonly { href: string; label: string; also?: readonly string[] }[];
+  { href: '/me/saglik', key: 'health', also: ['/me/olcum'] },
+] as const satisfies readonly { href: string; key: string; also?: readonly string[] }[];
+
+export type ClientTab = { href: (typeof TABS)[number]['href']; label: string; also?: readonly string[] };
+
+/** Dock'un sekmeleri okuyanın dilinde. */
+export function clientTabs(locale: Locale = DEFAULT_LOCALE): ClientTab[] {
+  const labels = clientHomeMessages(locale).tabs;
+  return TABS.map(({ key, ...tab }) => ({ ...tab, label: labels[key] }));
+}
+
+/** Türkçe sekmeler (eski çağrılar); arayüz `clientTabs(locale)` kullanır. */
+export const CLIENT_TABS: readonly ClientTab[] = clientTabs('tr');
 
 /** Sondaki eğik çizgi yok sayılır (`/me/gecmis/` → `/me/gecmis`); kök `/` kalır. */
 function withoutTrailingSlash(pathname: string): string {
@@ -34,7 +49,7 @@ function isUnder(path: string, href: string): boolean {
  */
 export function clientTabIndex(pathname: string): number {
   const path = withoutTrailingSlash(pathname);
-  return CLIENT_TABS.findIndex((tab) => {
+  return TABS.findIndex((tab) => {
     if (tab.href === '/me') return path === tab.href;
     const prefixes: readonly string[] = 'also' in tab ? [tab.href, ...tab.also] : [tab.href];
     return prefixes.some((href) => isUnder(path, href));
@@ -45,11 +60,20 @@ export function clientTabIndex(pathname: string): number {
  * İlerleme sekmesinin bölümleri, şeritteki sırayla (`src/app/me/progress-tabs.tsx`). Her biri ayrı
  * sayfadır; Geçmiş'in adresi (`/me/gecmis`) yerinde kalır.
  */
-export const PROGRESS_SECTIONS = [
-  { href: '/me/ilerleme', label: 'Özet' },
-  { href: '/me/gecmis', label: 'Geçmiş' },
-  { href: '/me/ilerleme/rekorlar', label: 'Rekorlar' },
-] as const satisfies readonly { href: string; label: string }[];
+const SECTIONS = [
+  { href: '/me/ilerleme', key: 'summary' },
+  { href: '/me/gecmis', key: 'history' },
+  { href: '/me/ilerleme/rekorlar', key: 'records' },
+] as const satisfies readonly { href: string; key: string }[];
+
+/** İlerleme şeridinin bölümleri okuyanın dilinde. */
+export function progressSections(locale: Locale = DEFAULT_LOCALE): { href: (typeof SECTIONS)[number]['href']; label: string }[] {
+  const labels = clientHomeMessages(locale).progressSections;
+  return SECTIONS.map(({ href, key }) => ({ href, label: labels[key] }));
+}
+
+/** Türkçe bölümler (eski çağrılar); arayüz `progressSections(locale)` kullanır. */
+export const PROGRESS_SECTIONS = progressSections('tr');
 
 /**
  * Adresin İlerleme şeridindeki etkin bölümü; bölüm dışında -1. Özet bölümün köküdür
@@ -58,7 +82,7 @@ export const PROGRESS_SECTIONS = [
  */
 export function progressSectionIndex(pathname: string): number {
   const path = withoutTrailingSlash(pathname);
-  return PROGRESS_SECTIONS.findIndex((section, index) => (index === 0 ? path === section.href : isUnder(path, section.href)));
+  return SECTIONS.findIndex((section, index) => (index === 0 ? path === section.href : isUnder(path, section.href)));
 }
 
 /**
@@ -68,7 +92,7 @@ export function progressSectionIndex(pathname: string): number {
  */
 export function hasProgressTabs(pathname: string): boolean {
   const path = withoutTrailingSlash(pathname);
-  return PROGRESS_SECTIONS.some((section) => section.href === path);
+  return SECTIONS.some((section) => section.href === path);
 }
 
 /**

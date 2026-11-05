@@ -1,6 +1,7 @@
-import type { Locale } from '../i18n/locale.ts';
+import { DEFAULT_LOCALE, type Locale } from '../i18n/locale.ts';
+import { clientWorkoutMessages } from '../i18n/messages/client-workout/index.ts';
 import { stageAtLeast, type Exposure, type Stage } from './exposure.ts';
-import { formatKg, formatNumber, formatSignedWithUnit } from './format.ts';
+import { getFormat } from './format.ts';
 import {
   decreaseWeight,
   DELOAD_FACTOR,
@@ -12,7 +13,7 @@ import {
   percentOfTop,
   planSession,
   plannedSets,
-  REASON_LABELS,
+  reasonLabels,
   rescalePlan,
   sessionSeries,
   type LoadSpec,
@@ -243,19 +244,23 @@ const UP_REASONS = new Set<SuggestionReason>(['increase', 'range_increase', 'add
 const DOWN_REASONS = new Set<SuggestionReason>(['decrease', 'deload', 'calibrate', 'pain_reduce']);
 
 /** Danışan dilinde gerekçe (§5.7): "+2,5 kg · hedefe ulaştın", "Bir kez daha, sonra artır", "Tanışma 2/4 · …". */
-function explain(ctx: Context, plan: SessionPlan, note: Note): Why {
+function explain(ctx: Context, plan: SessionPlan, note: Note, locale: Locale): Why {
   const { spec, sets, exposure, tuning } = ctx;
+  const t = clientWorkoutMessages(locale).recommend;
+  const units = clientWorkoutMessages(locale).units;
+  const labels = reasonLabels(locale);
+  const f = getFormat(locale);
   const reason = plan.reason;
   const last = ctx.series.at(-1);
   const weighted = spec.trackingType === 'weight_reps' && gridOf(spec) !== null;
   const duration = spec.trackingType === 'duration';
   const weight = last?.weightKg;
   const delta = weighted && weight !== undefined ? clean(plan.topWeightKg - weight) : 0;
-  const signed = formatSignedWithUnit(delta, 'kg');
-  const values = last ? `${last.values.map(formatNumber).join(' · ')}${duration ? ' sn' : ''}` : '';
+  const signed = f.signedWithUnit(delta, 'kg');
+  const values = last ? t.values(last.values.map((value) => f.number(value)).join(' · '), duration) : '';
   const fullSets = sets.filter(isFullLoad);
   const top = Math.max(...(fullSets.length > 0 ? fullSets : sets).map((set) => set.max));
-  const topText = duration ? `${formatNumber(top)} sn` : `${formatNumber(top)} tekrar`;
+  const topText = `${f.number(top)} ${duration ? units.seconds(top) : units.reps(top)}`;
   const linear = ctx.rule.scheme === 'linear';
   const tone: Why['tone'] =
     reason === 'first_time' ? 'new' : UP_REASONS.has(reason) || delta > 0 ? 'up' : DOWN_REASONS.has(reason) || delta < 0 ? 'down' : 'hold';
@@ -264,94 +269,80 @@ function explain(ctx: Context, plan: SessionPlan, note: Note): Why {
   let detail: string;
   switch (reason) {
     case 'first_time':
-      chip = weighted ? 'Rahat bir ağırlıkla başla' : 'Rahat başla';
-      detail =
-        exposure.sessions === 0
-          ? `Bu harekette geçmişin yok. ${weighted ? 'Rahat bir ağırlıkla başla' : 'Rahat bir tempoyla başla'}; setler iyi geçerse sonraki sefer artar.`
-          : REASON_LABELS.first_time;
+      chip = t.firstChip(weighted);
+      detail = exposure.sessions === 0 ? t.firstDetail(weighted) : labels.first_time;
       break;
     case 'range_increase':
-      chip = 'Yeni aralık · ağırlık çevrildi';
-      detail = REASON_LABELS.range_increase;
+      chip = t.rangeChip;
+      detail = labels.range_increase;
       break;
     case 'increase': {
-      const lead = note.twoForTwo
-        ? `Son iki antrenmanda ${formatKg(weight ?? 0)} ile bütün setlerde hedefin tepesine ulaştın.`
-        : linear
-          ? `Geçen sefer ${formatKg(weight ?? 0)} ile bütün setleri tamamladın (${values}).`
-          : `Geçen sefer ${formatKg(weight ?? 0)} ile bütün setlerde hedefin tepesine ulaştın (${values}).`;
-      const extra = note.repsDone ? ' Tekrarları da ekledin; şimdi ağırlık zamanı.' : note.doubled ? ' Kolay geçtiği için artış iki kat.' : '';
-      chip = `${signed} · ${note.twoForTwo ? '2 antrenmandır tepede' : note.repsDone ? 'tekrarlar tamam' : note.doubled ? 'kolay geçti' : 'hedefe ulaştın'}`;
-      detail = `${lead}${extra} Ağırlık ${signed}${linear ? '.' : '; tekrar aralığın altından başlar.'}`;
+      const kg = f.kg(weight ?? 0);
+      const lead = note.twoForTwo ? t.increaseTwoForTwo(kg) : linear ? t.increaseLinear(kg, values) : t.increaseTop(kg, values);
+      const extra = note.repsDone ? t.increaseRepsDone : note.doubled ? t.increaseDoubled : '';
+      chip = t.increaseChip(signed, note.twoForTwo ? 'twoForTwo' : note.repsDone ? 'repsDone' : note.doubled ? 'doubled' : 'reached');
+      detail = t.increaseDetail(lead, extra, signed, linear);
       break;
     }
     case 'confirm_increase':
-      chip = 'Bir kez daha, sonra artır';
-      detail =
-        exposure.stage === 'intro'
-          ? `Tepeye ulaştın ama zorladı. Aynı ${weighted ? 'ağırlıkla' : 'hedefle'} bir kez daha yap; rahat geçince artar.`
-          : `Tepeye ulaştın; bir kez daha yap, sonra ${weighted ? 'artır' : 'zor bir varyasyona geç'}. Bu aşamada ilerleme için iki antrenman üst üste tepede kalmak gerekir.`;
+      chip = t.confirmChip;
+      detail = exposure.stage === 'intro' ? t.confirmIntro(weighted) : t.confirm(weighted);
       break;
     case 'reps_first': {
-      const step = note.nextKg !== undefined && weight !== undefined ? formatSignedWithUnit(clean(note.nextKg - weight), 'kg') : '';
-      chip = `Önce tekrar · ${formatNumber(note.goal ?? top)} olunca ${step}`;
-      detail = `Sonraki ağırlık (${formatKg(note.nextKg ?? 0)}) tek seferde %${formatNumber(Math.round(tuning.maxPct * 100))} sınırını aşan bir sıçrama. Önce tekrar ekle: bütün setlerde ${formatNumber(note.goal ?? top)} tekrar yapınca ağırlık artar.`;
+      const step = note.nextKg !== undefined && weight !== undefined ? f.signedWithUnit(clean(note.nextKg - weight), 'kg') : '';
+      chip = t.repsFirstChip(f.number(note.goal ?? top), step);
+      detail = t.repsFirstDetail(f.kg(note.nextKg ?? 0), f.number(Math.round(tuning.maxPct * 100)), f.number(note.goal ?? top));
       break;
     }
     case 'add_rep':
-      chip = '+1 tekrar hedefle';
-      detail = `Geçen sefer ${values}. Aynı ${weighted ? 'ağırlıkta' : 'harekette'} en düşük seti bir tekrar artır; bütün setlerde ${topText} olunca ${weighted ? 'ağırlık artar' : 'zor bir varyasyon önerilir'}.`;
+      chip = t.addRepChip;
+      detail = t.addRepDetail(values, weighted, topText);
       break;
     case 'add_time':
-      chip = `+${DURATION_STEP_SECONDS} sn hedefle`;
-      detail = `Geçen sefer ${values}. Her sette +${DURATION_STEP_SECONDS} sn; bütün setlerde ${topText} olunca zor bir varyasyon önerilir.`;
+      chip = t.addTimeChip(DURATION_STEP_SECONDS);
+      detail = t.addTimeDetail(values, DURATION_STEP_SECONDS, topText);
       break;
     case 'hold':
-      chip = weighted ? 'Aynı ağırlık · hedefi tamamla' : 'Aynı hedef · tamamla';
-      detail = `Geçen sefer ${values}: bir set hedefin altında kaldı. Aynı ${weighted ? 'ağırlıkla' : 'hedefle'} tekrar dene.`;
+      chip = t.holdChip(weighted);
+      detail = t.holdDetail(values, weighted);
       break;
     case 'incomplete':
-      chip = weighted ? 'Aynı ağırlık · geçen sefer yarım' : 'Aynı hedef · geçen sefer yarım';
-      detail = REASON_LABELS.incomplete;
+      chip = t.incompleteChip(weighted);
+      detail = labels.incomplete;
       break;
     case 'decrease':
-      chip = `${signed} · geçen sefer zorladı`;
-      detail =
-        exposure.stage === 'intro'
-          ? `Geçen sefer ${values}: hedefin altında kaldın. Tanışmada ağırlık hemen biraz iner; bu tıkanma sayılmaz.`
-          : `Geçen sefer ${values}: setler hedefin altında kaldı. Ağırlık biraz iner (${signed}).`;
+      chip = t.decreaseChip(signed);
+      detail = exposure.stage === 'intro' ? t.decreaseIntro(values) : t.decrease(values, signed);
       break;
     case 'deload':
-      chip = weighted && delta < 0 ? `Hafif antrenman · ${signed}` : 'Hafif antrenman · az set';
-      detail = `Üst üste üç antrenman hedefin altında kaldı. Bugün ağırlık yaklaşık %${formatNumber(Math.round((1 - DELOAD_FACTOR) * 100))} az ve daha az set; sonra yeniden artar.`;
+      chip = t.deloadChip(weighted && delta < 0 ? signed : null);
+      detail = t.deloadDetail(f.number(Math.round((1 - DELOAD_FACTOR) * 100)));
       break;
     case 'calibrate': {
       const days = Math.floor(exposure.gapDays ?? 0);
-      chip = 'Aradan dönüş · hafif ayar';
-      detail = `${formatNumber(days)} gündür bu hareketi yapmadın. Bugün ${
-        weighted ? `son ağırlığının yaklaşık %${formatNumber(Math.round(tuning.calibrateFactor * 100))} kadarıyla` : 'hedefin alt sınırıyla'
-      } ayar antrenmanı; zorlanırsan tıkanma sayılmaz.`;
+      chip = t.calibrateChip;
+      detail = t.calibrateDetail(f.number(days), days, weighted ? f.number(Math.round(tuning.calibrateFactor * 100)) : null);
       break;
     }
     case 'lighter_retry':
-      chip = 'Planı bir kez daha dene';
-      detail = 'Geçen sefer plandan hafif yaptın. Bugün planlanan ağırlıkla bir kez daha dene; üst üste ikinci kez hafif kalırsa ağırlık biraz iner.';
+      chip = t.lighterRetryChip;
+      detail = t.lighterRetryDetail;
       break;
     case 'device_max':
-      chip = 'Cihazın en ağır ayarı';
-      detail = REASON_LABELS.device_max;
+      chip = t.deviceMaxChip;
+      detail = labels.device_max;
       break;
     case 'harder_variant':
-      chip = 'Tepedesin · zor varyasyon';
-      detail = REASON_LABELS.harder_variant;
+      chip = t.harderChip;
+      detail = labels.harder_variant;
       break;
     case 'no_progression':
-      chip = 'Aynı hedef';
-      detail = REASON_LABELS.no_progression;
+      chip = t.noProgressionChip;
+      detail = labels.no_progression;
       break;
     default:
-      chip = REASON_LABELS[reason];
-      detail = REASON_LABELS[reason];
+      chip = labels[reason];
+      detail = labels[reason];
   }
 
   // Tanışma: çipin başında ilerleme ("Tanışma 2/4"); aradan dönüşte inen aşama "Aradan dönüş" der; ayar
@@ -359,19 +350,19 @@ function explain(ctx: Context, plan: SessionPlan, note: Note): Why {
   if (exposure.stage === 'intro' && reason !== 'calibrate') {
     const n = Math.min(exposure.sessions + 1, exposure.introLength);
     const returning = exposure.base !== 'intro';
-    const prefix = returning ? 'Aradan dönüş' : exposure.introLength > 1 ? `Tanışma ${n}/${exposure.introLength}` : 'Tanışma';
+    const prefix = returning ? t.returning : exposure.introLength > 1 ? t.introOf(n, exposure.introLength) : t.intro;
     const tail =
       weighted && delta !== 0
         ? signed
         : reason === 'confirm_increase'
-          ? 'bir kez daha'
+          ? t.tailOnceMore
           : reason === 'add_rep' || reason === 'add_time'
             ? chip
             : weighted
-              ? 'rahat bir ağırlık bul'
-              : 'rahat başla';
+              ? t.tailFindWeight
+              : t.tailEasyStart;
     chip = `${prefix} · ${tail}`;
-    detail = `${returning ? 'Aradan döndün: ilk antrenmanlarda küçük adımlarla ilerlenir.' : 'Bu hareketle tanışıyorsun: doğru ağırlık küçük adımlarla bulunur.'} ${detail}`;
+    detail = t.introDetail(returning, detail);
   }
   return { tone, chip, detail };
 }
@@ -393,6 +384,8 @@ export function recommend(input: {
   exercise: RecommendExercise;
   exposure: Exposure;
   tuning?: Partial<RecommendTuning>;
+  /** Gerekçenin dili; yoksa Türkçe. */
+  locale?: Locale;
 }): Recommendation {
   const tuning = { ...RECOMMEND_TUNING, ...input.tuning };
   const { spec, rule, sets, history } = input;
@@ -415,7 +408,7 @@ export function recommend(input: {
   });
   const ctx: Context = { spec, rule, sets, engine, series, exposure: input.exposure, pct: increasePct(input.exercise, tuning), tuning };
   const { plan, note } = decide(ctx);
-  return { plan, stage: input.exposure.stage, why: explain(ctx, plan, note) };
+  return { plan, stage: input.exposure.stage, why: explain(ctx, plan, note, input.locale ?? DEFAULT_LOCALE) };
 }
 
 /* --- hafifletme: yalnız bugünün planı (yoklama, tasarım §2.2) --- */
@@ -579,6 +572,8 @@ export function setIncreaseCandidates(input: {
   tuning?: Partial<SetIncreaseTuning>;
 }): SetIncreaseCandidate[] {
   const tuning = { ...SET_INCREASE_TUNING, ...input.tuning };
+  const t = clientWorkoutMessages(input.locale ?? DEFAULT_LOCALE).recommend;
+  const f = getFormat(input.locale ?? DEFAULT_LOCALE);
   if (input.readinessScore !== undefined && input.readinessScore < tuning.readinessMin) return [];
   const recent = finishedWithin(input.index, input.now, tuning.windowDays);
   const proposed: Record<string, number> = { ...input.proposedThisWeek };
@@ -603,8 +598,8 @@ export function setIncreaseCandidates(input: {
       exerciseId: row.exerciseId,
       from: row.setCount,
       to: row.setCount + 1,
-      text: `${row.title} ${row.setCount} → ${row.setCount + 1} set`,
-      why: `${Math.floor(exposure.weeks)} haftadır bu harekette; son 2 haftada ilerliyor. Hedef kasın son 7 günde ${formatNumber(weekly)} seti var (önerilen ~${tuning.muscleWeeklySets}).`,
+      text: t.setIncreaseText(row.title, row.setCount, row.setCount + 1),
+      why: t.setIncreaseWhy(Math.floor(exposure.weeks), f.number(weekly), tuning.muscleWeeklySets),
       muscles,
     });
   }

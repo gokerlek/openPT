@@ -1,3 +1,5 @@
+import { DEFAULT_LOCALE, intlLocale, type Locale } from '../i18n/locale.ts';
+import { clientWorkoutMessages } from '../i18n/messages/client-workout/index.ts';
 import type { TrackingType } from './progression.ts';
 import type { CardioKind } from './cardio.ts';
 import { cardioTargetParts, isFullLoad, setShape, timedSets, type SetSpec } from './set-plan.ts';
@@ -11,18 +13,12 @@ import { formatRest } from './template-plan.ts';
  * 1 dk 30 sn dinlenme". Saf; PT'nin yazımı `set-plan.ts` `formatSets`'te kalır.
  */
 
-function count(value: number): string {
-  return Number.isFinite(value) ? value.toLocaleString('tr-TR') : '?';
+function count(value: number, locale: Locale): string {
+  return Number.isFinite(value) ? value.toLocaleString(intlLocale(locale)) : '?';
 }
 
-function range(set: Pick<SetSpec, 'min' | 'max'>): string {
-  return set.min === set.max ? count(set.min) : `${count(set.min)}–${count(set.max)}`;
-}
-
-/** "a", "a ve b", "a, b ve c". */
-function listTr(items: readonly string[]): string {
-  if (items.length <= 1) return items[0] ?? '';
-  return `${items.slice(0, -1).join(', ')} ve ${items[items.length - 1]}`;
+function range(set: Pick<SetSpec, 'min' | 'max'>, locale: Locale): string {
+  return set.min === set.max ? count(set.min, locale) : `${count(set.min, locale)}–${count(set.max, locale)}`;
 }
 
 function pctOf(set: SetSpec): number {
@@ -34,41 +30,43 @@ function effective(sets: readonly SetSpec[], trackingType: TrackingType): SetSpe
   return trackingType === 'weight_reps' ? [...sets] : sets.map(({ loadPct: _pct, ...rest }) => rest);
 }
 
+type Unit = 'reps' | 'seconds' | 'minutes';
+
 /** Setlerin kendisi: sayı, tekrar (ya da saniye) ve "yapabildiğin kadar". */
-function setsPhrase(list: readonly SetSpec[], unit: string): string {
+function setsPhrase(list: readonly SetSpec[], unit: Unit, locale: Locale): string {
+  const t = clientWorkoutMessages(locale);
+  const text = t.setText;
+  const unitOf = (value: number) => t.units[unit](value);
   const n = list.length;
   const first = list[0] as SetSpec;
   const shape = setShape(list);
 
   if (shape.kind === 'straight') {
-    if (n === 1) return first.amrap ? `1 set: yapabildiğin kadar (en az ${count(first.min)} ${unit})` : `1 set: ${range(first)} ${unit}`;
-    if (shape.amrap === 'all') return `${count(n)} set, her sette yapabildiğin kadar (en az ${count(first.min)} ${unit})`;
-    const base = `${count(n)} set, her sette ${range(first)} ${unit}`;
-    if (shape.amrap === 'last') return `${base}; son sette yapabildiğin kadar`;
-    if (shape.amrap === 'some') {
-      const positions = list.flatMap((set, index) => (set.amrap ? [`${index + 1}.`] : []));
-      return `${base}; ${listTr(positions)} sette yapabildiğin kadar`;
-    }
+    if (n === 1) return first.amrap ? text.oneAmrap(count(first.min, locale), unitOf(first.min)) : text.one(range(first, locale), unitOf(first.max));
+    if (shape.amrap === 'all') return text.allAmrap(n, count(n, locale), count(first.min, locale), unitOf(first.min));
+    const base = text.straight(n, count(n, locale), range(first, locale), unitOf(first.max));
+    if (shape.amrap === 'last') return text.lastAmrap(base);
+    if (shape.amrap === 'some') return text.someAmrap(base, list.flatMap((set, index) => (set.amrap ? [index + 1] : [])));
     return base;
   }
 
   // Setler farklı: tek tek sayılır; birim son düz setin arkasına bir kez yazılır.
   const lastPlain = list.reduce((last, set, index) => (set.amrap ? last : index), -1);
   const items = list.map((set, index) => {
-    if (!set.amrap) return index === lastPlain ? `${range(set)} ${unit}` : range(set);
-    const where = index === n - 1 ? 'son sette' : `${index + 1}. sette`;
-    return `${where} yapabildiğin kadar (en az ${count(set.min)}${lastPlain < 0 ? ` ${unit}` : ''})`;
+    if (!set.amrap) return index === lastPlain ? `${range(set, locale)} ${unitOf(set.max)}` : range(set, locale);
+    return text.amrapAt(index === n - 1 ? 'last' : index + 1, count(set.min, locale), lastPlain < 0 ? unitOf(set.min) : '');
   });
-  return `${count(n)} set: ${listTr(items)}`;
+  return text.mixed(n, count(n, locale), items);
 }
 
 /** Yükün seyri, yüzdesiz: piramit, back-off ya da serbest yüzdeler. Düz sette yok. */
-function loadPhrase(list: readonly SetSpec[]): string | null {
+function loadPhrase(list: readonly SetSpec[], locale: Locale): string | null {
+  const text = clientWorkoutMessages(locale).setText;
   const shape = setShape(list);
   const pcts = list.map(pctOf);
-  if (shape.kind === 'pyramid') return 'ağırlık her sette artar';
-  if (shape.kind === 'backoff') return `ilk set en ağır, sonrakiler %${count(100 - (pcts[1] as number))} daha hafif`;
-  if (pcts.some((pct) => pct < 100)) return `ağırlık en ağır sete göre: ${pcts.map((pct) => `%${count(pct)}`).join(', ')}`;
+  if (shape.kind === 'pyramid') return text.pyramid;
+  if (shape.kind === 'backoff') return text.backoff(count(100 - (pcts[1] as number), locale));
+  if (pcts.some((pct) => pct < 100)) return text.percents(pcts.map((pct) => count(pct, locale)));
   return null;
 }
 
@@ -81,11 +79,12 @@ export function clientSetText(
   trackingType: TrackingType,
   restSeconds?: number,
   cardio: CardioKind | null = null,
+  locale: Locale = DEFAULT_LOCALE,
 ): string {
   const list = timedSets(effective(sets, trackingType), cardio);
   if (list.length === 0) return '';
-  const unit = cardio === 'walk' ? 'dk' : trackingType === 'duration' ? 'sn' : 'tekrar';
-  const rest =
-    restSeconds === undefined ? null : restSeconds > 0 ? `${formatRest(restSeconds)} dinlenme` : 'setler arası dinlenme yok';
-  return [setsPhrase(list, unit), ...cardioTargetParts(list), loadPhrase(list), rest].filter(Boolean).join(' · ');
+  const unit: Unit = cardio === 'walk' ? 'minutes' : trackingType === 'duration' ? 'seconds' : 'reps';
+  const text = clientWorkoutMessages(locale).setText;
+  const rest = restSeconds === undefined ? null : restSeconds > 0 ? text.rest(formatRest(restSeconds, locale)) : text.noRest;
+  return [setsPhrase(list, unit, locale), ...cardioTargetParts(list, locale), loadPhrase(list, locale), rest].filter(Boolean).join(' · ');
 }

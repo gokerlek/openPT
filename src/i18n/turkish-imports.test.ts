@@ -14,7 +14,6 @@ const SRC = join(ROOT, 'src');
 const PENDING = new Set([
   'src/app/me/antrenman/program-update-sheet.tsx',
   'src/app/me/(sekmeler)/programlar/[pid]/duzenle/page.tsx',
-  'src/lib/heart-rate.ts',
 ]);
 const IMPORTS_TURKISH = /from\s+['"][^'"]*\/turkish(?:\.ts)?['"]/;
 

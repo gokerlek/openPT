@@ -1,6 +1,8 @@
-import { DEFAULT_LOCALE, type Locale } from '../i18n/locale.ts';
+import { localizedLibraryTitle } from '../data/library-text.ts';
+import { DEFAULT_LOCALE, intlLocale, type Locale } from '../i18n/locale.ts';
+import { clientWorkoutMessages } from '../i18n/messages/client-workout/index.ts';
 import { totalKcal } from './cardio.ts';
-import { formatKg, formatNumber } from './format.ts';
+import { getFormat } from './format.ts';
 import { sessionDayText } from './own-program-text.ts';
 import { mondayOf, type ProgramLogEntry } from './program-plan.ts';
 import type { Category } from './schemas/exercise.ts';
@@ -109,51 +111,67 @@ export function clockOf(iso: string, timeZone: string): string {
   return format.format(new Date(iso));
 }
 
-const dayWithWeekday = new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'short', weekday: 'short', timeZone: 'UTC' });
+const dayFormats = new Map<Locale, Intl.DateTimeFormat>();
 
 /** Takvim günü, haftanın günüyle: "26 Eyl Cmt" (gün bir an değil, tarihtir: UTC'de biçimlenir). */
-export function shortDayText(day: string, _locale: Locale = DEFAULT_LOCALE): string {
-  return dayWithWeekday.format(new Date(`${day}T00:00:00Z`));
+export function shortDayText(day: string, locale: Locale = DEFAULT_LOCALE): string {
+  let format = dayFormats.get(locale);
+  if (!format) {
+    format = new Intl.DateTimeFormat(intlLocale(locale), { day: 'numeric', month: 'short', weekday: 'short', timeZone: 'UTC' });
+    dayFormats.set(locale, format);
+  }
+  return format.format(new Date(`${day}T00:00:00Z`));
+}
+
+/** Sayı ve birimi: "15 tekrar", "45 sn" (İngilizcede çoğul sayıya göre). */
+function amount(value: number, unit: 'reps' | 'seconds', locale: Locale): string {
+  return `${getFormat(locale).number(value)} ${clientWorkoutMessages(locale).units[unit](value)}`;
 }
 
 /** "62,5 kg × 10"; ağırlıksızda "15 tekrar". */
-export function pointText(point: RepPoint): string {
-  return point.kg > 0 ? `${formatKg(point.kg)} × ${formatNumber(point.reps)}` : `${formatNumber(point.reps)} tekrar`;
+export function pointText(point: RepPoint, locale: Locale = DEFAULT_LOCALE): string {
+  const f = getFormat(locale);
+  return point.kg > 0 ? `${f.kg(point.kg)} × ${f.number(point.reps)}` : amount(point.reps, 'reps', locale);
 }
 
 /** Kısa en iyi set ("Geçen sefere göre" satırı): "62,5 × 10", "15 tekrar", "45 sn". */
-export function topText(top: TopSet): string {
-  if (top.kind === 'kg') return `${formatNumber(top.kg)} × ${formatNumber(top.reps)}`;
-  return top.kind === 'reps' ? `${formatNumber(top.reps)} tekrar` : `${formatNumber(top.seconds)} sn`;
+export function topText(top: TopSet, locale: Locale = DEFAULT_LOCALE): string {
+  const f = getFormat(locale);
+  if (top.kind === 'kg') return `${f.number(top.kg)} × ${f.number(top.reps)}`;
+  return top.kind === 'reps' ? amount(top.reps, 'reps', locale) : amount(top.seconds, 'seconds', locale);
 }
 
 /** Süre: "45 dk", "1 sa 5 dk", "2 sa". */
-export function minutesText(minutes: number, _locale: Locale = DEFAULT_LOCALE): string {
+export function minutesText(minutes: number, locale: Locale = DEFAULT_LOCALE): string {
+  const f = getFormat(locale);
+  const t = clientWorkoutMessages(locale).summary;
   const hours = Math.floor(minutes / 60);
   const rest = minutes % 60;
-  if (hours === 0) return `${formatNumber(rest)} dk`;
-  return rest === 0 ? `${formatNumber(hours)} sa` : `${formatNumber(hours)} sa ${formatNumber(rest)} dk`;
+  if (hours === 0) return t.minutes(f.number(rest));
+  return rest === 0 ? t.hours(f.number(hours)) : t.hoursMinutes(f.number(hours), f.number(rest));
 }
 
 /** Özetin rekor kartı: hareketin adı, yeni değer ve öncekiyle karşılaştırma. */
 export type RecordLine = { title: string; value: string; detail: string };
 
-export function recordLine(title: string, hit: RecordHit): RecordLine {
+export function recordLine(title: string, hit: RecordHit, locale: Locale = DEFAULT_LOCALE): RecordLine {
+  const f = getFormat(locale);
+  const t = clientWorkoutMessages(locale).summary;
   switch (hit.kind) {
     case 'heaviest':
-      return { title, value: pointText(hit.now), detail: `Önceki en ağır: ${pointText(hit.before)}` };
+      return { title, value: pointText(hit.now, locale), detail: t.heaviestBefore(pointText(hit.before, locale)) };
     case 'e1rm':
       return {
         title,
-        value: pointText(hit.now),
-        detail: `Önceki en iyi: ${pointText(hit.before)}${hit.gainPct > 0 ? ` · tahmini 1RM +%${formatNumber(hit.gainPct)}` : ''}`,
+        value: pointText(hit.now, locale),
+        detail: t.bestBefore(pointText(hit.before, locale), hit.gainPct > 0 ? f.number(hit.gainPct) : ''),
       };
     case 'reps':
       return hit.now.kg > 0
-        ? { title, value: pointText(hit.now), detail: `Bu ağırlıkta önceki en çok: ${formatNumber(hit.before.reps)} tekrar` }
-        : { title, value: pointText(hit.now), detail: `Önceki en çok: ${formatNumber(hit.before.reps)} tekrar` };
+        ? { title, value: pointText(hit.now, locale), detail: t.repsAtWeightBefore(f.number(hit.before.reps), hit.before.reps) }
+        : { title, value: pointText(hit.now, locale), detail: t.repsBefore(f.number(hit.before.reps), hit.before.reps) };
     case 'seconds':
-      return { title, value: `${formatNumber(hit.now)} sn`, detail: `Önceki en uzun: ${formatNumber(hit.before)} sn` };
+      return { title, value: amount(hit.now, 'seconds', locale), detail: t.secondsBefore(f.number(hit.before)) };
   }
 }
 
@@ -165,13 +183,13 @@ export type ExerciseLine = { title: string; text: string; state: 'done' | 'parti
 export type ChangeState = 'applied' | 'pending' | 'approved' | 'declined' | 'stale';
 export type ChangeLine = { text: string; state: ChangeState; note?: string };
 
-export const CHANGE_LABELS: Record<ChangeState, string> = {
-  applied: 'programa yazıldı',
-  pending: 'antrenörünün onayında',
-  approved: 'antrenörün onayladı',
-  declined: 'antrenörün reddetti',
-  stale: 'uygulanamadı',
-};
+/** Değişikliğin durumu okuyanın dilinde. */
+export function changeLabels(locale: Locale = DEFAULT_LOCALE): Record<ChangeState, string> {
+  return clientWorkoutMessages(locale).summary.changes;
+}
+
+/** Türkçe durumlar (eski çağrılar); arayüz `changeLabels(locale)` kullanır. */
+export const CHANGE_LABELS: Record<ChangeState, string> = changeLabels('tr');
 
 type ProposalLike = { sessionId: string; text: string; status: Exclude<ChangeState, 'applied'>; ptNote?: string | null | undefined };
 
@@ -198,7 +216,8 @@ export function sessionChanges(input: {
  * Programın satırlarındaki (muadil ve eklenen hareket hariç) yapılmış hareketler: "65 kg × 8", "12 tekrar",
  * "45 sn".
  */
-export function nextTimeLines(day: Pick<WorkoutDay, 'rows'>, doc: Pick<SessionDoc, 'entries'>): NextLine[] {
+export function nextTimeLines(day: Pick<WorkoutDay, 'rows'>, doc: Pick<SessionDoc, 'entries'>, locale: Locale = DEFAULT_LOCALE): NextLine[] {
+  const f = getFormat(locale);
   const lines: NextLine[] = [];
   const seen = new Set<string>();
   for (const entry of doc.entries) {
@@ -210,32 +229,36 @@ export function nextTimeLines(day: Pick<WorkoutDay, 'rows'>, doc: Pick<SessionDo
     if (!top) continue;
     const text =
       row.trackingType === 'duration'
-        ? `${formatNumber(top.target)} sn`
+        ? amount(top.target, 'seconds', locale)
         : row.trackingType === 'weight_reps' && row.plan.topWeightKg > 0
-          ? `${formatKg(row.plan.topWeightKg)} × ${formatNumber(top.target)}`
-          : `${formatNumber(top.target)} tekrar`;
+          ? `${f.kg(row.plan.topWeightKg)} × ${f.number(top.target)}`
+          : amount(top.target, 'reps', locale);
     lines.push({ title: row.title, text });
   }
   return lines;
 }
 
 /** Hareketin satırı (4. kart ve geçmiş): "3 set · 27 tekrar · 62,5 kg üst", yarımda "2/3 set · …". */
-export function exerciseLine(entry: SessionEntry): ExerciseLine {
+export function exerciseLine(entry: SessionEntry, locale: Locale = DEFAULT_LOCALE): ExerciseLine {
+  const f = getFormat(locale);
+  const t = clientWorkoutMessages(locale);
+  // Kütüphane adının anlık görüntüsü okuyanın dilinde; PT'nin adı ve silinmiş hareket olduğu gibi.
+  const title = localizedLibraryTitle(entry.exerciseId, entry.title, locale);
   const sets = working(entry);
-  if (sets.length === 0) return { title: entry.title, text: entry.status === 'skipped' ? 'geçildi' : 'yapılmadı', state: entry.status === 'skipped' ? 'skipped' : 'missed' };
+  if (sets.length === 0) return { title, text: entry.status === 'skipped' ? t.summary.skipped : t.summary.missed, state: entry.status === 'skipped' ? 'skipped' : 'missed' };
   const planned = Math.max(0, ...sets.map((set) => set.plannedSetCount ?? 0), entry.plannedSets ?? 0);
   const reps = sets.reduce((sum, set) => sum + (set.reps ?? 0), 0);
   const seconds = sets.reduce((sum, set) => sum + (set.seconds ?? 0), 0);
   const kgs = sets.flatMap((set) => (set.kg !== undefined && set.kg > 0 ? [set.kg] : []));
   const partial = planned > 0 && sets.length < planned;
   const parts = [
-    `${formatNumber(sets.length)}${partial ? `/${formatNumber(planned)}` : ''} set`,
-    ...(reps > 0 ? [`${formatNumber(reps)} tekrar`] : []),
-    ...(seconds > 0 ? [`${formatNumber(seconds)} sn`] : []),
-    ...(kgs.length > 0 ? [`${formatKg(Math.max(...kgs))} üst`] : []),
-    ...(entry.oneOff ? ['bir defalık'] : []),
+    `${f.number(sets.length)}${partial ? `/${f.number(planned)}` : ''} ${t.units.sets(partial ? planned : sets.length)}`,
+    ...(reps > 0 ? [amount(reps, 'reps', locale)] : []),
+    ...(seconds > 0 ? [amount(seconds, 'seconds', locale)] : []),
+    ...(kgs.length > 0 ? [t.summary.top(f.kg(Math.max(...kgs)))] : []),
+    ...(entry.oneOff ? [t.summary.oneOff] : []),
   ];
-  return { title: entry.title, text: parts.join(' · '), state: partial ? 'partial' : 'done' };
+  return { title, text: parts.join(' · '), state: partial ? 'partial' : 'done' };
 }
 
 /** Hareketler yapılış sırasıyla (`order`; sırada olmayanlar arkada). */
@@ -261,16 +284,23 @@ export function summaryWeek(index: SessionIndex, date: string, current: { done: 
   return { done: days.size, target: null, current: false };
 }
 
-export function weekText(week: SummaryWeek): string {
-  if (!week.current) return `O hafta ${formatNumber(week.done)} antrenman`;
-  return week.target ? `Bu hafta ${formatNumber(week.done)}/${formatNumber(week.target)}` : `Bu hafta ${formatNumber(week.done)}`;
+export function weekText(week: SummaryWeek, locale: Locale = DEFAULT_LOCALE): string {
+  const f = getFormat(locale);
+  const t = clientWorkoutMessages(locale).summary;
+  if (!week.current) return t.weekPast(f.number(week.done), week.done);
+  return week.target ? t.weekTarget(f.number(week.done), f.number(week.target)) : t.week(f.number(week.done));
 }
 
 /**
  * Aynı günün önceki (yarım bırakılmamış) antrenmanına göre toplam ağırlık farkı. Önceki yoksa ya da iki
  * taraftan biri 0 kg ise (yalnız süreli ya da ağırlıksız hareketler) null: "−%100" bir şey anlatmaz.
  */
-export function versusLastText(index: SessionIndex, doc: Pick<SessionDoc, 'id' | 'startedAt' | 'program'>, volumeKg: number): string | null {
+export function versusLastText(
+  index: SessionIndex,
+  doc: Pick<SessionDoc, 'id' | 'startedAt' | 'program'>,
+  volumeKg: number,
+  locale: Locale = DEFAULT_LOCALE,
+): string | null {
   const dayId = doc.program?.dayId;
   if (!dayId || volumeKg <= 0) return null;
   const start = Date.parse(doc.startedAt);
@@ -280,8 +310,9 @@ export function versusLastText(index: SessionIndex, doc: Pick<SessionDoc, 'id' |
   if (!previous || previous.volumeKg <= 0) return null;
   const pct = Math.round(((volumeKg - previous.volumeKg) / previous.volumeKg) * 100);
   const name = doc.program?.dayName ?? '';
-  if (pct === 0) return `Önceki ${name} antrenmanıyla aynı toplam ağırlık`;
-  return `Önceki ${name} antrenmanına göre ${pct > 0 ? '+' : '−'}%${formatNumber(Math.abs(pct))}`;
+  const t = clientWorkoutMessages(locale).summary;
+  if (pct === 0) return t.versusSame(name);
+  return t.versus(name, pct > 0 ? '+' : '−', getFormat(locale).number(Math.abs(pct)));
 }
 
 export type SessionSummary = {
@@ -334,8 +365,13 @@ export function sessionSummary<E extends MuscleSource>(input: {
   next: NextLine[] | null;
   /** Seansın günündeki kilo (yalnız ölçüm onayıyla): yürüyüş/koşu kalorisi. */
   bodyMassKg?: number | undefined;
+  /** Metinlerin dili; yoksa Türkçe. */
+  locale?: Locale;
 }): SessionSummary {
   const { doc } = input;
+  const locale = input.locale ?? DEFAULT_LOCALE;
+  const f = getFormat(locale);
+  const t = clientWorkoutMessages(locale);
   const index = input.index.items.some((row) => row.id === doc.id) ? input.index : upsertIndexRow(input.index, indexRowOf(doc, '0'.repeat(40)));
   // Süre ve saat aralığı Geçmiş'teki gibi (`durationOf`, `sessionEnd`): yarım antrenman son setten en çok 10 dk sonra biter.
   const end = sessionEnd(doc) ?? doc.startedAt;
@@ -347,25 +383,25 @@ export function sessionSummary<E extends MuscleSource>(input: {
   const worked = workedList(workedMuscles(doc.entries, input.exercises, total), total, input.muscleGroups);
   const load = Object.fromEntries(worked.flatMap((item) => item.muscles.map((muscle) => [muscle, total[muscle] ?? 0] as const)));
 
-  // Hareketin adı antrenmandaki hâliyle (egzersiz ve cihaz anahtarıyla).
+  // Hareketin adı antrenmandaki hâliyle (egzersiz ve cihaz anahtarıyla); kütüphane adıysa okuyanın dilinde.
   const titles = new Map<string, string>();
-  for (const entry of doc.entries) if (!titles.has(recordKey(entry))) titles.set(recordKey(entry), entry.title);
+  for (const entry of doc.entries) if (!titles.has(recordKey(entry))) titles.set(recordKey(entry), localizedLibraryTitle(entry.exerciseId, entry.title, locale));
   const titleOf = (key: string, exerciseId: string) => titles.get(key) ?? exerciseId;
 
   const records = sessionRecords(index, doc.id).flatMap((record) => {
     const [first] = record.hits;
-    return first ? [recordLine(titleOf(record.key, record.exerciseId), first)] : [];
+    return first ? [recordLine(titleOf(record.key, record.exerciseId), first, locale)] : [];
   });
   const compare = compareWithLast(index, doc.id).map(
     (item): CompareLine => ({
       title: titleOf(item.key, item.exerciseId),
       trend: item.trend,
-      text: item.trend === 'first' || !item.before ? 'ilk kez' : `${topText(item.before)} → ${topText(item.now)}`,
+      text: item.trend === 'first' || !item.before ? t.summary.firstTime : `${topText(item.before, locale)} → ${topText(item.now, locale)}`,
     }),
   );
 
   const ordered = entriesInOrder(doc);
-  const exercises = ordered.filter((entry) => working(entry).length > 0 || entry.status === 'skipped' || entry.skip).map(exerciseLine);
+  const exercises = ordered.filter((entry) => working(entry).length > 0 || entry.status === 'skipped' || entry.skip).map((entry) => exerciseLine(entry, locale));
   const reps = doc.entries.reduce((sum, entry) => sum + working(entry).reduce((total, set) => total + (set.reps ?? 0), 0), 0);
   const seconds = doc.entries.reduce((sum, entry) => sum + working(entry).reduce((total, set) => total + (set.seconds ?? 0), 0), 0);
   const water = waterOf(doc);
@@ -375,15 +411,15 @@ export function sessionSummary<E extends MuscleSource>(input: {
     id: doc.id,
     unfinished,
     // Kendi programdan antrenmanda programın adıyla ("Evde · Gün A"), Geçmiş'teki gibi.
-    dayName: sessionDayText(doc.program),
-    when: `${shortDayText(doc.date)} · ${clockOf(doc.startedAt, input.timeZone)}–${clockOf(end, input.timeZone)}`,
+    dayName: sessionDayText(doc.program, undefined, locale),
+    when: `${shortDayText(doc.date, locale)} · ${clockOf(doc.startedAt, input.timeZone)}–${clockOf(end, input.timeZone)}`,
     minutes,
     volumeKg,
     sets,
     muscles: worked.length,
     prs: records.length,
-    versusLast: versusLastText(index, doc, volumeKg),
-    footer: [input.week ? weekText(input.week) : null, `${formatNumber(water)} bardak su`, unfinished ? 'yarım bırakıldı' : null]
+    versusLast: versusLastText(index, doc, volumeKg, locale),
+    footer: [input.week ? weekText(input.week, locale) : null, t.summary.water(f.number(water), water), unfinished ? t.summary.unfinished : null]
       .filter((part): part is string => part !== null)
       .join(' · '),
     records,
@@ -392,7 +428,11 @@ export function sessionSummary<E extends MuscleSource>(input: {
     load,
     worked,
     topMuscle: worked[0]?.label ?? null,
-    totals: [`${formatNumber(sets)} set`, ...(reps > 0 ? [`${formatNumber(reps)} tekrar`] : []), ...(seconds > 0 ? [`${formatNumber(seconds)} sn`] : [])].join(' · '),
+    totals: [
+      `${f.number(sets)} ${t.units.sets(sets)}`,
+      ...(reps > 0 ? [amount(reps, 'reps', locale)] : []),
+      ...(seconds > 0 ? [amount(seconds, 'seconds', locale)] : []),
+    ].join(' · '),
     exercises,
     changes: [...input.changes],
     kcal: totalKcal(doc.entries.flatMap(working), input.bodyMassKg),

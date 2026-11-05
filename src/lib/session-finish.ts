@@ -1,4 +1,5 @@
 import { DEFAULT_LOCALE, type Locale } from '../i18n/locale.ts';
+import { clientWorkoutMessages } from '../i18n/messages/client-workout/index.ts';
 import * as v from 'valibot';
 import { canRecordHealth } from './client-status.ts';
 import { todayIn } from './format.ts';
@@ -72,7 +73,7 @@ export function finishedAtFor(finishedAt: string | undefined, startedAt: string,
   return finishedAt as string;
 }
 
-type Context = { now: Date; timeZone: string };
+type Context = { now: Date; timeZone: string; /** Commit mesajının dili (yazanın); yoksa Türkçe. */ locale?: Locale | undefined };
 
 /** Gelen belge sunucunun gözüyle: tarih kayıttaki (yoksa sunucunun), durum etkin, bitiş anı yok. */
 export function prepareIncoming(incoming: SessionDoc, stored: SessionDoc | null, ctx: Context): SessionDoc {
@@ -87,7 +88,7 @@ export function prepareIncoming(incoming: SessionDoc, stored: SessionDoc | null,
 export function planPut(stored: SessionDoc | null, incoming: SessionDoc, ctx: Context): { doc: SessionDoc; changed: boolean; message: string } {
   const prepared = prepareIncoming(incoming, stored, ctx);
   const merged = { ...(mergeAll(stored ? [stored, prepared] : [prepared]) as SessionDoc), writer: incoming.writer };
-  return { doc: merged, changed: !stored || !sameSessionData(stored, merged), message: putMessage(stored, merged) };
+  return { doc: merged, changed: !stored || !sameSessionData(stored, merged), message: putMessage(stored, merged, ctx.locale) };
 }
 
 /* --- bitiş --- */
@@ -201,9 +202,10 @@ function withNotice(notices: readonly SessionNotice[], notice: SessionNotice): S
  * Commit mesajı: "Antrenman bitti · Gün A · 17 set", program değiştiyse "· Program (danışan)" (kendi programda
  * "· Kendi programı") ve gövdede cümleler.
  */
-function finishCommitMessage(doc: SessionDoc, changes: readonly ProgramChange[], proposals: number, own = false): string {
-  const label = own ? 'Kendi programı' : 'Program (danışan)';
-  const parts = [finishMessage(doc), ...(changes.length > 0 ? [label] : []), ...(proposals > 0 ? [`${proposals} öneri`] : [])];
+function finishCommitMessage(doc: SessionDoc, changes: readonly ProgramChange[], proposals: number, own = false, locale: Locale = DEFAULT_LOCALE): string {
+  const t = clientWorkoutMessages(locale).commits;
+  const label = own ? t.ownProgram : t.clientProgram;
+  const parts = [finishMessage(doc, locale), ...(changes.length > 0 ? [label] : []), ...(proposals > 0 ? [t.proposals(proposals)] : [])];
   const subject = parts.join(' · ');
   if (changes.length === 0) return subject;
   return `${subject}\n\n${changes.map((change) => `- ${change.scope ? `${change.scope}: ` : ''}${change.text}`).join('\n')}`;
@@ -280,8 +282,9 @@ export function planFinish(input: FinishInput): FinishPlan {
     rawProgram,
     proposals: proposalsBroken ? null : (input.proposalsFile ?? null),
     now,
+    ...(input.locale ? { locale: input.locale } : {}),
   });
-  const ownFeedback = own ? planOwnFeedback({ doc, feedback: verified, program: own, now }) : null;
+  const ownFeedback = own ? planOwnFeedback({ doc, feedback: verified, program: own, now, ...(input.locale ? { locale: input.locale } : {}) }) : null;
 
   let notices = doc.notices;
   // Kendi programda yarım ve başka program bildirimi yok: plan danışanın (§3.4).
@@ -336,7 +339,7 @@ export function planFinish(input: FinishInput): FinishPlan {
   return {
     doc,
     files,
-    message: finishCommitMessage(doc, changes, outcome.proposals, Boolean(ownFeedback)),
+    message: finishCommitMessage(doc, changes, outcome.proposals, Boolean(ownFeedback), input.locale),
     health,
     feedback: outcome,
     proposalsBroken: proposalsBroken && feedback.outcome.proposals > 0,
@@ -353,7 +356,7 @@ export function applyPatch(
   stored: SessionDoc,
   body: PatchBody,
   now: Date,
-  _locale: Locale = DEFAULT_LOCALE,
+  locale: Locale = DEFAULT_LOCALE,
 ): { doc: SessionDoc; changed: boolean; message: string } {
   const variants: SessionDoc[] = [stored];
   if (body.addSets?.length) variants.push({ ...stored, entries: body.addSets });
@@ -371,5 +374,5 @@ export function applyPatch(
     doc = withDeletions(doc, { setIds: body.deleteSetIds ?? [], entryIds: body.deleteEntryIds ?? [] });
   }
   doc = { ...doc, writer: body.writer };
-  return { doc, changed: !sameSessionData(stored, doc), message: patchMessage(stored, doc) };
+  return { doc, changed: !sameSessionData(stored, doc), message: patchMessage(stored, doc, locale) };
 }

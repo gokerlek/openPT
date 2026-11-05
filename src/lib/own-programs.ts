@@ -1,9 +1,10 @@
-import { DEFAULT_LOCALE, type Locale } from '../i18n/locale.ts';
+import { DEFAULT_LOCALE, LOCALES, type Locale } from '../i18n/locale.ts';
+import { clientProgramsMessages } from '../i18n/messages/client-programs/index.ts';
 import { withClientTargets } from './client-targets.ts';
 import { cleanWeekdays, phaseWeekdays } from './day-assignments.ts';
 import { applyProgramEdit, type DiffContext } from './program-diff.ts';
 import {
-  DEFAULT_PHASE_NAME,
+  defaultPhaseName,
   OWN_PROGRAM_ID_PATTERN,
   OWN_PROGRAM_NAME_MAX,
   PROGRAM_LIMITS,
@@ -49,11 +50,17 @@ import { normalizeWeekdays } from './training-days.ts';
 export const OWN_PROGRAMS_DIR = 'own-programs';
 export const OWN_INDEX_PATH = 'own-programs-index.json';
 export const OWN_PROGRAM_LIMITS = { programs: 5, name: OWN_PROGRAM_NAME_MAX, days: PROGRAM_LIMITS.daysPerPhase } as const;
-/** PT'nin programının danışandaki adı: kendi programa verilemez. */
-export const PT_PROGRAM_NAME = 'Antrenörünün programı';
-export const DEFAULT_OWN_NAME = 'Programım';
-/** Silmenin commit mesajı: ad yok (seans silmeyle aynı ilke, §3.7). */
-export const OWN_DELETE_MESSAGE = 'Kendi programı silindi';
+/** PT'nin programının danışandaki adı: kendi programa verilemez (Türkçe; arayüz `ptProgramName(locale)`). */
+export const PT_PROGRAM_NAME = clientProgramsMessages('tr').ptProgramName;
+/** Varsayılan ad, Türkçe (eski çağrılar); yeni program yazanın dilinde (`defaultOwnName(taken, locale)`). */
+export const DEFAULT_OWN_NAME = clientProgramsMessages('tr').defaultName;
+/** Silmenin commit mesajı: ad yok (seans silmeyle aynı ilke, §3.7). Türkçe; yazanın dilinde `ownDeleteMessage`. */
+export const OWN_DELETE_MESSAGE = clientProgramsMessages('tr').commits.deleted;
+
+/** Silmenin commit mesajı yazanın dilinde. */
+export function ownDeleteMessage(locale: Locale = DEFAULT_LOCALE): string {
+  return clientProgramsMessages(locale).commits.deleted;
+}
 
 /** Günün kopyalandığı PT günü (anlık görüntü). */
 export type DayCopy = { dayId: string; dayName: string; at: string };
@@ -111,19 +118,24 @@ function nameKey(name: string): string {
   return name.trim().toLocaleLowerCase('tr');
 }
 
-/** Adın sorunu (formda ve sunucuda aynı): boş, uzun, ayrılmış ya da başka programda var; yoksa null. */
-export function ownNameProblem(name: string, others: readonly string[], _locale: Locale = DEFAULT_LOCALE): string | null {
+/**
+ * Adın sorunu (formda ve sunucuda aynı): boş, uzun, ayrılmış ya da başka programda var; yoksa null. PT'nin programının
+ * adı her dilde ayrılmıştır (İngilizce danışanın kendi programı Türkçe ekranda o adla görünmesin, tersi de).
+ */
+export function ownNameProblem(name: string, others: readonly string[], locale: Locale = DEFAULT_LOCALE): string | null {
+  const t = clientProgramsMessages(locale).name;
   const trimmed = name.trim();
-  if (!trimmed) return 'Ad gir.';
-  if (trimmed.length > OWN_PROGRAM_NAME_MAX) return `En fazla ${OWN_PROGRAM_NAME_MAX} karakter.`;
-  if (nameKey(trimmed) === nameKey(PT_PROGRAM_NAME)) return `"${PT_PROGRAM_NAME}" ad olarak kullanılamaz.`;
-  if (others.some((other) => nameKey(other) === nameKey(trimmed))) return 'Bu adda bir programın var.';
+  if (!trimmed) return t.empty;
+  if (trimmed.length > OWN_PROGRAM_NAME_MAX) return t.tooLong(OWN_PROGRAM_NAME_MAX);
+  const reserved = LOCALES.find((other) => nameKey(trimmed) === nameKey(ptProgramName(other)));
+  if (reserved) return t.reserved(ptProgramName(reserved));
+  if (others.some((other) => nameKey(other) === nameKey(trimmed))) return t.taken;
   return null;
 }
 
-/** Varsayılan ad: "Programım", sonra "Programım 2"… */
-export function defaultOwnName(taken: readonly string[], _locale: Locale = DEFAULT_LOCALE): string {
-  return uniqueName(DEFAULT_OWN_NAME, taken);
+/** Varsayılan ad, yazanın dilinde: "Programım", sonra "Programım 2"… */
+export function defaultOwnName(taken: readonly string[], locale: Locale = DEFAULT_LOCALE): string {
+  return uniqueName(clientProgramsMessages(locale).defaultName, taken);
 }
 
 /* --- oluşturma --- */
@@ -174,9 +186,14 @@ function reId(blocks: ProgramDay['blocks'], ids: ProgramIdSource): ProgramDay['b
 }
 
 /** Düzenleyicinin başlangıç gövdesi: tek gizli evre; PT günlerinden hiçbiri seçilmediyse boş gün. */
-export function ownStartBody(start: OwnStart, ids: ProgramIdSource, now: Date): { currentPhaseId: string; phases: OwnProgramPhase[] } {
+export function ownStartBody(
+  start: OwnStart,
+  ids: ProgramIdSource,
+  now: Date,
+  locale: Locale = DEFAULT_LOCALE,
+): { currentPhaseId: string; phases: OwnProgramPhase[] } {
   const phaseId = ids('p');
-  const blank = (): OwnProgramDay[] => [{ id: ids('d'), name: nextDayName([]), blocks: [] }];
+  const blank = (): OwnProgramDay[] => [{ id: ids('d'), name: nextDayName([], locale), blocks: [] }];
   let days: OwnProgramDay[];
   switch (start.kind) {
     case 'blank':
@@ -188,10 +205,10 @@ export function ownStartBody(start: OwnStart, ids: ProgramIdSource, now: Date): 
       break;
     }
     case 'template':
-      days = [dayFromTemplate({ days: [] }, start.template, ids, now)];
+      days = [dayFromTemplate({ days: [] }, start.template, ids, now, locale)];
       break;
   }
-  return { currentPhaseId: phaseId, phases: [{ id: phaseId, name: DEFAULT_PHASE_NAME, days }] };
+  return { currentPhaseId: phaseId, phases: [{ id: phaseId, name: defaultPhaseName(locale), days }] };
 }
 
 /** Programın evre, gün, blok ve satır kimlikleri. */
@@ -249,22 +266,28 @@ export function settleFrequency(phases: readonly OwnProgramPhase[], weekdays: re
   });
 }
 
-/** Oluşturma kaydının cümlesi: PT'nin programından kaç gün, hangi şablonlardan. */
-export function ownCreationChange(phases: readonly OwnProgramPhase[]): ProgramChange {
+/** Oluşturma kaydının cümlesi (yazanın dilinde): PT'nin programından kaç gün, hangi şablonlardan. */
+export function ownCreationChange(phases: readonly OwnProgramPhase[], locale: Locale = DEFAULT_LOCALE): ProgramChange {
+  const t = clientProgramsMessages(locale).changes;
   const copied = phases.flatMap((phase) => phase.days).filter((day) => day.copiedFrom).length;
   const templates = sourceNames(phases as ProgramPhase[]);
-  const parts = [
-    ...(copied > 0 ? [`antrenörünün programından ${copied} gün`] : []),
-    ...(templates.length > 0 ? [`${templates.map((name) => `'${name}'`).join(', ')} ${templates.length === 1 ? 'şablonundan' : 'şablonlarından'}`] : []),
-  ];
-  return { text: parts.length > 0 ? `Program oluşturuldu: ${parts.join(', ')}` : 'Program oluşturuldu' };
+  const parts = [...(copied > 0 ? [t.fromPt(copied)] : []), ...(templates.length > 0 ? [t.fromTemplates(templates)] : [])];
+  return { text: t.created(parts) };
 }
 
 /**
  * Yeni program kaydı: revision 1, şu anki evre şimdi başlar, geçmişte tek "oluşturuldu". Antrenman günleri
  * programların atamalarının birleşimi (an ile; yoksa alan yok); atama varken sıklık kaydedilmez.
  */
-export function createOwnProgram(input: { id: string; name: string; currentPhaseId: string; phases: OwnProgramPhase[]; now: Date }): OwnProgram {
+export function createOwnProgram(input: {
+  id: string;
+  name: string;
+  currentPhaseId: string;
+  phases: OwnProgramPhase[];
+  now: Date;
+  /** Geçmiş cümlesinin dili (yazanın); yoksa Türkçe. */
+  locale?: Locale;
+}): OwnProgram {
   const at = input.now.toISOString();
   const weekdays = phaseWeekdays(input.phases[0]?.days ?? []);
   const phases = settleFrequency(input.phases, weekdays);
@@ -280,7 +303,7 @@ export function createOwnProgram(input: { id: string; name: string; currentPhase
     current: { phaseId: input.currentPhaseId, startedAt: at },
     rotation: {},
     ...(weekdays.length > 0 ? { schedule: { weekdays, at } } : {}),
-    log: appendLog([], { at, revision: 1, kind: 'create', changes: [ownCreationChange(phases)] }),
+    log: appendLog([], { at, revision: 1, kind: 'create', changes: [ownCreationChange(phases, input.locale)] }),
   };
 }
 
@@ -338,7 +361,7 @@ export function applyOwnEdit(
     now,
   );
   const name = by === 'pt' || body.name === undefined ? stored.name : body.name.trim();
-  const rename: ProgramChange[] = name === stored.name ? [] : [{ text: `Ad: '${stored.name}' → '${name}'` }];
+  const rename: ProgramChange[] = name === stored.name ? [] : [{ text: clientProgramsMessages(ctx.locale ?? DEFAULT_LOCALE).changes.renamed(stored.name, name) }];
   const mark = (entry: ProgramLogEntry): ProgramLogEntry => (by === 'pt' ? { ...entry, by: 'pt' } : entry);
 
   if (result) {
@@ -358,15 +381,20 @@ export function applyOwnEdit(
 
 /* --- paylaşım ve günler --- */
 
-/** Paylaşma ya da kapatma (§3.5): revision artmaz, geçmişe `share`. Zaten öyleyse null. */
-export function setOwnShared(program: OwnProgram, shared: boolean, now: Date): OwnProgram | null {
+/** Paylaşma ya da kapatma (§3.5): revision artmaz, geçmişe `share` (yazanın dilinde). Zaten öyleyse null. */
+export function setOwnShared(program: OwnProgram, shared: boolean, now: Date, locale: Locale = DEFAULT_LOCALE): OwnProgram | null {
   if (Boolean(program.shared) === shared) return null;
   const at = now.toISOString();
   const { shared: _previous, ...rest } = program;
   return {
     ...rest,
     ...(shared ? { shared: { at } } : {}),
-    log: appendLog(program.log, { at, revision: program.revision, kind: 'share', changes: [{ text: shared ? 'Antrenörle paylaşıldı' : 'Paylaşım kapatıldı' }] }),
+    log: appendLog(program.log, {
+      at,
+      revision: program.revision,
+      kind: 'share',
+      changes: [{ text: shared ? clientProgramsMessages(locale).changes.shared : clientProgramsMessages(locale).changes.unshared }],
+    }),
   };
 }
 
@@ -381,9 +409,7 @@ export function ownSummaryOf(program: Pick<OwnProgram, 'phases' | 'schedule'>): 
   };
 }
 
-/* --- dil: imza dondurma (i18n planı §7 F). Sahibi görev çevirir; şimdilik Türkçe döner. --- */
-
-/** PT'nin programının danışandaki adı, okuyanın dilinde (`PT_PROGRAM_NAME`). Ad denetimi her dilin adını ayırmalı. */
-export function ptProgramName(_locale: Locale = DEFAULT_LOCALE): string {
-  return PT_PROGRAM_NAME;
+/** PT'nin programının danışandaki adı, okuyanın dilinde (`PT_PROGRAM_NAME`). Ad denetimi her dilin adını ayırır. */
+export function ptProgramName(locale: Locale = DEFAULT_LOCALE): string {
+  return clientProgramsMessages(locale).ptProgramName;
 }

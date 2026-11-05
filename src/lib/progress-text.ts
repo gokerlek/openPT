@@ -1,7 +1,10 @@
 import { DEFAULT_LOCALE, type Locale } from '../i18n/locale.ts';
-import { formatDay, formatDayShort, formatKg, formatNumber, formatSignedWithUnit, formatWithUnit } from './format.ts';
+import { clientProgressMessages } from '../i18n/messages/client-progress/index.ts';
+import { lower } from '../i18n/text.ts';
+import { getFormat } from './format.ts';
 import type { LineKey } from './measurement-trends.ts';
-import { MEASUREMENTS } from './measurements.ts';
+import { measurementDef } from './measurements.ts';
+import { roleLabels } from './muscles.ts';
 import type { CircumferenceChange, ExerciseStrength, MuscleRole, StrengthStatus } from './muscle-progress.ts';
 import { E1RM_MAX_REPS, type RecordEvent, type RecordKind, type RecordMark } from './personal-records.ts';
 import type { TrackingType } from './progression.ts';
@@ -21,17 +24,21 @@ import { daysBetween, forecast, forecastAsOf, FORECAST_MIN_POINTS, FORECAST_MIN_
 /** İlerleme ekranını kim görüyor: danışan kendi gidişatını, PT danışanınkini. */
 export type ProgressViewer = 'client' | 'pt';
 
-/** Hareket grafiğinin gösterebildiği değerler. `short`: 375 px'te yan yana üç düğmeye sığan ad. */
-export const METRICS = {
-  top: { label: 'En ağır set', short: 'En ağır', unit: 'kg', forecast: true },
-  e1rm: { label: 'Tahmini maksimum', short: 'Maksimum', unit: 'kg', forecast: true },
-  volume: { label: 'Toplam ağırlık', short: 'Toplam', unit: 'kg', forecast: false },
-  reps: { label: 'En çok tekrar', short: 'En çok', unit: 'tekrar', forecast: true },
-  total_reps: { label: 'Toplam tekrar', short: 'Toplam', unit: 'tekrar', forecast: false },
-  seconds: { label: 'En uzun set', short: 'En uzun', unit: 'sn', forecast: true },
-  total_seconds: { label: 'Toplam süre', short: 'Toplam', unit: 'sn', forecast: false },
-} as const;
-export type Metric = keyof typeof METRICS;
+const FORECAST = { top: true, e1rm: true, volume: false, reps: true, total_reps: false, seconds: true, total_seconds: false } as const;
+export type Metric = keyof typeof FORECAST;
+export type MetricInfo = { label: string; short: string; unit: string; forecast: boolean };
+
+/** Hareket grafiğinin değerleri okuyanın dilinde. `short`: 375 px'te yan yana üç düğmeye sığan ad. */
+export function metricsOf(locale: Locale = DEFAULT_LOCALE): Record<Metric, MetricInfo> {
+  const text = clientProgressMessages(locale).metrics;
+  return Object.fromEntries((Object.keys(FORECAST) as Metric[]).map((metric) => [metric, { ...text[metric], forecast: FORECAST[metric] }])) as Record<
+    Metric,
+    MetricInfo
+  >;
+}
+
+/** Türkçe değerler (eski çağrılar); arayüz `metricsOf(locale)` kullanır. */
+export const METRICS: Record<Metric, MetricInfo> = metricsOf('tr');
 
 /**
  * Kayıt türüne göre grafikler; ilki varsayılan. Toplamlarda tahmin çizilmez: set sayısıyla oynar,
@@ -89,11 +96,12 @@ export function metricForecast(metric: Metric, points: readonly { date: string; 
 }
 
 /** "45 sn", "1 dk 30 sn", "2 dk". */
-export function formatSeconds(seconds: number): string {
+export function formatSeconds(seconds: number, locale: Locale = DEFAULT_LOCALE): string {
   const minutes = Math.floor(seconds / 60);
   const rest = seconds % 60;
-  if (minutes === 0) return `${rest} sn`;
-  return rest === 0 ? `${minutes} dk` : `${minutes} dk ${rest} sn`;
+  const text = clientProgressMessages(locale).duration;
+  if (minutes === 0) return text('', String(rest), 'seconds');
+  return rest === 0 ? text(String(minutes), '', 'minutes') : text(String(minutes), String(rest), 'both');
 }
 
 /**
@@ -101,22 +109,20 @@ export function formatSeconds(seconds: number): string {
  * eskiyse tahmin yazılmaz (geçmiş bir güne tahmin olmaz, `forecastAsOf`). Eğilim düz ya da aşağıysa
  * ileriye sayı verilmez: hafifletme ya da ara olabilir, düşüşü uzatmak yanıltır.
  */
-export function describeTrend(result: Forecast, unit: string, today: string): string {
-  if (!result.ok) {
-    return result.reason === 'too_few_points'
-      ? 'Tahmin için en az 4 antrenman gerekir.'
-      : 'Tahmin için kayıtların en az 3 haftaya yayılması gerekir.';
-  }
+export function describeTrend(result: Forecast, unit: string, today: string, locale: Locale = DEFAULT_LOCALE): string {
+  const t = clientProgressMessages(locale).trend;
+  const f = getFormat(locale);
+  if (!result.ok) return result.reason === 'too_few_points' ? t.tooFewPoints : t.tooShortSpan;
   const view = forecastAsOf(result, today);
-  if (view.kind === 'stale') return `Son kayıt ${view.daysSince} gün önce; tahmin bir sonraki antrenmanla güncellenir.`;
+  if (view.kind === 'stale') return t.stale(view.daysSince);
   const slope = tenth(result.slopePerWeek);
-  const trend = `Eğilim haftada ${formatSignedWithUnit(slope, unit)}.`;
+  const trend = t.slope(f.signedWithUnit(slope, unit));
   if (slope <= 0 || result.bound) return trend;
   const end = result.points.at(-1)!;
   const weeks = Math.round(result.horizonDays / 7);
   const [low, high] = [tenth(end.low), tenth(end.high)];
-  const range = low === high ? '' : `; olası aralık ${formatNumber(low)}–${formatWithUnit(high, unit)}`;
-  return `${trend} Böyle giderse ${weeks} hafta sonra (${formatDay(end.date)}) ≈ ${formatWithUnit(tenth(end.value), unit)}${range}. Tahmin eğilimin süreceğini varsayar.`;
+  const range = low === high ? '' : t.range(f.number(low), f.withUnit(high, unit));
+  return t.forecast(trend, weeks, f.day(end.date), f.withUnit(tenth(end.value), unit), range);
 }
 
 /**
@@ -131,178 +137,177 @@ export function highRepDaysSince(points: readonly ExercisePoint[], from?: string
 }
 
 /** Grafiğin altında: son günlerin neden çizilmediği ve nereye bakılacağı. */
-export function highRepDaysText(count: number, viewer: ProgressViewer = 'client'): string {
-  const days = count === 1 ? 'Son antrenman gününde' : `Son ${count} antrenman gününde`;
-  const where = viewer === 'pt' ? "Ağırlık “En ağır”da, güç gelişimi Gelişim'de görünür." : "Ağırlığın “En ağır”da, güç gelişimin Gelişim'de görünür.";
-  return `${days} bütün setler ${E1RM_MAX_REPS}'den çok tekrarlı; tahmini maksimum o günler için hesaplanmaz. ${where}`;
+export function highRepDaysText(count: number, viewer: ProgressViewer = 'client', locale: Locale = DEFAULT_LOCALE): string {
+  return clientProgressMessages(locale).highRepDays(count, E1RM_MAX_REPS, viewer === 'pt');
 }
 
 /** Tahmini maksimumun açıklaması (grafiğin altında). */
-export function e1rmNote(viewer: ProgressViewer = 'client'): string {
-  const lead =
-    viewer === 'pt'
-      ? 'Tek tekrarda kaldırabileceği en ağır yükün tahmini; kaldırması gereken bir hedef değil, gidişatı gösterir.'
-      : 'Tek tekrarda kaldırabileceğin en ağır yükün tahmini; kaldırman gereken bir hedef değil, gidişatı gösterir.';
-  return `${lead} Epley formülüyle hesaplanır: ağırlık × (1 + tekrar ÷ 30). Yalnız 1–${E1RM_MAX_REPS} tekrarlı setlerden: tekrar arttıkça tahmin şaşar, en isabetlisi az tekrarlı setlerdir.`;
+export function e1rmNote(viewer: ProgressViewer = 'client', locale: Locale = DEFAULT_LOCALE): string {
+  return clientProgressMessages(locale).e1rmNote(E1RM_MAX_REPS, viewer === 'pt');
 }
 
 /** Rekorun adı; vücut ağırlığında "en ağır" ek yüktür. */
-export function recordLabel(kind: RecordKind, trackingType: TrackingType): string {
+export function recordLabel(kind: RecordKind, trackingType: TrackingType, locale: Locale = DEFAULT_LOCALE): string {
+  const t = clientProgressMessages(locale).records;
   switch (kind) {
     case 'heaviest':
-      return trackingType === 'bodyweight_reps' ? 'En ağır ek yük' : 'En ağır set';
+      return trackingType === 'bodyweight_reps' ? t.heaviestAdded : t.heaviest;
     case 'e1rm':
-      return 'Tahmini maksimum';
+      return t.e1rm;
     case 'reps_at_weight':
-      return 'Aynı ağırlıkta en çok tekrar';
+      return t.repsAtWeight;
     case 'most_reps':
-      return 'En çok tekrar';
+      return t.mostReps;
     case 'longest':
-      return 'En uzun süre';
+      return t.longest;
   }
 }
 
 /** Rekorun değeri: "62,5 kg × 8", "≈ 83,3 kg (62,5 kg × 10)", "15 tekrar", "1 dk 30 sn". */
-export function recordValue(mark: Pick<RecordMark, 'kind' | 'value' | 'kg' | 'reps' | 'seconds'>): string {
+export function recordValue(mark: Pick<RecordMark, 'kind' | 'value' | 'kg' | 'reps' | 'seconds'>, locale: Locale = DEFAULT_LOCALE): string {
+  const f = getFormat(locale);
   switch (mark.kind) {
     case 'heaviest':
     case 'reps_at_weight':
-      return `${formatKg(mark.kg ?? 0)} × ${mark.reps ?? 0}`;
+      return `${f.kg(mark.kg ?? 0)} × ${mark.reps ?? 0}`;
     case 'e1rm':
-      return `≈ ${formatKg(tenth(mark.value))} (${formatKg(mark.kg ?? 0)} × ${mark.reps ?? 0})`;
+      return `≈ ${f.kg(tenth(mark.value))} (${f.kg(mark.kg ?? 0)} × ${mark.reps ?? 0})`;
     case 'most_reps':
-      return `${mark.reps ?? mark.value} tekrar`;
+      return clientProgressMessages(locale).records.reps(mark.reps ?? mark.value);
     case 'longest':
-      return formatSeconds(mark.seconds ?? mark.value);
+      return formatSeconds(mark.seconds ?? mark.value, locale);
   }
 }
 
 /** Önceki en iyi: "önceki en iyi 60 kg × 8", tahminde "önceki ≈ 80 kg". */
-export function recordPrevious(event: Pick<RecordEvent, 'kind' | 'previous'>): string {
+export function recordPrevious(event: Pick<RecordEvent, 'kind' | 'previous'>, locale: Locale = DEFAULT_LOCALE): string {
   const previous = event.previous;
-  if (event.kind === 'e1rm') return `önceki ≈ ${formatKg(tenth(previous.value))}`;
-  return `önceki en iyi ${recordValue(previous)}`;
+  const t = clientProgressMessages(locale).records;
+  if (event.kind === 'e1rm') return t.previousEstimate(getFormat(locale).kg(tenth(previous.value)));
+  return t.previousBest(recordValue(previous, locale));
 }
 
 /** Hafta: "21–27 Eyl", ay değişirse "28 Eyl–4 Eki", yıl değişirse yıllı. */
-export function weekLabel(weekStart: string, weekEnd: string, _locale: Locale = DEFAULT_LOCALE): string {
+export function weekLabel(weekStart: string, weekEnd: string, locale: Locale = DEFAULT_LOCALE): string {
+  const f = getFormat(locale);
   const withYear = weekStart.slice(0, 4) !== weekEnd.slice(0, 4);
-  if (!withYear && weekStart.slice(0, 7) === weekEnd.slice(0, 7)) return `${Number(weekStart.slice(8))}–${formatDayShort(weekEnd)}`;
-  return `${formatDayShort(weekStart, withYear)}–${formatDayShort(weekEnd, withYear)}`;
+  if (!withYear && weekStart.slice(0, 7) === weekEnd.slice(0, 7)) return `${Number(weekStart.slice(8))}–${f.dayShort(weekEnd)}`;
+  return `${f.dayShort(weekStart, withYear)}–${f.dayShort(weekEnd, withYear)}`;
 }
 
-export const ACHIEVEMENT_TITLES: Record<AchievementId, string> = {
-  first_workout: 'İlk antrenman',
-  workouts_10: '10 antrenman',
-  workouts_25: '25 antrenman',
-  workouts_50: '50 antrenman',
-  streak_4: '4 hafta üst üste',
-  streak_12: '12 hafta üst üste',
-  first_record: 'İlk rekor',
-};
+/** Başarıların adları okuyanın dilinde. */
+export function achievementTitles(locale: Locale = DEFAULT_LOCALE): Record<AchievementId, string> {
+  return clientProgressMessages(locale).achievements.titles;
+}
+
+/** Türkçe adlar (eski çağrılar); arayüz `achievementTitles(locale)` kullanır. */
+export const ACHIEVEMENT_TITLES: Record<AchievementId, string> = achievementTitles('tr');
 
 /** Başarının altındaki satır: kazanıldıysa günü, değilse ne gerektiği ve ilerleme. */
-export function achievementDetail(achievement: Achievement, weeklyTarget: number, viewer: ProgressViewer = 'client'): string {
-  if (achievement.achievedOn) return formatDay(achievement.achievedOn);
+export function achievementDetail(achievement: Achievement, weeklyTarget: number, viewer: ProgressViewer = 'client', locale: Locale = DEFAULT_LOCALE): string {
+  if (achievement.achievedOn) return getFormat(locale).day(achievement.achievedOn);
+  const t = clientProgressMessages(locale).achievements;
   switch (achievement.id) {
     case 'first_workout':
-      return viewer === 'pt' ? 'İlk antrenmanını bitirince.' : 'İlk antrenmanını bitir.';
+      return t.firstWorkout(viewer === 'pt');
     case 'first_record':
-      return viewer === 'pt' ? 'Bir harekette en iyisini geçince.' : 'Bir harekette en iyini geç.';
+      return t.firstRecord(viewer === 'pt');
     case 'streak_4':
     case 'streak_12':
-      return `Her hafta en az ${weeklyTarget} gün antrenman · ${achievement.current}/${achievement.target} hafta`;
+      return t.streak(weeklyTarget, achievement.current, achievement.target);
     default:
-      return `${achievement.current}/${achievement.target} antrenman`;
+      return t.workouts(achievement.current, achievement.target);
   }
 }
 
 /** Seri satırı: "3 hafta üst üste · en uzun 6 hafta"; seri yoksa bu haftanın durumu. */
-export function streakText(streak: Streak): string {
-  const week = `Bu hafta ${streak.thisWeek}/${streak.target} gün`;
-  if (streak.current === 0) return streak.best > 0 ? `${week} · en uzun seri ${streak.best} hafta` : week;
-  const best = streak.best > streak.current ? ` · en uzun ${streak.best} hafta` : '';
-  return `${streak.current} hafta üst üste${best} · ${week.toLocaleLowerCase('tr')}`;
+export function streakText(streak: Streak, locale: Locale = DEFAULT_LOCALE): string {
+  const t = clientProgressMessages(locale).streak;
+  const week = t.week(streak.thisWeek, streak.target);
+  if (streak.current === 0) return streak.best > 0 ? `${week}${t.bestStreak(streak.best)}` : week;
+  const best = streak.best > streak.current ? t.best(streak.best) : '';
+  return t.current(streak.current, best, week);
 }
 
 /* --- Gelişim (güç) --- */
 
-export const STRENGTH_STATUS_LABELS: Record<StrengthStatus, string> = {
-  improved: 'Gelişti',
-  stable: 'Sabit',
-  declined: 'Geriledi',
-  insufficient: 'Veri az',
-};
+/** Gelişim durumlarının adları okuyanın dilinde. */
+export function strengthStatusLabels(locale: Locale = DEFAULT_LOCALE): Record<StrengthStatus, string> {
+  return clientProgressMessages(locale).strengthStatus;
+}
+
+/** Türkçe adlar (eski çağrılar); arayüz `strengthStatusLabels(locale)` kullanır. */
+export const STRENGTH_STATUS_LABELS: Record<StrengthStatus, string> = strengthStatusLabels('tr');
 
 /** Oransal değişim: 0,084 → "+%8,4", −0,03 → "−%3"; binde bire yuvarlı. */
-export function formatChangePct(ratio: number): string {
-  return formatSignedWithUnit(Math.round(ratio * 1000) / 10, '%');
+export function formatChangePct(ratio: number, locale: Locale = DEFAULT_LOCALE): string {
+  return getFormat(locale).signedWithUnit(Math.round(ratio * 1000) / 10, '%');
 }
 
 /** Karar yoksa ne gerektiği: pencerede en az 4 antrenman günü ve 3 hafta (`FORECAST_MIN_*`). */
-export function strengthMissingText(exercise: Pick<ExerciseStrength, 'missing'> & { points: readonly { date: string }[] }): string {
+export function strengthMissingText(
+  exercise: Pick<ExerciseStrength, 'missing'> & { points: readonly { date: string }[] },
+  locale: Locale = DEFAULT_LOCALE,
+): string {
+  const t = clientProgressMessages(locale).strength;
   if (exercise.missing === 'too_short_span') {
     const days = daysBetween(exercise.points[0]!.date, exercise.points.at(-1)!.date);
-    return `Kayıtların en az ${FORECAST_MIN_SPAN_DAYS / 7} haftaya yayılması gerekir; bu dönemde ${days} güne sığıyor.`;
+    return t.shortSpan(FORECAST_MIN_SPAN_DAYS / 7, days);
   }
-  return `Karar için bu dönemde en az ${FORECAST_MIN_POINTS} antrenman günü gerekir; şimdilik ${exercise.points.length}.`;
+  return t.fewPoints(FORECAST_MIN_POINTS, exercise.points.length);
 }
 
 /**
  * Hareketin satırı: çizginin başı ve sonu, değişim ve olası aralığı. "≈ 62,1 → 68,4 kg (+%10,2) · olası
  * değişim +5,3 – +10,5 kg"; karar yoksa ne gerektiği.
  */
-export function strengthDetail(exercise: Pick<ExerciseStrength, 'metric' | 'fit' | 'missing'> & { points: readonly { date: string }[] }): string {
+export function strengthDetail(
+  exercise: Pick<ExerciseStrength, 'metric' | 'fit' | 'missing'> & { points: readonly { date: string }[] },
+  locale: Locale = DEFAULT_LOCALE,
+): string {
   const fit = exercise.fit;
-  if (!fit) return strengthMissingText(exercise);
-  const unit = METRICS[exercise.metric].unit;
-  const pct = fit.changePct === null ? '' : ` (${formatChangePct(fit.changePct)})`;
-  const signed = (value: number) => `${value > 0 ? '+' : value < 0 ? '−' : '±'}${formatNumber(Math.abs(value))}`;
-  const range = `${signed(tenth(fit.low))} – ${formatSignedWithUnit(tenth(fit.high), unit)}`;
-  return `≈ ${formatNumber(tenth(fit.start))} → ${formatWithUnit(tenth(fit.end), unit)}${pct} · olası değişim ${range}`;
+  if (!fit) return strengthMissingText(exercise, locale);
+  const f = getFormat(locale);
+  const unit = metricsOf(locale)[exercise.metric].unit;
+  const pct = fit.changePct === null ? '' : ` (${formatChangePct(fit.changePct, locale)})`;
+  const signed = (value: number) => `${value > 0 ? '+' : value < 0 ? '−' : '±'}${f.number(Math.abs(value))}`;
+  const range = `${signed(tenth(fit.low))} – ${f.signedWithUnit(tenth(fit.high), unit)}`;
+  return clientProgressMessages(locale).strength.detail(f.number(tenth(fit.start)), f.withUnit(tenth(fit.end), unit), pct, range);
 }
 
 /** Kasın rolü, grup satırında: hepsi aynıysa tek ad, değilse kas kas ("Hedef: alt göğüs · Yardımcı: üst göğüs"). */
-export function groupRoleText(roles: readonly { muscle: string; role: MuscleRole }[], labelOf: (muscle: string) => string): string {
+export function groupRoleText(
+  roles: readonly { muscle: string; role: MuscleRole }[],
+  labelOf: (muscle: string) => string,
+  locale: Locale = DEFAULT_LOCALE,
+): string {
+  const names = roleLabels(locale);
   const distinct = [...new Set(roles.map((item) => item.role))];
-  if (distinct.length === 1) return ROLE_NAMES[distinct[0]!];
+  if (distinct.length === 1) return names[distinct[0]!];
   return (['primary', 'secondary', 'stabilizer'] as const)
     .filter((role) => distinct.includes(role))
-    .map((role) => `${ROLE_NAMES[role]}: ${roles.filter((item) => item.role === role).map((item) => labelOf(item.muscle).toLocaleLowerCase('tr')).join(', ')}`)
+    .map((role) => `${names[role]}: ${roles.filter((item) => item.role === role).map((item) => lower(locale, labelOf(item.muscle))).join(', ')}`)
     .join(' · ');
 }
 
-const ROLE_NAMES: Record<MuscleRole, string> = { primary: 'Hedef', secondary: 'Yardımcı', stabilizer: 'Dengeleyici' };
-
 /** Gelişim bölümünün yöntem notu (kas sheet'inin altında). */
-export function strengthMethodNote(viewer: ProgressViewer = 'client'): string[] {
-  const first =
-    viewer === 'pt'
-      ? `Her hareket için seçilen dönemdeki antrenman günlerinin en iyisi alınır: ağırlıklı harekette tahmini maksimum, vücut ağırlığıyla yapılanda en çok tekrar, süreli harekette en uzun set. Bütün setleri ${E1RM_MAX_REPS}'den çok tekrarlı gün de sayılır: tahmini maksimum o gün en ağır setten hesaplanır.`
-      : `Her hareket için seçtiğin dönemdeki antrenman günlerinin en iyisi alınır: ağırlıklı harekette tahmini maksimum, vücut ağırlığıyla yaptığında en çok tekrar, süreli harekette en uzun set. Bütün setlerini ${E1RM_MAX_REPS}'den çok tekrarla yaptığın gün de sayılır: tahmini maksimum o gün en ağır setinden hesaplanır.`;
-  return [first, ...STRENGTH_METHOD_REST];
+export function strengthMethodNote(viewer: ProgressViewer = 'client', locale: Locale = DEFAULT_LOCALE): string[] {
+  const t = clientProgressMessages(locale).strength;
+  return [t.methodFirst(E1RM_MAX_REPS, viewer === 'pt'), ...t.methodRest(FORECAST_MIN_POINTS, FORECAST_MIN_SPAN_DAYS / 7)];
 }
 
-const STRENGTH_METHOD_REST = [
-  'Bu değerlerden tek bir kötü güne kapılmayan bir eğilim çizgisi çizilir (Theil–Sen). Çizginin değişiminin olası aralığı (≈%80) tamamen artıdaysa “gelişti”, tamamen eksideyse “geriledi”, sıfırı kapsıyorsa “sabit” denir.',
-  `Karar için dönemde en az ${FORECAST_MIN_POINTS} antrenman günü ve ${FORECAST_MIN_SPAN_DAYS / 7} hafta gerekir.`,
-  'Kas, onu çalıştıran hareketlerden hesaplanır: hedef kas tam, yardımcı kas yarım, dengeleyici kas çeyrek sayılır; yalnız dengeleyici olarak çalıştığı hareketler kasa karar vermez.',
-  'Bu güç gelişimidir: kasın büyüdüğünü tek başına göstermez, beceri ve sinir sistemi de gücü artırır.',
-];
-
 export const STRENGTH_METHOD_NOTE = strengthMethodNote('client');
-
-const SIDE_NAMES: Record<LineKey, string> = { value: '', left: 'sol', right: 'sağ' };
 
 /**
  * Çevre değişimi: "Kol çevresi (kasılı), sağ: +0,6 cm". Eşiği bilinen ölçümde (kalça) hata payı içindeyse
  * söylenir; eşiği olmayanda (kol, uyluk, baldır) yalnız fark: gelişme ya da gerileme denmez.
  */
-export function circumferenceText(change: Pick<CircumferenceChange, 'id' | 'key' | 'delta' | 'kind'>): string {
-  const side = SIDE_NAMES[change.key];
-  const label = `${MEASUREMENTS[change.id].label}${side ? `, ${side}` : ''}`;
-  const noise = change.kind === 'no_real_change' ? ' · ölçüm hatası payı içinde' : '';
-  return `${label}: ${formatSignedWithUnit(change.delta, 'cm')}${noise}`;
+export function circumferenceText(change: Pick<CircumferenceChange, 'id' | 'key' | 'delta' | 'kind'>, locale: Locale = DEFAULT_LOCALE): string {
+  const t = clientProgressMessages(locale).circumference;
+  const sides: Record<LineKey, string> = { value: '', left: t.left, right: t.right };
+  const label = t.label(measurementDef(change.id, locale).label, sides[change.key]);
+  const noise = change.kind === 'no_real_change' ? t.noise : '';
+  return `${label}: ${getFormat(locale).signedWithUnit(change.delta, 'cm')}${noise}`;
 }
 
 /* --- grafik bölümü --- */
@@ -316,10 +321,9 @@ export function recentAverage(points: readonly { date: string; value: number }[]
 }
 
 /** "Son 4 tamamlanan haftada 11/12 gün (%92)." — hafta başına plandan fazlası sayılmaz. */
-export function adherenceText(recent: { done: number; planned: number; weeks: number }): string {
+export function adherenceText(recent: { done: number; planned: number; weeks: number }, locale: Locale = DEFAULT_LOCALE): string {
   const pct = Math.round((recent.done / recent.planned) * 100);
-  const weeks = recent.weeks === 1 ? 'Geçen hafta' : `Son ${recent.weeks} tamamlanan haftada`;
-  return `${weeks} ${recent.done}/${recent.planned} gün (%${pct}).`;
+  return clientProgressMessages(locale).adherence(recent.weeks, recent.done, recent.planned, pct);
 }
 
 /** Su özeti: kayıtlı gün ve o günlerin ortalaması (bardak). */
@@ -338,72 +342,19 @@ export function waterSummary(days: readonly { glasses: number }[]): { recorded: 
  * PT'ye danışanın adıyla ya da yansız. `name`: danışanın adı (PT'de; boşsa "Danışan"). Ad yalnız öznedir,
  * arkasına ek gelmez. Kime göre değişmeyen metinler bileşenlerde durur.
  */
-export function progressCopy(viewer: ProgressViewer, name?: string) {
-  const who = name?.trim() || 'Danışan';
-  const pt = viewer === 'pt';
+export function progressCopy(viewer: ProgressViewer, name?: string, locale: Locale = DEFAULT_LOCALE) {
+  const t = clientProgressMessages(locale);
+  const f = getFormat(locale);
+  const who = name?.trim() || t.client;
+  const copy = t.copy(viewer === 'pt', who, FORECAST_MIN_POINTS, FORECAST_MIN_SPAN_DAYS / 7);
   return {
-    /* sayfa */
-    emptyTitle: pt ? 'Henüz bitmiş antrenman yok' : 'İlerlemen burada görünecek',
-    emptyText: pt
-      ? `${who} ilk antrenmanını bitirince her hareketin ağırlık grafiği, hangi kasların ne kadar çalıştığı, rekorlar ve başarılar burada birikmeye başlar.`
-      : 'İlk antrenmanını bitirdiğinde her hareket için kaldırdığın ağırlığın grafiği, hangi kasları ne kadar çalıştırdığın, rekorların ve başarıların burada birikmeye başlar.',
-    firstWorkout: (day: string) => (pt ? `İlk antrenman ${day}` : `İlk antrenmanın ${day}`),
-
-    /* Gelişim */
-    strengthIntro: pt
-      ? `${who} hangi kasında güç kazandı: hareketlerindeki en iyi setlerin gidişatı.`
-      : 'Hangi kasında güç kazandın: hareketlerindeki en iyi setlerin gidişatı.',
-    strengthNoData: (periodIn: string) =>
-      `${periodIn} karar verecek kadar veri yok. Bir hareketin kararı için dönemde en az ${FORECAST_MIN_POINTS} antrenman günü ve ${FORECAST_MIN_SPAN_DAYS / 7} hafta gerekir; ${pt ? 'daha uzun bir dönem seç.' : 'daha uzun bir dönem seç ya da antrenmanlarına devam et.'}`,
-    strengthHint: pt ? 'Bir kas seç: hareketleri ve grafikleri' : 'Bir kasa dokun: hareketleri ve grafikleri',
-    strengthFootnote: `Bu güç gelişimidir; kasın büyüdüğünü tek başına göstermez. ${pt ? 'Bir kas seçilince' : 'Bir kasa dokununca'} hareketleri, grafikleri ve hesabın nasıl yapıldığı açılır.`,
-    measurementsUnavailable: pt ? 'Ölçümler şu an okunamadı.' : 'Ölçümlerin şu an okunamadı.',
-    methodNote: strengthMethodNote(viewer),
-
-    /* Hareketler */
-    exerciseIntro: pt ? 'Bir hareket seç: ağırlık, tekrar ve rekorların gidişatı.' : 'Bir hareket seç: ağırlığının, tekrarlarının ve rekorlarının gidişatı.',
-    stageNote: pt ? 'bu hareketteki deneyimi' : 'bu hareketteki deneyimin',
-    bestTitle: pt ? 'En iyileri' : 'En iyilerin',
-    recordSessions: (count: number) => `${formatNumber(count)} antrenmanda rekor ${pt ? 'kırdı' : 'kırdın'}`,
-    pickerDescription: pt ? 'Yapılan hareketler, en son yapılan önce.' : 'Yaptığın hareketler, en son yaptığın önce.',
-    pickerList: pt ? 'Yapılan hareketler' : 'Yaptığın hareketler',
-    e1rmNote: e1rmNote(viewer),
-    highRepDays: (count: number) => highRepDaysText(count, viewer),
-
-    /* grafikler */
-    unavailable: (what: string) => `${what} şu an okunamadı. ${pt ? 'Biraz sonra sayfayı yenile.' : 'Biraz sonra yeniden dene; sürerse antrenörüne haber ver.'}`,
-    weeklyLoadIntro: pt
-      ? 'Hafta başına kaldırılan toplam ağırlık ya da yapılan çalışma seti; ısınma setleri hariç.'
-      : 'Hafta başına kaldırdığın toplam ağırlık ya da yaptığın çalışma seti; ısınma setleri hariç.',
-    workingSetsNote: `Çalışma seti: ısınma hariç ${pt ? 'yapılan' : 'yaptığın'} bütün setler (fazladan setler dahil).`,
-    adherenceIntro: pt ? 'Haftada kaç gün antrenman yapıldığı ve plan.' : 'Haftada kaç gün antrenman yaptığın ve planın.',
-    adherenceNoPlan: pt
-      ? 'Programda haftalık gün sayısı yok; yalnız yapılan günler gösteriliyor.'
-      : 'Programında haftalık gün sayısı yok; yalnız yaptığın günler gösteriliyor.',
-    adherencePlanNote: `Plan bugünkü ${pt ? 'plandır' : 'planındır'}, geçmiş haftalara da uygulanır. Aynı gün iki antrenman bir gün sayılır.`,
-    adherenceWeeksNote: `Bu hafta sürüyor; ${pt ? 'ilk hafta' : 'ilk haftan'} (başlangıç) özete girmez.`,
-    readinessWhat: pt ? 'Hazır oluşluk cevapları' : 'Hazır oluşluk cevapların',
-    readinessFirst: (score: number) => `${pt ? 'ilk puan' : 'ilk puanın'} ${formatNumber(score)}`,
-    painIntro: `0 ağrı yok, 10 dayanılmaz. Antrenman öncesi: son 24 saatteki ${pt ? 'ağrı' : 'ağrın'}; antrenmanda: en yüksek ${pt ? 'ağrı' : 'ağrın'}.`,
-    painWhat: pt ? 'Ağrı cevapları' : 'Ağrı cevapların',
-    painFootnote: pt ? `Ağrı artıyor ya da geçmiyorsa ${who} ile konuş; programı ona göre düzenle.` : 'Ağrın artıyorsa ya da geçmiyorsa antrenörüne söyle.',
-    effortEmpty: `${pt ? `${who} antrenman` : 'Antrenman'} sonrası “Nasıl geçti?” sorusunu cevapladıkça burada birikir; grafik iki cevaptan sonra çizilir.`,
-    waterIntro: pt
-      ? 'Son 30 günde günde kaç bardak su içildiği: Bugün ekranındaki bardaklar ve antrenmandakiler.'
-      : "Son 30 günde günde kaç bardak içtiğin: Bugün'deki bardaklar ve antrenmandakiler.",
-    waterWhat: pt ? 'Su kaydı' : 'Su kaydın',
-    waterEmpty: pt
-      ? `${who} Bugün ekranındaki su düğmesiyle ya da antrenmanda bardak ekledikçe burada günlük birikir.`
-      : 'Bugün ekranındaki su düğmesiyle ya da antrenmanda eklediğin bardaklar burada günlük birikir.',
-    waterDays: (days: number) => `Su ${pt ? 'girilen' : 'girdiğin'} ${formatNumber(days)} günde ortalama`,
-    musclesIntro: pt ? 'Haftada hangi kasın kaç set çalıştığı.' : 'Haftada hangi kası kaç set çalıştırdığın.',
-    musclesHint: pt ? 'Bir kas seç: set sayısı' : 'Bir kasa dokun: set sayısı',
-
-    /* rekorlar */
-    recordsIntro: pt ? 'Bir hareketteki en iyisinin geçildiği antrenmanlar.' : 'Bir hareketteki en iyini geçtiğin antrenmanlar.',
-    recordsEmpty: pt
-      ? `Henüz rekor yok. ${who} bir harekette daha ağır kaldırınca ya da aynı ağırlıkta daha çok tekrar yapınca burada görünür.`
-      : 'Henüz rekor yok. Bir harekette daha ağır kaldırdığında ya da aynı ağırlıkta daha çok tekrar yaptığında burada görünür.',
+    ...copy,
+    methodNote: strengthMethodNote(viewer, locale),
+    recordSessions: (count: number) => copy.recordSessions(count, f.number(count)),
+    e1rmNote: e1rmNote(viewer, locale),
+    highRepDays: (count: number) => highRepDaysText(count, viewer, locale),
+    readinessFirst: (score: number) => copy.readinessFirst(f.number(score)),
+    waterDays: (days: number) => copy.waterDays(days, f.number(days)),
   };
 }
 

@@ -1,3 +1,6 @@
+import { DEFAULT_LOCALE, type Locale } from '../i18n/locale.ts';
+import { clientHomeMessages } from '../i18n/messages/client-home/index.ts';
+import { msg } from '../i18n/valibot.ts';
 import * as v from 'valibot';
 import { todayIn } from './format.ts';
 import { waterTapSchema, type WaterTap } from './schemas/session.ts';
@@ -28,7 +31,11 @@ export const WATER_BATCH_MS = 10_000;
 export type WaterFile = { version: 1; taps: WaterTap[] };
 
 export const waterPostSchema = v.object({
-  taps: v.pipe(v.array(waterTapSchema), v.minLength(1, 'Değişiklik yok.'), v.maxLength(WATER_LIMITS.perRequest)),
+  taps: v.pipe(
+    v.array(waterTapSchema),
+    v.minLength(1, msg((locale) => clientHomeMessages(locale).water.noChange)),
+    v.maxLength(WATER_LIMITS.perRequest),
+  ),
 });
 export type WaterPost = v.InferOutput<typeof waterPostSchema>;
 
@@ -95,8 +102,8 @@ export function waterOnDay(taps: readonly Pick<WaterTap, 'd' | 'at'>[], day: str
 }
 
 /** Commit mesajı: "Su · +2", geri almada "Su · +1 · −1". Değer olarak yalnız bardak sayısı. */
-export function waterMessage(added: readonly Pick<WaterTap, 'd'>[]): string {
+export function waterMessage(added: readonly Pick<WaterTap, 'd'>[], locale: Locale = DEFAULT_LOCALE): string {
   const plus = added.filter((tap) => tap.d > 0).length;
   const minus = added.length - plus;
-  return ['Su', plus > 0 ? `+${plus}` : null, minus > 0 ? `−${minus}` : null].filter(Boolean).join(' · ');
+  return [clientHomeMessages(locale).water.commit, plus > 0 ? `+${plus}` : null, minus > 0 ? `−${minus}` : null].filter(Boolean).join(' · ');
 }

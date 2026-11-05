@@ -1,6 +1,8 @@
-import { formatNumber } from './format.ts';
+import { DEFAULT_LOCALE, type Locale } from '../i18n/locale.ts';
+import { clientWorkoutMessages } from '../i18n/messages/client-workout/index.ts';
+import { getFormat } from './format.ts';
 import type { SessionDoc } from './schemas/session.ts';
-import { BLOCK_KIND_LABELS, type BlockKind } from './template-plan.ts';
+import { blockKindLabels, type BlockKind } from './template-plan.ts';
 import type { CursorUnit } from './workout-cursor.ts';
 import type { WorkoutDay } from './workout-plan.ts';
 import { cursorOf, lastSetOf, memberAfter, setViews, type NextSet } from './workout-session.ts';
@@ -56,8 +58,9 @@ export type GroupView = {
   members: GroupMember[];
 };
 
-function range(min: number, max: number): string {
-  return min === max ? formatNumber(min) : `${formatNumber(min)}–${formatNumber(max)}`;
+function range(min: number, max: number, locale: Locale): string {
+  const f = getFormat(locale);
+  return min === max ? f.number(min) : `${f.number(min)}–${f.number(max)}`;
 }
 
 function unitOf(day: WorkoutDay, doc: Pick<SessionDoc, 'entries' | 'order'>, unitKey: string): CursorUnit | undefined {
@@ -74,7 +77,10 @@ export function groupView(
   doc: Pick<SessionDoc, 'entries' | 'order'>,
   unitKey: string,
   focus: Pick<NextSet, 'rowId' | 'position' | 'kg' | 'round' | 'extra'> | null,
+  locale: Locale = DEFAULT_LOCALE,
 ): GroupView | null {
+  const f = getFormat(locale);
+  const units = clientWorkoutMessages(locale).units;
   const unit = unitOf(day, doc, unitKey);
   if (!unit || unit.kind === 'single') return null;
   const planned = Math.max(0, ...unit.members.map((member) => member.planned));
@@ -101,15 +107,16 @@ export function groupView(
     if (view) {
       const weighted = row.trackingType === 'weight_reps';
       const value = logged ? (logged.reps ?? logged.seconds ?? 0) : undefined;
-      const target = view.target.amrap ? `${formatNumber(view.target.min)}+` : range(view.target.min, view.target.max);
+      const target = view.target.amrap ? `${f.number(view.target.min)}+` : range(view.target.min, view.target.max, locale);
       const kg = logged ? logged.kg : current ? focus.kg : (lastSetOf(row, view.setIndex)?.kg ?? view.plannedKg);
-      if (weighted) text = `${kg !== undefined ? formatNumber(kg) : '—'} × ${value !== undefined ? formatNumber(value) : target}`;
-      else if (row.trackingType === 'duration') text = `${value !== undefined ? formatNumber(value) : target} sn`;
-      else text = `${value !== undefined ? formatNumber(value) : target} tekrar`;
+      const count = value ?? view.target.max;
+      if (weighted) text = `${kg !== undefined ? f.number(kg) : '—'} × ${value !== undefined ? f.number(value) : target}`;
+      else if (row.trackingType === 'duration') text = `${value !== undefined ? f.number(value) : target} ${units.seconds(count)}`;
+      else text = `${value !== undefined ? f.number(value) : target} ${units.reps(count)}`;
     }
     return [{ rowId: row.rowId, letter: memberLetter(index), title: row.title, status, text }];
   });
-  return { kind: unit.kind, label: BLOCK_KIND_LABELS[unit.kind], round, rounds, members };
+  return { kind: unit.kind, label: blockKindLabels(locale)[unit.kind], round, rounds, members };
 }
 
 /**
