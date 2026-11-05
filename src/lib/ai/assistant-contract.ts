@@ -1,4 +1,6 @@
 import { DEFAULT_LOCALE, type Locale } from '../../i18n/locale.ts';
+import { coachMessages } from '../../i18n/messages/coach/index.ts';
+import { msg } from '../../i18n/valibot.ts';
 import * as v from 'valibot';
 import { MUSCLES, EQUIPMENT } from '../schemas/exercise.ts';
 import { programFormSchema } from '../schemas/program.ts';
@@ -6,8 +8,9 @@ import { ownProgramIdSchema } from '../schemas/own-program.ts';
 import { conditionsSchema } from './coach-contract.ts';
 export const ASSISTANT_PATH = 'ai-assistant.json';
 export const GOALS = ['general_fitness', 'strength', 'hypertrophy', 'weight_management', 'mobility'] as const;
-export const GOAL_LABELS = { general_fitness: 'Daha fit olmak', strength: 'Güç kazanmak', hypertrophy: 'Kas gelişimi', weight_management: 'Kilo yönetimini desteklemek', mobility: 'Hareketlilik' };
-export const selectionSchema = v.pipe(v.strictObject({ goal: v.picklist(GOALS), fullBody: v.boolean(), muscles: v.pipe(v.array(v.picklist(MUSCLES)), v.maxLength(MUSCLES.length), v.check(x => new Set(x).size === x.length)), conditions: conditionsSchema }), v.check(x => x.fullBody || x.muscles.length > 0, 'Bütün beden veya en az bir kas seç.'));
+/** Türkçe adlar (eski çağrılar); arayüz ve taslak metni `goalLabels(locale)` kullanır. */
+export const GOAL_LABELS = coachMessages(DEFAULT_LOCALE).goals;
+export const selectionSchema = v.pipe(v.strictObject({ goal: v.picklist(GOALS), fullBody: v.boolean(), muscles: v.pipe(v.array(v.picklist(MUSCLES)), v.maxLength(MUSCLES.length), v.check(x => new Set(x).size === x.length)), conditions: conditionsSchema }), v.check(x => x.fullBody || x.muscles.length > 0, msg(l => coachMessages(l).assistant.selectionMessage)));
 export type AssistantSelection = v.InferOutput<typeof selectionSchema>;
 export const interpretedSchema = v.strictObject({ intent: v.picklist(['fitness', 'support', 'health_question', 'unclear']), goal: v.nullable(v.picklist(GOALS)), fullBody: v.nullable(v.boolean()), muscles: v.pipe(v.array(v.picklist(MUSCLES)), v.maxLength(MUSCLES.length), v.check(x => new Set(x).size === x.length)), weekdays: v.nullable(v.pipe(v.array(v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(7))), v.maxLength(7), v.check(x => new Set(x).size === x.length))), minutes: v.nullable(v.pipe(v.number(), v.integer(), v.minValue(15), v.maxValue(120))), equipment: v.nullable(v.pipe(v.array(v.picklist(EQUIPMENT)), v.maxLength(EQUIPMENT.length), v.check(x => new Set(x).size === x.length))) });
 export type InterpretedGoal = v.InferOutput<typeof interpretedSchema>;
@@ -25,9 +28,7 @@ export type AssistantStore = v.InferOutput<typeof assistantStoreSchema>;
 export const emptyAssistant = (): AssistantStore => ({ version: 1, drafts: [], reviews: [], requests: [] });
 export type AssistantView = { clientName: string; access: 'off' | 'ready'; connection: 'pt' | 'client' | null; global?: boolean; drafts: AssistantDraft[]; reviews: AssistantStore['reviews']; exercises: { id: string; title: string; equipment: string; trackingType?: string; primaryMuscles: string[] }[]; interpreted?: InterpretedGoal };
 
-/* --- dil: imza dondurma (i18n planı §7 F). Sahibi görev çevirir; şimdilik Türkçe döner. --- */
-
 /** Hedeflerin adları okuyanın dilinde (`GOAL_LABELS`). */
-export function goalLabels(_locale: Locale = DEFAULT_LOCALE): typeof GOAL_LABELS {
-  return GOAL_LABELS;
+export function goalLabels(locale: Locale = DEFAULT_LOCALE): typeof GOAL_LABELS {
+  return coachMessages(locale).goals;
 }
