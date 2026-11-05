@@ -329,7 +329,7 @@ const en: Shape<typeof tr> = {
       otherDay: 'different program chosen',
       unfinished: (progress: { done: string; planned: string } | null) =>
         progress ? `left unfinished (${progress.done}/${progress.planned} sets)` : 'left unfinished',
-      lighter: 'lightened day',
+      lighter: 'lighter day',
     },
     notes: {
       insteadOf: (title: string) => `instead of ${title}`,
