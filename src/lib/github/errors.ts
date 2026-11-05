@@ -1,3 +1,6 @@
+import { DEFAULT_LOCALE, type Locale } from '../../i18n/locale.ts';
+import type { Localizable, LocalizedText } from '../../i18n/errors.ts';
+
 /**
  * GitHub katmanının hata tipleri ve yeni açılan repo'ya ilk yazma — saf: `server-only`, ortam ya da
  * Octokit yok. Test edilen çekirdekler (`session-core.ts`, `clients-core.ts`, `config-update.ts`)
@@ -15,18 +18,28 @@ export type RateLimitInfo = {
   remaining?: number;
 };
 
-export class GithubError extends Error {
+/**
+ * `message` düz metin ya da dile göre metin (`LocalizedText`) olabilir: `.message` Türkçe kalır (günlükler ve
+ * testler), kullanıcıya giden metni uçlar `messageOf(error, locale)` ile alır.
+ */
+export class GithubError extends Error implements Localizable {
   readonly status: number;
   readonly rateLimited: boolean;
   readonly retryAfter: number | undefined;
   readonly remaining: number | undefined;
-  constructor(message: string, status: number, rate: RateLimitInfo = {}) {
-    super(message);
+  readonly text: LocalizedText | undefined;
+  constructor(message: string | LocalizedText, status: number, rate: RateLimitInfo = {}) {
+    super(typeof message === 'function' ? message(DEFAULT_LOCALE) : message);
+    this.text = typeof message === 'function' ? message : undefined;
     this.name = 'GithubError';
     this.status = status;
     this.rateLimited = rate.rateLimited ?? false;
     this.retryAfter = rate.retryAfter;
     this.remaining = rate.remaining;
+  }
+
+  localized(locale: Locale): string {
+    return this.text ? this.text(locale) : this.message;
   }
 }
 

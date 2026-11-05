@@ -1,19 +1,17 @@
 import type { HealthConsentState } from '@/lib/client-status';
+import { DEFAULT_LOCALE, type Locale } from '@/i18n/locale';
+import { ptClientsMessages } from '@/i18n/messages/pt-clients';
 
 /** Sağlık modülünün danışan açısından durumu: PT ekranlarında aynı adla. */
-export const HEALTH_STATE_LABELS: Record<HealthConsentState, string> = {
-  off: 'Sağlık modülü kapalı',
-  pending: 'Sağlık onayı bekleniyor',
-  granted: 'Sağlık takibi açık',
-  declined: 'Sağlık onayı verilmedi',
-  outdated: 'Sağlık onayı yenilenecek',
-};
+export function healthStateLabels(locale: Locale = DEFAULT_LOCALE): Record<HealthConsentState, string> {
+  return ptClientsMessages(locale).healthState.labels;
+}
 
-export const HEALTH_STATE_DETAILS: Record<HealthConsentState, string> = {
-  off: 'Sağlık verisi tutulmuyor; danışan bu ekranları görmez.',
-  pending: 'Danışan ilk girişinde neyin tutulacağını görüp onaylayacak. O zamana kadar kayıt tutulmaz.',
-  granted: 'Danışan onay verdi; seçili parçalar kaydedilebilir. İstediği an geri çekebilir.',
-  declined: 'Danışan onay vermedi; sağlık kaydı tutulmaz. Kendi ekranından sonra açabilir.',
-  outdated:
-    'Onay bazı parçaların güncel kapsamını ya da metnini karşılamıyor (modül yeniden açıldı, parça eklendi ya da parçanın metni değişti); o parçalar bir sonraki girişinde yeniden sorulacak, onayı süren parçaların kaydı devam eder.',
-};
+export function healthStateDetails(locale: Locale = DEFAULT_LOCALE): Record<HealthConsentState, string> {
+  return ptClientsMessages(locale).healthState.details;
+}
+
+/** Türkçe metinler (eski çağrılar); arayüz `healthStateLabels(locale)` ve `healthStateDetails(locale)` kullanır. */
+export const HEALTH_STATE_LABELS: Record<HealthConsentState, string> = healthStateLabels('tr');
+
+export const HEALTH_STATE_DETAILS: Record<HealthConsentState, string> = healthStateDetails('tr');

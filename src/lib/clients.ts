@@ -1,5 +1,8 @@
 import 'server-only';
 import { cache } from 'react';
+import type { Locale } from '../i18n/locale';
+import { getLocale } from '../i18n/server';
+import { ptClientsMessages } from '../i18n/messages/pt-clients';
 import { revalidateTag, unstable_cache } from 'next/cache';
 import { newClientId } from './client-access';
 import { readClient, writeClient } from './client-record';
@@ -134,13 +137,14 @@ export const cachedClientIndex: () => Promise<ClientIndexEntry[]> = unstable_cac
 export const loadClient = cache(async function loadClient(
   id: string,
 ): Promise<{ ok: true; client: Client } | { ok: false; problem: string } | null> {
-  let problem = "Danışanın repo'su ya da kaydı bulunamadı.";
+  const locale = await getLocale();
+  let problem = ptClientsMessages(locale).errors.repoOrRecordNotFound;
   try {
     const stored = await readClient(id);
     if (stored) return { ok: true, client: stored.client };
   } catch (error) {
     if (!(error instanceof GithubError && error.status === 500)) throw error;
-    problem = error.message;
+    problem = error.localized(locale);
   }
   return (await isKnownClient(id)) ? { ok: false, problem } : null;
 });
@@ -155,15 +159,17 @@ export type ClientSummary =
   | { id: string; status: ClientStatus; ok: false; problem: string };
 
 export async function listClients(): Promise<ClientSummary[]> {
+  const locale = await getLocale();
+  const t = ptClientsMessages(locale).errors;
   const { items } = await core.readIndex(store());
   const summaries = await Promise.all(
     items.map(async (entry): Promise<ClientSummary> => {
       try {
         const stored = await readClient(entry.id);
         if (stored) return { ...entry, ok: true, client: stored.client };
-        return { ...entry, ok: false, problem: 'Danışan kaydı bulunamadı.' };
+        return { ...entry, ok: false, problem: t.recordNotFound };
       } catch (error) {
-        return { ...entry, ok: false, problem: error instanceof GithubError ? error.message : 'Kayıt okunamadı.' };
+        return { ...entry, ok: false, problem: error instanceof GithubError ? error.localized(locale) : t.recordUnreadable };
       }
     }),
   );
@@ -266,7 +272,7 @@ export async function markNoticesSeen(id: string, at: Date): Promise<boolean> {
 /** Danışanın sağlık onayı ya da onayı geri çekmesi. */
 export async function setHealthConsent(
   id: string,
-  decision: { granted: boolean; fields: HealthField[]; version: string },
+  decision: { granted: boolean; fields: HealthField[]; version: string; locale?: Locale },
 ): Promise<Client> {
   return core.setHealthConsent(store(), id, decision);
 }

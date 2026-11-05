@@ -1,4 +1,6 @@
 import * as v from 'valibot';
+import type { Locale } from '../i18n/locale.ts';
+import { ptClientsMessages } from '../i18n/messages/pt-clients/index.ts';
 import { checkInvite, newInvite, type InviteCheck } from './client-access.ts';
 import {
   beginLoginAttempt,
@@ -89,7 +91,7 @@ export async function readIndex(store: Pick<ClientStore, 'readIndex'>): Promise<
   const stored = await store.readIndex();
   if (!stored) return { items: [], sha: null };
   const parsed = v.safeParse(clientIndexSchema, stored.content);
-  if (!parsed.success) throw new GithubError(`${CLIENT_INDEX_PATH} beklenen biçimde değil.`, 500);
+  if (!parsed.success) throw new GithubError((l) => ptClientsMessages(l).errors.indexMalformed(CLIENT_INDEX_PATH), 500);
   return { items: parsed.output, sha: stored.sha };
 }
 
@@ -135,7 +137,7 @@ export function parseInvite(stored: StoredFile | null): { invite: Invite; sha: s
  */
 export async function updateClient(store: ClientStore, id: string, input: ClientInput): Promise<void> {
   const stored = await store.readClient(id);
-  if (!stored) throw new GithubError('Danışan bulunamadı.', 404);
+  if (!stored) throw new GithubError((l) => ptClientsMessages(l).errors.notFound, 404);
   const { client, sha } = stored;
   const { note: _note, training: _training, heartRate: _heartRate, ...rest } = client;
   const next: Client = {
@@ -192,8 +194,8 @@ export async function deleteClient(store: ClientStore, id: string): Promise<void
 /** Yeni davet: eskisinin üzerine yazar, yani eski kod anında geçersiz olur. Kod yalnız bu yanıtta var. */
 export async function issueInvite(store: ClientStore, id: string): Promise<{ code: string; expiresAt: string }> {
   const stored = await store.readClient(id);
-  if (!stored) throw new GithubError('Danışan bulunamadı.', 404);
-  if (stored.client.status === 'archived') throw new GithubError('Arşivdeki danışana davet üretilemez.', 409);
+  if (!stored) throw new GithubError((l) => ptClientsMessages(l).errors.notFound, 404);
+  if (stored.client.status === 'archived') throw new GithubError((l) => ptClientsMessages(l).errors.archivedInvite, 409);
 
   const { invite, code } = newInvite(store.secret, id, store.now());
   const current = await store.readInvite(id);
@@ -288,7 +290,7 @@ async function dropPassword(store: ClientStore, id: string): Promise<void> {
  */
 export async function revokeAccess(store: ClientStore, id: string): Promise<void> {
   const stored = await store.readClient(id);
-  if (!stored) throw new GithubError('Danışan bulunamadı.', 404);
+  if (!stored) throw new GithubError((l) => ptClientsMessages(l).errors.notFound, 404);
   const invite = await store.readInvite(id);
   if (invite) {
     try {
@@ -452,23 +454,24 @@ async function markLoginLocked(store: ClientStore, record: { client: Client; sha
  * Danışanın sağlık onayı ya da onayı geri çekmesi. Onay, danışanın EKRANDA GÖRDÜĞÜ
  * parçaları ve metin sürümünü taşır; PT bu arada listeyi değiştirdiyse onay reddedilir
  * (409) ve danışan güncel listeyi görüp yeniden karar verir. Görmediği bir parçaya
- * onay yazılmaz.
+ * onay yazılmaz. `decision.locale`: onay metninin gösterildiği dil (istek dili); kayda `lang` olarak yazılır,
+ * verilmezse yazılmaz (i18n-followup(T3): `api/me/consent` isteğin dilini geçirmeli).
  */
 export async function setHealthConsent(
   store: ClientStore,
   id: string,
-  decision: { granted: boolean; fields: HealthField[]; version: string },
+  decision: { granted: boolean; fields: HealthField[]; version: string; locale?: Locale },
 ): Promise<Client> {
   const stored = await store.readClient(id);
-  if (!stored) throw new GithubError('Danışan bulunamadı.', 404);
+  if (!stored) throw new GithubError((l) => ptClientsMessages(l).errors.notFound, 404);
   const { client, sha } = stored;
   const healthModule = client.modules.health;
-  if (!healthModule.enabled) throw new GithubError('Sağlık modülü kapalı.', 409);
+  if (!healthModule.enabled) throw new GithubError((l) => ptClientsMessages(l).errors.healthOff, 409);
   if (decision.granted) {
     const shown = new Set(decision.fields);
     const same = shown.size === healthModule.fields.length && healthModule.fields.every((field) => shown.has(field));
     if (!same || decision.version !== HEALTH_CONSENT_VERSION) {
-      throw new GithubError('Antrenörün sorulan bilgileri değiştirdi. Sayfayı yenileyip yeniden bak.', 409);
+      throw new GithubError((l) => ptClientsMessages(l).errors.consentChanged, 409);
     }
   }
   // Onay parça başına o parçanın güncel sürümünü yazar (tasarım `kisit-tarama.md` §5.1).
@@ -483,6 +486,7 @@ export async function setHealthConsent(
         ...(fields.length > 0 ? { versions: Object.fromEntries(fields.map((field) => [field, HEALTH_FIELD_VERSIONS[field]])) } : {}),
         fields,
         at: store.now().toISOString(),
+        ...(decision.locale ? { lang: decision.locale } : {}),
       },
     },
   };

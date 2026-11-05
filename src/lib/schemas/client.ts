@@ -1,6 +1,8 @@
 import * as v from 'valibot';
-import { DEFAULT_LOCALE, type Locale } from '../../i18n/locale.ts';
+import { DEFAULT_LOCALE, LOCALES, type Locale } from '../../i18n/locale.ts';
 import { catalogMessages } from '../../i18n/messages/catalog/index.ts';
+import { ptClientsMessages } from '../../i18n/messages/pt-clients/index.ts';
+import { msg } from '../../i18n/valibot.ts';
 import { HEART_RATE_MAX, HEART_RATE_MIN } from '../heart-rate.ts';
 
 /**
@@ -71,25 +73,29 @@ export function trainingExperienceLabels(locale: Locale = DEFAULT_LOCALE): Recor
 /** Türkçe adlar (eski çağrılar); arayüz `trainingExperienceLabels(locale)` kullanır. */
 export const TRAINING_EXPERIENCE_LABELS: Record<TrainingExperience, string> = trainingExperienceLabels('tr');
 
-export const clientIdSchema = v.pipe(v.string(), v.regex(CLIENT_ID_PATTERN, 'Danışan kimliği geçersiz.'));
+export const clientIdSchema = v.pipe(v.string(), v.regex(CLIENT_ID_PATTERN, msg((l) => ptClientsMessages(l).validation.clientId)));
 
 /** Nabız sınırı (bpm): tam sayı, `HEART_RATE_MIN`–`HEART_RATE_MAX`. */
 const heartRateBpmSchema = v.pipe(
-  v.number('Sayı olmalı.'),
-  v.integer('Tam sayı olmalı.'),
-  v.minValue(HEART_RATE_MIN, `En az ${HEART_RATE_MIN} olmalı.`),
-  v.maxValue(HEART_RATE_MAX, `En fazla ${HEART_RATE_MAX} olmalı.`),
+  v.number(msg((l) => ptClientsMessages(l).validation.number)),
+  v.integer(msg((l) => ptClientsMessages(l).validation.integer)),
+  v.minValue(HEART_RATE_MIN, msg((l) => ptClientsMessages(l).validation.atLeast(HEART_RATE_MIN))),
+  v.maxValue(HEART_RATE_MAX, msg((l) => ptClientsMessages(l).validation.atMost(HEART_RATE_MAX))),
 );
 
 const timestamp = v.pipe(v.string(), v.isoTimestamp());
 
 const nameSchema = v.pipe(
-  v.string('Ad gir.'),
+  v.string(msg((l) => ptClientsMessages(l).validation.nameRequired)),
   v.trim(),
-  v.minLength(2, 'Ad çok kısa.'),
-  v.maxLength(CLIENT_NAME_MAX, `En fazla ${CLIENT_NAME_MAX} karakter.`),
+  v.minLength(2, msg((l) => ptClientsMessages(l).validation.nameShort)),
+  v.maxLength(CLIENT_NAME_MAX, msg((l) => ptClientsMessages(l).validation.maxChars(CLIENT_NAME_MAX))),
 );
-const noteSchema = v.pipe(v.string(), v.trim(), v.maxLength(CLIENT_NOTE_MAX, `En fazla ${CLIENT_NOTE_MAX} karakter.`));
+const noteSchema = v.pipe(
+  v.string(),
+  v.trim(),
+  v.maxLength(CLIENT_NOTE_MAX, msg((l) => ptClientsMessages(l).validation.maxChars(CLIENT_NOTE_MAX))),
+);
 const healthFieldsSchema = v.pipe(
   v.array(v.picklist(HEALTH_FIELDS)),
   v.maxLength(HEALTH_FIELDS.length),
@@ -117,6 +123,8 @@ export const healthConsentSchema = v.object({
   /** Onayın kapsadığı parçalar. */
   fields: healthFieldsSchema,
   at: timestamp,
+  /** Onay metninin gösterildiği dil; eski onaylarda yok (Türkçe gösterilmişti). */
+  lang: v.optional(v.picklist(LOCALES)),
 });
 export type HealthConsent = v.InferOutput<typeof healthConsentSchema>;
 
@@ -195,7 +203,7 @@ export const inviteSchema = v.object({
 export type Invite = v.InferOutput<typeof inviteSchema>;
 
 /** Formdaki antrenman geçmişi: verilmezse kayıttaki kalır (yeni danışanda "yeni"). */
-const trainingExperienceSchema = v.optional(v.picklist(TRAINING_EXPERIENCES, 'Antrenman geçmişini seç.'));
+const trainingExperienceSchema = v.optional(v.picklist(TRAINING_EXPERIENCES, msg((l) => ptClientsMessages(l).validation.pickExperience)));
 
 /**
  * Formdaki nabız sınırı: metin kutusu; boş → null (otomatik). Yalnız rakamlar: `Number` "0x78", "1e2", "+120" gibi
@@ -205,7 +213,7 @@ const heartRateInputSchema = v.optional(
   v.pipe(
     v.string(),
     v.trim(),
-    v.regex(/^\d*$/, 'Yalnız rakam girilmeli.'),
+    v.regex(/^\d*$/, msg((l) => ptClientsMessages(l).validation.digitsOnly)),
     v.transform((text) => (text === '' ? null : Number(text))),
     v.nullable(heartRateBpmSchema),
   ),
@@ -216,15 +224,15 @@ const heartRateInputSchema = v.optional(
  */
 const heartRateSaveSchema = v.optional(v.nullable(heartRateBpmSchema));
 
-const HEART_RATE_PAIR = 'İkisi birlikte girilmeli ya da ikisi de boş bırakılmalı.';
-const HEART_RATE_ORDER = 'Toparlanma sınırı uyarı sınırından düşük olmalı.';
+const HEART_RATE_PAIR = msg((l) => ptClientsMessages(l).validation.heartPair);
+const HEART_RATE_ORDER = msg((l) => ptClientsMessages(l).validation.heartOrder);
 
 /** PT'nin formu. Durum yalnız düzenlemede görünür; yeni danışan aktif başlar. */
 export const clientFormSchema = v.pipe(
   v.object({
     name: nameSchema,
     note: noteSchema,
-    status: v.picklist(CLIENT_STATUSES, 'Durumu seç.'),
+    status: v.picklist(CLIENT_STATUSES, msg((l) => ptClientsMessages(l).validation.pickStatus)),
     aiEnabled: v.optional(v.boolean()),
     healthEnabled: v.boolean(),
     healthFields: healthFieldsSchema,
@@ -236,7 +244,7 @@ export const clientFormSchema = v.pipe(
     v.partialCheck(
       [['healthEnabled'], ['healthFields']],
       (input) => !input.healthEnabled || input.healthFields.length > 0,
-      'Modül açıksa en az bir parça seç.',
+      msg((l) => ptClientsMessages(l).validation.pickHealthPart),
     ),
     ['healthFields'],
   ),
@@ -256,7 +264,7 @@ export const clientSaveSchema = v.pipe(
     id: v.optional(clientIdSchema),
     name: nameSchema,
     note: noteSchema,
-    status: v.picklist(CLIENT_STATUSES, 'Durumu seç.'),
+    status: v.picklist(CLIENT_STATUSES, msg((l) => ptClientsMessages(l).validation.pickStatus)),
     aiEnabled: v.optional(v.boolean()),
     healthEnabled: v.boolean(),
     healthFields: healthFieldsSchema,
@@ -268,7 +276,7 @@ export const clientSaveSchema = v.pipe(
     v.partialCheck(
       [['healthEnabled'], ['healthFields']],
       (input) => !input.healthEnabled || input.healthFields.length > 0,
-      'Modül açıksa en az bir parça seç.',
+      msg((l) => ptClientsMessages(l).validation.pickHealthPart),
     ),
     ['healthFields'],
   ),
