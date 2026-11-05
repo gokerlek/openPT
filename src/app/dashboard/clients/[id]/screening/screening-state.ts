@@ -2,10 +2,10 @@
 import type { ScreeningSide, ScreeningTests } from '../../../../../lib/schemas/health.ts';
 import {
   SCREENING_TEST_IDS,
-  SCREENING_TESTS,
   screeningKey,
   sideEntry,
   sidesOf,
+  TEST_RULES,
   type NotTestedReason,
   type ResultChoice,
 } from '../../../../../lib/screening.ts';
@@ -60,7 +60,7 @@ export function testsOf(state: ScreeningDraftState): ScreeningTests {
   for (const testId of SCREENING_TEST_IDS) {
     const extra = state.extras[testId];
     const note = extra?.note.trim();
-    if (SCREENING_TESTS[testId].sided) {
+    if (TEST_RULES[testId].sided) {
       const left = toEntry(state.sides[screeningKey(testId, 'left')]);
       const right = toEntry(state.sides[screeningKey(testId, 'right')]);
       if (left || right) tests[testId] = { ...(left ? { left } : {}), ...(right ? { right } : {}), ...(note ? { note } : {}) };

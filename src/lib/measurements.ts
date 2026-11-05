@@ -28,8 +28,8 @@ export type MeasurementDef = {
   note?: string;
 };
 
-/** Ölçümlerin metin dışı kuralları (birim, grup, öncelik, taraf); ad, sıklık ve not sözlükte. */
-const MEASUREMENT_RULES = {
+/** Ölçümlerin metin dışı kuralları (birim, grup, öncelik, taraf); ad, sıklık ve not sözlükte. Dilsiz: arayüz de okur. */
+export const MEASUREMENT_RULES = {
   // --- Antropometri (ISAK Seviye 1'in çevre ölçümleri) ---
   body_mass: { unit: 'kg', group: 'anthropometry', tier: 'recommended' },
   stature: { unit: 'cm', group: 'anthropometry', tier: 'recommended' },
@@ -57,6 +57,8 @@ const MEASUREMENT_RULES = {
 
 export type MeasurementId = keyof typeof MEASUREMENT_RULES;
 export const MEASUREMENT_IDS = Object.keys(MEASUREMENT_RULES) as MeasurementId[];
+/** Ölçüm ekranlarının bölümleri, sırasıyla; başlıkları sözlükte (`measurementsMessages(locale).groups`). */
+export const MEASUREMENT_GROUPS: readonly MeasurementDef['group'][] = ['anthropometry', 'performance', 'mobility', 'questionnaire'];
 
 /** Ölçüm tanımı, adı, sıklığı ve notu okuyanın dilinde. */
 export function measurementDef(id: MeasurementId, locale: Locale = DEFAULT_LOCALE): MeasurementDef {

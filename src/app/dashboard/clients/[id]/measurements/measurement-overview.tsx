@@ -19,7 +19,7 @@ import {
   type MeasurementLine,
   type MeasurementTrend,
 } from '@/lib/measurement-trends';
-import { measurementDefs, type MeasurementDef } from '@/lib/measurements';
+import { MEASUREMENT_GROUPS, measurementDefs } from '@/lib/measurements';
 import type { HealthRecord } from '@/lib/schemas/health';
 import { forecastAsOf } from '@/lib/trend';
 import {
@@ -28,7 +28,6 @@ import {
   describeSideBridge,
   describeSitToStand,
   describeWaistHip,
-  GROUP_INFO,
   latestChangeView,
   noRuleText,
   trendView,
@@ -93,7 +92,7 @@ export function MeasurementOverview({
     );
   }
 
-  const groups = (Object.keys(GROUP_INFO) as MeasurementDef['group'][])
+  const groups = MEASUREMENT_GROUPS
     .map((group) => ({ group, trends: trends.filter((trend) => defs[trend.id].group === group) }))
     .filter((entry) => entry.trends.length > 0);
   const days = measurementDays(inRange);

@@ -23,12 +23,12 @@ import { commonMessages } from '@/i18n/messages/common';
 import { measurementsMessages } from '@/i18n/messages/measurements';
 import { getFormat } from '@/lib/format';
 import { isSided, SIDES, slotKey, valuesFromSlots, type MeasurementValue } from '@/lib/measurement-log';
-import { MEASUREMENT_IDS, MEASUREMENTS, measurementDef, type MeasurementDef, type MeasurementId } from '@/lib/measurements';
+import { MEASUREMENT_GROUPS, MEASUREMENT_IDS, MEASUREMENT_RULES, measurementDef, type MeasurementDef, type MeasurementId } from '@/lib/measurements';
 import { fetchJson } from '@/lib/query/errors';
 import { applyFieldErrors } from '@/lib/query/field-errors';
 import { useServiceMutation } from '@/lib/query/use-service';
 import { decimalText, measurementFormSchema, SEX_UNKNOWN, sexLabels, type SexChoice } from '@/lib/schemas/measurement';
-import { GROUP_INFO, groupSummary } from './measurement-text';
+import { groupSummary } from './measurement-text';
 
 type FormStore = ReturnType<typeof useForm<typeof measurementFormSchema>>;
 type Group = MeasurementDef['group'];
@@ -39,14 +39,14 @@ export type MeasurementFormMode =
   /** Düzenleme: gün adresten gelir, değişmez. */
   | { kind: 'edit'; date: string };
 
-const GROUPS = Object.keys(GROUP_INFO) as Group[];
+const GROUPS = MEASUREMENT_GROUPS;
 const FORM_ID = 'measurement-form';
 
 
 const inputId = (key: string) => `m-${key.replace(':', '-')}`;
 
 /** "calf_girth:left" → bölümü. */
-const groupOfSlot = (key: string): Group | undefined => MEASUREMENTS[key.split(':')[0] as MeasurementId]?.group;
+const groupOfSlot = (key: string): Group | undefined => MEASUREMENT_RULES[key.split(':')[0] as MeasurementId]?.group;
 
 /**
  * Geçersiz gönderimde ilk hataya kaydırır. Hatalı alan katlanmış bölümdeyse bölüm hata yüzünden
@@ -403,7 +403,7 @@ export function MeasurementForm({
             </CardHeader>
             <Collapsible.Panel keepMounted>
               <CardContent className="grid gap-x-6 gap-y-6 sm:grid-cols-2 lg:grid-cols-3">
-                {MEASUREMENT_IDS.filter((id) => MEASUREMENTS[id].group === group).map((id) => (
+                {MEASUREMENT_IDS.filter((id) => MEASUREMENT_RULES[id].group === group).map((id) => (
                   <MeasurementField key={id} form={form} id={id} onEdit={clearEmptyError} />
                 ))}
               </CardContent>

@@ -17,7 +17,7 @@ import { healthConsentState } from '@/lib/client-status';
 import { readAppConfig } from '@/lib/config';
 import { todayIn } from '@/lib/format';
 import { requirePt } from '@/lib/guards';
-import { defaultStrengthWindow, STRENGTH_WINDOWS, type StrengthWindow } from '@/lib/muscle-progress';
+import { defaultStrengthWindow, STRENGTH_WINDOW_KEYS, type StrengthWindow } from '@/lib/muscle-progress';
 import { loadProgress } from '@/lib/progress-data';
 import { CLIENT_ID_PATTERN } from '@/lib/schemas/client';
 import { LOW_READINESS } from '@/lib/session-check';
@@ -96,7 +96,7 @@ export default async function ClientProgressPage({
 
   const requested = typeof query.hareket === 'string' ? query.hareket : null;
   const period: StrengthWindow =
-    typeof query.donem === 'string' && Object.hasOwn(STRENGTH_WINDOWS, query.donem)
+    typeof query.donem === 'string' && STRENGTH_WINDOW_KEYS.includes(query.donem as StrengthWindow)
       ? (query.donem as StrengthWindow)
       : defaultStrengthWindow(view.exercises, today);
   // Onay yoksa sağlık grafikleri hiç gelmez (`off`); PT nedenini görsün.

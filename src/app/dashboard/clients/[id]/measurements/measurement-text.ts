@@ -12,7 +12,7 @@ import type {
   WaistHipIndicator,
 } from '@/lib/measurement-trends';
 import { MEASUREMENT_SLOTS } from '../../../../../lib/measurement-log.ts';
-import { MEASUREMENT_UNIT_LABELS, measurementDef, type MeasurementDef } from '../../../../../lib/measurements.ts';
+import { measurementDef, type MeasurementDef } from '../../../../../lib/measurements.ts';
 import { forecastAsOf, type Forecast } from '../../../../../lib/trend.ts';
 
 /** Ölçüm ekranlarının ortak metinleri (PT tarafı); hepsi okuyanın dilinde (`locale`, yoksa Türkçe). */
@@ -21,16 +21,10 @@ function text(locale: Locale) {
   return measurementsMessages(locale);
 }
 
-/** Katalog birimi → ekranda görünen ("s" Türkçede "sn"); tek yer `measurements.ts`. */
-export const UNIT_LABELS: Record<MeasurementDef['unit'], string> = MEASUREMENT_UNIT_LABELS;
-
 /** Grupların başlığı ve açıklaması okuyanın dilinde. */
 export function groupInfo(locale: Locale = DEFAULT_LOCALE): Record<MeasurementDef['group'], { title: string; description: string }> {
   return text(locale).groups;
 }
-
-/** Türkçe gruplar (eski çağrılar); arayüz `groupInfo(locale)` kullanır. */
-export const GROUP_INFO: Record<MeasurementDef['group'], { title: string; description: string }> = groupInfo('tr');
 
 /**
  * Katlanmış bölümün özeti: dolu alan sayısı ve ilk üçü, yazıldığı gibi ("Vücut ağırlığı 81,5 kg ·

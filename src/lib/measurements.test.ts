@@ -1,9 +1,12 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
+import { measurementsMessages } from '../i18n/messages/measurements/index.ts';
 import {
   ENDURANCE_NOISE,
   enduranceRatios,
+  MEASUREMENT_GROUPS,
   MEASUREMENT_IDS,
+  MEASUREMENT_RULES,
   measurementDef,
   realChange,
   SIT_TO_STAND_MCID,
@@ -18,6 +21,14 @@ describe('ölçüm kataloğu', () => {
     for (const id of MEASUREMENT_IDS) {
       const def = measurementDef(id);
       assert.ok(def.label && def.unit && def.tier && def.frequency, `${id} eksik`);
+    }
+  });
+
+  test('bölümler sözlükteki sırayla, her ölçümün bölümü listede (dilsiz kurallar tanımla aynı)', () => {
+    for (const locale of ['tr', 'en'] as const) assert.deepEqual(MEASUREMENT_GROUPS, Object.keys(measurementsMessages(locale).groups), locale);
+    for (const id of MEASUREMENT_IDS) {
+      assert.ok(MEASUREMENT_GROUPS.includes(MEASUREMENT_RULES[id].group), id);
+      assert.equal(MEASUREMENT_RULES[id].group, measurementDef(id, 'en').group, id);
     }
   });
 });

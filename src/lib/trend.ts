@@ -320,6 +320,8 @@ export function trendStatus(
 /** Grafik süzgecinin hazır aralıkları; adreste `?aralik=` ile taşınır. */
 const RANGE_DAYS = { '4h': 28, '3a': 91, '6a': 182, '1y': 365, tumu: null } as const;
 export type RangePreset = keyof typeof RANGE_DAYS;
+/** Hazır aralıklar, sırasıyla (dilsiz; adları `rangePresets(locale)`). */
+export const RANGE_PRESET_KEYS = Object.keys(RANGE_DAYS) as RangePreset[];
 /** Türkçe adlar (eski çağrılar); arayüz `rangePresets(locale)` kullanır. */
 export const RANGE_PRESETS: Record<RangePreset, { label: string; days: number | null }> = rangePresets('tr');
 

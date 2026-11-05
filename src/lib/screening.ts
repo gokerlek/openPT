@@ -77,7 +77,7 @@ type TestRules = Omit<ScreeningTest, 'id' | 'title' | 'short' | 'sideNote' | 'se
   points: readonly string[];
 };
 
-const TEST_RULES: Record<ScreeningTestId, TestRules> = {
+export const TEST_RULES: Record<ScreeningTestId, TestRules> = {
   squat: {
     sided: false,
     points: ['heels', 'knees', 'depth', 'torso', 'spine'],

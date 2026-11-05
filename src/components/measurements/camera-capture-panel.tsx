@@ -5,7 +5,7 @@ import {Checkbox} from '@/components/ui/checkbox';
 import {useLocale,useMessages} from '@/i18n/client';
 import {intlLocale} from '@/i18n/locale';
 import {measurementsMessages} from '@/i18n/messages/measurements';
-import {PROTOCOLS,POSE_PROTOCOL,type PoseTask} from '@/lib/pose/protocols';
+import {protocols,POSE_PROTOCOL,type PoseTask} from '@/lib/pose/protocols';
 import {movementCues} from '@/lib/pose/guidance';
 import {CaptureSession} from '@/lib/pose/capture';
 import {StartGate} from '@/lib/pose/start-gate';
@@ -25,7 +25,7 @@ export function CameraCapturePanel({detection,task,enabled,chairHeight,armSuppor
  const [error,setError]=useState<string|null>(null);
  const [sound,setSound]=useState(false);
  const lastSpeech=useRef('');const lastSpokenAt=useRef(-Infinity);
- const protocol=PROTOCOLS[task];const instruction=movementCues(locale)[task];
+ const protocol=protocols(locale)[task];const instruction=movementCues(locale)[task];
  useEffect(()=>{latest.current=detection;},[detection]);
  useEffect(()=>()=>{if(interval.current)clearInterval(interval.current);capture.current=null;if(typeof speechSynthesis!=='undefined')speechSynthesis.cancel();onBusyChange(false);},[onBusyChange]);
  function say(text:string){

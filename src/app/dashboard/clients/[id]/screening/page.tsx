@@ -37,12 +37,12 @@ import {
   reachOf,
   SCREENING_PROTOCOL,
   SCREENING_TEST_IDS,
-  SCREENING_TESTS,
   screeningHints,
   screeningTest,
   screeningSummary,
   sideEntry,
   sidesOf,
+  TEST_RULES,
   testName,
   type ScreeningTestId,
   type SideKey,
@@ -111,7 +111,7 @@ function changeText(testId: ScreeningTestId, current: Screening, previous: Scree
 
 /** "Kısıt olarak ekle"nin kısıtı: testin bölgesi ve tarafı, hareket kısıtı, testin kaçınma önerisi; tanı yok. */
 function constraintFromCell(testId: ScreeningTestId, side: SideKey): ConstraintForm {
-  const test = SCREENING_TESTS[testId];
+  const test = TEST_RULES[testId];
   const paired = isPaired(test.constraintRegion);
   return {
     region: test.constraintRegion,
@@ -204,7 +204,7 @@ async function Overview({
           </CardHeader>
           <CardContent className="flex flex-col gap-3 text-sm">
             {pains.map((cell) => {
-              const test = SCREENING_TESTS[cell.testId];
+              const test = TEST_RULES[cell.testId];
               const draft = constraintFromCell(cell.testId, cell.side);
               const suggestion = t.suggestion(regionText(draft, locale), draft.avoid[0] ? healthMessages(locale).constraints.avoid[draft.avoid[0]] : null);
               const carried = cell.date !== current.date;
@@ -279,7 +279,7 @@ async function Overview({
                 {SCREENING_TEST_IDS.map((testId) => (
                   <TableRow key={testId}>
                     <TableCell className="font-medium">{testName(testId, locale)}</TableCell>
-                    {SCREENING_TESTS[testId].sided ? (
+                    {TEST_RULES[testId].sided ? (
                       <>
                         <TableCell className="whitespace-normal">{cellText(testId, current, 'left', locale)}</TableCell>
                         <TableCell className="whitespace-normal">{cellText(testId, current, 'right', locale)}</TableCell>
@@ -322,7 +322,7 @@ async function Overview({
           <CardContent>
             <ol className="flex list-decimal flex-col gap-2 pl-5 text-sm">
               {hints.map((hint) => {
-                const mine = own.filter((exercise) => exercise.pattern && SCREENING_TESTS[hint.testId].patterns.includes(exercise.pattern));
+                const mine = own.filter((exercise) => exercise.pattern && TEST_RULES[hint.testId].patterns.includes(exercise.pattern));
                 return (
                   <li key={hint.key}>
                     {hint.text}

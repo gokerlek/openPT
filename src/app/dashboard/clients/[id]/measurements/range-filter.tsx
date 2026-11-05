@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import type { Locale } from '@/i18n/locale';
 import { measurementsMessages } from '@/i18n/messages/measurements';
 import { isCalendarDate } from '@/lib/measurement-log';
-import { RANGE_PRESETS, rangePresets, rangeStart, type RangePreset } from '@/lib/trend';
+import { RANGE_PRESET_KEYS, rangePresets, rangeStart, type RangePreset } from '@/lib/trend';
 
 export type DateRange = {
   /** Hazır aralık; özel aralıkta null. */
@@ -13,7 +13,7 @@ export type DateRange = {
   to?: string;
 };
 
-const PRESETS = Object.keys(RANGE_PRESETS) as RangePreset[];
+const PRESETS = RANGE_PRESET_KEYS;
 
 /**
  * Adresten tarih aralığı: `?aralik=4h|3a|6a|1y|tumu` ya da `?bas=YYYY-AA-GG&bit=YYYY-AA-GG`.
