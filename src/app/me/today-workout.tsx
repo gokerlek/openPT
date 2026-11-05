@@ -6,12 +6,14 @@ import { AnimatePresence, motion } from 'motion/react';
 import { useQueryClient } from '@tanstack/react-query';
 import { FlagCheckered, Play } from '@phosphor-icons/react';
 import { WaterGlass } from '@/components/water-glass';
-import { UNIT_STATE_TEXT, UnitStateIcon } from '@/components/workout/unit-state';
+import { unitStateText, UnitStateIcon } from '@/components/workout/unit-state';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { formatNumber, formatRecent, todayIn } from '@/lib/format';
+import { useLocale } from '@/i18n/client';
+import { clientHomeMessages } from '@/i18n/messages/client-home';
+import { getFormat, todayIn } from '@/lib/format';
 import { DURATION, tween, WORKOUT } from '@/lib/motion';
 import { fetchJson } from '@/lib/query/errors';
 import type { SessionDoc, WaterTap } from '@/lib/schemas/session';
@@ -55,6 +57,8 @@ function useLocalWorkout(clientId: string) {
 /** "Bu hafta 1/3" (sıklık yoksa "Bu hafta 1"); yüklenirken yer tutucu. */
 export function WeekBadge({ clientId }: { clientId: string }) {
   const { data, isPending, fetchStatus } = useWorkoutOverview(clientId);
+  const locale = useLocale();
+  const f = getFormat(locale);
   // Çevrimdışı (sorgu duraklatıldı): yer tutucu sonsuza dek dönmesin.
   if (isPending && fetchStatus === 'paused') return null;
   if (isPending) return <Skeleton className="h-5 w-20 rounded-full" />;
@@ -62,7 +66,7 @@ export function WeekBadge({ clientId }: { clientId: string }) {
   const { done, target } = data.week;
   return (
     <Badge variant="secondary" className="tabular-nums">
-      Bu hafta {target ? `${formatNumber(Math.min(done, target))}/${formatNumber(target)}` : formatNumber(done)}
+      {clientHomeMessages(locale).today.week(target ? `${f.number(Math.min(done, target))}/${f.number(target)}` : f.number(done))}
     </Badge>
   );
 }
@@ -80,6 +84,9 @@ const RESUME_LIST_LIMIT = 8;
  */
 function ResumeCard({ progress, timeZone, strip, clientWater }: { progress: InProgress; timeZone: string; strip: React.ReactNode; clientWater: React.ReactNode }) {
   const { doc, plan } = progress;
+  const locale = useLocale();
+  const t = clientHomeMessages(locale).today;
+  const states = unitStateText(locale);
   const view = plan ? listView(plan, doc) : null;
   const items = view && view.items.length > 0 ? view.items : null;
   const list = items && view ? listWindow(items, view.current, RESUME_LIST_LIMIT) : null;
@@ -93,14 +100,15 @@ function ResumeCard({ progress, timeZone, strip, clientWater }: { progress: InPr
     <>
       <Card>
         <CardHeader>
-          <CardTitle className="text-xl">{dayName ? `Yarım kalan antrenman · ${dayName}` : 'Yarım kalan antrenman'}</CardTitle>
+          <CardTitle className="text-xl">{dayName ? t.unfinishedDay(dayName) : t.unfinished}</CardTitle>
           <CardDescription>
             {items ? null : (
               <span className="block">
-                <span className="tabular-nums">{view ? `${view.doneSets}/${view.plannedSets}` : workingSetCount(doc)}</span> set yapıldı
+                <span className="tabular-nums">{view ? `${view.doneSets}/${view.plannedSets}` : workingSetCount(doc)}</span>{' '}
+                {t.setsDone(view ? view.plannedSets : workingSetCount(doc))}
               </span>
             )}
-            Kaldığın yerden sürer; kayıtların telefonunda saklı. Son kayıt {formatRecent(lastAt, timeZone)}.
+            {t.resumeText(getFormat(locale).recent(lastAt, timeZone))}
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
@@ -108,27 +116,25 @@ function ResumeCard({ progress, timeZone, strip, clientWater }: { progress: InPr
             // Hepsi bitti: tek iş bitirmek (antrenman ekranı bitiş sheet'iyle açılır; kapatınca liste).
             <Button size="lg" className="h-12 w-full" nativeButton={false} render={<Link href="/me/antrenman?bitir=1" />}>
               <FlagCheckered data-icon="inline-start" weight="fill" />
-              Antrenmanı bitir
+              {t.finish}
             </Button>
           ) : (
             <div className="flex flex-col gap-2">
               <Button size="lg" className="h-12 w-full" nativeButton={false} render={<Link href="/me/antrenman" />}>
                 <Play data-icon="inline-start" weight="fill" />
-                <span className="min-w-0 truncate">{currentName ? `Devam et: ${currentName}` : 'Kaldığın yerden devam et'}</span>
+                <span className="min-w-0 truncate">{currentName ? t.continueWith(currentName) : t.continue}</span>
               </Button>
               <Button variant="ghost" className="h-11 w-full text-muted-foreground" nativeButton={false} render={<Link href="/me/antrenman?bitir=1" />}>
-                Antrenmanı bitir
+                {t.finish}
               </Button>
             </div>
           )}
           {list ? (
             <div className="flex flex-col gap-1">
               {list.before > 0 ? (
-                <p className="pl-7.5 text-sm text-muted-foreground">
-                  Önceki <span className="tabular-nums">{list.before}</span> hareket
-                </p>
+                <p className="pl-7.5 text-sm text-muted-foreground tabular-nums">{t.before(list.before)}</p>
               ) : null}
-              <ol className="flex flex-col gap-1" aria-label="Antrenmanın hareketleri">
+              <ol className="flex flex-col gap-1" aria-label={t.exercises}>
                 {list.shown.map((item) => {
                   const isCurrent = item.state === 'current';
                   return (
@@ -142,20 +148,18 @@ function ResumeCard({ progress, timeZone, strip, clientWater }: { progress: InPr
                       )}>
                       <UnitStateIcon state={item.state} />
                       <span className="min-w-0 flex-1 break-words">
-                        <span className="sr-only">{UNIT_STATE_TEXT[item.state]}: </span>
+                        <span className="sr-only">{states[item.state]}: </span>
                         {itemName(item)}
                       </span>
                       <span className={cn('shrink-0 tabular-nums', isCurrent ? 'text-foreground' : 'text-muted-foreground')}>
-                        {item.done}/{item.planned} set
+                        {t.sets(item.done, item.planned)}
                       </span>
                     </li>
                   );
                 })}
               </ol>
               {list.after > 0 ? (
-                <p className="pl-7.5 text-sm text-muted-foreground">
-                  +<span className="tabular-nums">{list.after}</span> hareket daha
-                </p>
+                <p className="pl-7.5 text-sm text-muted-foreground tabular-nums">{t.after(list.after)}</p>
               ) : null}
             </div>
           ) : null}
@@ -208,6 +212,8 @@ export function WaterCard({ clientId }: { clientId: string }) {
   const undoTimer = useRef<number | undefined>(undefined);
   const sending = useRef(false);
   const [undo, setUndo] = useState<string | null>(null);
+  const locale = useLocale();
+  const t = clientHomeMessages(locale).today;
 
   const update = useCallback(
     (next: WaterTap[]) => {
@@ -306,27 +312,27 @@ export function WaterCard({ clientId }: { clientId: string }) {
     <Card size="sm" className="flex-row flex-wrap items-center gap-x-3 gap-y-1 border-sky-500/20 bg-sky-500/5 p-3">
       <WaterGlass count={total} />
       <p className="min-w-0 flex-1 text-sm">
-        <span className="mb-1 block text-muted-foreground">Su · bugün</span>
+        <span className="mb-1 block text-muted-foreground">{t.waterToday}</span>
         {/* Çevrimdışıyken sorgu bekler (`paused`): telefondaki toplam gösterilir, iskelet sonsuza dek yanıp sönmez. */}
         {isPending && fetchStatus !== 'paused' ? (
           <span aria-hidden className="inline-block h-4 w-4 animate-pulse rounded-md bg-muted align-middle" />
         ) : (
           <motion.b key={total} initial={{ scale: 1.15 }} animate={{ scale: 1 }} transition={tween(DURATION.fast)} className="inline-block text-3xl font-semibold tabular-nums">
-            {formatNumber(total)}
+            {getFormat(locale).number(total)}
           </motion.b>
         )}{' '}
-        bardak
+        {t.glasses(total)}
       </p>
       <AnimatePresence initial={false}>
         {undo ? (
           <motion.div className="order-last w-full text-right" key="undo" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={tween(DURATION.fast)}>
             <Button variant="ghost" className="h-11 px-3 text-[0.8125rem]" onClick={revert}>
-              +1 · Geri al
+              {t.undo}
             </Button>
           </motion.div>
         ) : null}
       </AnimatePresence>
-      <Button variant="outline" className="h-12 min-w-14 border-sky-500/40 bg-sky-500/10 text-base text-sky-700 hover:bg-sky-500/20 dark:text-sky-300" onClick={add} aria-label="Bir bardak su ekle">
+      <Button variant="outline" className="h-12 min-w-14 border-sky-500/40 bg-sky-500/10 text-base text-sky-700 hover:bg-sky-500/20 dark:text-sky-300" onClick={add} aria-label={t.addWater}>
         +1
       </Button>
     </Card>

@@ -11,6 +11,8 @@ import {
 } from '@/components/ui/alert-dialog';
 import { discardDrafts } from '@/components/block-editor/editor-draft';
 import { Button } from '@/components/ui/button';
+import { useMessages } from '@/i18n/client';
+import { clientHomeMessages } from '@/i18n/messages/client-home';
 import { ownDraftPrefix } from '@/lib/unsaved-changes';
 
 /**
@@ -31,19 +33,16 @@ export function LogoutDialog({
   /** Kendi programların yerel taslakları çıkışta silinir (aynı telefonu başkası kullanabilir). */
   clientId?: string;
 }) {
+  const t = useMessages(clientHomeMessages).menu;
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Çıkış yapılsın mı?</AlertDialogTitle>
-          <AlertDialogDescription>
-            {hasPassword
-              ? 'Tekrar girmek için şifren gerekir; şifreni unuttuysan antrenörüne söyle.'
-              : "Henüz şifre belirlemedin: tekrar girmek için antrenöründen yeni bir kare kod istemen gerekir. İstersen önce Ayarlar'dan şifre belirle."}
-          </AlertDialogDescription>
+          <AlertDialogTitle>{t.signOutQuestion}</AlertDialogTitle>
+          <AlertDialogDescription>{hasPassword ? t.signOutWithPassword : t.signOutWithoutPassword}</AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel className="h-11">Vazgeç</AlertDialogCancel>
+          <AlertDialogCancel className="h-11">{t.cancel}</AlertDialogCancel>
           <form
             action="/api/auth/logout"
             method="post"
@@ -53,7 +52,7 @@ export function LogoutDialog({
             }}>
             <input type="hidden" name="rol" value="danisan" />
             <Button type="submit" variant="destructive" className="h-11">
-              Çıkış yap
+              {t.signOut}
             </Button>
           </form>
         </AlertDialogFooter>

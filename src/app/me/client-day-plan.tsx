@@ -1,8 +1,10 @@
 import { Bandaids } from '@phosphor-icons/react/dist/ssr';
 import { Badge } from '@/components/ui/badge';
+import { clientHomeMessages } from '@/i18n/messages/client-home';
+import { getLocale } from '@/i18n/server';
 import { cardioKind } from '@/lib/cardio';
 import { clientSetText } from '@/lib/client-set-text';
-import { BLOCK_KIND_LABELS, describeBlock, groupSkipNote, roundsOf, rowLabels, type PlanExercise, type TemplateBlock } from '@/lib/template-plan';
+import { blockKindLabels, describeBlock, groupSkipNote, roundsOf, rowLabels, type PlanExercise, type TemplateBlock } from '@/lib/template-plan';
 
 /**
  * Danışanın günü (`/me`, yalnız telefon): hareketler yapılış sırasıyla, setler cümleyle
@@ -13,7 +15,7 @@ import { BLOCK_KIND_LABELS, describeBlock, groupSkipNote, roundsOf, rowLabels, t
  * Günün bir parçası çizilirken (Bugün önizlemesi, "Tümünü gör") numaralar bütün günden gelir (`labels`,
  * `rowLabels`): önizlemede 4. hareket yine "4". `cared`: kısıt notu olan satırlar; başlığın yanında yara bandı.
  */
-export function ClientDayPlan({
+export async function ClientDayPlan({
   blocks,
   exercises,
   labels: dayLabels,
@@ -24,6 +26,9 @@ export function ClientDayPlan({
   labels?: ReadonlyMap<string, string>;
   cared?: ReadonlySet<string>;
 }) {
+  const locale = await getLocale();
+  const t = clientHomeMessages(locale).home;
+  const kinds = blockKindLabels(locale);
   const labels = dayLabels ?? rowLabels({ blocks });
   return (
     <ol className="flex flex-col gap-4">
@@ -31,13 +36,13 @@ export function ClientDayPlan({
         const rows = block.rows.filter((row) => exercises.has(row.exerciseId));
         if (rows.length === 0) return null;
         const single = block.kind === 'single';
-        const skip = single ? null : groupSkipNote({ ...block, rows }, (row) => exercises.get(row.exerciseId)?.title ?? '');
+        const skip = single ? null : groupSkipNote({ ...block, rows }, (row) => exercises.get(row.exerciseId)?.title ?? '', locale);
         return (
           <li key={block.id} className={single ? '' : 'flex flex-col gap-3 rounded-lg border p-3'}>
             {single ? null : (
               <div className="flex flex-col gap-1">
-                <Badge variant="secondary">{BLOCK_KIND_LABELS[block.kind]}</Badge>
-                <span className="text-sm text-muted-foreground">{describeBlock({ ...block, sets: roundsOf({ rows }) })}</span>
+                <Badge variant="secondary">{kinds[block.kind]}</Badge>
+                <span className="text-sm text-muted-foreground">{describeBlock({ ...block, sets: roundsOf({ rows }) }, locale)}</span>
                 {skip ? <span className="text-sm text-muted-foreground">{skip}</span> : null}
               </div>
             )}
@@ -52,13 +57,13 @@ export function ClientDayPlan({
                       <span className="flex items-start gap-1.5">
                         <span className="min-w-0 font-medium">{exercise.title}</span>
                         <Bandaids weight="fill" aria-hidden className="mt-0.5 size-4 shrink-0 text-primary-text" />
-                        <span className="sr-only">, kısıt notu var</span>
+                        <span className="sr-only">{t.careNote}</span>
                       </span>
                     ) : (
                       <span className="font-medium">{exercise.title}</span>
                     )}
                     <span className="text-sm text-muted-foreground">
-                      {clientSetText(row.sets, exercise.trackingType, single ? block.restSeconds : undefined, cardioKind(exercise))}
+                      {clientSetText(row.sets, exercise.trackingType, single ? block.restSeconds : undefined, cardioKind(exercise), locale)}
                     </span>
                     {row.note ? <span className="text-sm italic text-muted-foreground">{row.note}</span> : null}
                   </div>

@@ -3,10 +3,12 @@
 import { usePathname } from 'next/navigation';
 import { ChartBar, FirstAidKit, House, Notebook } from '@phosphor-icons/react';
 import { Dock } from '@/components/dock/dock';
-import { CLIENT_TABS, clientTabIndex } from '@/lib/client-tabs';
+import { useLocale } from '@/i18n/client';
+import { clientHomeMessages } from '@/i18n/messages/client-home';
+import { clientTabIndex, clientTabs, type ClientTab } from '@/lib/client-tabs';
 
 /** Sekmelerin ikonları (Phosphor, tasarım §0); sıra ve adlar `client-tabs.ts`'te. */
-const ICONS: Record<(typeof CLIENT_TABS)[number]['href'], React.ReactNode> = {
+const ICONS: Record<ClientTab['href'], React.ReactNode> = {
   '/me': <House />,
   '/me/programlar': <Notebook />,
   // Dolu ve kendiliğinden katı bir glif: komşuları (ev, defter, ilk yardım) gibi dolu görünür.
@@ -24,10 +26,11 @@ const ICONS: Record<(typeof CLIENT_TABS)[number]['href'], React.ReactNode> = {
  */
 export function ClientDock({ health }: { health: boolean }) {
   const active = clientTabIndex(usePathname());
+  const locale = useLocale();
   return (
     <Dock
-      ariaLabel="Ana menü"
-      items={CLIENT_TABS.map(({ href, label }, index) => ({ href, label, icon: ICONS[href], active: index === active })).filter(
+      ariaLabel={clientHomeMessages(locale).home.mainMenu}
+      items={clientTabs(locale).map(({ href, label }, index) => ({ href, label, icon: ICONS[href], active: index === active })).filter(
         (item) => health || item.href !== '/me/saglik',
       )}
     />

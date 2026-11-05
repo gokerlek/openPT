@@ -8,6 +8,8 @@ import { SetPasswordForm } from '@/app/giris/set-password-form';
 import { focusAfterRemoval } from '@/components/focus-next';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { useMessages } from '@/i18n/client';
+import { clientHomeMessages } from '@/i18n/messages/client-home';
 
 /**
  * Şifre kartı (SPEC §5): eski akışla (yalnız kare kodla) katılmış ya da kare koddan sonra şifre
@@ -20,32 +22,29 @@ export function PasswordCard({ reset }: { reset: boolean }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
+  const t = useMessages(clientHomeMessages).password;
   return (
     <Card ref={cardRef} className="border-primary/40">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Key weight="fill" className="size-5 text-primary" />
-          {reset ? 'Yeni şifreni belirle' : 'Bir dahaki girişin için şifre belirle'}
+          {reset ? t.resetTitle : t.title}
         </CardTitle>
-        <CardDescription>
-          {reset
-            ? 'Yeni kare kodla girdin; eski şifren artık açmaz. Yeni şifreni belirle.'
-            : 'Şifren olmazsa çıkış yapınca yeniden girmek için antrenöründen yeni kare kod istemen gerekir.'}
-        </CardDescription>
+        <CardDescription>{reset ? t.resetText : t.text}</CardDescription>
       </CardHeader>
       <CardContent>
         {open ? (
           <SetPasswordForm
-            submitLabel="Şifreyi kaydet"
+            submitLabel={t.save}
             onDone={() => {
               focusAfterRemoval(cardRef.current);
-              toast.success('Şifren kaydedildi.');
+              toast.success(t.saved);
               router.refresh();
             }}
           />
         ) : (
           <Button className="h-11 w-full" onClick={() => setOpen(true)}>
-            Şifre belirle
+            {t.set}
           </Button>
         )}
       </CardContent>

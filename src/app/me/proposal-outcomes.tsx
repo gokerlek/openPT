@@ -1,7 +1,10 @@
 import { CheckCircle, HourglassMedium, WarningCircle, XCircle } from '@phosphor-icons/react/dist/ssr';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { formatNumber, formatRecent } from '@/lib/format';
-import { clientOutcomes, OUTCOME_LABELS, type Proposal } from '@/lib/proposals';
+import { clientHomeMessages } from '@/i18n/messages/client-home';
+import type { Locale } from '@/i18n/locale';
+import { getLocale } from '@/i18n/server';
+import { getFormat } from '@/lib/format';
+import { clientOutcomes, outcomeLabels, type Proposal } from '@/lib/proposals';
 import { readProposals } from '@/lib/proposals-store';
 
 const ICONS = {
@@ -16,7 +19,8 @@ const ICONS = {
  * onay bekleyenler. Gösterilecek bir şey yoksa kart yok; öneriler okunamazsa da sessizce yok.
  */
 export async function ProposalOutcomes({ clientId, timeZone }: { clientId: string; timeZone: string }) {
-  const stored = await readProposals(clientId).catch(() => null);
+  const [stored, locale] = await Promise.all([readProposals(clientId).catch(() => null), getLocale()]);
+  const t = clientHomeMessages(locale).proposals;
   if (!stored || stored.broken) return null;
   const now = new Date();
   const { decided, pending } = clientOutcomes(stored.file, now);
@@ -25,14 +29,14 @@ export async function ProposalOutcomes({ clientId, timeZone }: { clientId: strin
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Program önerilerin</CardTitle>
-        <CardDescription>Antrenman bitişinde antrenörüne gönderdiğin değişiklikler.</CardDescription>
+        <CardTitle>{t.title}</CardTitle>
+        <CardDescription>{t.text}</CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
         {decided.length > 0 ? (
           <ul className="flex flex-col gap-3">
             {decided.map((item) => (
-              <Outcome key={item.id} item={item} timeZone={timeZone} now={now} />
+              <Outcome key={item.id} item={item} timeZone={timeZone} now={now} locale={locale} />
             ))}
           </ul>
         ) : null}
@@ -40,7 +44,7 @@ export async function ProposalOutcomes({ clientId, timeZone }: { clientId: strin
           <div className="flex gap-3">
             <HourglassMedium weight="fill" className="size-5 shrink-0 text-muted-foreground" aria-hidden />
             <div className="flex min-w-0 flex-col gap-0.5">
-              <span className="text-sm font-medium">Antrenörünün onayında: {formatNumber(pending.length)} öneri</span>
+              <span className="text-sm font-medium">{t.pending(getFormat(locale).number(pending.length), pending.length)}</span>
               <ul className="flex flex-col text-sm text-muted-foreground">
                 {pending.map((item) => (
                   <li key={item.id}>{item.text}</li>
@@ -54,15 +58,15 @@ export async function ProposalOutcomes({ clientId, timeZone }: { clientId: strin
   );
 }
 
-function Outcome({ item, timeZone, now }: { item: Proposal; timeZone: string; now: Date }) {
+function Outcome({ item, timeZone, now, locale }: { item: Proposal; timeZone: string; now: Date; locale: Locale }) {
   const status = item.status === 'pending' ? 'stale' : item.status;
   return (
     <li className="flex gap-3">
       {ICONS[status]}
       <div className="flex min-w-0 flex-col gap-0.5">
         <span className="text-[0.8125rem] text-muted-foreground">
-          {OUTCOME_LABELS[status]}
-          {item.decidedAt ? ` · ${formatRecent(item.decidedAt, timeZone, now)}` : ''}
+          {outcomeLabels(locale)[status]}
+          {item.decidedAt ? ` · ${getFormat(locale).recent(item.decidedAt, timeZone, now)}` : ''}
         </span>
         <span className="font-medium">{item.text}</span>
         {item.ptNote ? <span className="text-sm text-muted-foreground italic">“{item.ptNote}”</span> : null}

@@ -7,20 +7,24 @@ import { Button } from '@/components/ui/button';
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from '@/components/ui/item';
+import type { Locale } from '@/i18n/locale';
+import { clientHomeMessages } from '@/i18n/messages/client-home';
+import { getLocale } from '@/i18n/server';
+import { lower } from '@/i18n/text';
 import type { TodayCare } from '@/lib/client-care';
 import { withClientTargets } from '@/lib/client-targets';
 import { careLine, evaluateCare, hasCare, rowCareOf, type CareInput } from '@/lib/constraint-filter';
 import type { CareTags } from '@/lib/constraints';
 import { hasAssignments, weekAssignments } from '@/lib/day-assignments';
 import { listExercises } from '@/lib/exercises';
-import { formatDayShort, todayIn } from '@/lib/format';
+import { getFormat, todayIn } from '@/lib/format';
 import { activeItem, shownProgram } from '@/lib/own-program-index';
 import { lastDateByProgram, ptUpdatedSince } from '@/lib/own-program-text';
-import { PT_PROGRAM_NAME } from '@/lib/own-programs';
+import { ptProgramName } from '@/lib/own-programs';
 import { readOwnOverview, readOwnProgramOf } from '@/lib/own-programs-store';
 import { displayDays, currentPhaseOf, frequencyLabel, phaseStatus } from '@/lib/program-plan';
 import { previewBlocks, rowLabels, templateSummary, type TemplateBlock } from '@/lib/template-plan';
-import { isoWeekdayOf, phaseFrequency, todayAssigned, WEEKDAY_NAMES, type Weekday } from '@/lib/training-days';
+import { isoWeekdayOf, phaseFrequency, todayAssigned, weekdayLabels, type Weekday } from '@/lib/training-days';
 import { lastDoneDates, programStamp, type PlanOwner, type PlanProgram } from '@/lib/workout-plan';
 import { ClientDayPlan } from './client-day-plan';
 import { NewPtProgramBanner, ProgramChip, PtEditLine, type ProgramChoice } from './program-choice';
@@ -41,6 +45,7 @@ function dayCare(
   exercises: ReadonlyMap<string, CareTags & { id: string; title: string }>,
   input: CareInput | null,
   own: boolean,
+  locale: Locale,
 ): { rows: Set<string>; lines: { id: string; text: string }[] } {
   const rows = new Set<string>();
   const lines: { id: string; text: string; avoid: boolean }[] = [];
@@ -54,7 +59,7 @@ function dayCare(
       rows.add(row.id);
       if (seen.has(exercise.id)) continue;
       seen.add(exercise.id);
-      lines.push({ id: exercise.id, text: careLine(own ? { ...rowCare, own: true } : rowCare, exercise.title), avoid: rowCare.kind === 'avoid' });
+      lines.push({ id: exercise.id, text: careLine(own ? { ...rowCare, own: true } : rowCare, exercise.title, locale), avoid: rowCare.kind === 'avoid' });
     }
   }
   // `sort` kararlı: aynı türde programın sırası korunur.
@@ -62,14 +67,15 @@ function dayCare(
   return { rows, lines: lines.map(({ id, text }) => ({ id, text })) };
 }
 
-function Unavailable({ children, top }: { children?: React.ReactNode; top?: React.ReactNode }) {
+function Unavailable({ children, top, locale }: { children?: React.ReactNode; top?: React.ReactNode; locale: Locale }) {
+  const t = clientHomeMessages(locale).card;
   return (
     <>
       {top}
       <Card>
         <CardHeader>
-          <CardTitle>Bugünün antrenmanı</CardTitle>
-          <CardDescription>Programın şu an açılamıyor. Antrenörüne haber ver.</CardDescription>
+          <CardTitle>{t.todaysWorkout}</CardTitle>
+          <CardDescription>{t.unavailable}</CardDescription>
         </CardHeader>
       </Card>
       {children}
@@ -125,8 +131,11 @@ export async function ProgramCard({
   care?: TodayCare;
   children?: React.ReactNode;
 }) {
-  const [overview, exercises] = await Promise.all([readOwnOverview(clientId).catch(() => null), listExercises()]);
-  if (!overview) return <Unavailable>{children}</Unavailable>;
+  const [overview, exercises, locale] = await Promise.all([readOwnOverview(clientId).catch(() => null), listExercises(), getLocale()]);
+  const t = clientHomeMessages(locale).card;
+  const f = getFormat(locale);
+  const weekdayNames = weekdayLabels(locale);
+  if (!overview) return <Unavailable locale={locale}>{children}</Unavailable>;
 
   const { state, pt, sessions } = overview;
   const index = state.index;
@@ -134,7 +143,7 @@ export async function ProgramCard({
   const ptProgram = pt?.program ?? null;
   let program: PlanProgram | null = ptProgram;
   let owner: PlanOwner = null;
-  let problem = 'broken' in choice && choice.broken ? `${choice.broken.name ?? 'Seçtiğin program'} şu an açılamıyor.` : null;
+  let problem = 'broken' in choice && choice.broken ? t.chosenUnavailable(choice.broken.name ?? null) : null;
   if (choice.shown) {
     const cached = state.programs.get(choice.shown);
     const read = cached ? { status: 'ok' as const, program: cached } : await readOwnProgramOf(clientId, choice.shown);
@@ -142,14 +151,14 @@ export async function ProgramCard({
       program = read.program;
       owner = { programId: choice.shown, name: read.program.name };
     } else {
-      problem = `${index.items.find((item) => item.id === choice.shown)?.name ?? 'Programın'} şu an açılamıyor.`;
+      problem = t.yoursUnavailable(index.items.find((item) => item.id === choice.shown)?.name ?? null);
     }
   }
 
   // Program seçimi (§2.6): yalnız en az bir kendi program varken.
   const last = lastDateByProgram(sessions);
   const choices: ProgramChoice[] = [
-    ...(ptProgram ? [{ id: null, name: PT_PROGRAM_NAME, ...(last.get('pt') ? { lastDate: last.get('pt') } : {}) }] : []),
+    ...(ptProgram ? [{ id: null, name: ptProgramName(locale), ...(last.get('pt') ? { lastDate: last.get('pt') } : {}) }] : []),
     ...index.items.map((item) => ({ id: item.id, name: item.name, ...(last.get(item.id) ? { lastDate: last.get(item.id) } : {}) })),
   ];
   const shown = owner?.programId ?? null;
@@ -167,12 +176,14 @@ export async function ProgramCard({
           programId={edited.id}
           name={edited.name}
           editedAt={edited.ptEditedAt}
-          dateText={formatDayShort(todayIn(timeZone, new Date(edited.ptEditedAt)))}
+          dateText={f.dayShort(todayIn(timeZone, new Date(edited.ptEditedAt)))}
         />
       ) : null}
       {problem ? (
         <Alert>
-          <AlertDescription>{problem} Antrenörünün programı gösteriliyor.</AlertDescription>
+          <AlertDescription>
+            {problem} {t.showingPt}
+          </AlertDescription>
         </Alert>
       ) : null}
     </>
@@ -184,7 +195,7 @@ export async function ProgramCard({
         {top}
         <Card>
           <CardHeader>
-            <CardTitle>Bugünün antrenmanı</CardTitle>
+            <CardTitle>{t.todaysWorkout}</CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col gap-3">
             {chip}
@@ -193,14 +204,14 @@ export async function ProgramCard({
                 <EmptyMedia variant="icon">
                   <Barbell weight="fill" />
                 </EmptyMedia>
-                <EmptyTitle>Henüz program yok</EmptyTitle>
-                <EmptyDescription>Antrenörün programını hazırladığında sıradaki antrenmanın burada görünecek.</EmptyDescription>
+                <EmptyTitle>{t.noProgram}</EmptyTitle>
+                <EmptyDescription>{t.noProgramText}</EmptyDescription>
               </EmptyHeader>
               {index.items.length === 0 ? (
                 <EmptyContent>
                   <Button variant="outline" className="h-11" nativeButton={false} render={<Link href="/me/programlar/yeni" />}>
                     <Plus data-icon="inline-start" />
-                    Kendi programını kur
+                    {t.setUpOwn}
                   </Button>
                 </EmptyContent>
               ) : null}
@@ -211,10 +222,10 @@ export async function ProgramCard({
       </>
     );
   }
-  if (!program) return <Unavailable top={top}>{children}</Unavailable>;
+  if (!program) return <Unavailable top={top} locale={locale}>{children}</Unavailable>;
 
   const phase = currentPhaseOf(program)?.phase;
-  if (!phase || phase.days.length === 0) return <Unavailable top={top}>{children}</Unavailable>;
+  if (!phase || phase.days.length === 0) return <Unavailable top={top} locale={locale}>{children}</Unavailable>;
   const plan = program;
   type Day = (typeof phase.days)[number];
 
@@ -229,8 +240,8 @@ export async function ProgramCard({
   const context = phased
     ? [
         phase.name,
-        phase.weeks !== undefined ? `${Math.min(status.week, phase.weeks)}. hafta / ${phase.weeks}` : null,
-        frequencyLabel(phaseFrequency(phase))?.toLocaleLowerCase('tr') ?? null,
+        phase.weeks !== undefined ? t.phaseWeek(Math.min(status.week, phase.weeks), phase.weeks) : null,
+        lower(locale, frequencyLabel(phaseFrequency(phase), locale) ?? '') || null,
       ]
         .filter(Boolean)
         .join(' · ')
@@ -240,7 +251,7 @@ export async function ProgramCard({
   const todayDay = todayAssigned(phase.days, today);
   const anyAssigned = hasAssignments(phase.days);
   const doneToday = sessions.items.some((row) => Boolean(row.finishedAt) && row.date === today);
-  const note = doneToday ? 'Bugünkü antrenmanını yaptın' : null;
+  const note = doneToday ? t.doneToday : null;
   // Her başlangıç açık günle (`?day=`); tek seferlik seçimde antrenman o programla açılır.
   const programQuery = oneOff ? `&program=${encodeURIComponent(shown ?? 'pt')}` : '';
   const startHref = (dayId: string) => `/me/antrenman?day=${encodeURIComponent(dayId)}${programQuery}`;
@@ -252,7 +263,7 @@ export async function ProgramCard({
   const weekCard = anyAssigned ? (
     <Card>
       <CardHeader>
-        <CardTitle>Haftanın programı</CardTitle>
+        <CardTitle>{t.weekProgram}</CardTitle>
         {phased ? <CardDescription>{phase.name}</CardDescription> : null}
       </CardHeader>
       <CardContent className="flex flex-col gap-2">
@@ -265,15 +276,13 @@ export async function ProgramCard({
                 <Item variant="outline">
                   <ItemContent className="min-w-0">
                     <ItemTitle className="w-full break-words">
-                      {WEEKDAY_NAMES[weekday as Weekday]} · {day.name}
+                      {weekdayNames[weekday as Weekday]} · {day.name}
                     </ItemTitle>
-                    <ItemDescription className="tabular-nums">
-                      {itemSummary.rows} hareket · ≈ {itemSummary.minutes} dk
-                    </ItemDescription>
+                    <ItemDescription className="tabular-nums">{t.summary(itemSummary.rows, itemSummary.minutes)}</ItemDescription>
                   </ItemContent>
                   {isToday ? (
                     <ItemActions>
-                      <Badge variant="secondary">bugün</Badge>
+                      <Badge variant="secondary">{t.today}</Badge>
                     </ItemActions>
                   ) : null}
                 </Item>
@@ -282,7 +291,7 @@ export async function ProgramCard({
           })}
         </ul>
         {unassigned.length > 0 ? (
-          <p className="text-sm break-words text-muted-foreground">Gün atanmamış: {unassigned.map((day) => day.name).join(', ')}</p>
+          <p className="text-sm break-words text-muted-foreground">{t.unassigned(unassigned.map((day) => day.name).join(', '))}</p>
         ) : null}
       </CardContent>
     </Card>
@@ -302,14 +311,14 @@ export async function ProgramCard({
             <CardAction>
               <WeekBadge clientId={clientId} />
             </CardAction>
-            <CardTitle className="text-xl">{anyAssigned ? 'Bugün atanmış program yok' : 'Bugün hangi programı yapacaksın?'}</CardTitle>
+            <CardTitle className="text-xl">{anyAssigned ? t.nothingToday : t.whichToday}</CardTitle>
             <CardDescription>
               {context ? <span className="block">{context}</span> : null}
-              Yapmak istediğin programı seç.
+              {t.pick}
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
-            <ul className="flex flex-col gap-2" aria-label="Programlar">
+            <ul className="flex flex-col gap-2" aria-label={t.programs}>
               {displayDays(phase.days).map((day) => {
                 const itemSummary = summaryOf(day);
                 const lastDate = lastByDay[day.id];
@@ -320,14 +329,14 @@ export async function ProgramCard({
                         <ItemTitle className="w-full break-words">{day.name}</ItemTitle>
                         <ItemDescription className="tabular-nums">
                           {itemSummary.rows > 0
-                            ? `${itemSummary.rows} hareket · ≈ ${itemSummary.minutes} dk · ${lastDate ? `son: ${formatDayShort(lastDate)}` : 'henüz yapılmadı'}`
-                            : 'Bu programın hareketleri şu an açılamıyor.'}
+                            ? `${t.summary(itemSummary.rows, itemSummary.minutes)} · ${lastDate ? t.last(f.dayShort(lastDate)) : t.notYet}`
+                            : t.rowsUnavailable}
                         </ItemDescription>
                       </ItemContent>
                       {itemSummary.rows > 0 ? (
                         <ItemActions>
-                          <Button className="h-11" nativeButton={false} aria-label={`Başla: ${day.name}`} render={<Link href={startHref(day.id)} />}>
-                            Başla
+                          <Button className="h-11" nativeButton={false} aria-label={t.startNamed(day.name)} render={<Link href={startHref(day.id)} />}>
+                            {t.start}
                           </Button>
                         </ItemActions>
                       ) : null}
@@ -347,7 +356,7 @@ export async function ProgramCard({
 
   const blocks = blocksOf(todayDay);
   const summary = templateSummary({ blocks }, byId);
-  const title = `${WEEKDAY_NAMES[isoWeekdayOf(today)]} · ${todayDay.name}`;
+  const title = `${weekdayNames[isoWeekdayOf(today)]} · ${todayDay.name}`;
   // Önizleme: kütüphanede olmayan satırlar önce ayıklanır (çizilmiyorlar; yoksa "ilk 3" üçten az görünür).
   const labels = rowLabels({ blocks });
   const shownBlocks = blocks.flatMap((block) => {
@@ -355,7 +364,7 @@ export async function ProgramCard({
     return rows.length > 0 ? [{ ...block, rows }] : [];
   });
   const preview = previewBlocks(shownBlocks, 3);
-  const cares = dayCare(shownBlocks, byId, care.input, owner !== null);
+  const cares = dayCare(shownBlocks, byId, care.input, owner !== null, locale);
 
   return (
     <>
@@ -372,7 +381,8 @@ export async function ProgramCard({
           <CardTitle className="text-xl">{title}</CardTitle>
           <CardDescription>
             {context ? <span className="block">{context}</span> : null}
-            <span className="tabular-nums">{summary.rows}</span> hareket · ≈ <span className="tabular-nums">{summary.minutes}</span> dk
+            <span className="tabular-nums">{summary.rows}</span> {t.exercisesUnit(summary.rows)} · ≈ <span className="tabular-nums">{summary.minutes}</span>{' '}
+            {t.minutesUnit}
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
@@ -380,7 +390,7 @@ export async function ProgramCard({
             <div className="flex flex-col gap-2">
               <Button size="lg" className="h-12 w-full" nativeButton={false} render={<Link href={startHref(todayDay.id)} />}>
                 <Play data-icon="inline-start" weight="fill" />
-                Antrenmana başla
+                {t.startWorkout}
               </Button>
               <OtherProgramButton clientId={clientId} />
             </div>
@@ -397,9 +407,7 @@ export async function ProgramCard({
                 </li>
               ))}
               {cares.lines.length > CARE_LINES ? (
-                <li className="pl-6 text-muted-foreground">
-                  +<span className="tabular-nums">{cares.lines.length - CARE_LINES}</span> harekette daha not var
-                </li>
+                <li className="pl-6 text-muted-foreground tabular-nums">{t.moreNotes(cares.lines.length - CARE_LINES)}</li>
               ) : null}
             </ul>
           ) : null}
@@ -415,9 +423,7 @@ export async function ProgramCard({
                       className="size-3.5 shrink-0 motion-safe:transition-transform motion-safe:duration-160 group-open/rest:rotate-90"
                     />
                     {/* Tek kutu: flex'te metin parçaları ayrı öğe olur, `gap` parantezin içine boşluk koyardı. */}
-                    <span>
-                      Tümünü gör (<span className="tabular-nums">{preview.restRows}</span> hareket daha)
-                    </span>
+                    <span className="tabular-nums">{t.showAll(preview.restRows)}</span>
                   </summary>
                   <div className="pt-2">
                     <ClientDayPlan blocks={preview.rest} exercises={byId} labels={labels} cared={cares.rows} />
@@ -426,7 +432,7 @@ export async function ProgramCard({
               ) : null}
             </div>
           ) : (
-            <p className="text-sm text-muted-foreground">Bu programın hareketleri şu an açılamıyor. Antrenörüne haber ver.</p>
+            <p className="text-sm text-muted-foreground">{t.rowsUnavailableTell}</p>
           )}
           <WeekStrip clientId={clientId} />
         </CardContent>

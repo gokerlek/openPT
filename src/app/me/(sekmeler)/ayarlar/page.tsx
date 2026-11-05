@@ -3,6 +3,8 @@ import type { Metadata } from 'next';
 import { FirstAidKit, Key } from '@phosphor-icons/react/dist/ssr';
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { LocaleSwitch } from '@/i18n/locale-switch';
+import { clientHomeMessages } from '@/i18n/messages/client-home';
+import { getLocale, getMessages } from '@/i18n/server';
 import { canRecordHealth, canSetPassword, hasHealthSection, hasPassword, healthConsentState, outdatedHealthFields } from '@/lib/client-status';
 import { readAppConfig } from '@/lib/config';
 import { currentClient } from '@/lib/guards';
@@ -16,7 +18,9 @@ import { ConsentCard } from '../../consent-card';
 import { PasswordCard } from '../../password-card';
 import { TrainingDaysCard } from '../../training-days-card';
 
-export const metadata: Metadata = { title: 'Ayarlar' };
+export async function generateMetadata(): Promise<Metadata> {
+  return { title: (await getMessages(clientHomeMessages)).settings.title };
+}
 
 /**
  * Danışanın ayarları (avatar menüsünden; dock'ta yok, dock'ta etkin sekme de yok): antrenman günleri
@@ -26,7 +30,8 @@ export const metadata: Metadata = { title: 'Ayarlar' };
  * Sayfa yetkiyi kendisi denetler (SPEC §5): kapatılmış erişim, arşiv ya da eski kuşak giremez.
  */
 export default async function ClientSettingsPage() {
-  const [client, config, session] = await Promise.all([currentClient(), readAppConfig(), readClientSession()]);
+  const [client, config, session, locale] = await Promise.all([currentClient(), readAppConfig(), readClientSession(), getLocale()]);
+  const t = clientHomeMessages(locale);
   const health = healthConsentState(client);
   const passwordSet = hasPassword(client.access);
   // Bugün'ün programının (kalıcı seçim; kendi programsa onun) günleri. Okunamıyorsa ya da yoksa satır çıkmaz (Bugün
@@ -38,7 +43,7 @@ export default async function ClientSettingsPage() {
 
   return (
     <main className="flex flex-col gap-6">
-      <ClientHeader client={client} appName={config.appName} title="Ayarlar" back={{ href: '/me', label: 'Bugün' }} />
+      <ClientHeader client={client} appName={config.appName} title={t.settings.title} back={{ href: '/me', label: t.tabs.today }} />
 
       {program ? (
         <TrainingDaysCard
@@ -54,9 +59,9 @@ export default async function ClientSettingsPage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <FirstAidKit weight="fill" className="size-5 text-muted-foreground" />
-              Sağlık takibi
+              {t.settings.healthTracking}
             </CardTitle>
-            <CardDescription>Kapalı: antrenörün sağlık takibini açmadı, sağlık kaydı tutulmuyor.</CardDescription>
+            <CardDescription>{t.settings.healthOff}</CardDescription>
           </CardHeader>
         </Card>
       ) : (
@@ -76,13 +81,9 @@ export default async function ClientSettingsPage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Key weight="fill" className="size-5 text-muted-foreground" />
-              Şifre
+              {t.settings.password}
             </CardTitle>
-            <CardDescription>
-              {passwordSet
-                ? 'Şifren belirli. Unutursan ya da değiştirmek istersen antrenörüne söyle: yeni kare kodla girip yeni şifreni belirlersin.'
-                : 'Şifre belirlemek için antrenöründen yeni bir kare kod iste.'}
-            </CardDescription>
+            <CardDescription>{passwordSet ? t.settings.passwordSet : t.settings.passwordNone}</CardDescription>
           </CardHeader>
         </Card>
       )}
