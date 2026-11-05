@@ -189,9 +189,9 @@ async function buildDigest(id: string, locale: Locale): Promise<ClientOverview |
 
 /**
  * Danışanın Genel bakış özeti (önbellekli): bildirimler, dikkat özeti ve AI koçun açık olup olmadığı; kaydı yoksa null.
- * Anahtardaki sürüm özetin biçimi değişince eski önbelleği bırakır (`v3`: dile göre). Özetteki metinler (bildirim,
- * bölge adı) yazıldığı dildedir: anahtarda `locale` var, iki dil birbirinin özetini görmez. Dil çağıranın isteğinden
- * gelir (`getLocale()`); önbelleğin içinde okunamaz.
+ * Anahtardaki sürüm özetin biçimi değişince eski önbelleği bırakır (`v3`: dile göre; `v4`: egzersiz adları okuyanın
+ * dilinde). Özetteki metinler (bildirim, bölge adı) yazıldığı dildedir: anahtarda `locale` var, iki dil birbirinin
+ * özetini görmez. Dil çağıranın isteğinden gelir (`getLocale()`); önbelleğin içinde okunamaz.
  */
 export function readClientDigest(id: string, locale: Locale = DEFAULT_LOCALE): Promise<ClientOverview | null> {
   return unstable_cache(() => buildDigest(id, locale), ['client-overview', 'v4', id, locale], { tags: [noticesTag(id)], revalidate: 300 })();
