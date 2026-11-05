@@ -1,5 +1,10 @@
 # Çoklu dil — temel altyapı (F) raporu
 
+> **Denetim sonrası değişiklik (40f6bdc):**
+> - `listExercises`/`listDevices`/`listAttachments` içinde `getLocale()` ÇAĞRILMAZ. Bunlar `unstable_cache` içinde çalışır (`notices-store` özeti) ve orada `cookies()` hata verir. Sözleşme `listExercises(custom?, locale?: Locale)`: dil verilmezse çeviri yapılmaz. Sayfa ve route handler `await getLocale()` geçirir.
+> - Önbelleğe giren metin ya dilden bağımsız tutulur ya da anahtara dil eklenir.
+> - `findHardcodedText` artık şunları da yakalar: Türkçe harfsiz Türkçe sözcükler, metin alanlarına yazılmış cümleler ve toast/alert/confirm çağrıları.
+>
 > 2026-11-05. Temel altyapı ajanının raporu; alan ajanları (T1–T5) bu dondurulmuş arayüzleri kullanır. Commit'ler: F1 `8945404`, F2 `4893194`.
 
 I ran no new commands after the earlier report, so this is the same report again in case only the last message reaches you. Both commits are on `openpt` (not pushed). Turkish output is unchanged, and tests, `tsc` and `eslint` are clean. I didn't run the dev server or the build, so nothing has been checked in a browser yet.
