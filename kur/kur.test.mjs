@@ -1286,7 +1286,7 @@ function sampleArgs(fn) {
   return Array.from({ length: fn.length }, (_, index) => `x${index}`);
 }
 
-test('dil seçimi: KUR_LANG → LC_ALL → LC_MESSAGES → LANG → Intl; tr ile başlayan tr, gerisi en', () => {
+test('dil seçimi: KUR_LANG → LC_ALL → LC_MESSAGES → LANG → Intl; C/POSIX atlanır; tr ile başlayan tr, gerisi en', () => {
   const table = [
     [{ KUR_LANG: 'tr' }, 'en-US', 'tr'],
     [{ KUR_LANG: 'en', LC_ALL: 'tr_TR.UTF-8', LANG: 'tr_TR.UTF-8' }, 'tr-TR', 'en'],
@@ -1300,7 +1300,14 @@ test('dil seçimi: KUR_LANG → LC_ALL → LC_MESSAGES → LANG → Intl; tr ile
     [{ LANG: 'TR_TR' }, 'en-US', 'tr'],
     [{ LANG: 'tr' }, 'en-US', 'tr'],
     [{ LANG: 'en_GB.UTF-8' }, 'tr-TR', 'en'],
-    [{ LANG: 'C' }, 'tr-TR', 'en'],
+    // C/POSIX dil seçmez (macOS terminalinde sistem Türkçeyken de LANG=C olabilir): sıradakine, en son Intl'e geçilir.
+    [{ LANG: 'C' }, 'tr-TR', 'tr'],
+    [{ LANG: 'C.UTF-8' }, 'tr-TR', 'tr'],
+    [{ LANG: 'POSIX' }, 'tr-TR', 'tr'],
+    [{ LC_ALL: 'c.utf8', LANG: 'tr_TR.UTF-8' }, 'en-US', 'tr'],
+    [{ LC_ALL: 'C', LC_MESSAGES: 'POSIX', LANG: 'C.UTF-8' }, 'en-US', 'en'],
+    [{ LANG: 'C' }, '', 'en'],
+    [{ KUR_LANG: 'C', LANG: 'en_US.UTF-8' }, 'tr-TR', 'en'],
     [{ KUR_LANG: '', LC_ALL: '  ', LC_MESSAGES: '', LANG: 'tr_TR.UTF-8' }, 'en-US', 'tr'],
     [{}, 'tr-TR', 'tr'],
     [{}, 'en-US', 'en'],

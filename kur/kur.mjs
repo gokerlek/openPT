@@ -636,13 +636,14 @@ export function render(lang, value) {
 }
 
 /**
- * Dil seçimi: `KUR_LANG`, sonra `LC_ALL`, `LC_MESSAGES`, `LANG` (boş olanlar atlanır), en son `Intl` yerel ayarı.
- * İlk dolu değer karar verir: `tr` ile başlıyorsa 'tr', başka her şey (C/POSIX dahil) 'en'.
+ * Dil seçimi: `KUR_LANG`, sonra `LC_ALL`, `LC_MESSAGES`, `LANG`, en son `Intl` yerel ayarı. Boş olanlar ve `C`/`POSIX`
+ * (`C.UTF-8` dahil) atlanır: dil seçmezler, macOS terminali sistem Türkçeyken de `LANG=C` verebilir. İlk kalan değer
+ * karar verir: `tr` ile başlıyorsa 'tr', başka her şey 'en'.
  */
 export function detectLang(env = {}, intlLocale = '') {
   const candidates = [env.KUR_LANG, env.LC_ALL, env.LC_MESSAGES, env.LANG, intlLocale];
   for (const candidate of candidates) {
-    if (typeof candidate !== 'string' || candidate.trim() === '') continue;
+    if (typeof candidate !== 'string' || candidate.trim() === '' || /^(?:c|posix)(?:[.@]|$)/i.test(candidate.trim())) continue;
     return candidate.trim().toLowerCase().startsWith('tr') ? 'tr' : 'en';
   }
   return 'en';
